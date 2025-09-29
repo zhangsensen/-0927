@@ -1,0 +1,135 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Cache and optimization files
+.pytest_cache/
+.mypy_cache/
+.numba_cache/
+.jupyter_cache/
+.matplotlib/
+cache/
+*.cache
+
+# Logs
+*.log
+logs/
+
+# Raw data files (EXCLUDE THESE FROM REPOSITORY)
+raw/
+*.parquet
+*.csv
+*.h5
+*.hdf5
+*.feather
+*.pkl
+*.pickle
+*.mat
+*.bin
+*.fmp
+*.qmt
+*.vnpy
+
+# Data directories
+data/
+dataset/
+datasets/
+market_data/
+historical_data/
+tick_data/
+raw_data/
+processed_data/
+sample_data/
+test_data/
+
+# Output and results directories
+output/
+outputs/
+results/
+backtest_results/
+backtest_output/
+reports/
+generated_reports/
+analysis_results/
+
+# Model files
+models/
+model_outputs/
+saved_models/
+model_checkpoints/
+*.model
+*.joblib
+*.onnx
+*.pt
+*.pth
+
+# Temporary and working files
+temp/
+tmp/
+temporary/
+working/
+analysis_temp/
+temp_analysis/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Large archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Development databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Local configuration
+config.local.yaml
+config.local.json
+*.local
+
+# Claude specific
+.claude/
+.claude-*
+
+# System files that should never be in git
+.bash_history
+.zsh_history
+.python_history
+
+# Backup files
+*.backup
+*.zip
+*.tar.gz
+*.rar
+*.7z

@@ -1,0 +1,51 @@
+multi_horizon_ic:
+  horizons:
+  - 1
+  - 2
+  - 3
+  min_sample_size: 50
+  rolling_window: 60
+statistical_testing:
+  alpha_level: 0.1
+  fdr_method: benjamini_hochberg
+  multiple_testing_correction: true
+independence_analysis:
+  vif_threshold: 5.0
+  correlation_threshold: 0.8
+  base_factors:
+  - MA5
+  - MA10
+  - RSI14
+  - MACD_12_26_9
+trading_costs:
+  commission_rate: 0.002
+  slippage_bps: 5.0
+  market_impact_coeff: 0.1
+screening_thresholds:
+  min_ic_threshold: 0.015
+  min_ir_threshold: 0.3
+  min_stability_threshold: 0.6
+  max_vif_threshold: 10.0
+  max_cost_threshold: 0.01
+performance:
+  max_workers: 4
+  cache_enabled: true
+  memory_limit_mb: 2048
+  timeout_seconds: 300
+scoring_weights:
+  predictive_power: 0.5
+  stability: 0.15
+  independence: 0.1
+  practicality: 0.05
+  adaptability: 0.2
+logging:
+  level: INFO
+  file_enabled: true
+  console_enabled: true
+output:
+  save_detailed_report: true
+  save_summary_report: true
+  export_formats:
+  - csv
+  - json
+  include_metadata: true

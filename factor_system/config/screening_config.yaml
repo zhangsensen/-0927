@@ -1,0 +1,86 @@
+# 专业级因子筛选系统配置文件
+# 版本: 2.0.0
+# 日期: 2025-09-29
+
+# 多周期IC分析配置
+multi_horizon_ic:
+  horizons: [1, 3, 5, 10, 20]  # IC计算周期（天）
+  min_sample_size: 100         # 最小样本量要求
+  rolling_window: 60           # 滚动IC窗口大小
+
+# 统计显著性检验配置
+statistical_testing:
+  alpha_level: 0.05                    # 显著性水平
+  fdr_method: "benjamini_hochberg"     # FDR校正方法: "benjamini_hochberg" 或 "bonferroni"
+  multiple_testing_correction: true    # 是否进行多重比较校正
+
+# 独立性分析配置
+independence_analysis:
+  vif_threshold: 5.0                   # VIF阈值
+  correlation_threshold: 0.8           # 相关性阈值
+  base_factors: ["MA5", "MA10", "RSI14", "MACD_12_26_9"]  # 基准因子
+
+# 交易成本配置
+trading_costs:
+  commission_rate: 0.002      # 佣金率 (0.2%)
+  slippage_bps: 5.0          # 滑点 (5bp)
+  market_impact_coeff: 0.1   # 市场冲击系数
+
+# 筛选阈值配置
+screening_thresholds:
+  min_ic_threshold: 0.02          # 最小IC阈值
+  min_ir_threshold: 0.5           # 最小IR阈值
+  min_stability_threshold: 0.6    # 最小稳定性阈值
+  max_vif_threshold: 10.0         # 最大VIF阈值
+  max_cost_threshold: 0.01        # 最大交易成本阈值 (1%)
+
+# 性能配置
+performance:
+  max_workers: 4              # 最大并行工作线程数
+  cache_enabled: true         # 是否启用缓存
+  memory_limit_mb: 2048       # 内存限制 (MB)
+  timeout_seconds: 300        # 超时时间 (秒)
+
+# 评分权重配置
+scoring_weights:
+  predictive_power: 0.35      # 预测能力权重
+  stability: 0.25             # 稳定性权重
+  independence: 0.20          # 独立性权重
+  practicality: 0.15          # 实用性权重
+  adaptability: 0.05          # 短周期适应性权重
+
+# 日志配置
+logging:
+  level: "INFO"               # 日志级别: DEBUG, INFO, WARNING, ERROR
+  file_enabled: true          # 是否启用文件日志
+  console_enabled: true       # 是否启用控制台日志
+  max_file_size_mb: 100       # 最大日志文件大小 (MB)
+  backup_count: 5             # 日志文件备份数量
+
+# 输出配置
+output:
+  save_detailed_report: true       # 是否保存详细报告
+  save_summary_report: true        # 是否保存摘要报告
+  export_formats: ["csv", "json"]  # 导出格式
+  include_metadata: true           # 是否包含元数据
+
+# 数据质量配置
+data_quality:
+  max_missing_rate: 0.3       # 最大缺失率
+  min_unique_ratio: 0.01      # 最小唯一值比例
+  outlier_detection: true     # 是否进行异常值检测
+  outlier_method: "iqr"       # 异常值检测方法: "iqr", "zscore"
+
+# 高级配置
+advanced:
+  enable_parallel_processing: true    # 是否启用并行处理
+  enable_memory_optimization: true    # 是否启用内存优化
+  enable_progress_tracking: true      # 是否启用进度跟踪
+  enable_performance_profiling: false # 是否启用性能分析
+
+# 实验性功能配置
+experimental:
+  enable_machine_learning_features: false  # 是否启用机器学习特征
+  enable_regime_detection: false           # 是否启用市场状态检测
+  enable_dynamic_weighting: false          # 是否启用动态权重调整
+
