@@ -1,0 +1,48 @@
+alpha_level: 0.05
+base_factors:
+- MA5
+- MA10
+- RSI14
+- MACD_12_26_9
+commission_rate: 0.002
+correlation_threshold: 0.8
+data_root: ./output
+description: 默认筛选配置 - 平衡的参数设置
+enable_parallel: true
+fdr_method: benjamini_hochberg
+ic_horizons:
+- 1
+- 3
+- 5
+- 10
+- 20
+log_level: INFO
+market_impact_coeff: 0.1
+max_cost_threshold: 0.01
+max_vif_threshold: 10.0
+max_workers: 4
+memory_limit_gb: 8.0
+min_ic_threshold: 0.015
+min_ir_threshold: 0.35
+min_robustness_score: 0.6
+min_sample_size: 100
+min_stability_threshold: 0.6
+name: default
+output_dir: ./output
+raw_data_root: ../raw
+rolling_window: 60
+save_detailed_metrics: true
+save_reports: true
+slippage_bps: 5.0
+symbols:
+- 0700.HK
+timeframes:
+- 60min
+timeout_minutes: 60
+vif_threshold: 5.0
+weights:
+  independence: 0.2
+  practicality: 0.1
+  predictive_power: 0.35
+  short_term_fitness: 0.1
+  stability: 0.25
