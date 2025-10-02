@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 快速启动命令行接口
 作者：量化首席工程师
@@ -88,6 +89,10 @@ class FactorScreeningCLI:
                                 help='任务名称')
         batch_parser.add_argument('--output', default='./output',
                                 help='输出目录')
+        batch_parser.add_argument('--data-root', default='./output',
+                                help='因子数据根目录')
+        batch_parser.add_argument('--raw-data-root', default='../raw',
+                                help='原始数据根目录')
         batch_parser.add_argument('--max-workers', type=int, default=2,
                                 help='最大并发任务数')
         batch_parser.add_argument('--continue-on-error', action='store_true',
@@ -126,6 +131,8 @@ class FactorScreeningCLI:
             config.data_root = args.data_root
             config.raw_data_root = args.raw_data_root
             config.output_dir = args.output
+            # 确保因子数据根目录也更新
+            config.factor_data_root = args.data_root
             
             # 验证配置
             errors = self.config_manager.validate_config(config)
@@ -136,7 +143,7 @@ class FactorScreeningCLI:
             # 创建筛选器
             screener = ProfessionalFactorScreener(
                 data_root=config.data_root,
-                raw_data_root=config.raw_data_root
+                config=config
             )
             
             # 执行筛选
@@ -159,7 +166,7 @@ class FactorScreeningCLI:
             
             # 生成报告
             if config.save_reports:
-                report_df = screener.generate_screening_report(results)
+                report_df = screener.generate_screening_report(results, symbol=args.symbol, timeframe=args.timeframe)
                 logger.info(f"报告已生成，包含 {len(report_df)} 个因子")
             
         except Exception as e:
@@ -188,10 +195,13 @@ class FactorScreeningCLI:
             # 更新配置
             batch_config.max_concurrent_tasks = args.max_workers
             batch_config.continue_on_error = args.continue_on_error
-            
-            # 更新输出目录
+
+            # 更新数据目录和输出目录
             for config in batch_config.screening_configs:
+                config.data_root = args.data_root
+                config.raw_data_root = args.raw_data_root
                 config.output_dir = args.output
+                config.factor_data_root = args.data_root
             
             # 显示配置摘要
             logger.info("批量配置摘要:")
@@ -253,7 +263,7 @@ class FactorScreeningCLI:
                 # 执行筛选
                 screener = ProfessionalFactorScreener(
                     data_root=config.data_root,
-                    raw_data_root=getattr(config, 'raw_data_root', '../raw')
+                    config=config
                 )
                 
                 for symbol in config.symbols:

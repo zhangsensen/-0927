@@ -12,8 +12,11 @@ from typing import Dict, Any, Optional, List
 class SimpleConfig:
     """简化配置类"""
 
-    def __init__(self, config_file: str = "config.yaml"):
+    def __init__(self, config_file: str = None):
         """初始化配置"""
+        if config_file is None:
+            # 默认使用同目录下的config.yaml
+            config_file = Path(__file__).parent / "config.yaml"
         self.config_file = Path(config_file)
         self.config_data = None
 

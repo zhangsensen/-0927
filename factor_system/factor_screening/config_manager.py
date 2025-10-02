@@ -74,12 +74,19 @@ class ScreeningConfig:
         "short_term_fitness": 0.10
     })
     
+    # 路径配置（关键修复）
+    factor_data_root: str = "./data/factors"      # 因子数据目录
+    price_data_root: str = "../raw/HK"            # 价格数据目录
+    output_root: str = "./data/screening_results" # 输出根目录
+    log_root: str = "./logs/screening"            # 日志根目录
+    cache_root: str = "./cache"                   # 缓存根目录
+    
     # 并行处理配置
     max_workers: int = 4
     enable_parallel: bool = True
     
-    # 输出配置
-    output_dir: str = "./output"
+    # 输出配置（向后兼容）
+    output_dir: str = "./output"  # 废弃，使用output_root
     save_reports: bool = True
     save_detailed_metrics: bool = True
     log_level: str = "INFO"

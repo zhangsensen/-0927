@@ -1,0 +1,13 @@
+{
+  "total_factors": 252,
+  "significant_factors": 3,
+  "high_score_factors": 0,
+  "total_time": 38.42401671409607,
+  "memory_used_mb": 5.234375,
+  "sample_size": 738,
+  "factors_aligned": 252,
+  "data_alignment_successful": true,
+  "screening_timestamp": "2025-09-30T04:25:37.375787",
+  "symbol": "0700.HK",
+  "timeframe": "60min"
+}

@@ -20,7 +20,7 @@ import vectorbt as vbt
 from pathlib import Path
 import logging
 from typing import Dict, List, Tuple, Optional, Union, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from scipy import stats
 from scipy.stats import jarque_bera
 from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -150,13 +150,52 @@ class ScreeningConfig:
 class ProfessionalFactorScreener:
     """专业级因子筛选器 - 5维度筛选框架"""
     
-    def __init__(self, data_root: str, config: Optional[ScreeningConfig] = None):
-        """初始化筛选器"""
-        self.data_root = Path(data_root)
+    def __init__(self, data_root: str = None, config: Optional[ScreeningConfig] = None):
+        """初始化筛选器
+        
+        Args:
+            data_root: 向后兼容参数，优先使用config中的路径配置
+            config: 筛选配置对象
+        """
         self.config = config or ScreeningConfig()
+        
+        # 路径优先级: config > data_root参数 > 默认值
+        if hasattr(self.config, 'factor_data_root'):
+            self.data_root = Path(self.config.factor_data_root)
+        elif data_root:
+            self.data_root = Path(data_root)
+        else:
+            self.data_root = Path("/Users/zhangshenshen/深度量化0927/factor_system/因子输出")  # 默认因子数据目录
+
+        # 设置日志和缓存路径
+        self.log_root = Path(getattr(self.config, 'log_root', './logs/screening'))
+        self.cache_dir = Path(getattr(self.config, 'cache_root', self.data_root / "cache"))
+
+        # 设置筛选报告专用目录
+        self.screening_results_dir = Path("/Users/zhangshenshen/深度量化0927/factor_system/因子筛选")
+        self.screening_results_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 初始化增强版结果管理器（延迟记录日志）
+        try:
+            from enhanced_result_manager import EnhancedResultManager
+            self.result_manager = EnhancedResultManager(str(self.screening_results_dir))
+        except ImportError as e:
+            self.result_manager = None
+
+        # 创建必要的目录
+        self.log_root.mkdir(parents=True, exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
         self.logger = self._setup_logger()
-        self.cache_dir = self.data_root / "cache"
-        self.cache_dir.mkdir(exist_ok=True)
+
+        # 调试信息
+        self.logger.info(f"DEBUG: data_root设置为: {self.data_root}")
+        
+        # 现在可以安全地记录增强版结果管理器状态
+        if self.result_manager:
+            self.logger.info("✅ 增强版结果管理器已启用")
+        else:
+            self.logger.warning("⚠️ 使用传统存储方式")
         
         # 性能监控
         self.process = psutil.Process()
@@ -167,7 +206,7 @@ class ProfessionalFactorScreener:
         self.logger.info(f"显著性水平={self.config.alpha_level}, FDR方法={self.config.fdr_method}")
     
     def _setup_logger(self) -> logging.Logger:
-        """设置专业级日志系统"""
+        """设置专业级日志系统 - 改进版"""
         logger = logging.getLogger(f"{__name__}.{id(self)}")
         logger.setLevel(logging.INFO)
         
@@ -175,9 +214,17 @@ class ProfessionalFactorScreener:
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
         
-        # 创建文件处理器
-        log_file = self.data_root / f"professional_screener_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        file_handler = logging.FileHandler(log_file)
+        # 使用日志轮转 - 关键修复
+        from logging.handlers import RotatingFileHandler
+        today = datetime.now().strftime('%Y%m%d')
+        log_file = self.log_root / f"screener_{today}.log"
+        
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5,           # 保留5个备份
+            encoding='utf-8'
+        )
         file_handler.setLevel(logging.DEBUG)
         
         # 创建控制台处理器
@@ -580,10 +627,10 @@ class ProfessionalFactorScreener:
         
         raise FileNotFoundError(f"No factor data found for {symbol} {timeframe}")
     
-    def load_price_data(self, symbol: str) -> pd.DataFrame:
-        """加载价格数据 - 增强版本"""
+    def load_price_data(self, symbol: str, timeframe: str = None) -> pd.DataFrame:
+        """加载价格数据 - 智能匹配时间框架（修复版）"""
         start_time = time.time()
-        self.logger.info(f"加载价格数据: {symbol}")
+        self.logger.info(f"加载价格数据: {symbol} (时间框架: {timeframe})")
         
         # 处理symbol格式
         if symbol.endswith('.HK'):
@@ -596,12 +643,35 @@ class ProfessionalFactorScreener:
         if not raw_data_path.exists():
             raw_data_path = Path("/Users/zhangshenshen/深度量化0927/raw/HK")
         
-        # 按优先级搜索价格文件
-        search_patterns = [
-            f"{clean_symbol}_60m_*.parquet",    # 60分钟数据
-            f"{clean_symbol}_1day_*.parquet",   # 日线数据
-            f"{clean_symbol}_*.parquet",        # 任意时间框架
-        ]
+        # 时间框架到文件名的映射
+        timeframe_map = {
+            '1min': '1min',
+            '2min': '2min',
+            '3min': '3min',
+            '5min': '5min',
+            '15min': '15m',
+            '30min': '30m',
+            '60min': '60m',
+            'daily': '1day',
+            '1d': '1day',
+        }
+        
+        # 根据时间框架智能选择搜索模式
+        if timeframe and timeframe in timeframe_map:
+            file_pattern = timeframe_map[timeframe]
+            self.logger.info(f"根据时间框架 '{timeframe}' 搜索 '{file_pattern}' 格式文件")
+            search_patterns = [
+                f"{clean_symbol}_{file_pattern}_*.parquet",  # 精确匹配
+                f"{clean_symbol}_*.parquet",                  # 备用
+            ]
+        else:
+            # 默认搜索顺序（保持向后兼容）
+            self.logger.warning(f"未指定时间框架或不在映射表中，使用默认搜索")
+            search_patterns = [
+                f"{clean_symbol}_60m_*.parquet",    # 60分钟数据
+                f"{clean_symbol}_1day_*.parquet",   # 日线数据
+                f"{clean_symbol}_*.parquet",        # 任意时间框架
+            ]
         
         for pattern in search_patterns:
             price_files = list(raw_data_path.glob(pattern))
@@ -1447,12 +1517,20 @@ class ProfessionalFactorScreener:
             metrics.adaptability_score = min(adaptability_score, 1.0)
             
             # 综合评分计算
+            weights = getattr(self.config, 'weights', {
+                'predictive_power': 0.35,
+                'stability': 0.25,
+                'independence': 0.20,
+                'practicality': 0.10,
+                'short_term_fitness': 0.10
+            })
+            
             metrics.comprehensive_score = (
-                metrics.predictive_score * self.config.weight_predictive +
-                metrics.stability_score * self.config.weight_stability +
-                metrics.independence_score * self.config.weight_independence +
-                metrics.practicality_score * self.config.weight_practicality +
-                metrics.adaptability_score * self.config.weight_adaptability
+                metrics.predictive_score * weights.get('predictive_power', 0.35) +
+                metrics.stability_score * weights.get('stability', 0.25) +
+                metrics.independence_score * weights.get('independence', 0.20) +
+                metrics.practicality_score * weights.get('practicality', 0.10) +
+                metrics.adaptability_score * weights.get('short_term_fitness', 0.10)
             )
             
             # 统计显著性
@@ -1479,17 +1557,38 @@ class ProfessionalFactorScreener:
             # 1. 数据加载
             self.logger.info("步骤1: 数据加载...")
             factors = self.load_factors(symbol, timeframe)
-            price_data = self.load_price_data(symbol)
+            price_data = self.load_price_data(symbol, timeframe)  # 传递timeframe参数
             
             # 2. 数据预处理和对齐
             self.logger.info("步骤2: 数据预处理...")
             close_prices = price_data['close']
             returns = close_prices.pct_change().shift(-1)  # 次日收益
             
+            # 添加诊断日志 - 关键修复
+            self.logger.info(f"数据对齐前诊断:")
+            self.logger.info(f"  因子数据: {len(factors)} 行, 时间 {factors.index.min()} 到 {factors.index.max()}")
+            self.logger.info(f"  价格数据: {len(close_prices)} 行, 时间 {close_prices.index.min()} 到 {close_prices.index.max()}")
+            
             # 时间对齐
             common_index = factors.index.intersection(close_prices.index)
+            
+            # 如果对齐失败，尝试诊断并修复
+            if len(common_index) == 0:
+                self.logger.error("数据对齐失败！尝试诊断...")
+                self.logger.error(f"  因子前5个时间: {factors.index[:5].tolist()}")
+                self.logger.error(f"  价格前5个时间: {close_prices.index[:5].tolist()}")
+                
+                # 对于daily数据，尝试标准化到日期
+                if timeframe == 'daily':
+                    self.logger.info("检测到daily时间框架，尝试标准化到日期...")
+                    factors.index = factors.index.normalize()
+                    close_prices.index = close_prices.index.normalize()
+                    returns.index = returns.index.normalize()
+                    common_index = factors.index.intersection(close_prices.index)
+                    self.logger.info(f"标准化后共同时间点: {len(common_index)}")
+            
             if len(common_index) < self.config.min_sample_size:
-                raise ValueError(f"数据对齐后样本量不足: {len(common_index)}")
+                raise ValueError(f"数据对齐后样本量不足: {len(common_index)} < {self.config.min_sample_size}")
             
             factors_aligned = factors.loc[common_index]
             returns_aligned = returns.loc[common_index]
@@ -1554,19 +1653,86 @@ class ProfessionalFactorScreener:
             total_time = time.time() - start_time
             current_memory = self.process.memory_info().rss / 1024 / 1024
             memory_used = current_memory - self.start_memory
-            
+
             self.logger.info(f"5维度筛选完成:")
             self.logger.info(f"  - 总耗时: {total_time:.2f}秒")
             self.logger.info(f"  - 内存使用: {memory_used:.1f}MB")
             self.logger.info(f"  - 因子总数: {len(comprehensive_results)}")
-            
+
             # 统计各维度表现
             significant_count = sum(1 for m in comprehensive_results.values() if m.is_significant)
             high_score_count = sum(1 for m in comprehensive_results.values() if m.comprehensive_score > 0.7)
-            
+
             self.logger.info(f"  - 显著因子: {significant_count}")
             self.logger.info(f"  - 高分因子: {high_score_count}")
-            
+
+            # 7. 收集筛选统计信息
+            screening_stats = {
+                'total_factors': len(comprehensive_results),
+                'significant_factors': significant_count,
+                'high_score_factors': high_score_count,
+                'total_time': total_time,
+                'memory_used_mb': memory_used,
+                'sample_size': len(common_index) if 'common_index' in locals() else 0,
+                'factors_aligned': len(factors_aligned.columns) if 'factors_aligned' in locals() else 0,
+                'data_alignment_successful': len(common_index) > 0 if 'common_index' in locals() else False,
+                'screening_timestamp': datetime.now().isoformat(),
+                'symbol': symbol,
+                'timeframe': timeframe
+            }
+
+            # 8. 收集数据质量信息
+            data_quality_info = {
+                'factor_data_shape': factors.shape if 'factors' in locals() else None,
+                'price_data_shape': price_data.shape if 'price_data' in locals() else None,
+                'aligned_data_shape': factors_aligned.shape if 'factors_aligned' in locals() else None,
+                'data_overlap_count': len(common_index) if 'common_index' in locals() else 0,
+                'factor_data_range': {
+                    'start': factors.index.min().isoformat() if 'factors' in locals() and len(factors) > 0 else None,
+                    'end': factors.index.max().isoformat() if 'factors' in locals() and len(factors) > 0 else None
+                },
+                'price_data_range': {
+                    'start': price_data.index.min().isoformat() if 'price_data' in locals() and len(price_data) > 0 else None,
+                    'end': price_data.index.max().isoformat() if 'price_data' in locals() and len(price_data) > 0 else None
+                },
+                'alignment_success_rate': len(common_index) / min(len(factors), len(price_data)) if 'factors' in locals() and 'price_data' in locals() else 0.0
+            }
+
+            # 9. 保存完整筛选信息 - 使用增强版结果管理器
+            try:
+                if self.result_manager is not None:
+                    # 使用新的增强版结果管理器创建时间戳文件夹
+                    session_id = self.result_manager.create_screening_session(
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        results=comprehensive_results,
+                        screening_stats=screening_stats,
+                        config=self.config,
+                        data_quality_info=data_quality_info
+                    )
+                    
+                    self.logger.info(f"✅ 完整筛选会话已创建: {session_id}")
+                    screening_stats['session_id'] = session_id
+                else:
+                    self.logger.info("使用传统存储方式")
+                
+                # 保持向后兼容 - 仍然保存传统格式
+                try:
+                    saved_files = self.save_comprehensive_screening_info(
+                        results=comprehensive_results,
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        screening_stats=screening_stats,
+                        data_quality_info=data_quality_info
+                    )
+                    screening_stats['legacy_files'] = saved_files
+                except Exception as legacy_error:
+                    self.logger.warning(f"传统格式保存失败: {legacy_error}")
+                    
+            except Exception as e:
+                self.logger.error(f"保存完整筛选信息失败: {str(e)}")
+                screening_stats['save_error'] = str(e)
+
             return comprehensive_results
             
         except Exception as e:
@@ -1574,7 +1740,7 @@ class ProfessionalFactorScreener:
             raise
     
     def generate_screening_report(self, results: Dict[str, FactorMetrics], 
-                                output_path: str = None) -> pd.DataFrame:
+                                output_path: str = None, symbol: str = None, timeframe: str = None) -> pd.DataFrame:
         """生成筛选报告"""
         self.logger.info("生成筛选报告...")
         
@@ -1622,9 +1788,14 @@ class ProfessionalFactorScreener:
         report_df = pd.DataFrame(report_data)
         report_df = report_df.sort_values('Comprehensive_Score', ascending=False)
         
-        # 保存报告
+        # 保存报告（包含时间框架标识）
         if output_path is None:
-            output_path = self.data_root / f"screening_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            # 使用传入的参数或从results中提取symbol和timeframe信息
+            symbol_info = symbol or results.get('symbol', 'unknown')
+            timeframe_info = timeframe or results.get('timeframe', 'unknown')
+            # 使用专门的筛选报告目录
+            output_path = self.screening_results_dir / f"screening_report_{symbol_info}_{timeframe_info}_{timestamp}.csv"
         
         # 确保路径是字符串格式，避免pandas Path._flavour问题
         output_path_str = str(output_path)
@@ -1632,7 +1803,102 @@ class ProfessionalFactorScreener:
         self.logger.info(f"筛选报告已保存: {output_path}")
         
         return report_df
-    
+
+    def save_comprehensive_screening_info(self, results: Dict[str, FactorMetrics],
+                                       symbol: str, timeframe: str,
+                                       screening_stats: Dict,
+                                       data_quality_info: Dict = None):
+        """保存完整的筛选信息，包括多个格式的报告"""
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base_filename = f"screening_{symbol}_{timeframe}_{timestamp}"
+
+        # 1. 保存详细的CSV报告
+        csv_path = self.screening_results_dir / f"{base_filename}_detailed_report.csv"
+        report_df = self.generate_screening_report(results, str(csv_path), symbol, timeframe)
+
+        # 2. 保存筛选过程统计信息
+        stats_path = self.screening_results_dir / f"{base_filename}_screening_stats.json"
+        with open(stats_path, 'w', encoding='utf-8') as f:
+            json.dump(screening_stats, f, indent=2, ensure_ascii=False, default=str)
+
+        # 3. 保存顶级因子摘要
+        summary_path = self.screening_results_dir / f"{base_filename}_top_factors_summary.txt"
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            f.write(f"=== 因子筛选摘要报告 ===\n")
+            f.write(f"股票代码: {symbol}\n")
+            f.write(f"时间框架: {timeframe}\n")
+            f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"\n=== 筛选统计 ===\n")
+            f.write(f"总因子数: {screening_stats.get('total_factors', 0)}\n")
+            f.write(f"显著因子: {screening_stats.get('significant_factors', 0)}\n")
+            f.write(f"高分因子: {screening_stats.get('high_score_factors', 0)}\n")
+            f.write(f"总耗时: {screening_stats.get('total_time', 0):.2f}秒\n")
+            f.write(f"内存使用: {screening_stats.get('memory_used_mb', 0):.1f}MB\n")
+
+            # 获取前10名因子
+            top_factors = self.get_top_factors(results, top_n=10, min_score=0.0, require_significant=False)
+            f.write(f"\n=== 前10名顶级因子 ===\n")
+            for i, factor in enumerate(top_factors, 1):
+                f.write(f"{i:2d}. {factor.name:<25} 综合得分: {factor.comprehensive_score:.3f} ")
+                f.write(f"预测能力: {factor.predictive_score:.3f} 显著性: {'✓' if factor.is_significant else '✗'}\n")
+
+        # 4. 保存数据质量报告
+        if data_quality_info:
+            quality_path = self.screening_results_dir / f"{base_filename}_data_quality.json"
+            with open(quality_path, 'w', encoding='utf-8') as f:
+                json.dump(data_quality_info, f, indent=2, ensure_ascii=False, default=str)
+
+        # 5. 保存配置参数记录
+        config_path = self.screening_results_dir / f"{base_filename}_config.yaml"
+        config_dict = {
+            'screening_config': asdict(self.config),
+            'execution_info': {
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'timestamp': timestamp,
+                'data_root': str(self.data_root),
+                'screening_results_dir': str(self.screening_results_dir)
+            }
+        }
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(config_dict, f, default_flow_style=False, allow_unicode=True, indent=2)
+
+        # 6. 创建一个主索引文件
+        index_path = self.screening_results_dir / f"{base_filename}_index.txt"
+        with open(index_path, 'w', encoding='utf-8') as f:
+            f.write(f"因子筛选完整报告索引\n")
+            f.write(f"========================\n\n")
+            f.write(f"基础信息:\n")
+            f.write(f"  股票代码: {symbol}\n")
+            f.write(f"  时间框架: {timeframe}\n")
+            f.write(f"  生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"包含文件:\n")
+            f.write(f"  1. {csv_path.name} - 详细因子数据 (CSV格式)\n")
+            f.write(f"  2. {stats_path.name} - 筛选过程统计 (JSON格式)\n")
+            f.write(f"  3. {summary_path.name} - 顶级因子摘要 (TXT格式)\n")
+            if data_quality_info:
+                f.write(f"  4. {quality_path.name} - 数据质量报告 (JSON格式)\n")
+            f.write(f"  5. {config_path.name} - 配置参数记录 (YAML格式)\n")
+            f.write(f"  6. {index_path.name} - 本索引文件\n\n")
+            f.write(f"使用说明:\n")
+            f.write(f"  - 查看顶级因子: 阅读 {summary_path.name}\n")
+            f.write(f"  - 详细数据分析: 打开 {csv_path.name} 使用Excel或pandas\n")
+            f.write(f"  - 筛选过程详情: 查看 {stats_path.name}\n")
+            f.write(f"  - 配置参数参考: 查看 {config_path.name}\n")
+
+        self.logger.info(f"完整筛选信息已保存到: {self.screening_results_dir}")
+        self.logger.info(f"主索引文件: {index_path}")
+
+        return {
+            'csv_report': str(csv_path),
+            'stats_json': str(stats_path),
+            'summary_txt': str(summary_path),
+            'data_quality_json': str(quality_path) if data_quality_info else None,
+            'config_yaml': str(config_path),
+            'index_txt': str(index_path)
+        }
+
     def get_top_factors(self, results: Dict[str, FactorMetrics], 
                        top_n: int = 20, 
                        min_score: float = 0.5,

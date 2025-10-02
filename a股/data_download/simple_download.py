@@ -62,15 +62,14 @@ def download_stock_data(ticker_symbol, output_dir):
 def main():
     """主函数"""
     # 配置
-    output_dir = "/Users/zhangshenshen/深度量化0927/a股/存储概念"
+    output_dir = "/Users/zhangshenshen/深度量化0927/a股"
 
-    # 需要下载的股票列表
+    # 需要下载的股票列表 - 300450 先导智能
     required_stocks = [
-        "002371.SZ",  # 北方华创
-        "300408.SZ",  # 三环集团
+        "300450.SZ",  # 先导智能
     ]
 
-    print("开始下载推荐股票数据...")
+    print("开始下载300450先导智能股票数据...")
     print(f"将下载 {len(required_stocks)} 只股票的数据到: {output_dir}")
 
     # 下载所有股票数据

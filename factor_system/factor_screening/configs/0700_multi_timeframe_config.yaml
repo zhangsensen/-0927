@@ -1,0 +1,143 @@
+# 0700.HK 5个时间框架批量筛选配置
+task_name: "0700_HK_multi_timeframe_analysis"
+description: "腾讯控股5个时间框架综合因子分析 - 15min, 30min, 60min, 4hour, daily"
+max_concurrent_tasks: 3
+continue_on_error: true
+generate_summary_report: true
+compare_results: true
+max_retries: 2
+
+screening_configs:
+  - name: "0700_HK_15min"
+    description: "腾讯控股15分钟因子筛选"
+    symbols: ["0700.HK"]
+    timeframes: ["15min"]
+    ic_horizons: [1, 2, 3, 5]
+    min_sample_size: 100
+    alpha_level: 0.05
+    weights:
+      predictive_power: 0.35
+      stability: 0.25
+      independence: 0.20
+      practicality: 0.10
+      short_term_fitness: 0.10
+    enable_parallel: true
+    max_workers: 4
+    correlation_threshold: 0.7
+    min_ic_threshold: 0.015
+    min_ir_threshold: 0.3
+    min_stability_threshold: 0.6
+    min_robustness_score: 0.6
+    rolling_window: 60
+    fdr_method: benjamini_hochberg
+    save_reports: true
+    save_detailed_metrics: true
+    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+
+  - name: "0700_HK_30min"
+    description: "腾讯控股30分钟因子筛选"
+    symbols: ["0700.HK"]
+    timeframes: ["30min"]
+    ic_horizons: [1, 3, 5, 10]
+    min_sample_size: 120
+    alpha_level: 0.05
+    weights:
+      predictive_power: 0.35
+      stability: 0.25
+      independence: 0.20
+      practicality: 0.10
+      short_term_fitness: 0.10
+    enable_parallel: true
+    max_workers: 4
+    correlation_threshold: 0.7
+    min_ic_threshold: 0.015
+    min_ir_threshold: 0.3
+    min_stability_threshold: 0.6
+    min_robustness_score: 0.6
+    rolling_window: 80
+    fdr_method: benjamini_hochberg
+    save_reports: true
+    save_detailed_metrics: true
+    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+
+  - name: "0700_HK_60min"
+    description: "腾讯控股60分钟因子筛选"
+    symbols: ["0700.HK"]
+    timeframes: ["60min"]
+    ic_horizons: [1, 3, 5, 10, 20]
+    min_sample_size: 150
+    alpha_level: 0.05
+    weights:
+      predictive_power: 0.35
+      stability: 0.25
+      independence: 0.20
+      practicality: 0.10
+      short_term_fitness: 0.10
+    enable_parallel: true
+    max_workers: 6
+    correlation_threshold: 0.7
+    min_ic_threshold: 0.015
+    min_ir_threshold: 0.3
+    min_stability_threshold: 0.6
+    min_robustness_score: 0.6
+    rolling_window: 120
+    fdr_method: benjamini_hochberg
+    save_reports: true
+    save_detailed_metrics: true
+    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+
+  - name: "0700_HK_4hour"
+    description: "腾讯控股4小时因子筛选"
+    symbols: ["0700.HK"]
+    timeframes: ["4hour"]
+    ic_horizons: [1, 3, 5, 10, 20]
+    min_sample_size: 100
+    alpha_level: 0.05
+    weights:
+      predictive_power: 0.35
+      stability: 0.25
+      independence: 0.20
+      practicality: 0.10
+      short_term_fitness: 0.10
+    enable_parallel: true
+    max_workers: 4
+    correlation_threshold: 0.7
+    min_ic_threshold: 0.015
+    min_ir_threshold: 0.3
+    min_stability_threshold: 0.6
+    min_robustness_score: 0.6
+    rolling_window: 80
+    fdr_method: benjamini_hochberg
+    save_reports: true
+    save_detailed_metrics: true
+    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+
+  - name: "0700_HK_daily"
+    description: "腾讯控股日线因子筛选"
+    symbols: ["0700.HK"]
+    timeframes: ["daily"]
+    ic_horizons: [1, 3, 5, 10, 20, 30]
+    min_sample_size: 200
+    alpha_level: 0.05
+    weights:
+      predictive_power: 0.30
+      stability: 0.30
+      independence: 0.20
+      practicality: 0.15
+      short_term_fitness: 0.05
+    enable_parallel: true
+    max_workers: 6
+    correlation_threshold: 0.7
+    min_ic_threshold: 0.01
+    min_ir_threshold: 0.25
+    min_stability_threshold: 0.65
+    min_robustness_score: 0.65
+    rolling_window: 252
+    fdr_method: benjamini_hochberg
+    save_reports: true
+    save_detailed_metrics: true
+    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+
+# 全局设置
+global_data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+global_output_dir: "/Users/zhangshenshen/深度量化0927/output"

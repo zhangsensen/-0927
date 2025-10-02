@@ -216,6 +216,7 @@ class EnhancedFactorCalculator:
         """
         计算综合技术因子 - 基于专业探测器的154个指标
         这是核心方法，移植自vbt_professional_detector.py
+        根据不同时间框架调整计算参数和逻辑
         """
         logger.info(f"计算 {timeframe.value} 时间框架的综合技术因子...")
 
@@ -237,37 +238,32 @@ class EnhancedFactorCalculator:
             # 计算所有可用的VectorBT指标
             factor_calculations = []
 
-            # 1. 移动平均线系列 - 启用所有周期
+            # 根据时间框架调整参数 - 核心修复
+            timeframe_params = self._get_timeframe_parameters(timeframe)
+            logger.info(f"{timeframe.value} 时间框架参数: {timeframe_params}")
+
+            # 1. 移动平均线系列 - 根据时间框架调整窗口
             if self.config.enable_ma and 'MA' in available_indicators:
-                if self.config.enable_all_periods:
-                    ma_windows = [3, 5, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120, 150, 200]
-                else:
-                    ma_windows = [5, 10, 20, 30, 60]  # 核心周期
+                ma_windows = timeframe_params['ma_windows']
+                logger.info(f"{timeframe.value} 使用MA窗口: {ma_windows}")
 
                 for window in ma_windows:
                     calc = lambda w=window: vbt.MA.run(price, window=w).ma.rename(f'MA{w}')
                     factor_calculations.append((f'MA{window}', calc))
 
-            # 2. 指数移动平均
+            # 2. 指数移动平均 - 根据时间框架调整
             if self.config.enable_ema:
-                if self.config.enable_all_periods:
-                    ema_spans = [3, 5, 8, 12, 15, 20, 26, 30, 40, 50, 60]
-                else:
-                    ema_spans = [5, 10, 20, 30, 60]
+                ema_spans = timeframe_params['ema_spans']
+                logger.info(f"{timeframe.value} 使用EMA窗口: {ema_spans}")
 
                 for span in ema_spans:
                     calc = lambda s=span: price.ewm(span=s, adjust=False).mean().rename(f'EMA{s}')
                     factor_calculations.append((f'EMA{span}', calc))
 
-            # 3. MACD指标系列 - 多种参数组合
+            # 3. MACD指标系列 - 根据时间框架调整参数
             if self.config.enable_macd and 'MACD' in available_indicators:
-                if self.config.enable_all_periods:
-                    macd_params = [
-                        (6, 13, 6), (8, 17, 9), (12, 26, 9), (15, 30, 12),
-                        (6, 19, 6), (12, 30, 6), (8, 21, 9)
-                    ]
-                else:
-                    macd_params = [(12, 26, 9)]  # 标准参数
+                macd_params = timeframe_params['macd_params']
+                logger.info(f"{timeframe.value} 使用MACD参数: {macd_params}")
 
                 for fast, slow, signal in macd_params:
                     calc = lambda f=fast, s=slow, sig=signal: (
@@ -277,10 +273,8 @@ class EnhancedFactorCalculator:
 
             # 4. RSI系列
             if self.config.enable_rsi and 'RSI' in available_indicators:
-                if self.config.enable_all_periods:
-                    rsi_windows = [3, 6, 9, 12, 14, 18, 21, 25, 30]
-                else:
-                    rsi_windows = [14]  # 标准周期
+                rsi_windows = timeframe_params['rsi_windows']
+                logger.info(f"{timeframe.value} 使用RSI窗口: {rsi_windows}")
 
                 for window in rsi_windows:
                     calc = lambda w=window: vbt.RSI.run(price, window=w).rsi.rename(f'RSI{w}')
@@ -288,12 +282,11 @@ class EnhancedFactorCalculator:
 
             # 5. 布林带系列
             if self.config.enable_bbands and 'BBANDS' in available_indicators:
-                if self.config.enable_all_periods:
-                    bb_params = [(10, 1.5), (12, 2.0), (15, 2.0), (20, 2.0), (20, 2.5), (25, 2.0), (30, 2.0)]
-                else:
-                    bb_params = [(20, 2.0)]  # 标准参数
+                bb_windows = timeframe_params['bb_windows']
+                logger.info(f"{timeframe.value} 使用BB窗口: {bb_windows}")
 
-                for window, alpha in bb_params:
+                for window in bb_windows:
+                    alpha = 2.0  # 标准alpha
                     calc = lambda w=window, a=alpha: (
                         vbt.BBANDS.run(price, window=w, alpha=a)
                     )
@@ -301,12 +294,10 @@ class EnhancedFactorCalculator:
 
             # 6. 随机指标
             if self.config.enable_stoch and 'STOCH' in available_indicators:
-                if self.config.enable_all_periods:
-                    stoch_params = [(9, 3), (14, 3), (14, 5), (18, 6)]
-                else:
-                    stoch_params = [(14, 3)]  # 标准参数
+                stoch_windows = timeframe_params['stoch_windows']
+                logger.info(f"{timeframe.value} 使用STOCH窗口: {stoch_windows}")
 
-                for k_window, d_window in stoch_params:
+                for k_window, d_window in stoch_windows:
                     calc = lambda k=k_window, d=d_window: (
                         extract_vbt_indicator(vbt.STOCH.run(high, low, price, k_window=k, d_window=d))
                     )
@@ -314,10 +305,8 @@ class EnhancedFactorCalculator:
 
             # 7. 平均真实范围
             if self.config.enable_atr and 'ATR' in available_indicators:
-                if self.config.enable_all_periods:
-                    atr_windows = [7, 14, 21, 28]
-                else:
-                    atr_windows = [14]  # 标准周期
+                atr_windows = timeframe_params['atr_windows']
+                logger.info(f"{timeframe.value} 使用ATR窗口: {atr_windows}")
 
                 for window in atr_windows:
                     calc = lambda w=window: vbt.ATR.run(high, low, price, window=w).atr.rename(f'ATR{w}')
@@ -325,10 +314,8 @@ class EnhancedFactorCalculator:
 
             # 8. 移动标准差 (波动率)
             if self.config.enable_mstd and 'MSTD' in available_indicators:
-                if self.config.enable_all_periods:
-                    mstd_windows = [5, 10, 15, 20, 25, 30]
-                else:
-                    mstd_windows = [20]  # 标准周期
+                mstd_windows = timeframe_params['mstd_windows']
+                logger.info(f"{timeframe.value} 使用MSTD窗口: {mstd_windows}")
 
                 for window in mstd_windows:
                     calc = lambda w=window: vbt.MSTD.run(price, window=w).mstd.rename(f'MSTD{w}')
@@ -367,11 +354,14 @@ class EnhancedFactorCalculator:
                 #             calc = lambda w=window, func=stat_func, name=stat_name: func.run(price, window=w).rename(f'{name}{w}')
                 #             factor_calculations.append((f'{stat_name}{window}', calc))
 
-                # 其他移动平均指标
+                # 其他移动平均指标 - 根据时间框架调整窗口
                 for lb_func, lb_name in [(vbt.LEXLB, 'LEXLB'), (vbt.MEANLB, 'MEANLB'),
                                          (vbt.TRENDLB, 'TRENDLB')]:
                     if lb_name in available_indicators:
-                        for window in [5, 10, 20]:
+                        lb_windows = timeframe_params['lb_windows']
+                        logger.info(f"{timeframe.value} 使用{lb_name}窗口: {lb_windows}")
+
+                        for window in lb_windows:
                             if lb_name in ['LEXLB']:
                                 # LEXLB只需要close, pos_th, neg_th
                                 calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(func.run(price, pos_th=0.1, neg_th=-0.1))
@@ -642,6 +632,75 @@ class EnhancedFactorCalculator:
             import traceback
             logger.error(traceback.format_exc())
             return None
+
+    def _get_timeframe_parameters(self, timeframe: TimeFrame) -> Dict[str, Any]:
+        """根据时间框架获取计算参数 - 核心修复"""
+        # 根据时间框架的特性调整参数
+        if timeframe == TimeFrame.MIN_5:
+            # 5分钟框架：短周期，快速反应
+            return {
+                'ma_windows': [3, 5, 8, 10, 15, 20],
+                'ema_spans': [3, 5, 8, 12, 15, 20],
+                'lb_windows': [3, 5, 8, 10],
+                'rsi_windows': [7, 10, 14],
+                'bb_windows': [10, 15, 20],
+                'atr_windows': [7, 10, 14],
+                'mstd_windows': [5, 10, 15],
+                'stoch_windows': [(7, 10), (10, 14), (14, 20)],
+                'macd_params': [(6, 13, 4), (8, 17, 5), (12, 26, 9)]
+            }
+        elif timeframe == TimeFrame.MIN_15:
+            # 15分钟框架：中等偏短周期
+            return {
+                'ma_windows': [5, 8, 10, 15, 20, 30],
+                'ema_spans': [5, 8, 12, 15, 20, 26],
+                'lb_windows': [5, 8, 12, 15],
+                'rsi_windows': [10, 14, 20],
+                'bb_windows': [15, 20, 25],
+                'atr_windows': [10, 14, 20],
+                'mstd_windows': [8, 12, 20],
+                'stoch_windows': [(10, 14), (14, 20), (20, 25)],
+                'macd_params': [(8, 17, 5), (12, 26, 9), (16, 34, 7)]
+            }
+        elif timeframe == TimeFrame.MIN_30:
+            # 30分钟框架：中等周期
+            return {
+                'ma_windows': [8, 10, 15, 20, 30, 40],
+                'ema_spans': [8, 12, 15, 20, 26, 30],
+                'lb_windows': [8, 12, 15, 20],
+                'rsi_windows': [14, 20, 25],
+                'bb_windows': [20, 25, 30],
+                'atr_windows': [14, 20, 25],
+                'mstd_windows': [12, 20, 25],
+                'stoch_windows': [(14, 20), (20, 25), (25, 30)],
+                'macd_params': [(12, 26, 9), (16, 34, 7), (20, 42, 8)]
+            }
+        elif timeframe == TimeFrame.MIN_60:
+            # 60分钟框架：中等偏长周期
+            return {
+                'ma_windows': [10, 15, 20, 30, 40, 50],
+                'ema_spans': [12, 15, 20, 26, 30, 40],
+                'lb_windows': [10, 15, 20, 25],
+                'rsi_windows': [14, 20, 30],
+                'bb_windows': [20, 30, 40],
+                'atr_windows': [14, 20, 30],
+                'mstd_windows': [15, 25, 35],
+                'stoch_windows': [(14, 20), (20, 30), (30, 40)],
+                'macd_params': [(12, 26, 9), (16, 34, 7), (20, 42, 8)]
+            }
+        else:  # DAILY
+            # 日线框架：长周期，趋势跟踪
+            return {
+                'ma_windows': [10, 20, 30, 40, 50, 60, 80, 100],
+                'ema_spans': [12, 20, 26, 30, 40, 50, 60],
+                'lb_windows': [10, 20, 30, 40],
+                'rsi_windows': [14, 20, 30, 60],
+                'bb_windows': [20, 30, 40, 50],
+                'atr_windows': [14, 20, 30, 60],
+                'mstd_windows': [20, 30, 40, 60],
+                'stoch_windows': [(14, 20), (20, 30), (30, 60)],
+                'macd_params': [(12, 26, 9), (16, 34, 7), (20, 42, 8)]
+            }
 
     def _check_available_indicators(self) -> List[str]:
         """检查VectorBT可用指标"""

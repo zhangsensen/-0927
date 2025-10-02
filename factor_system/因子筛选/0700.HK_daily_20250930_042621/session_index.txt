@@ -1,0 +1,21 @@
+因子筛选完整报告索引
+========================
+
+基础信息:
+  股票代码: 0700.HK
+  时间框架: daily
+  生成时间: 2025-09-30 04:26:21
+
+包含文件:
+  1. screening_0700.HK_daily_20250930_042621_detailed_report.csv - 详细因子数据 (CSV格式)
+  2. screening_0700.HK_daily_20250930_042621_screening_stats.json - 筛选过程统计 (JSON格式)
+  3. screening_0700.HK_daily_20250930_042621_top_factors_summary.txt - 顶级因子摘要 (TXT格式)
+  4. screening_0700.HK_daily_20250930_042621_data_quality.json - 数据质量报告 (JSON格式)
+  5. screening_0700.HK_daily_20250930_042621_config.yaml - 配置参数记录 (YAML格式)
+  6. screening_0700.HK_daily_20250930_042621_index.txt - 本索引文件
+
+使用说明:
+  - 查看顶级因子: 阅读 screening_0700.HK_daily_20250930_042621_top_factors_summary.txt
+  - 详细数据分析: 打开 screening_0700.HK_daily_20250930_042621_detailed_report.csv 使用Excel或pandas
+  - 筛选过程详情: 查看 screening_0700.HK_daily_20250930_042621_screening_stats.json
+  - 配置参数参考: 查看 screening_0700.HK_daily_20250930_042621_config.yaml
