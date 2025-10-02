@@ -50,17 +50,23 @@ class FactorScreeningCLI:
 1. 单股票快速筛选:
    python cli.py single 0700.HK 60min
 
-2. 批量筛选多时间框架:
+2. 多时间框架筛选:
+   python cli.py multi 0700.HK 15min,30min,60min,4hour,daily
+
+3. 批量筛选多股票多时间框架:
    python cli.py batch 0700.HK,0005.HK 30min,60min
 
-3. 使用配置文件:
+4. 使用配置文件:
    python cli.py config batch_config.yaml
 
-4. 列出预设配置:
+5. 列出预设配置:
    python cli.py presets
 
-5. 创建配置模板:
+6. 创建配置模板:
    python cli.py templates
+
+7. 查看系统状态:
+   python cli.py status
             """
         )
         
@@ -70,14 +76,29 @@ class FactorScreeningCLI:
         single_parser = subparsers.add_parser('single', help='单个股票筛选')
         single_parser.add_argument('symbol', help='股票代码 (例: 0700.HK)')
         single_parser.add_argument('timeframe', help='时间框架 (例: 60min)')
-        single_parser.add_argument('--preset', default='default', 
+        single_parser.add_argument('--preset', default='default',
                                  help='预设配置 (default/quick/deep/high_freq)')
-        single_parser.add_argument('--output', default='./output', 
+        single_parser.add_argument('--output', default='./output',
                                  help='输出目录')
         single_parser.add_argument('--data-root', default='./output',
                                  help='因子数据根目录')
         single_parser.add_argument('--raw-data-root', default='../raw',
                                  help='原始数据根目录')
+
+        # 多时间框架筛选命令
+        multi_parser = subparsers.add_parser('multi', help='多时间框架筛选')
+        multi_parser.add_argument('symbol', help='股票代码 (例: 0700.HK)')
+        multi_parser.add_argument('timeframes', help='时间框架列表 (逗号分隔, 例: 15min,30min,60min)')
+        multi_parser.add_argument('--preset', default='default',
+                                help='预设配置')
+        multi_parser.add_argument('--output', default='./output',
+                                help='输出目录')
+        multi_parser.add_argument('--data-root', default='./output',
+                                help='因子数据根目录')
+        multi_parser.add_argument('--raw-data-root', default='../raw',
+                                help='原始数据根目录')
+        multi_parser.add_argument('--parallel', action='store_true',
+                                help='并行处理时间框架')
         
         # 批量筛选命令
         batch_parser = subparsers.add_parser('batch', help='批量筛选')
@@ -162,18 +183,125 @@ class FactorScreeningCLI:
             logger.info(f"总因子数: {len(results)}")
             logger.info(f"顶级因子 (前5个):")
             for i, factor in enumerate(top_factors[:5], 1):
-                logger.info(f"  {i}. {factor.name}: {factor.comprehensive_score:.3f}")
-            
-            # 生成报告
-            if config.save_reports:
-                report_df = screener.generate_screening_report(results, symbol=args.symbol, timeframe=args.timeframe)
-                logger.info(f"报告已生成，包含 {len(report_df)} 个因子")
-            
+                logger.info(f"  {i}. {factor.factor_name} - 评分: {factor.comprehensive_score:.3f}")
+
         except Exception as e:
-            logger.error(f"单个筛选失败: {str(e)}")
+            logger.error(f"筛选失败: {str(e)}")
             raise
-    
+
+    def run_multi_timeframe_screening(self, args) -> None:
+        """运行多时间框架筛选"""
+        # 解析时间框架列表
+        timeframes = [tf.strip() for tf in args.timeframes.split(',')]
+
+        logger.info(f"开始多时间框架筛选: {args.symbol}")
+        logger.info(f"时间框架: {', '.join(timeframes)}")
+
+        try:
+            # 获取预设配置
+            config = self.config_manager.get_preset(args.preset)
+
+            # 更新配置
+            config.symbols = [args.symbol]
+            config.timeframes = timeframes
+            config.data_root = args.data_root
+            config.raw_data_root = args.raw_data_root
+            config.output_dir = args.output
+            config.factor_data_root = args.data_root
+
+            # 验证配置
+            errors = self.config_manager.validate_config(config)
+            if errors:
+                logger.error(f"配置验证失败: {errors}")
+                return
+
+            # 创建筛选器
+            screener = ProfessionalFactorScreener(
+                data_root=config.data_root,
+                config=config
+            )
+
+            # 执行多时间框架筛选
+            all_results = screener.screen_multiple_timeframes(
+                symbol=args.symbol,
+                timeframes=timeframes
+            )
+
+            # 显示汇总结果
+            logger.info(f"🎉 多时间框架筛选完成!")
+            logger.info(f"成功时间框架: {len(all_results)}/{len(timeframes)}")
+
+            total_factors = 0
+            total_top_factors = 0
+
+            for tf, results in all_results.items():
+                tf_top_factors = sum(1 for m in results.values() if m.comprehensive_score >= 0.8)
+                total_factors += len(results)
+                total_top_factors += tf_top_factors
+
+                logger.info(f"  {tf}: {len(results)} 总因子, {tf_top_factors} 顶级因子")
+
+            logger.info(f"总计: {total_factors} 因子, {total_top_factors} 顶级因子")
+
+            # 显示各时间框架顶级因子
+            for tf, results in all_results.items():
+                tf_top_factors = screener.get_top_factors(
+                    results, top_n=5, min_score=0.0, require_significant=False
+                )
+
+                logger.info(f"\n{tf} 顶级因子 (前3个):")
+                for i, factor in enumerate(tf_top_factors[:3], 1):
+                    logger.info(f"  {i}. {factor.factor_name} - 评分: {factor.comprehensive_score:.3f}")
+
+        except Exception as e:
+            logger.error(f"多时间框架筛选失败: {str(e)}")
+            raise
+
     def run_batch_screening(self, args) -> None:
+        """运行批量筛选"""
+        # 解析股票和时间框架列表
+        symbols = [s.strip() for s in args.symbols.split(',')]
+        timeframes = [tf.strip() for tf in args.timeframes.split(',')]
+
+        logger.info(f"开始批量筛选: {len(symbols)} 股票 x {len(timeframes)} 时间框架")
+        logger.info(f"股票: {', '.join(symbols)}")
+        logger.info(f"时间框架: {', '.join(timeframes)}")
+
+        try:
+            # 创建批量配置
+            batch_config = BatchConfig(
+                task_name=args.task_name,
+                screening_configs=[
+                    ScreeningConfig(
+                        name=f"batch_{i}_{symbol}_{timeframe}",
+                        symbols=[symbol],
+                        timeframes=[timeframe],
+                        max_workers=args.max_workers
+                    )
+                    for i, symbol in enumerate(symbols)
+                    for timeframe in timeframes
+                ],
+                enable_task_parallel=True,
+                max_concurrent_tasks=args.max_workers,
+                continue_on_error=args.continue_on_error,
+                generate_summary_report=True,
+                compare_results=True
+            )
+
+            # 执行批量筛选
+            batch_result = self.batch_screener.run_batch(batch_config)
+
+            # 显示结果
+            logger.info(f"批量筛选完成!")
+            logger.info(f"总任务数: {batch_result.total_tasks}")
+            logger.info(f"成功任务: {batch_result.successful_tasks}")
+            logger.info(f"失败任务: {batch_result.failed_tasks}")
+
+        except Exception as e:
+            logger.error(f"批量筛选失败: {str(e)}")
+            raise
+
+    def run_config_file(self, args) -> None:
         """运行批量筛选"""
         # 解析参数
         symbols = [s.strip() for s in args.symbols.split(',')]
@@ -363,6 +491,8 @@ class FactorScreeningCLI:
         try:
             if parsed_args.command == 'single':
                 self.run_single_screening(parsed_args)
+            elif parsed_args.command == 'multi':
+                self.run_multi_timeframe_screening(parsed_args)
             elif parsed_args.command == 'batch':
                 self.run_batch_screening(parsed_args)
             elif parsed_args.command == 'config':
