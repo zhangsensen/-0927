@@ -1,6 +1,7 @@
 # 0700.HK 5个时间框架批量筛选配置
-task_name: "0700_HK_multi_timeframe_analysis"
-description: "腾讯控股5个时间框架综合因子分析 - 15min, 30min, 60min, 4hour, daily"
+# BatchConfig 结构
+batch_name: "0700_HK_multi_timeframe_analysis"
+description: "腾讯控股5个时间框架综合因子分析 - 5min, 15min, 30min, 60min, daily"
 max_concurrent_tasks: 3
 continue_on_error: true
 generate_summary_report: true
@@ -8,6 +9,42 @@ compare_results: true
 max_retries: 2
 
 screening_configs:
+  - name: "0700_HK_5min"
+    description: "腾讯控股5分钟因子筛选"
+    symbols: ["0700.HK"]
+    timeframes: ["5min"]
+    ic_horizons: [1, 2, 3, 5]
+    min_sample_size: 100
+    alpha_level: 0.05
+    weights:
+      predictive_power: 0.35
+      stability: 0.25
+      independence: 0.20
+      practicality: 0.10
+      short_term_fitness: 0.10
+    enable_parallel: true
+    max_workers: 4
+    correlation_threshold: 0.7
+    min_ic_threshold: 0.015
+    min_ir_threshold: 0.3
+    min_stability_threshold: 0.6
+    min_robustness_score: 0.6
+    rolling_window: 60
+    fdr_method: "benjamini_hochberg"
+    save_reports: true
+    save_detailed_metrics: true
+    data_root: "../因子输出"
+    output_dir: "./因子筛选"
+    commission_rate: 0.002
+    slippage_bps: 5.0
+    market_impact_coeff: 0.1
+    min_stability_threshold: 0.6
+    max_vif_threshold: 10.0
+    max_cost_threshold: 0.01
+    log_level: "INFO"
+    memory_limit_gb: 8.0
+    timeout_minutes: 30
+
   - name: "0700_HK_15min"
     description: "腾讯控股15分钟因子筛选"
     symbols: ["0700.HK"]
@@ -29,10 +66,11 @@ screening_configs:
     min_stability_threshold: 0.6
     min_robustness_score: 0.6
     rolling_window: 60
-    fdr_method: benjamini_hochberg
+    fdr_method: "benjamini_hochberg"
     save_reports: true
     save_detailed_metrics: true
-    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+    data_root: "../因子输出"
+    output_dir: "./因子筛选"
 
   - name: "0700_HK_30min"
     description: "腾讯控股30分钟因子筛选"
@@ -55,10 +93,11 @@ screening_configs:
     min_stability_threshold: 0.6
     min_robustness_score: 0.6
     rolling_window: 80
-    fdr_method: benjamini_hochberg
+    fdr_method: "benjamini_hochberg"
     save_reports: true
     save_detailed_metrics: true
-    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+    data_root: "../因子输出"
+    output_dir: "./因子筛选"
 
   - name: "0700_HK_60min"
     description: "腾讯控股60分钟因子筛选"
@@ -81,10 +120,11 @@ screening_configs:
     min_stability_threshold: 0.6
     min_robustness_score: 0.6
     rolling_window: 120
-    fdr_method: benjamini_hochberg
+    fdr_method: "benjamini_hochberg"
     save_reports: true
     save_detailed_metrics: true
-    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+    data_root: "../因子输出"
+    output_dir: "./因子筛选"
 
   - name: "0700_HK_4hour"
     description: "腾讯控股4小时因子筛选"
@@ -107,10 +147,11 @@ screening_configs:
     min_stability_threshold: 0.6
     min_robustness_score: 0.6
     rolling_window: 80
-    fdr_method: benjamini_hochberg
+    fdr_method: "benjamini_hochberg"
     save_reports: true
     save_detailed_metrics: true
-    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+    data_root: "../因子输出"
+    output_dir: "./因子筛选"
 
   - name: "0700_HK_daily"
     description: "腾讯控股日线因子筛选"
@@ -133,11 +174,12 @@ screening_configs:
     min_stability_threshold: 0.65
     min_robustness_score: 0.65
     rolling_window: 252
-    fdr_method: benjamini_hochberg
+    fdr_method: "benjamini_hochberg"
     save_reports: true
     save_detailed_metrics: true
-    data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
+    data_root: "../因子输出"
+    output_dir: "./因子筛选"
 
 # 全局设置
-global_data_root: "/Users/zhangshenshen/深度量化0927/factor_system/output"
-global_output_dir: "/Users/zhangshenshen/深度量化0927/output"
+global_data_root: "../因子输出"
+global_output_dir: "./因子筛选"

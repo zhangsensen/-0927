@@ -192,8 +192,11 @@ class ConfigManager:
         # 5. 多时间框架配置
         presets["multi_timeframe"] = ScreeningConfig(
             name="multi_timeframe",
-            description="多时间框架筛选配置",
-            timeframes=["5min", "15min", "30min", "60min", "1day"],
+            description="多时间框架筛选配置 - 预设路径",
+            data_root="../因子输出",
+            raw_data_root="../raw",
+            output_dir="./因子筛选",
+            timeframes=["5min", "15min", "30min", "60min", "daily"],
             ic_horizons=[1, 3, 5, 10],
             max_workers=8,
             enable_parallel=True

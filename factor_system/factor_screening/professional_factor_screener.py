@@ -36,6 +36,17 @@ import psutil
 from collections import defaultdict
 import json
 
+# 导入因子对齐工具
+try:
+    from utils import FactorFileAligner, find_aligned_factor_files, validate_factor_alignment
+except ImportError:
+    # 如果导入失败，提供回退方案
+    FactorFileAligner = None
+    def find_aligned_factor_files(*args, **kwargs):
+        raise ImportError("因子对齐工具不可用")
+    def validate_factor_alignment(*args, **kwargs):
+        return True, "对齐验证工具不可用"
+
 warnings.filterwarnings('ignore')
 
 # 配置日志
@@ -159,43 +170,53 @@ class ProfessionalFactorScreener:
         """
         self.config = config or ScreeningConfig()
         
-        # 路径优先级: config > data_root参数 > 默认值
-        if hasattr(self.config, 'factor_data_root'):
-            self.data_root = Path(self.config.factor_data_root)
+        # 路径优先级: config.data_root > data_root参数 > 默认值
+        if hasattr(self.config, 'data_root') and self.config.data_root:
+            self.data_root = Path(self.config.data_root)
         elif data_root:
             self.data_root = Path(data_root)
         else:
-            self.data_root = Path("/Users/zhangshenshen/深度量化0927/factor_system/因子输出")  # 默认因子数据目录
+            self.data_root = Path("../因子输出")  # 默认因子数据目录（相对路径）
 
         # 设置日志和缓存路径
         self.log_root = Path(getattr(self.config, 'log_root', './logs/screening'))
         self.cache_dir = Path(getattr(self.config, 'cache_root', self.data_root / "cache"))
 
         # 设置筛选报告专用目录
-        self.screening_results_dir = Path("/Users/zhangshenshen/深度量化0927/factor_system/因子筛选")
+        if hasattr(self.config, 'output_dir') and self.config.output_dir:
+            self.screening_results_dir = Path(self.config.output_dir)
+        else:
+            self.screening_results_dir = Path("./因子筛选")
         self.screening_results_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 初始化增强版结果管理器（延迟记录日志）
-        try:
-            from enhanced_result_manager import EnhancedResultManager
-            self.result_manager = EnhancedResultManager(str(self.screening_results_dir))
-        except ImportError as e:
-            self.result_manager = None
+
+        # 初始化会话相关变量（稍后在screen_factors_comprehensive中创建）
+        self.session_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.session_dir = None
+
+        # 设置日志和缓存路径（先使用默认路径）
+        self.log_root = Path(getattr(self.config, 'log_root', './logs/screening'))
+        self.cache_dir = Path(getattr(self.config, 'cache_root', self.data_root / "cache"))
 
         # 创建必要的目录
         self.log_root.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self.logger = self._setup_logger()
+        # 设置日志
+        self.logger = self._setup_logger(self.session_timestamp)
 
         # 调试信息
         self.logger.info(f"DEBUG: data_root设置为: {self.data_root}")
-        
-        # 现在可以安全地记录增强版结果管理器状态
-        if self.result_manager:
-            self.logger.info("✅ 增强版结果管理器已启用")
-        else:
-            self.logger.warning("⚠️ 使用传统存储方式")
+        self.logger.info(f"DEBUG: 日志文件: {self.current_log_file}")
+
+        # 初始化增强版结果管理器
+        try:
+            from enhanced_result_manager import EnhancedResultManager
+            self.result_manager = EnhancedResultManager(str(self.screening_results_dir))
+            self.logger.info("✅ 增强版结果管理器初始化成功")
+        except ImportError as e:
+            self.result_manager = None
+            self.logger.warning(f"增强版结果管理器导入失败: {e}")
+            self.logger.info("将使用传统文件保存方式")
         
         # 性能监控
         self.process = psutil.Process()
@@ -205,19 +226,29 @@ class ProfessionalFactorScreener:
         self.logger.info(f"配置: IC周期={self.config.ic_horizons}, 最小样本={self.config.min_sample_size}")
         self.logger.info(f"显著性水平={self.config.alpha_level}, FDR方法={self.config.fdr_method}")
     
-    def _setup_logger(self) -> logging.Logger:
+    def _setup_logger(self, session_timestamp: str = None) -> logging.Logger:
         """设置专业级日志系统 - 改进版"""
         logger = logging.getLogger(f"{__name__}.{id(self)}")
         logger.setLevel(logging.INFO)
-        
+
         # 清除现有处理器
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
-        
+
         # 使用日志轮转 - 关键修复
         from logging.handlers import RotatingFileHandler
-        today = datetime.now().strftime('%Y%m%d')
-        log_file = self.log_root / f"screener_{today}.log"
+
+        # 支持会话时间戳或日期命名
+        if session_timestamp:
+            log_filename = f"professional_screener_{session_timestamp}.log"
+        else:
+            today = datetime.now().strftime('%Y%m%d_%H%M%S')
+            log_filename = f"professional_screener_{today}.log"
+
+        log_file = self.log_root / log_filename
+
+        # 保存当前日志文件路径，方便其他地方访问
+        self.current_log_file = str(log_file)
         
         file_handler = RotatingFileHandler(
             log_file,
@@ -565,13 +596,43 @@ class ProfessionalFactorScreener:
         return factors_df
 
     def load_factors(self, symbol: str, timeframe: str) -> pd.DataFrame:
-        """加载因子数据 - 增强版本"""
+        """加载因子数据 - 增强版本，支持因子文件对齐"""
         start_time = time.time()
         self.logger.info(f"加载因子数据: {symbol} {timeframe}")
-        
+
+        # 🎯 优先使用对齐的因子文件
+        if hasattr(self, 'aligned_factor_files') and self.aligned_factor_files:
+            if timeframe in self.aligned_factor_files:
+                selected_file = self.aligned_factor_files[timeframe]
+                self.logger.info(f"✅ 使用对齐的因子文件: {selected_file.name}")
+
+                try:
+                    factors = pd.read_parquet(selected_file)
+
+                    # 数据质量检查
+                    if factors.empty:
+                        self.logger.warning(f"因子文件为空: {selected_file}")
+                        raise ValueError(f"因子文件为空: {selected_file}")
+
+                    # 确保索引是datetime类型
+                    if not isinstance(factors.index, pd.DatetimeIndex):
+                        factors.index = pd.to_datetime(factors.index)
+
+                    # Linus式数据质量验证
+                    factors = self.validate_factor_data_quality(factors, symbol, timeframe)
+
+                    self.logger.info(f"因子数据加载成功: 形状={factors.shape}")
+                    self.logger.info(f"时间范围: {factors.index.min()} 到 {factors.index.max()}")
+                    self.logger.info(f"加载耗时: {time.time() - start_time:.2f}秒")
+
+                    return factors
+
+                except Exception as e:
+                    self.logger.warning(f"加载对齐文件失败，回退到默认搜索: {str(e)}")
+
         # 处理symbol格式
         clean_symbol = symbol.replace('.HK', '')
-        
+
         # 搜索策略：按优先级搜索不同格式的文件
         search_patterns = [
             # 新格式：timeframe子目录 (带.HK后缀)
@@ -583,7 +644,7 @@ class ProfessionalFactorScreener:
             # 根目录格式
             (self.data_root, f"{clean_symbol}*_{timeframe}_factors_*.parquet"),
         ]
-        
+
         for search_dir, pattern in search_patterns:
             if search_dir.exists():
                 factor_files = list(search_dir.glob(pattern))
@@ -1547,12 +1608,480 @@ class ProfessionalFactorScreener:
         return comprehensive_results
     
     # ==================== 主筛选函数 ====================
-    
+
+    def setup_multi_timeframe_session(self, symbol: str, timeframes: List[str]) -> Path:
+        """
+        设置多时间框架会话目录结构
+
+        Args:
+            symbol: 股票代码
+            timeframes: 时间框架列表
+
+        Returns:
+            Path: 主会话目录路径
+        """
+        # 创建主会话目录
+        main_session_id = f"{symbol}_multi_tf_{self.session_timestamp}"
+        self.multi_tf_session_dir = self.screening_results_dir / main_session_id
+        self.multi_tf_session_dir.mkdir(parents=True, exist_ok=True)
+
+        # 创建时间框架子目录
+        self.timeframes_dir = self.multi_tf_session_dir / "timeframes"
+        self.timeframes_dir.mkdir(exist_ok=True)
+
+        # 创建各个时间框架的会话目录
+        self.tf_session_dirs = {}
+        for tf in timeframes:
+            tf_session_id = f"{tf}_{self.session_timestamp}"
+            tf_session_dir = self.timeframes_dir / tf_session_id
+            tf_session_dir.mkdir(exist_ok=True)
+            self.tf_session_dirs[tf] = tf_session_dir
+
+        return self.multi_tf_session_dir
+
+    def screen_single_timeframe_in_multi_session(self, symbol: str, timeframe: str) -> Dict[str, FactorMetrics]:
+        """
+        在多时间框架会话中筛选单个时间框架
+
+        Args:
+            symbol: 股票代码
+            timeframe: 时间框架
+
+        Returns:
+            Dict[str, FactorMetrics]: 筛选结果
+        """
+        # 设置当前时间框架的会话目录
+        self.session_dir = self.tf_session_dirs[timeframe]
+
+        # 为当前时间框架创建独立的日志记录器
+        tf_logger_name = f"{self.session_timestamp}_{timeframe}"
+        # 临时设置日志根目录到时间框架会话目录
+        original_log_root = self.log_root
+        self.log_root = self.session_dir
+        self.logger = self._setup_logger(tf_logger_name)
+        # 恢复原始日志根目录
+        self.log_root = original_log_root
+
+        start_time = time.time()
+        self.logger.info(f"📁 多时间框架会话 - {timeframe} 子目录: {self.session_dir}")
+        self.logger.info(f"开始5维度因子筛选: {symbol} {timeframe}")
+
+        try:
+            # 1. 数据加载
+            self.logger.info("步骤1: 数据加载...")
+            factors = self.load_factors(symbol, timeframe)
+            price_data = self.load_price_data(symbol, timeframe)
+
+            # 2. 数据预处理和对齐
+            self.logger.info("步骤2: 数据预处理...")
+            close_prices = price_data['close']
+
+            # 3. 执行现有的筛选逻辑（复用原函数的核心部分）
+            return self._execute_screening_core(factors, close_prices, symbol, timeframe, start_time)
+
+        except Exception as e:
+            self.logger.error(f"多时间框架筛选失败 {symbol} {timeframe}: {str(e)}")
+            raise
+
+    def _execute_screening_core(self, factors: pd.DataFrame, close_prices: pd.Series,
+                               symbol: str, timeframe: str, start_time: float) -> Dict[str, FactorMetrics]:
+        """执行筛选的核心逻辑（从原函数中提取）"""
+        # 直接调用主筛选方法的逻辑，但使用已有的数据
+        self.logger.info(f"开始{symbol} {timeframe} 核心筛选分析...")
+
+        # 2. 数据预处理和对齐
+        self.logger.info("步骤2: 数据预处理...")
+        returns = close_prices.pct_change().shift(-1)  # 次日收益
+
+        # 时间对齐
+        common_index = factors.index.intersection(close_prices.index)
+
+        # 如果对齐失败，尝试诊断并修复
+        if len(common_index) == 0:
+            self.logger.error("数据对齐失败！尝试诊断...")
+            self.logger.error(f"  因子前5个时间: {factors.index[:5].tolist()}")
+            self.logger.error(f"  价格前5个时间: {close_prices.index[:5].tolist()}")
+
+            # 对于daily数据，尝试标准化到日期
+            if timeframe == 'daily':
+                self.logger.info("检测到daily时间框架，尝试标准化到日期...")
+                factors.index = factors.index.normalize()
+                close_prices.index = close_prices.index.normalize()
+                returns.index = returns.index.normalize()
+                common_index = factors.index.intersection(close_prices.index)
+                self.logger.info(f"标准化后共同时间点: {len(common_index)}")
+
+        if len(common_index) < self.config.min_sample_size:
+            raise ValueError(f"数据对齐后样本量不足: {len(common_index)} < {self.config.min_sample_size}")
+
+        factors_aligned = factors.loc[common_index]
+        returns_aligned = returns.loc[common_index]
+
+        self.logger.info(f"数据对齐完成: 样本量={len(common_index)}, 因子数={len(factors_aligned.columns)}")
+
+        # 3. 5维度分析
+        all_metrics = {}
+
+        # 3.1 预测能力分析
+        self.logger.info("步骤3.1: 预测能力分析...")
+        all_metrics['multi_horizon_ic'] = self.calculate_multi_horizon_ic(factors_aligned, returns_aligned)
+        all_metrics['ic_decay'] = self.analyze_ic_decay(all_metrics['multi_horizon_ic'])
+
+        # 3.2 稳定性分析
+        self.logger.info("步骤3.2: 稳定性分析...")
+        all_metrics['rolling_ic'] = self.calculate_rolling_ic(factors_aligned, returns_aligned)
+        all_metrics['cross_section_stability'] = self.calculate_cross_sectional_stability(factors_aligned)
+
+        # 3.3 独立性分析
+        self.logger.info("步骤3.3: 独立性分析...")
+        all_metrics['vif_scores'] = self.calculate_vif_scores(factors_aligned)
+        all_metrics['correlation_matrix'] = self.calculate_factor_correlation_matrix(factors_aligned)
+        all_metrics['information_increment'] = self.calculate_information_increment(factors_aligned, returns_aligned)
+
+        # 3.4 实用性分析
+        self.logger.info("步骤3.4: 实用性分析...")
+        price_data = pd.DataFrame({'close': close_prices, 'volume': factors_aligned.get('volume', pd.Series(index=factors_aligned.index, dtype=float))})
+        all_metrics['trading_costs'] = self.calculate_trading_costs(factors_aligned, price_data)
+        all_metrics['liquidity_requirements'] = self.calculate_liquidity_requirements(factors_aligned, price_data['volume'])
+
+        # 3.5 短周期适应性分析
+        self.logger.info("步骤3.5: 短周期适应性分析...")
+        all_metrics['reversal_effects'] = self.detect_reversal_effects(factors_aligned, returns_aligned)
+        all_metrics['momentum_persistence'] = self.analyze_momentum_persistence(factors_aligned, returns_aligned)
+        all_metrics['volatility_sensitivity'] = self.analyze_volatility_sensitivity(factors_aligned, returns_aligned)
+
+        # 4. 统计显著性检验
+        self.logger.info("步骤4: 统计显著性检验...")
+
+        # 收集p值
+        p_values = {}
+        for factor, ic_data in all_metrics['multi_horizon_ic'].items():
+            # 使用1日IC的p值作为主要显著性指标
+            p_values[factor] = ic_data.get('p_value_1d', 1.0)
+
+        all_metrics['p_values'] = p_values
+
+        # FDR校正
+        if self.config.fdr_method == "benjamini_hochberg":
+            corrected_p = self.benjamini_hochberg_correction(p_values)
+        else:
+            corrected_p = self.bonferroni_correction(p_values)
+
+        all_metrics['corrected_p_values'] = corrected_p
+
+        # 5. 综合评分
+        self.logger.info("步骤5: 综合评分...")
+        comprehensive_results = self.calculate_comprehensive_scores(all_metrics)
+
+        # 性能统计
+        duration = time.time() - start_time
+
+        # 保存结果（保存到时间框架子目录）
+        screening_stats = {
+            'total_factors': len(comprehensive_results),
+            'significant_factors': sum(1 for m in comprehensive_results.values() if m.is_significant),
+            'high_score_factors': sum(1 for m in comprehensive_results.values() if m.comprehensive_score > 0.7),
+            'total_time': duration,
+            'sample_size': len(factors_aligned),
+            'symbol': symbol,
+            'timeframe': timeframe
+        }
+        data_quality_info = {
+            'factor_data_shape': factors.shape,
+            'aligned_data_shape': factors_aligned.shape,
+            'data_overlap_count': len(common_index)
+        }
+        self.save_comprehensive_screening_info(comprehensive_results, symbol, timeframe, screening_stats, data_quality_info)
+        self.logger.info(f"✅ {symbol} {timeframe} 筛选完成，耗时: {duration:.2f}秒")
+        self.logger.info(f"   总因子数: {len(comprehensive_results)}")
+        self.logger.info(f"   顶级因子数: {sum(1 for m in comprehensive_results.values() if m.comprehensive_score >= 0.8)}")
+
+        return comprehensive_results
+
+    def generate_multi_timeframe_summary(self, symbol: str, timeframes: List[str],
+                                       all_results: Dict[str, Dict[str, FactorMetrics]]) -> Dict:
+        """
+        生成多时间框架汇总报告
+
+        Args:
+            symbol: 股票代码
+            timeframes: 时间框架列表
+            all_results: 所有时间框架的筛选结果
+
+        Returns:
+            Dict: 汇总报告数据
+        """
+        from datetime import datetime
+
+        summary = {
+            'symbol': symbol,
+            'timeframes': timeframes,
+            'generation_time': datetime.now().isoformat(),
+            'session_timestamp': self.session_timestamp,
+            'total_timeframes': len(timeframes),
+            'timeframe_summary': {},
+            'cross_timeframe_analysis': {},
+            'top_factors_by_timeframe': {},
+            'consensus_factors': [],
+            'performance_comparison': {}
+        }
+
+        # 按时间框架汇总
+        for tf in timeframes:
+            if tf in all_results:
+                tf_results = all_results[tf]
+                tf_summary = {
+                    'total_factors': len(tf_results),
+                    'significant_factors': sum(1 for m in tf_results.values() if m.p_value < 0.05),
+                    'top_factors': sum(1 for m in tf_results.values() if m.comprehensive_score >= 0.8),
+                    'average_ic': sum(m.ic_mean for m in tf_results.values()) / len(tf_results) if tf_results else 0,
+                    'average_score': sum(m.comprehensive_score for m in tf_results.values()) / len(tf_results) if tf_results else 0
+                }
+                summary['timeframe_summary'][tf] = tf_summary
+
+                # 顶级因子列表
+                top_factors = sorted(
+                    [(name, metrics) for name, metrics in tf_results.items()],
+                    key=lambda x: x[1].comprehensive_score,
+                    reverse=True
+                )[:10]  # 取前10个
+                summary['top_factors_by_timeframe'][tf] = [
+                    {'factor': name, 'score': metrics.comprehensive_score, 'ic_mean': metrics.ic_mean}
+                    for name, metrics in top_factors
+                ]
+
+        # 跨时间框架分析 - 寻找共识因子
+        if len(all_results) > 1:
+            # 找出在多个时间框架中都表现优秀的因子
+            factor_performance = {}
+            for tf, tf_results in all_results.items():
+                for factor_name, metrics in tf_results.items():
+                    if factor_name not in factor_performance:
+                        factor_performance[factor_name] = {}
+                    factor_performance[factor_name][tf] = metrics.comprehensive_score
+
+            # 计算共识因子（在超过一半的时间框架中得分>=0.7的因子）
+            consensus_threshold = 0.7
+            min_timeframes = max(1, len(timeframes) // 2)
+
+            consensus_factors = []
+            for factor_name, tf_scores in factor_performance.items():
+                high_score_count = sum(1 for score in tf_scores.values() if score >= consensus_threshold)
+                if high_score_count >= min_timeframes:
+                    avg_score = sum(tf_scores.values()) / len(tf_scores)
+                    consensus_factors.append({
+                        'factor': factor_name,
+                        'average_score': avg_score,
+                        'high_score_count': high_score_count,
+                        'scores_by_timeframe': tf_scores
+                    })
+
+            # 按平均分数排序
+            consensus_factors.sort(key=lambda x: x['average_score'], reverse=True)
+            summary['consensus_factors'] = consensus_factors[:20]  # 取前20个共识因子
+
+        return summary
+
+    def save_multi_timeframe_summary(self, symbol: str, timeframes: List[str],
+                                   all_results: Dict[str, Dict[str, FactorMetrics]]):
+        """
+        保存多时间框架汇总报告
+
+        Args:
+            symbol: 股票代码
+            timeframes: 时间框架列表
+            all_results: 所有时间框架的筛选结果
+        """
+        if not hasattr(self, 'multi_tf_session_dir'):
+            self.logger.warning("多时间框架会话目录未设置，跳过汇总报告保存")
+            return
+
+        # 生成汇总报告
+        summary = self.generate_multi_timeframe_summary(symbol, timeframes, all_results)
+
+        # 保存汇总报告
+        summary_file = self.multi_tf_session_dir / "multi_timeframe_summary.json"
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False, default=str)
+
+        # 生成总索引文件
+        index_file = self.multi_tf_session_dir / "index.txt"
+        with open(index_file, 'w', encoding='utf-8') as f:
+            f.write(f"多时间框架因子筛选完整报告索引\n")
+            f.write(f"{'='*50}\n\n")
+            f.write(f"基础信息:\n")
+            f.write(f"  股票代码: {symbol}\n")
+            f.write(f"  时间框架: {', '.join(timeframes)}\n")
+            f.write(f"  生成时间: {summary['generation_time']}\n")
+            f.write(f"  会话ID: {summary['session_timestamp']}\n\n")
+
+            f.write(f"目录结构:\n")
+            f.write(f"  1. timeframes/ - 各时间框架详细分析结果\n")
+            for i, tf in enumerate(timeframes, 1):
+                f.write(f"     {i}. {tf}/ - {tf}时间框架分析\n")
+            f.write(f"  2. multi_timeframe_summary.json - 多时间框架汇总报告\n")
+            f.write(f"  3. index.txt - 本索引文件\n\n")
+
+            f.write(f"使用说明:\n")
+            f.write(f"  - 查看各时间框架详细结果: 进入 timeframes/ 目录\n")
+            f.write(f"  - 查看多时间框架对比分析: 打开 multi_timeframe_summary.json\n")
+            f.write(f"  - 寻找共识因子: 查看汇总报告中的 consensus_factors 部分\n\n")
+
+            # 添加各时间框架概要
+            f.write(f"各时间框架概要:\n")
+            for tf in timeframes:
+                if tf in summary['timeframe_summary']:
+                    tf_summary = summary['timeframe_summary'][tf]
+                    f.write(f"  {tf}:\n")
+                    f.write(f"    总因子数: {tf_summary['total_factors']}\n")
+                    f.write(f"    显著因子: {tf_summary['significant_factors']}\n")
+                    f.write(f"    顶级因子: {tf_summary['top_factors']}\n")
+                    f.write(f"    平均IC: {tf_summary['average_ic']:.4f}\n")
+                    f.write(f"    平均评分: {tf_summary['average_score']:.3f}\n\n")
+
+            if summary['consensus_factors']:
+                f.write(f"顶级共识因子 (前5个):\n")
+                for i, factor in enumerate(summary['consensus_factors'][:5], 1):
+                    f.write(f"  {i}. {factor['factor']} - 评分: {factor['average_score']:.3f}\n")
+                    f.write(f"     在{factor['high_score_count']}个时间框架中表现优秀\n")
+
+        self.logger.info(f"✅ 多时间框架汇总报告已保存到: {self.multi_tf_session_dir}")
+        self.logger.info(f"   时间框架数量: {len(timeframes)}")
+        self.logger.info(f"   共识因子数量: {len(summary['consensus_factors'])}")
+
+    def screen_multiple_timeframes(self, symbol: str, timeframes: List[str]) -> Dict[str, Dict[str, FactorMetrics]]:
+        """
+        多时间框架筛选的主入口函数
+
+        Args:
+            symbol: 股票代码
+            timeframes: 时间框架列表
+
+        Returns:
+            Dict[str, Dict[str, FactorMetrics]]: 各时间框架的筛选结果
+        """
+        from datetime import datetime
+        start_time = datetime.now()
+
+        self.logger.info(f"🚀 开始多时间框架因子筛选: {symbol}")
+        self.logger.info(f"   时间框架: {', '.join(timeframes)}")
+        self.logger.info(f"   会话时间戳: {self.session_timestamp}")
+
+        # 🎯 新增：检查因子文件对齐性
+        try:
+            from utils import FactorFileAligner, find_aligned_factor_files, validate_factor_alignment
+            self.logger.info("🔍 检查因子文件对齐性...")
+
+            # 确保数据根目录正确
+            factor_data_root = Path(self.data_root)
+            self.logger.info(f"🔍 使用因子数据根目录: {factor_data_root}")
+
+            aligned_files = find_aligned_factor_files(factor_data_root, symbol, timeframes)
+            self.logger.info(f"✅ 找到对齐的因子文件:")
+            for tf, file_path in aligned_files.items():
+                self.logger.info(f"   {tf}: {file_path.name}")
+
+            # 验证时间对齐性
+            is_aligned, alignment_msg = validate_factor_alignment(
+                factor_data_root, symbol, timeframes, aligned_files
+            )
+            if is_aligned:
+                self.logger.info(f"✅ 时间对齐验证通过: {alignment_msg}")
+            else:
+                self.logger.warning(f"⚠️ 时间对齐验证警告: {alignment_msg}")
+
+            # 保存对齐的文件信息供后续使用
+            self.aligned_factor_files = aligned_files
+
+        except Exception as e:
+            self.logger.warning(f"⚠️ 因子对齐检查失败，使用默认文件选择: {str(e)}")
+            self.aligned_factor_files = None
+
+        # 设置多时间框架会话目录结构
+        main_session_dir = self.setup_multi_timeframe_session(symbol, timeframes)
+        self.logger.info(f"📁 主会话目录: {main_session_dir}")
+
+        # 初始化主日志记录器（用于记录总体进度）
+        # 临时设置日志根目录到主会话目录
+        original_log_root = self.log_root
+        self.log_root = main_session_dir
+        main_logger = self._setup_logger(f"{self.session_timestamp}_main")
+        # 恢复原始日志根目录
+        self.log_root = original_log_root
+
+        try:
+            # 逐个处理每个时间框架
+            all_results = {}
+            successful_timeframes = []
+            failed_timeframes = []
+
+            for i, timeframe in enumerate(timeframes, 1):
+                main_logger.info(f"处理时间框架 {i}/{len(timeframes)}: {timeframe}")
+
+                try:
+                    # 筛选单个时间框架
+                    tf_results = self.screen_single_timeframe_in_multi_session(symbol, timeframe)
+                    all_results[timeframe] = tf_results
+                    successful_timeframes.append(timeframe)
+
+                    main_logger.info(f"✅ {timeframe} 筛选完成 - 顶级因子数: {sum(1 for m in tf_results.values() if m.comprehensive_score >= 0.8)}")
+
+                except Exception as e:
+                    failed_timeframes.append(timeframe)
+                    main_logger.error(f"❌ {timeframe} 筛选失败: {str(e)}")
+
+                    if len(failed_timeframes) > len(timeframes) // 2:  # 如果失败超过一半，停止执行
+                        main_logger.error("失败时间框架过多，停止执行")
+                        break
+
+            # 保存多时间框架汇总报告
+            if all_results:
+                main_logger.info("生成多时间框架汇总报告...")
+                self.save_multi_timeframe_summary(symbol, timeframes, all_results)
+
+            # 完成统计
+            total_duration = (datetime.now() - start_time).total_seconds()
+            main_logger.info(f"🎉 多时间框架筛选完成!")
+            main_logger.info(f"   总耗时: {total_duration:.2f}秒")
+            main_logger.info(f"   成功时间框架: {len(successful_timeframes)}/{len(timeframes)}")
+            main_logger.info(f"   失败时间框架: {', '.join(failed_timeframes) if failed_timeframes else '无'}")
+
+            # 计算总体统计
+            total_factors = sum(len(results) for results in all_results.values())
+            total_top_factors = sum(
+                sum(1 for m in results.values() if m.comprehensive_score >= 0.8)
+                for results in all_results.values()
+            )
+
+            main_logger.info(f"   总因子数: {total_factors}")
+            main_logger.info(f"   总顶级因子数: {total_top_factors}")
+            if len(all_results) > 0:
+                main_logger.info(f"   平均每时间框架顶级因子数: {total_top_factors/len(all_results):.1f}")
+            else:
+                main_logger.info(f"   平均每时间框架顶级因子数: 0.0 (无成功结果)")
+
+            return all_results
+
+        except Exception as e:
+            main_logger.error(f"多时间框架筛选过程出现错误: {str(e)}")
+            raise
+
     def screen_factors_comprehensive(self, symbol: str, timeframe: str = "60min") -> Dict[str, FactorMetrics]:
         """主筛选函数 - 5维度综合筛选"""
+
+        # 创建会话目录
+        session_id = f"{symbol}_{timeframe}_{self.session_timestamp}"
+        self.session_dir = self.screening_results_dir / session_id
+        self.session_dir.mkdir(parents=True, exist_ok=True)
+
+        # 重新设置日志到会话目录
+        self.log_root = self.session_dir
+        self.logger = self._setup_logger(self.session_timestamp)
+
         start_time = time.time()
+        self.logger.info(f"📁 创建会话目录: {self.session_dir}")
         self.logger.info(f"开始5维度因子筛选: {symbol} {timeframe}")
-        
+
         try:
             # 1. 数据加载
             self.logger.info("步骤1: 数据加载...")
@@ -1790,12 +2319,15 @@ class ProfessionalFactorScreener:
         
         # 保存报告（包含时间框架标识）
         if output_path is None:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            # 使用传入的参数或从results中提取symbol和timeframe信息
-            symbol_info = symbol or results.get('symbol', 'unknown')
-            timeframe_info = timeframe or results.get('timeframe', 'unknown')
-            # 使用专门的筛选报告目录
-            output_path = self.screening_results_dir / f"screening_report_{symbol_info}_{timeframe_info}_{timestamp}.csv"
+            # 优先使用会话目录
+            if self.session_dir is not None:
+                output_path = self.session_dir / "screening_report.csv"
+            else:
+                # 备用方案：使用原有逻辑
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                symbol_info = symbol or results.get('symbol', 'unknown')
+                timeframe_info = timeframe or results.get('timeframe', 'unknown')
+                output_path = self.screening_results_dir / f"screening_report_{symbol_info}_{timeframe_info}_{timestamp}.csv"
         
         # 确保路径是字符串格式，避免pandas Path._flavour问题
         output_path_str = str(output_path)
@@ -1810,20 +2342,29 @@ class ProfessionalFactorScreener:
                                        data_quality_info: Dict = None):
         """保存完整的筛选信息，包括多个格式的报告"""
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        base_filename = f"screening_{symbol}_{timeframe}_{timestamp}"
+        # 使用会话目录和统一的时间戳
+        if self.session_dir is None:
+            # 如果没有会话目录，使用原有逻辑
+            base_dir = self.screening_results_dir
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            base_filename = f"screening_{symbol}_{timeframe}_{timestamp}"
+        else:
+            base_dir = self.session_dir
+            base_filename = f"screening_report"
+
+        self.logger.info(f"💾 保存筛选信息到会话目录: {base_dir}")
 
         # 1. 保存详细的CSV报告
-        csv_path = self.screening_results_dir / f"{base_filename}_detailed_report.csv"
+        csv_path = base_dir / f"{base_filename}.csv"
         report_df = self.generate_screening_report(results, str(csv_path), symbol, timeframe)
 
         # 2. 保存筛选过程统计信息
-        stats_path = self.screening_results_dir / f"{base_filename}_screening_stats.json"
+        stats_path = base_dir / "screening_statistics.json"
         with open(stats_path, 'w', encoding='utf-8') as f:
             json.dump(screening_stats, f, indent=2, ensure_ascii=False, default=str)
 
         # 3. 保存顶级因子摘要
-        summary_path = self.screening_results_dir / f"{base_filename}_top_factors_summary.txt"
+        summary_path = base_dir / "top_factors_summary.txt"
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write(f"=== 因子筛选摘要报告 ===\n")
             f.write(f"股票代码: {symbol}\n")
@@ -1845,27 +2386,28 @@ class ProfessionalFactorScreener:
 
         # 4. 保存数据质量报告
         if data_quality_info:
-            quality_path = self.screening_results_dir / f"{base_filename}_data_quality.json"
+            quality_path = base_dir / "data_quality.json"
             with open(quality_path, 'w', encoding='utf-8') as f:
                 json.dump(data_quality_info, f, indent=2, ensure_ascii=False, default=str)
 
         # 5. 保存配置参数记录
-        config_path = self.screening_results_dir / f"{base_filename}_config.yaml"
+        config_path = base_dir / "config.yaml"
         config_dict = {
             'screening_config': asdict(self.config),
             'execution_info': {
                 'symbol': symbol,
                 'timeframe': timeframe,
-                'timestamp': timestamp,
+                'timestamp': self.session_timestamp,
                 'data_root': str(self.data_root),
-                'screening_results_dir': str(self.screening_results_dir)
+                'screening_results_dir': str(self.screening_results_dir),
+                'session_dir': str(self.session_dir)
             }
         }
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(config_dict, f, default_flow_style=False, allow_unicode=True, indent=2)
 
         # 6. 创建一个主索引文件
-        index_path = self.screening_results_dir / f"{base_filename}_index.txt"
+        index_path = base_dir / "index.txt"
         with open(index_path, 'w', encoding='utf-8') as f:
             f.write(f"因子筛选完整报告索引\n")
             f.write(f"========================\n\n")
@@ -1887,8 +2429,8 @@ class ProfessionalFactorScreener:
             f.write(f"  - 筛选过程详情: 查看 {stats_path.name}\n")
             f.write(f"  - 配置参数参考: 查看 {config_path.name}\n")
 
-        self.logger.info(f"完整筛选信息已保存到: {self.screening_results_dir}")
-        self.logger.info(f"主索引文件: {index_path}")
+        self.logger.info(f"✅ 完整筛选信息已保存到: {base_dir}")
+        self.logger.info(f"📄 主索引文件: {index_path}")
 
         return {
             'csv_report': str(csv_path),
