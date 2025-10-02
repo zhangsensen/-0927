@@ -31,7 +31,7 @@ class ScreeningConfig:
     description: str = "默认筛选配置"
     
     # 数据配置
-    data_root: str = "./output"
+    data_root: str = "../因子输出"
     raw_data_root: str = "../raw"
     
     # 股票配置
@@ -100,7 +100,7 @@ class ScreeningConfig:
 class BatchConfig:
     """批量处理配置类"""
     # 批量任务配置
-    task_name: str = "batch_screening"
+    batch_name: str = "batch_screening"
     description: str = "批量因子筛选任务"
     
     # 任务列表
@@ -268,7 +268,7 @@ class ConfigManager:
         else:
             raise ValueError(f"不支持的配置类型: {config_type}")
     
-    def create_batch_config(self, task_name: str, 
+    def create_batch_config(self, batch_name: str, 
                           symbols: List[str],
                           timeframes: List[str],
                           preset: str = "default") -> BatchConfig:
@@ -316,7 +316,7 @@ class ConfigManager:
                 screening_configs.append(config)
         
         batch_config = BatchConfig(
-            task_name=task_name,
+            batch_name=batch_name,
             description=f"批量筛选任务: {len(symbols)}个股票 x {len(timeframes)}个时间框架",
             screening_configs=screening_configs
         )
@@ -379,7 +379,7 @@ class ConfigManager:
         
         # 2. 创建批量配置模板
         batch_config = self.create_batch_config(
-            task_name="example_batch",
+            batch_name="example_batch",
             symbols=["0700.HK", "0005.HK"],
             timeframes=["30min", "60min"],
             preset="default"
@@ -456,7 +456,7 @@ class ConfigManager:
             
             return f"""
 批量配置摘要:
-- 任务名称: {config.task_name}
+- 任务名称: {config.batch_name}
 - 描述: {config.description}
 - 总任务数: {total_tasks}
 - 涉及股票: {sorted(symbols)}
@@ -479,7 +479,7 @@ if __name__ == "__main__":
     
     # 创建批量配置示例
     batch_config = manager.create_batch_config(
-        task_name="test_batch",
+        batch_name="test_batch",
         symbols=["0700.HK", "0005.HK"],
         timeframes=["30min", "60min"],
         preset="quick"

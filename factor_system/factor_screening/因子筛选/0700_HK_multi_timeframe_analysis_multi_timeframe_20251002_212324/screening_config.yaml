@@ -1,0 +1,41 @@
+execution_info:
+  python_version: 3.11.9
+  system_info:
+    architecture: 64bit
+    platform: Darwin
+    processor: arm
+  timestamp: '2025-10-02T21:37:23.151621'
+screening_parameters:
+  alpha_level: 0.05
+  base_factors:
+  - MA5
+  - MA10
+  - RSI14
+  - MACD_12_26_9
+  cache_enabled: true
+  commission_rate: 0.002
+  correlation_threshold: 0.8
+  fdr_method: benjamini_hochberg
+  ic_horizons:
+  - 1
+  - 3
+  - 5
+  - 10
+  - 20
+  market_impact_coeff: 0.1
+  max_cost_threshold: 0.01
+  max_vif_threshold: 10.0
+  max_workers: 4
+  memory_limit_mb: 2048
+  min_ic_threshold: 0.02
+  min_ir_threshold: 0.5
+  min_sample_size: 100
+  min_stability_threshold: 0.6
+  rolling_window: 60
+  slippage_bps: 5.0
+  vif_threshold: 5.0
+  weight_adaptability: 0.05
+  weight_independence: 0.2
+  weight_practicality: 0.15
+  weight_predictive: 0.35
+  weight_stability: 0.25

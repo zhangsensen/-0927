@@ -21,6 +21,9 @@ import platform
 
 logger = logging.getLogger(__name__)
 
+# 导入JSON序列化函数
+from professional_factor_screener import ProfessionalFactorScreener
+
 @dataclass
 class ScreeningSession:
     """筛选会话信息"""
@@ -62,21 +65,28 @@ class EnhancedResultManager:
     
     def _save_sessions_index(self):
         """保存会话索引"""
+        from professional_factor_screener import ProfessionalFactorScreener
         with open(self.sessions_index_file, 'w', encoding='utf-8') as f:
-            json.dump(self.sessions_index, f, indent=2, ensure_ascii=False, default=str)
+            json.dump(ProfessionalFactorScreener._to_json_serializable(self.sessions_index), f, indent=2, ensure_ascii=False)
     
     def create_screening_session(self, symbol: str, timeframe: str, 
                                results: Dict, screening_stats: Dict,
-                               config: Any, data_quality_info: Dict = None) -> str:
+                               config: Any, data_quality_info: Dict = None, 
+                               existing_session_dir: Path = None) -> str:
         """创建完整的筛选会话存储"""
         
-        # 1. 创建时间戳文件夹
-        timestamp = datetime.now()
-        session_id = f"{symbol}_{timeframe}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
-        session_dir = self.base_output_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
+        # 1. 使用现有会话目录或创建新的
+        if existing_session_dir and existing_session_dir.exists():
+            session_dir = existing_session_dir
+            session_id = session_dir.name
+            logger.info(f"使用现有筛选会话: {session_id}")
+        else:
+            timestamp = datetime.now()
+            session_id = f"{symbol}_{timeframe}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
+            session_dir = self.base_output_dir / session_id
+            session_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"创建筛选会话: {session_id}")
         
-        logger.info(f"创建筛选会话: {session_id}")
         logger.info(f"会话目录: {session_dir}")
         
         # 2. 保存核心筛选数据
@@ -121,17 +131,17 @@ class EnhancedResultManager:
                 'Factor': factor_name,
                 'Comprehensive_Score': metrics.comprehensive_score,
                 'Predictive_Power_Mean_IC': metrics.predictive_power_mean_ic,
-                'Predictive_Power_IC_IR': metrics.predictive_power_ic_ir,
-                'Stability_Rolling_IC_Mean': metrics.stability_rolling_ic_mean,
-                'Stability_Rolling_IC_Std': metrics.stability_rolling_ic_std,
-                'Independence_VIF': metrics.independence_vif,
-                'Independence_Information_Increment': metrics.independence_information_increment,
-                'Practicality_Turnover_Rate': metrics.practicality_turnover_rate,
-                'Practicality_Transaction_Cost': metrics.practicality_transaction_cost,
-                'Short_Term_Adaptability_Reversal_Effect': metrics.short_term_adaptability_reversal_effect,
-                'Short_Term_Adaptability_Momentum_Persistence': metrics.short_term_adaptability_momentum_persistence,
+                'Predictive_Power_IC_IR': metrics.ic_ir,
+                'Stability_Rolling_IC_Mean': metrics.rolling_ic_mean,
+                'Stability_Rolling_IC_Std': metrics.rolling_ic_std,
+                'Independence_VIF': metrics.vif_score,
+                'Independence_Information_Increment': metrics.information_increment,
+                'Practicality_Turnover_Rate': metrics.turnover_rate,
+                'Practicality_Transaction_Cost': metrics.transaction_cost,
+                'Short_Term_Adaptability_Reversal_Effect': metrics.reversal_effect,
+                'Short_Term_Adaptability_Momentum_Persistence': metrics.momentum_persistence,
                 'P_Value': metrics.p_value,
-                'FDR_P_Value': metrics.fdr_p_value,
+                'FDR_P_Value': metrics.corrected_p_value,
                 'Is_Significant': metrics.is_significant,
                 'Tier': metrics.tier,
                 'Type': metrics.type,
@@ -155,8 +165,9 @@ class EnhancedResultManager:
             }
         }
         
+        from professional_factor_screener import ProfessionalFactorScreener
         with open(session_dir / "screening_statistics.json", 'w', encoding='utf-8') as f:
-            json.dump(enhanced_stats, f, indent=2, ensure_ascii=False, default=str)
+            json.dump(ProfessionalFactorScreener._to_json_serializable(enhanced_stats), f, indent=2, ensure_ascii=False)
         
         # 3. 顶级因子详细信息 (JSON)
         top_factors = sorted(results.values(), key=lambda x: x.comprehensive_score, reverse=True)[:20]
@@ -178,17 +189,18 @@ class EnhancedResultManager:
                 'description': factor.description,
                 'key_metrics': {
                     'mean_ic': round(factor.predictive_power_mean_ic, 4),
-                    'ic_ir': round(factor.predictive_power_ic_ir, 4),
-                    'rolling_ic_mean': round(factor.stability_rolling_ic_mean, 4),
-                    'vif': round(factor.independence_vif, 4) if factor.independence_vif else None,
-                    'turnover_rate': round(factor.practicality_turnover_rate, 4),
-                    'transaction_cost': round(factor.practicality_transaction_cost, 4)
+                    'ic_ir': round(factor.ic_ir, 4),
+                    'rolling_ic_mean': round(factor.rolling_ic_mean, 4),
+                    'vif': round(factor.vif_score, 4) if factor.vif_score else None,
+                    'turnover_rate': round(factor.turnover_rate, 4),
+                    'transaction_cost': round(factor.transaction_cost, 4)
                 }
             }
             top_factors_data.append(factor_info)
         
+        from professional_factor_screener import ProfessionalFactorScreener
         with open(session_dir / "top_factors_detailed.json", 'w', encoding='utf-8') as f:
-            json.dump(top_factors_data, f, indent=2, ensure_ascii=False)
+            json.dump(ProfessionalFactorScreener._to_json_serializable(top_factors_data), f, indent=2, ensure_ascii=False)
     
     def _save_configuration_data(self, session_dir: Path, config: Any, data_quality_info: Dict):
         """保存配置和数据质量信息"""
@@ -220,8 +232,9 @@ class EnhancedResultManager:
                 }
             }
             
+            from professional_factor_screener import ProfessionalFactorScreener
             with open(session_dir / "data_quality_report.json", 'w', encoding='utf-8') as f:
-                json.dump(enhanced_quality_info, f, indent=2, ensure_ascii=False, default=str)
+                json.dump(ProfessionalFactorScreener._to_json_serializable(enhanced_quality_info), f, indent=2, ensure_ascii=False)
     
     def _save_analysis_reports(self, session_dir: Path, symbol: str, timeframe: str,
                              results: Dict, screening_stats: Dict):
@@ -364,8 +377,8 @@ class EnhancedResultManager:
                     'independence_score': factor.independence_score,
                     'practicality_score': factor.practicality_score,
                     'mean_ic': factor.predictive_power_mean_ic,
-                    'ic_ir': factor.predictive_power_ic_ir,
-                    'rolling_ic_mean': factor.stability_rolling_ic_mean
+                    'ic_ir': factor.ic_ir,
+                    'rolling_ic_mean': factor.rolling_ic_mean
                 })
             
             correlation_df = pd.DataFrame(correlation_data)
@@ -402,15 +415,16 @@ class EnhancedResultManager:
                 'available_metrics': {
                     'mean_ic_values': {factor.name: factor.predictive_power_mean_ic 
                                      for factor in results.values()},
-                    'ic_ir_values': {factor.name: factor.predictive_power_ic_ir 
+                    'ic_ir_values': {factor.name: factor.ic_ir 
                                    for factor in results.values()},
-                    'rolling_ic_means': {factor.name: factor.stability_rolling_ic_mean 
+                    'rolling_ic_means': {factor.name: factor.rolling_ic_mean 
                                        for factor in results.values()}
                 }
             }
             
+            from professional_factor_screener import ProfessionalFactorScreener
             with open(session_dir / "ic_time_series_analysis.json", 'w', encoding='utf-8') as f:
-                json.dump(ic_analysis, f, indent=2, ensure_ascii=False, default=str)
+                json.dump(ProfessionalFactorScreener._to_json_serializable(ic_analysis), f, indent=2, ensure_ascii=False)
                 
         except Exception as e:
             logger.warning(f"生成IC时间序列分析失败: {e}")

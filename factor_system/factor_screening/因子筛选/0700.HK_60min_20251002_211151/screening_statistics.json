@@ -1,0 +1,28 @@
+{
+  "total_factors": 252,
+  "significant_factors": 3,
+  "high_score_factors": 0,
+  "total_time": 100.23112392425537,
+  "memory_used_mb": 129.9375,
+  "sample_size": 738,
+  "factors_aligned": 252,
+  "data_alignment_successful": true,
+  "screening_timestamp": "2025-10-02T21:13:32.224034",
+  "symbol": "0700.HK",
+  "timeframe": "60min",
+  "session_metadata": {
+    "symbol": "0700.HK",
+    "timeframe": "60min",
+    "screening_timestamp": "2025-10-02T21:13:32.229236",
+    "total_factors_processed": 252,
+    "factors_by_tier": {
+      "Unknown": 252
+    },
+    "score_distribution": {
+      "excellent (>0.8)": 0,
+      "good (0.6-0.8)": 3,
+      "average (0.4-0.6)": 69,
+      "poor (<0.4)": 180
+    }
+  }
+}
