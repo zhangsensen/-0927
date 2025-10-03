@@ -1,0 +1,75 @@
+{
+  "batch_name": "0700_HK_multi_timeframe_analysis",
+  "generated_at": "2025-10-04T00:21:56.864882",
+  "timeframes": [
+    {
+      "symbol": "0700.HK",
+      "timeframe": "5min",
+      "total_factors": 217,
+      "significant_factors": 68,
+      "tier1_factors": 0,
+      "tier2_factors": 12,
+      "tier3_factors": 53,
+      "not_recommended": 152,
+      "top_factors": 0,
+      "average_score": 0.380142
+    },
+    {
+      "symbol": "0700.HK",
+      "timeframe": "15min",
+      "total_factors": 245,
+      "significant_factors": 11,
+      "tier1_factors": 0,
+      "tier2_factors": 3,
+      "tier3_factors": 55,
+      "not_recommended": 187,
+      "top_factors": 0,
+      "average_score": 0.354314
+    },
+    {
+      "symbol": "0700.HK",
+      "timeframe": "60min",
+      "total_factors": 252,
+      "significant_factors": 3,
+      "tier1_factors": 0,
+      "tier2_factors": 3,
+      "tier3_factors": 117,
+      "not_recommended": 132,
+      "top_factors": 0,
+      "average_score": 0.42615
+    },
+    {
+      "symbol": "0700.HK",
+      "timeframe": "30min",
+      "total_factors": 242,
+      "significant_factors": 3,
+      "tier1_factors": 0,
+      "tier2_factors": 3,
+      "tier3_factors": 64,
+      "not_recommended": 175,
+      "top_factors": 0,
+      "average_score": 0.36879
+    },
+    {
+      "symbol": "0700.HK",
+      "timeframe": "daily",
+      "total_factors": 204,
+      "significant_factors": 2,
+      "tier1_factors": 0,
+      "tier2_factors": 5,
+      "tier3_factors": 154,
+      "not_recommended": 45,
+      "top_factors": 3,
+      "average_score": 0.517481
+    }
+  ],
+  "overall": {
+    "total_factors": 1160,
+    "significant_factors": 87,
+    "tier1_factors": 0,
+    "tier2_factors": 26,
+    "tier3_factors": 443,
+    "not_recommended": 691,
+    "top_factors": 3
+  }
+}

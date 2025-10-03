@@ -2828,9 +2828,11 @@ class ProfessionalFactorScreener:
                 tf_results = all_results[tf]
                 tf_summary = {
                     "total_factors": len(tf_results),
-                    "significant_factors": sum(
-                        1 for m in tf_results.values() if m.p_value < 0.05
-                    ),
+            "significant_factors": sum(
+                1
+                for m in tf_results.values()
+                if m.corrected_p_value < self.config.alpha_level
+            ),
                     "top_factors": sum(
                         1 for m in tf_results.values() if m.comprehensive_score >= 0.8
                     ),
