@@ -6,12 +6,12 @@ professional_factor_screener.py
 ├── enhanced_result_manager.EnhancedResultManager
 ├── utils.temporal_validator (TemporalValidator)
 ├── utils.time_series_protocols (SafeTimeSeriesProcessor)
-├── utils (FactorFileAligner, find_aligned_factor_files, validate_factor_alignment)
-├── pandas / numpy / psutil / yaml / scipy
-└── logging / pathlib / typing
+├── utils (FactorFileAligner 等)
+├── pandas / numpy / scipy / psutil / yaml
+└── 标准库：logging、pathlib、typing
 
 enhanced_result_manager.py
-├── professional_factor_screener.FactorMetrics (序列化依赖)
+├── professional_factor_screener.FactorMetrics
 ├── matplotlib.pyplot
 ├── pandas / numpy
 └── json / pathlib / logging
@@ -30,4 +30,4 @@ utils/time_series_protocols.py
 └── logging / typing
 ```
 
-> 备注：现阶段 `enhanced_result_manager` 仍需通过局部导入使用 `FactorMetrics`；后续架构拆分时需打破该循环依赖。
+> 后续重构目标：按照 core/data/computation/screening/reporting/config 分层拆分，逐步打散当前单体依赖。
