@@ -103,6 +103,10 @@ class ScreeningConfig:
     save_reports: bool = True
     save_detailed_metrics: bool = True
     log_level: str = "INFO"
+    
+    # P2-1修复：传统格式保存选项
+    enable_legacy_format: bool = False  # 是否启用传统格式保存
+    legacy_format_priority: bool = False  # 传统格式是否优先于增强格式
 
     # 性能配置
     memory_limit_gb: float = 8.0

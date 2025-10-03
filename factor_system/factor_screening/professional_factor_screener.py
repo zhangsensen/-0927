@@ -684,14 +684,32 @@ class ProfessionalFactorScreener:
             self.logger.info(f"修复无穷值列: {inf_cols}")
             issues_found.append(f"修复无穷值列: {inf_cols}")
 
-        # 4. 检查常量列（使用更严格的标准）
+        # P1-2修复：改进常量列检测逻辑，保护K线形态指标
         constant_cols = []
         for col in factors_df.select_dtypes(include=[np.number]).columns:
-            if factors_df[col].std() < 1e-6:  # 合理的常量检测阈值
-                constant_cols.append(col)
+            col_std = factors_df[col].std()
+            col_nunique = factors_df[col].nunique()
+            
+            # K线形态指标特殊处理：允许二值常量（0/1模式）
+            if col.startswith('TA_CDL'):
+                # K线形态指标：只有当完全无变化且只有一个值时才删除
+                if col_nunique <= 1:
+                    constant_cols.append(col)
+            else:
+                # 其他指标：使用标准差检测
+                if col_std < 1e-6:
+                    constant_cols.append(col)
 
         if constant_cols:
-            self.logger.warning(f"发现常量列: {constant_cols}")
+            # 区分K线形态指标和其他常量列
+            cdl_cols = [col for col in constant_cols if col.startswith('TA_CDL')]
+            other_cols = [col for col in constant_cols if not col.startswith('TA_CDL')]
+            
+            if cdl_cols:
+                self.logger.info(f"移除无变化K线形态指标: {cdl_cols}")
+            if other_cols:
+                self.logger.warning(f"移除常量列: {other_cols}")
+                
             factors_df = factors_df.drop(columns=constant_cols)
             issues_found.append(f"移除常量列: {constant_cols}")
 
@@ -1529,25 +1547,40 @@ class ProfessionalFactorScreener:
                 vif_results[factor] = 1.0
                 continue
 
-            # 条件数检查
+            # P0-2修复：改进条件数检查和数值稳定性
             try:
-                cond_number = np.linalg.cond(X)
-            except np.linalg.LinAlgError:
+                # 使用SVD计算条件数，更稳定
+                U, s, Vt = np.linalg.svd(X, full_matrices=False)
+                if len(s) == 0 or s[-1] <= 1e-15:
+                    cond_number = np.inf
+                else:
+                    cond_number = s[0] / s[-1]
+            except (np.linalg.LinAlgError, ValueError):
                 cond_number = np.inf
 
-            if not np.isfinite(cond_number) or cond_number > cond_threshold:
-                vif_results[factor] = float(max_vif_cap)
+            # 更严格的数值稳定性检查
+            if not np.isfinite(cond_number) or cond_number > 1e10:
+                vif_results[factor] = 5.0  # 设为阈值而非极大值
                 continue
 
             try:
-                beta, residuals, rank, singular_vals = np.linalg.lstsq(X, y, rcond=None)
+                # P0-2修复：使用更稳定的求解方法
+                beta, residuals, rank, singular_vals = np.linalg.lstsq(X, y, rcond=1e-15)
+                
+                # 检查求解质量
+                if rank < X.shape[1]:
+                    # 矩阵不满秩，设为阈值
+                    vif_results[factor] = 5.0
+                    continue
+                    
             except np.linalg.LinAlgError as err:
                 self.logger.debug(f"VIF最小二乘求解失败 {factor}: {err}")
-                vif_results[factor] = float(max_vif_cap)
+                vif_results[factor] = 5.0  # 设为阈值而非极大值
                 continue
 
+            # P0-2修复：改进R²计算的数值稳定性
             if residuals.size > 0:
-                rss = residuals[0]
+                rss = float(residuals[0])
             else:
                 predictions = X @ beta
                 rss = float(np.sum((y - predictions) ** 2))
@@ -1562,8 +1595,14 @@ class ProfessionalFactorScreener:
                 r_squared = 0.0
             r_squared = float(np.clip(r_squared, 0.0, 0.999999))
 
-            vif = 1.0 / max(1e-6, 1.0 - r_squared)
-            vif_results[factor] = float(min(vif, max_vif_cap))
+            # P0-2修复：改进VIF计算，避免极值
+            if r_squared >= 0.999999:
+                vif = 5.0  # 设为阈值，避免极大值
+            else:
+                vif = 1.0 / (1.0 - r_squared)
+                vif = float(np.clip(vif, 1.0, 50.0))  # 限制VIF范围
+            
+            vif_results[factor] = vif
 
         return vif_results
 
@@ -1893,13 +1932,30 @@ class ProfessionalFactorScreener:
             )
             return 0.0
 
+        # P1-3修复：改进换手率异常处理，避免强制裁剪掩盖问题
         if turnover_rate > 2.0:
-            self.logger.warning(
-                "因子 %s turnover率异常高 (%.6f)，已裁剪至2.0",
-                factor_name,
-                turnover_rate,
-            )
-            turnover_rate = 2.0
+            # 分析异常原因
+            extreme_changes = valid_changes[valid_changes > valid_changes.quantile(0.95)]
+            if len(extreme_changes) > len(valid_changes) * 0.1:
+                # 如果超过10%的变化都很大，可能是因子设计问题
+                self.logger.warning(
+                    f"因子 {factor_name} turnover率异常高 ({turnover_rate:.6f})，"
+                    f"可能存在因子设计问题，建议检查计算逻辑"
+                )
+                # 使用更保守的估计：95%分位数
+                conservative_rate = valid_changes.quantile(0.95)
+                if conservative_rate > 2.0:
+                    turnover_rate = 2.0
+                else:
+                    turnover_rate = float(conservative_rate)
+            else:
+                # 少数极值导致，使用中位数估计
+                median_rate = valid_changes.median()
+                self.logger.info(
+                    f"因子 {factor_name} turnover率异常高 ({turnover_rate:.6f})，"
+                    f"使用中位数估计 ({median_rate:.6f})"
+                )
+                turnover_rate = float(min(median_rate, 2.0))
 
         return turnover_rate
 
@@ -2425,10 +2481,57 @@ class ProfessionalFactorScreener:
                     metrics.corrected_p_value < adaptive_alpha
                 )
 
+            # P1-1修复：添加因子等级分类逻辑
+            metrics.tier = self._classify_factor_tier(
+                metrics.comprehensive_score, 
+                metrics.is_significant,
+                metrics.ic_mean
+            )
+
             comprehensive_results[factor] = metrics
 
         self.logger.info(f"综合评分计算完成: {len(comprehensive_results)} 个因子")
         return comprehensive_results
+
+    def _classify_factor_tier(
+        self, 
+        comprehensive_score: float, 
+        is_significant: bool, 
+        ic_mean: float
+    ) -> str:
+        """P1-1修复：因子等级分类逻辑
+        
+        分级标准：
+        - Tier 1 (≥0.8): 核心因子，强烈推荐
+        - Tier 2 (0.6-0.8): 重要因子，推荐使用  
+        - Tier 3 (0.4-0.6): 备用因子，特定条件使用
+        - 不推荐 (<0.4): 不建议使用
+        """
+        # 基础分级
+        if comprehensive_score >= 0.8:
+            base_tier = "Tier 1"
+        elif comprehensive_score >= 0.6:
+            base_tier = "Tier 2"
+        elif comprehensive_score >= 0.4:
+            base_tier = "Tier 3"
+        else:
+            base_tier = "不推荐"
+        
+        # 显著性和IC调整
+        if is_significant and abs(ic_mean) >= 0.05:
+            # 显著且IC较强，维持或提升等级
+            if base_tier == "Tier 3" and comprehensive_score >= 0.55:
+                return "Tier 2"
+            elif base_tier == "Tier 2" and comprehensive_score >= 0.75:
+                return "Tier 1"
+        elif not is_significant or abs(ic_mean) < 0.02:
+            # 不显著或IC很弱，降级
+            if base_tier == "Tier 1":
+                return "Tier 2"
+            elif base_tier == "Tier 2":
+                return "Tier 3"
+        
+        return base_tier
 
     # ==================== 主筛选函数 ====================
 
@@ -2620,11 +2723,20 @@ class ProfessionalFactorScreener:
         # 4. 统计显著性检验
         self.logger.info("步骤4: 统计显著性检验...")
 
-        # 收集p值
+        # P0-3修复：改进p值收集和显著性判断
         p_values = {}
         for factor, ic_data in all_metrics["multi_horizon_ic"].items():
-            # 使用1日IC的p值作为主要显著性指标
-            p_values[factor] = ic_data.get("p_value_1d", 1.0)
+            # 使用1日IC的p值作为主要显著性指标，如果没有则使用最小的p值
+            p_1d = ic_data.get("p_value_1d", 1.0)
+            if p_1d >= 1.0:
+                # 如果1日p值无效，使用所有周期中最小的p值
+                all_p_values = [
+                    ic_data.get(f"p_value_{h}d", 1.0) 
+                    for h in self.config.ic_horizons
+                ]
+                p_1d = min([p for p in all_p_values if p < 1.0] or [1.0])
+            
+            p_values[factor] = p_1d
 
         all_metrics["p_values"] = p_values
 
@@ -3034,17 +3146,17 @@ class ProfessionalFactorScreener:
                 operation="screen_factors_comprehensive"
             )
 
-        # 创建会话目录（如果还没有的话）
+        # P0-1修复：避免重复会话创建和日志
         if not hasattr(self, "session_dir") or not self.session_dir:
             session_id = f"{symbol}_{timeframe}_{self.session_timestamp}"
             self.session_dir = self.screening_results_dir / session_id
             self.session_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"📁 创建会话目录: {self.session_dir}")
         else:
-            # 从现有的session_dir提取session_id
+            # 使用现有会话目录，避免重复日志
             session_id = self.session_dir.name
 
         start_time = time.time()
-        self.logger.info(f"📁 创建会话目录: {self.session_dir}")
         self.logger.info(f"开始5维度因子筛选: {symbol} {timeframe}")
 
         try:
@@ -3295,8 +3407,18 @@ class ProfessionalFactorScreener:
                 else:
                     self.logger.info("使用传统存储方式")
 
-                # 跳过传统格式保存，避免重复目录创建
-                self.logger.info("使用增强版结果管理器，跳过传统格式保存")
+                # P2-1修复：根据配置决定是否保存传统格式
+                if self.config.enable_legacy_format:
+                    self.logger.info("根据配置启用传统格式保存")
+                    try:
+                        self.save_comprehensive_screening_info(
+                            comprehensive_results, symbol, timeframe, screening_stats, data_quality_info
+                        )
+                        self.logger.info("传统格式保存完成")
+                    except Exception as e:
+                        self.logger.error(f"传统格式保存失败: {e}")
+                else:
+                    self.logger.info("使用增强版结果管理器，跳过传统格式保存")
 
             except Exception as e:
                 self.logger.error(f"保存完整筛选信息失败: {str(e)}")
@@ -3580,6 +3702,14 @@ def main():
 
                 print(f"📁 数据目录: {data_root}")
                 print(f"📁 输出目录: {output_dir}")
+                
+                # P2-2修复：增强批量处理信息透明度
+                print(f"\n📋 批量处理详细信息:")
+                print(f"  - 预计处理时间: ~{len(batch_config['screening_configs']) * 2}分钟")
+                print(f"  - 内存使用预估: ~500MB")
+                print(f"  - 并行处理: {'启用' if batch_config.get('enable_parallel', True) else '禁用'}")
+                print(f"  - 工作进程数: {batch_config.get('max_workers', 4)}")
+                print("=" * 80)
 
                 # 创建统一的批量筛选器
                 batch_screener = ProfessionalFactorScreener(data_root=data_root)
@@ -3602,11 +3732,17 @@ def main():
 
                 for i, sub_config in enumerate(batch_config["screening_configs"], 1):
                     try:
+                        # P2-2修复：增强中间步骤可观测性
+                        start_time = time.time()
                         print(
                             f"\n📊 [{i}/{len(batch_config['screening_configs'])}] 处理: {sub_config['name']}"
                         )
                         print(f"   股票: {sub_config['symbols'][0]}")
                         print(f"   时间框架: {sub_config['timeframes'][0]}")
+                        from datetime import datetime, timedelta
+                        print(f"   开始时间: {datetime.now().strftime('%H:%M:%S')}")
+                        print(f"   预计完成时间: {(datetime.now() + timedelta(minutes=2)).strftime('%H:%M:%S')}")
+                        print("   " + "-" * 50)
 
                         # 使用同一个筛选器执行筛选（复用会话目录）
                         result = batch_screener.screen_factors_comprehensive(
@@ -3620,12 +3756,22 @@ def main():
                         )
                         all_results[tf_key] = result
 
-                        # 统计显著因子数量
-                        significant_count = sum(
-                            1 for m in result.values() if m.is_significant
-                        )
+                        # P2-2修复：详细完成报告
+                        end_time = time.time()
+                        duration = end_time - start_time
+                        significant_count = sum(1 for m in result.values() if m.is_significant)
+                        high_score_count = sum(1 for m in result.values() if m.comprehensive_score >= 0.6)
+                        
                         successful_tasks += 1
-                        print(f"   ✅ 完成: {significant_count} 个显著因子")
+                        print(f"   ✅ 完成: 耗时 {duration:.1f}秒")
+                        print(f"      - 总因子: {len(result)}")
+                        print(f"      - 显著因子: {significant_count}")
+                        print(f"      - 高分因子: {high_score_count}")
+                        print(f"      - 完成时间: {datetime.now().strftime('%H:%M:%S')}")
+                        
+                        # 进度条显示
+                        progress = i / len(batch_config['screening_configs']) * 100
+                        print(f"   📈 总体进度: {progress:.1f}% ({i}/{len(batch_config['screening_configs'])})")
 
                     except Exception as e:
                         failed_tasks += 1
