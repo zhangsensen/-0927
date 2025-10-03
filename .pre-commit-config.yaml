@@ -1,0 +1,69 @@
+# Linus模式质量工具配置 - 实用主义优先
+repos:
+  # 代码格式化 - 消除风格争论
+  - repo: https://github.com/psf/black
+    rev: 25.9.0
+    hooks:
+      - id: black
+        language_version: python3.11
+        args: [--line-length=88]
+
+  # 导入排序 - 减少merge冲突
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        args: [--profile, black]
+
+  # 基础代码检查 - 轻量级实用
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=88, --ignore=E203,W503]
+
+  # 安全检查 - 保护策略和资金
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.8.6
+    hooks:
+      - id: bandit
+        args: [-ll, --exclude=tests/*]
+
+  # 类型检查 - 防止运行时错误
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        args: [--ignore-missing-imports]
+        exclude: ^tests/
+
+  # 量化专用 - pandas最佳实践
+  - repo: local
+    hooks:
+      - id: pandas-vet
+        name: Pandas代码质量检查
+        entry: pandas-vet
+        language: system
+        files: \.py$
+        pass_filenames: true
+
+  # 未来函数防护 - 量化系统核心安全
+  - repo: local
+    hooks:
+      - id: future-function-check
+        name: 检查未来函数使用
+        entry: python factor_system/factor_screening/scripts/check_future_functions.py
+        language: system
+        files: \.py$
+        pass_filenames: true
+
+  # 依赖安全检查 - 防止供应链攻击
+  - repo: local
+    hooks:
+      - id: safety-check
+        name: 依赖安全检查
+        entry: safety check
+        language: system
+        files: requirements.*\.txt$|pyproject\.toml$
+        pass_filenames: false

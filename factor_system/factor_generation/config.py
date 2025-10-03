@@ -4,10 +4,12 @@
 支持多时间框架154指标因子引擎的完整配置
 """
 
-import yaml
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
+import yaml
+
 
 class SimpleConfig:
     """简化配置类"""
@@ -26,7 +28,7 @@ class SimpleConfig:
             raise FileNotFoundError(f"配置文件不存在: {self.config_file}")
 
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 self.config_data = yaml.safe_load(f)
             return self.config_data
         except Exception as e:
@@ -38,7 +40,7 @@ class SimpleConfig:
             self.load_config()
 
         # 支持嵌套键，如 "data.root_dir"
-        keys = key.split('.')
+        keys = key.split(".")
         value = self.config_data
 
         for k in keys:
@@ -118,10 +120,14 @@ class SimpleConfig:
 
     def get_enabled_timeframes(self) -> List[str]:
         """获取启用的时间框架列表"""
-        return self.get_timeframe_config().get("enabled", ["5min", "15min", "30min", "60min", "daily"])
+        return self.get_timeframe_config().get(
+            "enabled", ["5min", "15min", "30min", "60min", "daily"]
+        )
+
 
 # 全局配置实例
 _config = None
+
 
 def get_config() -> SimpleConfig:
     """获取全局配置实例"""
@@ -129,6 +135,7 @@ def get_config() -> SimpleConfig:
     if _config is None:
         _config = SimpleConfig()
     return _config
+
 
 def setup_logging(timestamp: str = None):
     """设置日志"""
@@ -145,12 +152,9 @@ def setup_logging(timestamp: str = None):
     # 设置日志
     logging.basicConfig(
         level=getattr(logging, config.get_log_level().upper()),
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(log_file)
-        ],
-        force=True  # 强制重新配置
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(), logging.FileHandler(log_file)],
+        force=True,  # 强制重新配置
     )
 
     return str(log_file)

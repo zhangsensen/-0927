@@ -31,6 +31,10 @@ dependencies = [
     "statsmodels>=0.14.0",
     # YAML配置文件支持
     "pyyaml>=6.0.0",
+    "seaborn>=0.13.2",
+    "mplfinance>=0.12.10b0",
+    "polars>=1.33.1",
+    "numba>=0.62.0",
 ]
 
 # 可选依赖（按需安装）
@@ -66,19 +70,35 @@ scheduling = [
     "schedule>=1.2.0",
 ]
 
-# 开发工具
+# 开发工具 - Linus模式精选
 dev = [
+    # 核心质量工具 (必需)
     "pytest>=8.4.2",
-    "pytest-cov>=5.0.0",
+    "pytest-cov>=7.0.0",
     "black>=25.9.0",
-    "flake8>=7.3.0",
+    "isort>=6.0.1",
     "mypy>=1.18.2",
-    "isort>=5.13.0",
+    "flake8>=7.3.0",
+
+    # 安全工具 (量化系统必需)
+    "bandit>=1.8.6",
+    "safety>=3.6.2",
+
+    # 性能分析工具 (量化核心)
+    "line-profiler>=5.0.0",
+    "memory-profiler>=0.61.0",
+
+    # 量化专用工具
+    "pandas-vet>=2023.8.2",
+    "vulture>=2.14",
+
+    # 自动化工具
+    "pre-commit>=4.3.0",
+
+    # 开发辅助
     "ipython>=9.5.0",
     "jupyterlab>=4.4.9",
     "notebook>=7.3.0",
-    "memory-profiler>=0.61.0",
-    "line-profiler>=4.1.0",
 ]
 
 # 完整安装（包含所有可选依赖）
@@ -175,4 +195,26 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "bandit>=1.8.6",
+    "black>=25.9.0",
+    "flake8>=7.3.0",
+    "isort>=6.0.1",
+    "line-profiler>=5.0.0",
+    "memory-profiler>=0.61.0",
+    "mypy>=1.18.2",
+    "pandas-stubs>=2.3.2.250926",
+    "pandas-vet>=2023.8.2",
+    "pre-commit>=4.3.0",
+    "pytest>=8.4.2",
+    "ruff>=0.13.2",
+    "safety>=3.6.2",
+    "scipy-stubs>=1.16.2.0",
+    "types-psutil>=7.0.0.20251001",
+    "types-pyyaml>=6.0.12.20250915",
+    "types-seaborn>=0.13.2.20250914",
+    "vulture>=2.14",
 ]

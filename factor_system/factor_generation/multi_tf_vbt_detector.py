@@ -5,34 +5,34 @@
 支持5个时间框架：5min, 15min, 30min, 60min, daily
 """
 
-import pandas as pd
-import numpy as np
-import vectorbt as vbt
-from pathlib import Path
-import logging
-from typing import Dict, List, Optional, Tuple, Any, Union
-from dataclasses import dataclass
-from enum import Enum
-import sys
-import os
-import time
 import argparse
-from datetime import datetime
+import logging
+import os
+import sys
+import time
 import warnings
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+import vectorbt as vbt
 
 try:
     import pyarrow.parquet as pq
 except ImportError:  # pragma: no cover - optional dependency fallback
     pq = None
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # 配置管理
 from config import get_config, setup_logging
 
 # 导入154指标引擎
 from enhanced_factor_calculator import EnhancedFactorCalculator, IndicatorConfig
-
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -50,38 +50,47 @@ def initialize_logging(timestamp: Optional[str] = None) -> Tuple[str, str]:
 
     return resolved_timestamp, log_file_path
 
+
 class TimeFrame(Enum):
     """时间框架枚举"""
+
     MIN_5 = "5min"
     MIN_15 = "15min"
     MIN_30 = "30min"
     MIN_60 = "60min"
     DAILY = "daily"
 
+
 class ScreenOperator(Enum):
     """筛选操作符"""
+
     GREATER_THAN = ">"
     LESS_THAN = "<"
     BETWEEN = "BETWEEN"
     TOP_N = "TOP_N"
     BOTTOM_N = "BOTTOM_N"
 
+
 @dataclass
 class ScreenCriteria:
     """筛选条件"""
+
     factor_name: str
     operator: ScreenOperator
     threshold: float
     weight: float = 1.0
 
+
 @dataclass
 class StrategyResult:
     """策略结果"""
+
     name: str
     selected_stocks: List[str]
     scores: pd.Series
     criteria_count: int
     backtest_result: Optional[Dict] = None
+
 
 class MultiTimeframeFactorStore:
     """多时间框架因子存储类 - 分离存储策略，Linus风格设计"""
@@ -133,9 +142,13 @@ class MultiTimeframeFactorStore:
                         self.factor_names[timeframe.value] = []
 
                     if row_count is not None:
-                        logger.info(f"  {timeframe.value}: {row_count} 行, {len(self.factor_names[timeframe.value])} 个因子")
+                        logger.info(
+                            f"  {timeframe.value}: {row_count} 行, {len(self.factor_names[timeframe.value])} 个因子"
+                        )
                     else:
-                        logger.info(f"  {timeframe.value}: 未能读取行数, {len(self.factor_names[timeframe.value])} 个因子")
+                        logger.info(
+                            f"  {timeframe.value}: 未能读取行数, {len(self.factor_names[timeframe.value])} 个因子"
+                        )
                 else:
                     logger.warning(f"未找到 {timeframe.value} 因子文件: {pattern}")
             else:
@@ -152,7 +165,11 @@ class MultiTimeframeFactorStore:
         if pq is not None:
             try:
                 parquet_file = pq.ParquetFile(file_path)
-                columns = [name for name in parquet_file.schema.names if name != "__index_level_0__"]
+                columns = [
+                    name
+                    for name in parquet_file.schema.names
+                    if name != "__index_level_0__"
+                ]
                 if parquet_file.metadata is not None:
                     row_count = parquet_file.metadata.num_rows
             except Exception as exc:
@@ -178,7 +195,9 @@ class MultiTimeframeFactorStore:
 
         self.timeframe_data[timeframe] = data
         if not self.factor_names.get(timeframe):
-            self.factor_names[timeframe] = [col for col in data.columns if col != "__index_level_0__"]
+            self.factor_names[timeframe] = [
+                col for col in data.columns if col != "__index_level_0__"
+            ]
 
         return data
 
@@ -211,9 +230,14 @@ class MultiTimeframeFactorStore:
 
     def get_all_factor_names(self) -> Dict[str, List[str]]:
         """获取所有时间框架的因子名称"""
-        return {tf: self.get_factor_names_by_timeframe(tf) for tf in self.get_available_timeframes()}
+        return {
+            tf: self.get_factor_names_by_timeframe(tf)
+            for tf in self.get_available_timeframes()
+        }
 
-    def get_factors_by_timeframe(self, timeframe: str, factors: List[str] = None) -> pd.DataFrame:
+    def get_factors_by_timeframe(
+        self, timeframe: str, factors: List[str] = None
+    ) -> pd.DataFrame:
         """获取指定时间框架的因子数据"""
         data = self._ensure_timeframe_loaded(timeframe)
         if data is None:
@@ -247,10 +271,9 @@ class MultiTimeframeFactorStore:
             logger.warning(f"因子不存在 {timeframe}.{factor_name}")
             return pd.Series(dtype=float)
 
-    
-    def get_time_range_by_timeframe(self, timeframe: str,
-                                   start_time: pd.Timestamp,
-                                   end_time: pd.Timestamp) -> pd.DataFrame:
+    def get_time_range_by_timeframe(
+        self, timeframe: str, start_time: pd.Timestamp, end_time: pd.Timestamp
+    ) -> pd.DataFrame:
         """获取指定时间框架和时间范围内的数据"""
         data = self._ensure_timeframe_loaded(timeframe)
         if data is None:
@@ -258,8 +281,9 @@ class MultiTimeframeFactorStore:
         mask = (data.index >= start_time) & (data.index <= end_time)
         return data[mask]
 
-    def get_latest_signals_by_timeframe(self, timeframe: str,
-                                       lookback_periods: int = 1) -> pd.DataFrame:
+    def get_latest_signals_by_timeframe(
+        self, timeframe: str, lookback_periods: int = 1
+    ) -> pd.DataFrame:
         """获取指定时间框架的最新信号"""
         data = self._ensure_timeframe_loaded(timeframe)
         if data is None:
@@ -272,7 +296,7 @@ class MultiTimeframeFactorStore:
         summary = {
             "symbol": self.symbol,
             "available_timeframes": self.get_available_timeframes(),
-            "timeframe_info": {}
+            "timeframe_info": {},
         }
 
         for tf in self.get_available_timeframes():
@@ -285,14 +309,14 @@ class MultiTimeframeFactorStore:
                 "columns": len(data.columns),
                 "time_range": {
                     "start": str(data.index.min()),
-                    "end": str(data.index.max())
+                    "end": str(data.index.max()),
                 },
-                "factors": self.factor_names.get(tf, [])
+                "factors": self.factor_names.get(tf, []),
             }
 
         return summary
 
-    
+
 class MultiTimeframeVBTDetector:
     """
     多时间框架VectorBT检测器
@@ -310,8 +334,13 @@ class MultiTimeframeVBTDetector:
         logger.info(f"多时间框架VBT检测器初始化，数据根目录: {self.data_root}")
 
         # 时间框架枚举
-        self.timeframes = [TimeFrame.MIN_5, TimeFrame.MIN_15,
-                          TimeFrame.MIN_30, TimeFrame.MIN_60, TimeFrame.DAILY]
+        self.timeframes = [
+            TimeFrame.MIN_5,
+            TimeFrame.MIN_15,
+            TimeFrame.MIN_30,
+            TimeFrame.MIN_60,
+            TimeFrame.DAILY,
+        ]
 
         # 初始化154指标引擎
         self.init_enhanced_calculator()
@@ -334,26 +363,34 @@ class MultiTimeframeVBTDetector:
                 enable_atr=indicator_config.get("enable_atr", True),
                 enable_obv=indicator_config.get("enable_obv", True),
                 enable_mstd=indicator_config.get("enable_mstd", True),
-                enable_manual_indicators=indicator_config.get("enable_manual_indicators", True),
+                enable_manual_indicators=indicator_config.get(
+                    "enable_manual_indicators", True
+                ),
                 enable_all_periods=indicator_config.get("enable_all_periods", False),
-                memory_efficient=indicator_config.get("memory_efficient", True)
+                memory_efficient=indicator_config.get("memory_efficient", True),
             )
 
             # 创建增强计算器
             self.calculator = EnhancedFactorCalculator(self.indicator_config)
             logger.info("✅ 154指标引擎初始化成功")
-            logger.info(f"引擎配置: MA={self.indicator_config.enable_ma}, MACD={self.indicator_config.enable_macd}, RSI={self.indicator_config.enable_rsi}")
+            logger.info(
+                f"引擎配置: MA={self.indicator_config.enable_ma}, MACD={self.indicator_config.enable_macd}, RSI={self.indicator_config.enable_rsi}"
+            )
 
         except Exception as e:
             logger.error(f"❌ 154指标引擎初始化失败: {e}")
             # 降级为基本计算器
-            self.indicator_config = IndicatorConfig(enable_all_periods=False, memory_efficient=True)
+            self.indicator_config = IndicatorConfig(
+                enable_all_periods=False, memory_efficient=True
+            )
             self.calculator = EnhancedFactorCalculator(self.indicator_config)
             logger.info("使用降级配置初始化引擎")
 
         # 简化：不再硬编码文件模式，直接扫描目录
 
-    def load_multi_timeframe_data(self, symbol: str) -> Optional[Dict[TimeFrame, pd.DataFrame]]:
+    def load_multi_timeframe_data(
+        self, symbol: str
+    ) -> Optional[Dict[TimeFrame, pd.DataFrame]]:
         """加载多时间框架数据"""
         logger.info(f"\n{'='*60}")
         logger.info(f"步骤1: 加载多时间框架数据 - {symbol}")
@@ -362,7 +399,7 @@ class MultiTimeframeVBTDetector:
         timeframe_data = {}
 
         # 简化：直接扫描目录中的文件
-        symbol_patterns = [symbol, f"{symbol}HK", symbol.replace('.', '')]
+        symbol_patterns = [symbol, f"{symbol}HK", symbol.replace(".", "")]
 
         for timeframe in self.timeframes:
             try:
@@ -370,11 +407,11 @@ class MultiTimeframeVBTDetector:
 
                 # 定义时间框架标识符
                 timeframe_map = {
-                    TimeFrame.MIN_5: '5min',
-                    TimeFrame.MIN_15: '15m',
-                    TimeFrame.MIN_30: '30m',
-                    TimeFrame.MIN_60: '60m',
-                    TimeFrame.DAILY: '1day'
+                    TimeFrame.MIN_5: "5min",
+                    TimeFrame.MIN_15: "15m",
+                    TimeFrame.MIN_30: "30m",
+                    TimeFrame.MIN_60: "60m",
+                    TimeFrame.DAILY: "1day",
                 }
                 timeframe_id = timeframe_map[timeframe]
 
@@ -382,7 +419,9 @@ class MultiTimeframeVBTDetector:
                 found_file = None
                 for pattern in symbol_patterns:
                     # 简单的文件名匹配
-                    potential_files = list(self.data_root.glob(f"{pattern}*{timeframe_id}*.parquet"))
+                    potential_files = list(
+                        self.data_root.glob(f"{pattern}*{timeframe_id}*.parquet")
+                    )
                     if potential_files:
                         found_file = potential_files[0]
                         break
@@ -394,11 +433,13 @@ class MultiTimeframeVBTDetector:
                 df = pd.read_parquet(found_file)
 
                 # 数据预处理
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df.set_index('timestamp', inplace=True)
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+                df.set_index("timestamp", inplace=True)
                 df.sort_index(inplace=True)
 
-                logger.info(f"{timeframe.value} 数据: {len(df)} 行 (文件: {found_file.name})")
+                logger.info(
+                    f"{timeframe.value} 数据: {len(df)} 行 (文件: {found_file.name})"
+                )
                 timeframe_data[timeframe] = df
 
             except Exception as e:
@@ -412,8 +453,9 @@ class MultiTimeframeVBTDetector:
         logger.info(f"成功加载 {len(timeframe_data)} 个时间框架数据")
         return timeframe_data
 
-    def resample_to_target_timeframe(self, df: pd.DataFrame,
-                                   target_timeframe: TimeFrame) -> pd.DataFrame:
+    def resample_to_target_timeframe(
+        self, df: pd.DataFrame, target_timeframe: TimeFrame
+    ) -> pd.DataFrame:
         """重采样数据到目标时间框架"""
         logger.info(f"重采样到 {target_timeframe.value}")
 
@@ -423,22 +465,24 @@ class MultiTimeframeVBTDetector:
 
         # 重采样规则
         resample_rules = {
-            TimeFrame.MIN_15: '15min',
-            TimeFrame.MIN_30: '30min',
-            TimeFrame.MIN_60: '1H',
-            TimeFrame.DAILY: '1D'
+            TimeFrame.MIN_15: "15min",
+            TimeFrame.MIN_30: "30min",
+            TimeFrame.MIN_60: "1H",
+            TimeFrame.DAILY: "1D",
         }
 
         rule = resample_rules[target_timeframe]
 
         # OHLCV重采样
-        resampled = df.resample(rule).agg({
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last',
-            'volume': 'sum'
-        })
+        resampled = df.resample(rule).agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "volume": "sum",
+            }
+        )
 
         # 清理空值
         resampled = resampled.dropna()
@@ -446,8 +490,9 @@ class MultiTimeframeVBTDetector:
         logger.info(f"重采样结果: {len(df)} -> {len(resampled)} 行")
         return resampled
 
-    def calculate_timeframe_factors(self, df: pd.DataFrame,
-                                  timeframe: TimeFrame) -> Optional[pd.DataFrame]:
+    def calculate_timeframe_factors(
+        self, df: pd.DataFrame, timeframe: TimeFrame
+    ) -> Optional[pd.DataFrame]:
         """计算指定时间框架的因子 - 使用154指标引擎"""
         logger.info(f"计算 {timeframe.value} 时间框架因子 (154指标引擎)...")
 
@@ -473,7 +518,9 @@ class MultiTimeframeVBTDetector:
             logger.info(f"引擎数据开始时间: {engine_start}")
 
             if engine_start > original_start:
-                logger.warning(f"⚠️ 数据丢失警告: 原始数据从 {original_start} 开始，但引擎结果从 {engine_start} 开始")
+                logger.warning(
+                    f"⚠️ 数据丢失警告: 原始数据从 {original_start} 开始，但引擎结果从 {engine_start} 开始"
+                )
                 lost_rows = len(df) - len(factors_df)
                 logger.warning(f"⚠️ 丢失了 {lost_rows} 行数据")
 
@@ -485,19 +532,22 @@ class MultiTimeframeVBTDetector:
             logger.info(f"  - 最终因子数量: {len(factors_df.columns)} 个")
             logger.info(f"  - 最终数据点数: {len(factors_df)} 行")
             logger.info(f"  - 计算耗时: {calc_time:.3f}秒")
-            logger.info(f"  - 数据范围: {factors_df.index.min()} 到 {factors_df.index.max()}")
+            logger.info(
+                f"  - 数据范围: {factors_df.index.min()} 到 {factors_df.index.max()}"
+            )
 
             return factors_df
 
         except Exception as e:
             logger.error(f"❌ {timeframe.value} 154指标因子计算失败: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return None
 
-    def _apply_data_cleaning_fix(self, original_df: pd.DataFrame,
-                               factors_df: pd.DataFrame,
-                               timeframe: TimeFrame) -> pd.DataFrame:
+    def _apply_data_cleaning_fix(
+        self, original_df: pd.DataFrame, factors_df: pd.DataFrame, timeframe: TimeFrame
+    ) -> pd.DataFrame:
         """应用数据清理修复 - 确保不丢失原始数据时间点"""
 
         # 检查数据完整性
@@ -527,23 +577,27 @@ class MultiTimeframeVBTDetector:
             # 只在指标有效后进行前向填充，不破坏初始的NaN状态
             for col in factors_reindexed.columns:
                 # 跳过原始OHLCV数据
-                if col in ['open', 'high', 'low', 'close', 'volume']:
+                if col in ["open", "high", "low", "close", "volume"]:
                     continue
 
                 # 找到第一个有效值的位置
                 first_valid_idx = factors_reindexed[col].first_valid_index()
                 if first_valid_idx is not None:
                     # 从第一个有效值开始，对后续的NaN进行前向填充
-                    factors_reindexed.loc[first_valid_idx:, col] = factors_reindexed.loc[first_valid_idx:, col].ffill()
+                    factors_reindexed.loc[first_valid_idx:, col] = (
+                        factors_reindexed.loc[first_valid_idx:, col].ffill()
+                    )
 
             return factors_reindexed
         else:
-            logger.error(f"❌ 数据修复失败: 修复后仍然缺少 {original_rows - repaired_rows} 行")
+            logger.error(
+                f"❌ 数据修复失败: 修复后仍然缺少 {original_rows - repaired_rows} 行"
+            )
             return factors_df  # 返回引擎原始结果
 
-  
-    def save_timeframe_factors_separately(self, timeframe_factors: Dict[TimeFrame, pd.DataFrame],
-                                         symbol: str) -> Dict[str, str]:
+    def save_timeframe_factors_separately(
+        self, timeframe_factors: Dict[TimeFrame, pd.DataFrame], symbol: str
+    ) -> Dict[str, str]:
         """分离保存各时间框架因子数据，减少冗余"""
         try:
             # 从配置获取输出目录
@@ -569,14 +623,13 @@ class MultiTimeframeVBTDetector:
                 # 保存该时间框架的因子数据
                 try:
                     factors_df.to_parquet(
-                        output_file,
-                        engine='pyarrow',
-                        compression='snappy',
-                        index=True
+                        output_file, engine="pyarrow", compression="snappy", index=True
                     )
                     logger.debug(f"成功保存因子数据到: {output_file}")
                 except Exception as save_error:
-                    logger.warning(f"直接保存失败，尝试清理VectorBT对象列: {save_error}")
+                    logger.warning(
+                        f"直接保存失败，尝试清理VectorBT对象列: {save_error}"
+                    )
 
                     # 清理无法序列化的VectorBT对象列
                     columns_to_drop = []
@@ -586,36 +639,53 @@ class MultiTimeframeVBTDetector:
 
                         if len(factors_df) > 0:
                             sample_data = factors_df[col].iloc[0]
-                            if sample_data is not None and hasattr(sample_data, '__class__'):
+                            if sample_data is not None and hasattr(
+                                sample_data, "__class__"
+                            ):
                                 class_str = str(sample_data.__class__)
-                                if ('vectorbt' in class_str and
-                                    ('labels.generators' in class_str or 'indicators.factory' in class_str or
-                                     'talib.' in class_str or 'indicator_wrapper' in class_str)):
+                                if "vectorbt" in class_str and (
+                                    "labels.generators" in class_str
+                                    or "indicators.factory" in class_str
+                                    or "talib." in class_str
+                                    or "indicator_wrapper" in class_str
+                                ):
                                     columns_to_drop.append(col)
                                     vectorbt_columns_found += 1
-                                    logger.info(f"标记删除VectorBT对象列: {col} ({class_str})")
+                                    logger.info(
+                                        f"标记删除VectorBT对象列: {col} ({class_str})"
+                                    )
 
                     if columns_to_drop:
-                        logger.warning(f"发现 {vectorbt_columns_found} 个VectorBT对象列无法序列化")
+                        logger.warning(
+                            f"发现 {vectorbt_columns_found} 个VectorBT对象列无法序列化"
+                        )
                         factors_df_cleaned = factors_df.drop(columns=columns_to_drop)
                         factors_df_cleaned.to_parquet(
                             output_file,
-                            engine='pyarrow',
-                            compression='snappy',
-                            index=True
+                            engine="pyarrow",
+                            compression="snappy",
+                            index=True,
                         )
-                        logger.info(f"清理后成功保存，删除了 {len(columns_to_drop)} 个VectorBT对象列")
+                        logger.info(
+                            f"清理后成功保存，删除了 {len(columns_to_drop)} 个VectorBT对象列"
+                        )
 
                         # 记录被删除的列以便后续分析
                         if vectorbt_columns_found > 0:
-                            logger.warning(f"建议检查enhanced_factor_calculator.py中以下指标的extract_vbt_indicator/extract_vbt_labels应用: {', '.join(columns_to_drop)}")
+                            logger.warning(
+                                f"建议检查enhanced_factor_calculator.py中以下指标的extract_vbt_indicator/extract_vbt_labels应用: {', '.join(columns_to_drop)}"
+                            )
                     else:
-                        logger.error("未找到VectorBT对象列但保存仍然失败，可能是其他序列化问题")
+                        logger.error(
+                            "未找到VectorBT对象列但保存仍然失败，可能是其他序列化问题"
+                        )
                         raise save_error
 
                 file_size = os.path.getsize(output_file) / 1024 / 1024  # MB
                 logger.info(f"  {timeframe.value}: {output_file}")
-                logger.info(f"    因子数量: {len(factors_df.columns)}, 数据点: {len(factors_df)}")
+                logger.info(
+                    f"    因子数量: {len(factors_df.columns)}, 数据点: {len(factors_df)}"
+                )
                 logger.info(f"    文件大小: {file_size:.2f} MB")
 
                 saved_files[timeframe.value] = str(output_file)
@@ -669,7 +739,9 @@ class MultiTimeframeVBTDetector:
         logger.info(f"处理时间框架: {len(timeframe_factors)}")
 
         # 计算存储效率（现在每个时间框架独立存储）
-        total_separate_rows = sum(len(factors_df) for factors_df in timeframe_factors.values())
+        total_separate_rows = sum(
+            len(factors_df) for factors_df in timeframe_factors.values()
+        )
 
         logger.info(f"存储效率分析（简化版）:")
         logger.info(f"  各时间框架独立存储总数据点: {total_separate_rows}")
@@ -689,7 +761,7 @@ class MultiTimeframeVBTDetector:
                 tf.value: {
                     "factors": len(factors_df.columns),
                     "data_points": len(factors_df),
-                    "file_path": saved_files.get(tf.value)
+                    "file_path": saved_files.get(tf.value),
                 }
                 for tf, factors_df in timeframe_factors.items()
             },
@@ -697,12 +769,13 @@ class MultiTimeframeVBTDetector:
             "separated_files": saved_files,
         }
 
+
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='多时间框架因子检测器')
-    parser.add_argument('symbol', help='股票代码')
-    parser.add_argument('--data-root', help='数据根目录')
-    parser.add_argument('--verbose', action='store_true', help='详细输出')
+    parser = argparse.ArgumentParser(description="多时间框架因子检测器")
+    parser.add_argument("symbol", help="股票代码")
+    parser.add_argument("--data-root", help="数据根目录")
+    parser.add_argument("--verbose", action="store_true", help="详细输出")
 
     args = parser.parse_args()
 
@@ -716,16 +789,22 @@ def main():
     detector = MultiTimeframeVBTDetector(data_root=args.data_root)
     result = detector.run_multi_timeframe_analysis(args.symbol)
 
-    if result.get('success'):
+    if result.get("success"):
         print(f"✅ 分析完成: {result['symbol']}")
         print(f"时间框架: {result['timeframes_processed']}")
         print(f"存储策略: {result.get('storage_strategy', 'unknown')}")
         print(f"计算耗时: {result['calculation_time']:.2f}秒")
 
         print(f"\n📁 分离存储文件:")
-        for timeframe, file_info in result.get('timeframe_details', {}).items():
-            info = file_info if isinstance(file_info, dict) else {'factors': 'unknown', 'data_points': 'unknown'}
-            print(f"  {timeframe}: {info.get('factors', '?')} 因子, {info.get('data_points', '?')} 数据点")
+        for timeframe, file_info in result.get("timeframe_details", {}).items():
+            info = (
+                file_info
+                if isinstance(file_info, dict)
+                else {"factors": "unknown", "data_points": "unknown"}
+            )
+            print(
+                f"  {timeframe}: {info.get('factors', '?')} 因子, {info.get('data_points', '?')} 数据点"
+            )
 
         print(f"\n💾 存储效率提升:")
         print(f"  避免冗余数据点: 9067")
@@ -742,6 +821,6 @@ def main():
         logger.error(f"❌ 执行会话失败: {result.get('error', '未知错误')}")
         logger.error(f"日志文件位置: {log_file_path}")
 
+
 if __name__ == "__main__":
     main()
-

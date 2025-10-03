@@ -4,16 +4,17 @@
 整合vbt_professional_detector.py的成熟计算逻辑到多时间框架系统
 """
 
-import pandas as pd
-import numpy as np
-import vectorbt as vbt
 import logging
-from itertools import product
-from typing import Dict, List, Optional, Tuple, Any, Union
+import time
 from dataclasses import dataclass
 from enum import Enum
-import time
+from itertools import product
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+import vectorbt as vbt
 
 # 导入配置
 from config import get_config, setup_logging
@@ -24,10 +25,10 @@ from config import get_config, setup_logging
 def extract_vbt_labels(vbt_result, name: Optional[str] = None):
     """从VectorBT标签对象中提取可序列化的标签数据"""
     try:
-        index = getattr(vbt_result, 'index', None)
+        index = getattr(vbt_result, "index", None)
 
         # 优先尝试常见的属性
-        for attr in ['integer', 'labels', 'real', 'values']:
+        for attr in ["integer", "labels", "real", "values"]:
             if hasattr(vbt_result, attr):
                 try:
                     value = getattr(vbt_result, attr)
@@ -35,11 +36,13 @@ def extract_vbt_labels(vbt_result, name: Optional[str] = None):
                     continue
                 if value is None:
                     continue
-                value_index = getattr(value, 'index', index)
-                return ensure_series(value, value_index, name or getattr(value, 'name', name))
+                value_index = getattr(value, "index", index)
+                return ensure_series(
+                    value, value_index, name or getattr(value, "name", name)
+                )
 
         # VectorBT对象通常支持to_pd()方法
-        if hasattr(vbt_result, 'to_pd'):
+        if hasattr(vbt_result, "to_pd"):
             converted = vbt_result.to_pd()
             if isinstance(converted, pd.Series):
                 return ensure_series(converted, converted.index, name or converted.name)
@@ -51,7 +54,7 @@ def extract_vbt_labels(vbt_result, name: Optional[str] = None):
         if isinstance(vbt_result, pd.Series):
             return ensure_series(vbt_result, vbt_result.index, name or vbt_result.name)
 
-        if hasattr(vbt_result, 'values'):
+        if hasattr(vbt_result, "values"):
             return ensure_series(vbt_result.values, index, name)
 
         return ensure_series(vbt_result, index, name)
@@ -66,7 +69,7 @@ def extract_indicator_component(result, attr_candidates):
         if hasattr(result, attr):
             return getattr(result, attr)
 
-    if hasattr(result, '_asdict'):
+    if hasattr(result, "_asdict"):
         result_dict = result._asdict()
         for attr in attr_candidates:
             if attr in result_dict:
@@ -83,7 +86,7 @@ def ensure_series(values, index, name):
             series.name = name
         return series
 
-    if hasattr(values, 'to_pd'):
+    if hasattr(values, "to_pd"):
         converted = values.to_pd()
         if isinstance(converted, pd.Series):
             return converted if name is None else converted.rename(name)
@@ -91,7 +94,7 @@ def ensure_series(values, index, name):
             series = converted.iloc[:, 0]
             return series if name is None else series.rename(name)
 
-    if hasattr(values, 'to_series'):
+    if hasattr(values, "to_series"):
         try:
             series = values.to_series()
             if name is not None:
@@ -114,21 +117,27 @@ def ensure_series(values, index, name):
 def extract_vbt_indicator(vbt_result, name: Optional[str] = None):
     """从VectorBT指标对象中提取可序列化的数值数据"""
     try:
-        index = getattr(vbt_result, 'index', None)
+        index = getattr(vbt_result, "index", None)
 
         if isinstance(vbt_result, pd.Series):
             return ensure_series(vbt_result, vbt_result.index, name or vbt_result.name)
 
         # 优先处理常见的属性
-        if hasattr(vbt_result, 'percent_k') and hasattr(vbt_result, 'percent_d'):
-            return ensure_series(vbt_result.percent_k, getattr(vbt_result.percent_k, 'index', index), name)
+        if hasattr(vbt_result, "percent_k") and hasattr(vbt_result, "percent_d"):
+            return ensure_series(
+                vbt_result.percent_k,
+                getattr(vbt_result.percent_k, "index", index),
+                name,
+            )
 
-        component = extract_indicator_component(vbt_result, ['k', 'fastk', 'slowk', 'real', 'output', 'values'])
+        component = extract_indicator_component(
+            vbt_result, ["k", "fastk", "slowk", "real", "output", "values"]
+        )
         if component is not None:
-            comp_index = getattr(component, 'index', index)
+            comp_index = getattr(component, "index", index)
             return ensure_series(component, comp_index, name)
 
-        if hasattr(vbt_result, 'to_pd'):
+        if hasattr(vbt_result, "to_pd"):
             converted = vbt_result.to_pd()
             if isinstance(converted, pd.Series):
                 return ensure_series(converted, converted.index, name or converted.name)
@@ -136,13 +145,15 @@ def extract_vbt_indicator(vbt_result, name: Optional[str] = None):
                 series = converted.iloc[:, 0]
                 return ensure_series(series, series.index, name or series.name)
 
-        if hasattr(vbt_result, 'values'):
+        if hasattr(vbt_result, "values"):
             return ensure_series(vbt_result.values, index, name)
 
         return ensure_series(vbt_result, index, name)
     except Exception as e:
         logging.warning(f"提取VectorBT指标失败: {e}")
         return None
+
+
 class TimeFrame(Enum):
     MIN_5 = "5min"
     MIN_15 = "15min"
@@ -150,39 +161,48 @@ class TimeFrame(Enum):
     MIN_60 = "60min"
     DAILY = "daily"
 
+
 # 策略相关数据结构（从vbt_professional_detector.py迁移）
 class ScreenOperator(Enum):
     """筛选操作符"""
+
     GREATER_THAN = ">"
     LESS_THAN = "<"
     BETWEEN = "BETWEEN"
     TOP_N = "TOP_N"
     BOTTOM_N = "BOTTOM_N"
 
+
 @dataclass
 class ScreenCriteria:
     """筛选条件"""
+
     factor_name: str
     operator: ScreenOperator
     threshold: float
     weight: float = 1.0
 
+
 @dataclass
 class StrategyResult:
     """策略结果"""
+
     name: str
     selected_stocks: List[str]
     scores: pd.Series
     criteria_count: int
     backtest_result: Optional[Dict] = None
 
+
 # 设置日志
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class IndicatorConfig:
     """指标配置类"""
+
     enable_ma: bool = True
     enable_ema: bool = True
     enable_macd: bool = True
@@ -196,7 +216,8 @@ class IndicatorConfig:
 
     # 性能优化配置
     enable_all_periods: bool = False  # 是否启用所有周期（影响性能）
-    memory_efficient: bool = True     # 内存高效模式
+    memory_efficient: bool = True  # 内存高效模式
+
 
 class EnhancedFactorCalculator:
     """
@@ -209,10 +230,13 @@ class EnhancedFactorCalculator:
         self.config = indicator_config or IndicatorConfig()
         logger.info("增强版因子计算器初始化完成")
 
-        logger.info(f"配置: MA={self.config.enable_ma}, MACD={self.config.enable_macd}, RSI={self.config.enable_rsi}")
+        logger.info(
+            f"配置: MA={self.config.enable_ma}, MACD={self.config.enable_macd}, RSI={self.config.enable_rsi}"
+        )
 
-    def calculate_comprehensive_factors(self, df: pd.DataFrame,
-                                     timeframe: TimeFrame) -> Optional[pd.DataFrame]:
+    def calculate_comprehensive_factors(
+        self, df: pd.DataFrame, timeframe: TimeFrame
+    ) -> Optional[pd.DataFrame]:
         """
         计算综合技术因子 - 基于专业探测器的154个指标
         这是核心方法，移植自vbt_professional_detector.py
@@ -224,10 +248,10 @@ class EnhancedFactorCalculator:
             start_time = time.time()
             logger.info(f"输入数据形状: {df.shape}")
 
-            price = df['close'].astype('float64')
-            high = df['high'].astype('float64')
-            low = df['low'].astype('float64')
-            volume = df['volume'].astype('float64')
+            price = df["close"].astype("float64")
+            high = df["high"].astype("float64")
+            low = df["low"].astype("float64")
+            volume = df["volume"].astype("float64")
 
             factor_data = {}
 
@@ -243,46 +267,56 @@ class EnhancedFactorCalculator:
             logger.info(f"{timeframe.value} 时间框架参数: {timeframe_params}")
 
             # 1. 移动平均线系列 - 根据时间框架调整窗口
-            if self.config.enable_ma and 'MA' in available_indicators:
-                ma_windows = timeframe_params['ma_windows']
+            if self.config.enable_ma and "MA" in available_indicators:
+                ma_windows = timeframe_params["ma_windows"]
                 logger.info(f"{timeframe.value} 使用MA窗口: {ma_windows}")
 
                 for window in ma_windows:
-                    calc = lambda w=window: vbt.MA.run(price, window=w).ma.rename(f'MA{w}')
-                    factor_calculations.append((f'MA{window}', calc))
+                    calc = lambda w=window: vbt.MA.run(price, window=w).ma.rename(
+                        f"MA{w}"
+                    )
+                    factor_calculations.append((f"MA{window}", calc))
 
             # 2. 指数移动平均 - 根据时间框架调整
             if self.config.enable_ema:
-                ema_spans = timeframe_params['ema_spans']
+                ema_spans = timeframe_params["ema_spans"]
                 logger.info(f"{timeframe.value} 使用EMA窗口: {ema_spans}")
 
                 for span in ema_spans:
-                    calc = lambda s=span: price.ewm(span=s, adjust=False).mean().rename(f'EMA{s}')
-                    factor_calculations.append((f'EMA{span}', calc))
+                    calc = (
+                        lambda s=span: price.ewm(span=s, adjust=False)
+                        .mean()
+                        .rename(f"EMA{s}")
+                    )
+                    factor_calculations.append((f"EMA{span}", calc))
 
             # 3. MACD指标系列 - 根据时间框架调整参数
-            if self.config.enable_macd and 'MACD' in available_indicators:
-                macd_params = timeframe_params['macd_params']
+            if self.config.enable_macd and "MACD" in available_indicators:
+                macd_params = timeframe_params["macd_params"]
                 logger.info(f"{timeframe.value} 使用MACD参数: {macd_params}")
 
                 for fast, slow, signal in macd_params:
                     calc = lambda f=fast, s=slow, sig=signal: (
-                        vbt.MACD.run(price, fast_window=f, slow_window=s, signal_window=sig)
+                        vbt.MACD.run(
+                            price, fast_window=f, slow_window=s, signal_window=sig
+                        )
                     )
-                    factor_calculations.append((f'MACD_{fast}_{slow}_{signal}', calc))
+                    factor_calculations.append((f"MACD_{fast}_{slow}_{signal}", calc))
 
             # 4. RSI系列
-            if self.config.enable_rsi and 'RSI' in available_indicators:
-                rsi_windows = timeframe_params['rsi_windows']
+            if self.config.enable_rsi and "RSI" in available_indicators:
+                rsi_windows = timeframe_params["rsi_windows"]
                 logger.info(f"{timeframe.value} 使用RSI窗口: {rsi_windows}")
 
                 for window in rsi_windows:
-                    calc = lambda w=window: vbt.RSI.run(price, window=w).rsi.rename(f'RSI{w}')
-                    factor_calculations.append((f'RSI{window}', calc))
+                    calc = lambda w=window: vbt.RSI.run(price, window=w).rsi.rename(
+                        f"RSI{w}"
+                    )
+                    factor_calculations.append((f"RSI{window}", calc))
 
             # 5. 布林带系列
-            if self.config.enable_bbands and 'BBANDS' in available_indicators:
-                bb_windows = timeframe_params['bb_windows']
+            if self.config.enable_bbands and "BBANDS" in available_indicators:
+                bb_windows = timeframe_params["bb_windows"]
                 logger.info(f"{timeframe.value} 使用BB窗口: {bb_windows}")
 
                 for window in bb_windows:
@@ -290,55 +324,65 @@ class EnhancedFactorCalculator:
                     calc = lambda w=window, a=alpha: (
                         vbt.BBANDS.run(price, window=w, alpha=a)
                     )
-                    factor_calculations.append((f'BB_{window}_{alpha}', calc))
+                    factor_calculations.append((f"BB_{window}_{alpha}", calc))
 
             # 6. 随机指标
-            if self.config.enable_stoch and 'STOCH' in available_indicators:
-                stoch_windows = timeframe_params['stoch_windows']
+            if self.config.enable_stoch and "STOCH" in available_indicators:
+                stoch_windows = timeframe_params["stoch_windows"]
                 logger.info(f"{timeframe.value} 使用STOCH窗口: {stoch_windows}")
 
                 for k_window, d_window in stoch_windows:
                     calc = lambda k=k_window, d=d_window: (
-                        extract_vbt_indicator(vbt.STOCH.run(high, low, price, k_window=k, d_window=d))
+                        extract_vbt_indicator(
+                            vbt.STOCH.run(high, low, price, k_window=k, d_window=d)
+                        )
                     )
-                    factor_calculations.append((f'STOCH_{k_window}_{d_window}', calc))
+                    factor_calculations.append((f"STOCH_{k_window}_{d_window}", calc))
 
             # 7. 平均真实范围
-            if self.config.enable_atr and 'ATR' in available_indicators:
-                atr_windows = timeframe_params['atr_windows']
+            if self.config.enable_atr and "ATR" in available_indicators:
+                atr_windows = timeframe_params["atr_windows"]
                 logger.info(f"{timeframe.value} 使用ATR窗口: {atr_windows}")
 
                 for window in atr_windows:
-                    calc = lambda w=window: vbt.ATR.run(high, low, price, window=w).atr.rename(f'ATR{w}')
-                    factor_calculations.append((f'ATR{window}', calc))
+                    calc = lambda w=window: vbt.ATR.run(
+                        high, low, price, window=w
+                    ).atr.rename(f"ATR{w}")
+                    factor_calculations.append((f"ATR{window}", calc))
 
             # 8. 移动标准差 (波动率)
-            if self.config.enable_mstd and 'MSTD' in available_indicators:
-                mstd_windows = timeframe_params['mstd_windows']
+            if self.config.enable_mstd and "MSTD" in available_indicators:
+                mstd_windows = timeframe_params["mstd_windows"]
                 logger.info(f"{timeframe.value} 使用MSTD窗口: {mstd_windows}")
 
                 for window in mstd_windows:
-                    calc = lambda w=window: vbt.MSTD.run(price, window=w).mstd.rename(f'MSTD{w}')
-                    factor_calculations.append((f'MSTD{window}', calc))
+                    calc = lambda w=window: vbt.MSTD.run(price, window=w).mstd.rename(
+                        f"MSTD{w}"
+                    )
+                    factor_calculations.append((f"MSTD{window}", calc))
 
             # 9. OBV指标
-            if self.config.enable_obv and 'OBV' in available_indicators:
-                calc = lambda: vbt.OBV.run(price, volume).obv.rename('OBV')
-                factor_calculations.append(('OBV', calc))
+            if self.config.enable_obv and "OBV" in available_indicators:
+                calc = lambda: vbt.OBV.run(price, volume).obv.rename("OBV")
+                factor_calculations.append(("OBV", calc))
 
                 # OBV移动平均
-                obv_ma_windows = [5, 10, 15, 20] if self.config.enable_all_periods else [20]
+                obv_ma_windows = (
+                    [5, 10, 15, 20] if self.config.enable_all_periods else [20]
+                )
                 for window in obv_ma_windows:
-                    calc = lambda w=window: vbt.MA.run(factor_data['OBV'], window=w).ma.rename(f'OBV_SMA{w}')
-                    factor_calculations.append((f'OBV_SMA{window}', calc))
+                    calc = lambda w=window: vbt.MA.run(
+                        factor_data["OBV"], window=w
+                    ).ma.rename(f"OBV_SMA{w}")
+                    factor_calculations.append((f"OBV_SMA{window}", calc))
 
             # 10. 其他VectorBT高级指标
             if self.config.enable_all_periods:
                 # Bollinger Band相关指标
-                if 'BOLB' in available_indicators:
+                if "BOLB" in available_indicators:
                     # BOLB直接返回结果对象，不需要rename
                     calc = lambda: vbt.BOLB.run(price, window=20)
-                    factor_calculations.append(('BOLB_20', calc))
+                    factor_calculations.append(("BOLB_20", calc))
 
                 # Fixed Lookback指标 - 暂时禁用，存在参数和rename方法问题
                 # if 'FIXLB' in available_indicators:
@@ -355,23 +399,34 @@ class EnhancedFactorCalculator:
                 #             factor_calculations.append((f'{stat_name}{window}', calc))
 
                 # 其他移动平均指标 - 根据时间框架调整窗口
-                for lb_func, lb_name in [(vbt.LEXLB, 'LEXLB'), (vbt.MEANLB, 'MEANLB'),
-                                         (vbt.TRENDLB, 'TRENDLB')]:
+                for lb_func, lb_name in [
+                    (vbt.LEXLB, "LEXLB"),
+                    (vbt.MEANLB, "MEANLB"),
+                    (vbt.TRENDLB, "TRENDLB"),
+                ]:
                     if lb_name in available_indicators:
-                        lb_windows = timeframe_params['lb_windows']
-                        logger.info(f"{timeframe.value} 使用{lb_name}窗口: {lb_windows}")
+                        lb_windows = timeframe_params["lb_windows"]
+                        logger.info(
+                            f"{timeframe.value} 使用{lb_name}窗口: {lb_windows}"
+                        )
 
                         for window in lb_windows:
-                            if lb_name in ['LEXLB']:
+                            if lb_name in ["LEXLB"]:
                                 # LEXLB只需要close, pos_th, neg_th
-                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(func.run(price, pos_th=0.1, neg_th=-0.1))
-                            elif lb_name in ['TRENDLB']:
+                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(
+                                    func.run(price, pos_th=0.1, neg_th=-0.1)
+                                )
+                            elif lb_name in ["TRENDLB"]:
                                 # TRENDLB需要close, pos_th, neg_th, mode
-                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(func.run(price, pos_th=0.1, neg_th=-0.1, mode=0))
+                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(
+                                    func.run(price, pos_th=0.1, neg_th=-0.1, mode=0)
+                                )
                             else:
                                 # MEANLB只需要close, window
-                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(func.run(price, window=w))
-                            factor_calculations.append((f'{lb_name}{window}', calc))
+                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(
+                                    func.run(price, window=w)
+                                )
+                            factor_calculations.append((f"{lb_name}{window}", calc))
 
                 # OHLC统计指标 - 暂时禁用，存在rename方法问题
                 # ohlc_funcs = [(vbt.OHLCSTCX, 'OHLCSTCX'), (vbt.OHLCSTX, 'OHLCSTX')]
@@ -403,113 +458,130 @@ class EnhancedFactorCalculator:
                 #         factor_calculations.append((st_name, calc))
 
             # 11. TA-Lib指标 (如果可用)
-            if hasattr(vbt, 'talib') and self.config.enable_all_periods:
+            if hasattr(vbt, "talib") and self.config.enable_all_periods:
                 talib_params = {
-                    'SMA': {'timeperiod': [5, 10, 20, 30, 60]},
-                    'EMA': {'timeperiod': [5, 10, 20, 30, 60]},
-                    'WMA': {'timeperiod': [5, 10, 20]},
-                    'DEMA': {'timeperiod': [5, 10, 20]},
-                    'TEMA': {'timeperiod': [5, 10, 20]},
-                    'TRIMA': {'timeperiod': [5, 10, 20]},
-                    'KAMA': {'timeperiod': [10, 20]},
-                    'T3': {'timeperiod': [5, 10, 20]},
-                    'MIDPRICE': {'timeperiod': [5, 10, 20]},
-                    'SAR': {},  # 无参数
-                    'ADX': {'timeperiod': [14]},
-                    'ADXR': {'timeperiod': [14]},
-                    'APO': {'fastperiod': [12], 'slowperiod': [26], 'matype': [0]},
-                    'AROON': {'timeperiod': [14]},
-                    'AROONOSC': {'timeperiod': [14]},
-                    'CCI': {'timeperiod': [14]},
-                    'DX': {'timeperiod': [14]},
-                    'MFI': {'timeperiod': [14]},
-                    'MOM': {'timeperiod': [10]},
-                    'ROC': {'timeperiod': [10]},
-                    'ROCP': {'timeperiod': [10]},
-                    'ROCR': {'timeperiod': [10]},
-                    'ROCR100': {'timeperiod': [10]},
-                    'RSI': {'timeperiod': [14]},
-                    'STOCH': {},  # 默认参数
-                    'STOCHF': {},
-                    'STOCHRSI': {'timeperiod': [14], 'fastk_period': [5], 'fastd_period': [3]},
-                    'TRIX': {'timeperiod': [14]},
-                    'ULTOSC': {'timeperiod1': [7], 'timeperiod2': [14], 'timeperiod3': [28]},
-                    'WILLR': {'timeperiod': [14]},
-                    'CDL2CROWS': {},  # 形态识别
-                    'CDL3BLACKCROWS': {},
-                    'CDL3INSIDE': {},
-                    'CDL3LINESTRIKE': {},
-                    'CDL3OUTSIDE': {},
-                    'CDL3STARSINSOUTH': {},
-                    'CDL3WHITESOLDIERS': {},
-                    'CDLABANDONEDBABY': {},
-                    'CDLADVANCEBLOCK': {},
-                    'CDLBELTHOLD': {},
-                    'CDLBREAKAWAY': {},
-                    'CDLCLOSINGMARUBOZU': {},
-                    'CDLCONCEALBABYSWALL': {},
-                    'CDLCOUNTERATTACK': {},
-                    'CDLDARKCLOUDCOVER': {},
-                    'CDLDOJI': {},
-                    'CDLDOJISTAR': {},
-                    'CDLDRAGONFLYDOJI': {},
-                    'CDLENGULFING': {},
-                    'CDLEVENINGDOJISTAR': {},
-                    'CDLEVENINGSTAR': {},
-                    'CDLGAPSIDESIDEWHITE': {},
-                    'CDLGRAVESTONEDOJI': {},
-                    'CDLHAMMER': {},
-                    'CDLHANGINGMAN': {},
-                    'CDLHARAMI': {},
-                    'CDLHARAMICROSS': {},
-                    'CDLHIGHWAVE': {},
-                    'CDLHIKKAKE': {},
-                    'CDLHOMINGPIGEON': {},
-                    'CDLIDENTICAL3CROWS': {},
-                    'CDLINNECK': {},
-                    'CDLINVERTEDHAMMER': {},
-                    'CDLKICKING': {},
-                    'CDLKICKINGBYLENGTH': {},
-                    'CDLLADDERBOTTOM': {},
-                    'CDLLONGLEGGEDDOJI': {},
-                    'CDLLONGLINE': {},
-                    'CDLMARUBOZU': {},
-                    'CDLMATCHINGLOW': {},
-                    'CDLMATHOLD': {},
-                    'CDLMORNINGDOJISTAR': {},
-                    'CDLMORNINGSTAR': {},
-                    'CDLONNECK': {},
-                    'CDLPIERCING': {},
-                    'CDLRICKSHAWMAN': {},
-                    'CDLRISEFALL3METHODS': {},
-                    'CDLSEPARATINGLINES': {},
-                    'CDLSHOOTINGSTAR': {},
-                    'CDLSHORTLINE': {},
-                    'CDLSPINNINGTOP': {},
-                    'CDLSTALLEDPATTERN': {},
-                    'CDLSTICKSANDWICH': {},
-                    'CDLTAKURI': {},
-                    'CDLTASUKIGAP': {},
-                    'CDLTHRUSTING': {},
-                    'CDLTRISTAR': {},
-                    'CDLUNIQUE3RIVER': {},
-                    'CDLUPSIDEGAP2CROWS': {},
-                    'CDLXSIDEGAP3METHODS': {}
+                    "SMA": {"timeperiod": [5, 10, 20, 30, 60]},
+                    "EMA": {"timeperiod": [5, 10, 20, 30, 60]},
+                    "WMA": {"timeperiod": [5, 10, 20]},
+                    "DEMA": {"timeperiod": [5, 10, 20]},
+                    "TEMA": {"timeperiod": [5, 10, 20]},
+                    "TRIMA": {"timeperiod": [5, 10, 20]},
+                    "KAMA": {"timeperiod": [10, 20]},
+                    "T3": {"timeperiod": [5, 10, 20]},
+                    "MIDPRICE": {"timeperiod": [5, 10, 20]},
+                    "SAR": {},  # 无参数
+                    "ADX": {"timeperiod": [14]},
+                    "ADXR": {"timeperiod": [14]},
+                    "APO": {"fastperiod": [12], "slowperiod": [26], "matype": [0]},
+                    "AROON": {"timeperiod": [14]},
+                    "AROONOSC": {"timeperiod": [14]},
+                    "CCI": {"timeperiod": [14]},
+                    "DX": {"timeperiod": [14]},
+                    "MFI": {"timeperiod": [14]},
+                    "MOM": {"timeperiod": [10]},
+                    "ROC": {"timeperiod": [10]},
+                    "ROCP": {"timeperiod": [10]},
+                    "ROCR": {"timeperiod": [10]},
+                    "ROCR100": {"timeperiod": [10]},
+                    "RSI": {"timeperiod": [14]},
+                    "STOCH": {},  # 默认参数
+                    "STOCHF": {},
+                    "STOCHRSI": {
+                        "timeperiod": [14],
+                        "fastk_period": [5],
+                        "fastd_period": [3],
+                    },
+                    "TRIX": {"timeperiod": [14]},
+                    "ULTOSC": {
+                        "timeperiod1": [7],
+                        "timeperiod2": [14],
+                        "timeperiod3": [28],
+                    },
+                    "WILLR": {"timeperiod": [14]},
+                    "CDL2CROWS": {},  # 形态识别
+                    "CDL3BLACKCROWS": {},
+                    "CDL3INSIDE": {},
+                    "CDL3LINESTRIKE": {},
+                    "CDL3OUTSIDE": {},
+                    "CDL3STARSINSOUTH": {},
+                    "CDL3WHITESOLDIERS": {},
+                    "CDLABANDONEDBABY": {},
+                    "CDLADVANCEBLOCK": {},
+                    "CDLBELTHOLD": {},
+                    "CDLBREAKAWAY": {},
+                    "CDLCLOSINGMARUBOZU": {},
+                    "CDLCONCEALBABYSWALL": {},
+                    "CDLCOUNTERATTACK": {},
+                    "CDLDARKCLOUDCOVER": {},
+                    "CDLDOJI": {},
+                    "CDLDOJISTAR": {},
+                    "CDLDRAGONFLYDOJI": {},
+                    "CDLENGULFING": {},
+                    "CDLEVENINGDOJISTAR": {},
+                    "CDLEVENINGSTAR": {},
+                    "CDLGAPSIDESIDEWHITE": {},
+                    "CDLGRAVESTONEDOJI": {},
+                    "CDLHAMMER": {},
+                    "CDLHANGINGMAN": {},
+                    "CDLHARAMI": {},
+                    "CDLHARAMICROSS": {},
+                    "CDLHIGHWAVE": {},
+                    "CDLHIKKAKE": {},
+                    "CDLHOMINGPIGEON": {},
+                    "CDLIDENTICAL3CROWS": {},
+                    "CDLINNECK": {},
+                    "CDLINVERTEDHAMMER": {},
+                    "CDLKICKING": {},
+                    "CDLKICKINGBYLENGTH": {},
+                    "CDLLADDERBOTTOM": {},
+                    "CDLLONGLEGGEDDOJI": {},
+                    "CDLLONGLINE": {},
+                    "CDLMARUBOZU": {},
+                    "CDLMATCHINGLOW": {},
+                    "CDLMATHOLD": {},
+                    "CDLMORNINGDOJISTAR": {},
+                    "CDLMORNINGSTAR": {},
+                    "CDLONNECK": {},
+                    "CDLPIERCING": {},
+                    "CDLRICKSHAWMAN": {},
+                    "CDLRISEFALL3METHODS": {},
+                    "CDLSEPARATINGLINES": {},
+                    "CDLSHOOTINGSTAR": {},
+                    "CDLSHORTLINE": {},
+                    "CDLSPINNINGTOP": {},
+                    "CDLSTALLEDPATTERN": {},
+                    "CDLSTICKSANDWICH": {},
+                    "CDLTAKURI": {},
+                    "CDLTASUKIGAP": {},
+                    "CDLTHRUSTING": {},
+                    "CDLTRISTAR": {},
+                    "CDLUNIQUE3RIVER": {},
+                    "CDLUPSIDEGAP2CROWS": {},
+                    "CDLXSIDEGAP3METHODS": {},
                 }
 
                 def resolve_talib_input(name: str):
                     key = name.lower()
-                    if key == 'open':
-                        return df['open']
-                    if key == 'high':
+                    if key == "open":
+                        return df["open"]
+                    if key == "high":
                         return high
-                    if key == 'low':
+                    if key == "low":
                         return low
-                    if key in ('close', 'real', 'real0', 'real1', 'real2', 'real3', 'price', 'value'):
+                    if key in (
+                        "close",
+                        "real",
+                        "real0",
+                        "real1",
+                        "real2",
+                        "real3",
+                        "price",
+                        "value",
+                    ):
                         return price
-                    if key in ('volume', 'real4', 'real5'):
+                    if key in ("volume", "real4", "real5"):
                         return volume
-                    if key.startswith('in') and key[2:].isdigit():
+                    if key.startswith("in") and key[2:].isdigit():
                         return price
                     return None
 
@@ -532,15 +604,15 @@ class EnhancedFactorCalculator:
 
                 def build_param_suffix(param_values: Dict[str, Any]) -> str:
                     if not param_values:
-                        return ''
+                        return ""
 
-                    if list(param_values.keys()) == ['timeperiod']:
+                    if list(param_values.keys()) == ["timeperiod"]:
                         return f"_{param_values['timeperiod']}"
 
                     parts = []
                     for key in sorted(param_values.keys()):
                         parts.append(f"{key}{param_values[key]}")
-                    return '_' + '_'.join(parts)
+                    return "_" + "_".join(parts)
 
                 for talib_name, params in talib_params.items():
                     try:
@@ -571,15 +643,25 @@ class EnhancedFactorCalculator:
                             run_inputs = dict(input_kwargs)
                             run_params = dict(combo)
 
-                            def make_talib_calc(ind=talib_indicator, inputs=run_inputs, param_values=run_params):
-                                def calc(indicator=ind, input_dict=inputs, param_dict=param_values):
+                            def make_talib_calc(
+                                ind=talib_indicator,
+                                inputs=run_inputs,
+                                param_values=run_params,
+                            ):
+                                def calc(
+                                    indicator=ind,
+                                    input_dict=inputs,
+                                    param_dict=param_values,
+                                ):
                                     kwargs = dict(input_dict)
                                     kwargs.update(param_dict)
                                     return indicator.run(**kwargs)
 
                                 return calc
 
-                            factor_calculations.append((f"TA_{talib_name}{suffix}", make_talib_calc()))
+                            factor_calculations.append(
+                                (f"TA_{talib_name}{suffix}", make_talib_calc())
+                            )
 
                     except Exception as e:
                         logger.warning(f"TA指标 {talib_name} 初始化失败: {e}")
@@ -588,7 +670,14 @@ class EnhancedFactorCalculator:
             # 10. 手动计算额外指标
             if self.config.enable_manual_indicators:
                 logger.info("计算额外技术指标...")
-                self._calculate_manual_indicators(factor_data, price, high, low, volume, self.config.enable_all_periods)
+                self._calculate_manual_indicators(
+                    factor_data,
+                    price,
+                    high,
+                    low,
+                    volume,
+                    self.config.enable_all_periods,
+                )
 
             # 执行VectorBT指标计算
             logger.info(f"执行VectorBT指标计算，共{len(factor_calculations)}个指标...")
@@ -600,7 +689,9 @@ class EnhancedFactorCalculator:
                     result = calc_func()
 
                     # 处理不同类型指标的输出
-                    processed = self._process_indicator_result(name, result, factor_data)
+                    processed = self._process_indicator_result(
+                        name, result, factor_data
+                    )
                     successful_calcs += processed
 
                 except Exception as e:
@@ -630,6 +721,7 @@ class EnhancedFactorCalculator:
         except Exception as e:
             logger.error(f"综合因子计算失败: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return None
 
@@ -639,67 +731,67 @@ class EnhancedFactorCalculator:
         if timeframe == TimeFrame.MIN_5:
             # 5分钟框架：短周期，快速反应
             return {
-                'ma_windows': [3, 5, 8, 10, 15, 20],
-                'ema_spans': [3, 5, 8, 12, 15, 20],
-                'lb_windows': [3, 5, 8, 10],
-                'rsi_windows': [7, 10, 14],
-                'bb_windows': [10, 15, 20],
-                'atr_windows': [7, 10, 14],
-                'mstd_windows': [5, 10, 15],
-                'stoch_windows': [(7, 10), (10, 14), (14, 20)],
-                'macd_params': [(6, 13, 4), (8, 17, 5), (12, 26, 9)]
+                "ma_windows": [3, 5, 8, 10, 15, 20],
+                "ema_spans": [3, 5, 8, 12, 15, 20],
+                "lb_windows": [3, 5, 8, 10],
+                "rsi_windows": [7, 10, 14],
+                "bb_windows": [10, 15, 20],
+                "atr_windows": [7, 10, 14],
+                "mstd_windows": [5, 10, 15],
+                "stoch_windows": [(7, 10), (10, 14), (14, 20)],
+                "macd_params": [(6, 13, 4), (8, 17, 5), (12, 26, 9)],
             }
         elif timeframe == TimeFrame.MIN_15:
             # 15分钟框架：中等偏短周期
             return {
-                'ma_windows': [5, 8, 10, 15, 20, 30],
-                'ema_spans': [5, 8, 12, 15, 20, 26],
-                'lb_windows': [5, 8, 12, 15],
-                'rsi_windows': [10, 14, 20],
-                'bb_windows': [15, 20, 25],
-                'atr_windows': [10, 14, 20],
-                'mstd_windows': [8, 12, 20],
-                'stoch_windows': [(10, 14), (14, 20), (20, 25)],
-                'macd_params': [(8, 17, 5), (12, 26, 9), (16, 34, 7)]
+                "ma_windows": [5, 8, 10, 15, 20, 30],
+                "ema_spans": [5, 8, 12, 15, 20, 26],
+                "lb_windows": [5, 8, 12, 15],
+                "rsi_windows": [10, 14, 20],
+                "bb_windows": [15, 20, 25],
+                "atr_windows": [10, 14, 20],
+                "mstd_windows": [8, 12, 20],
+                "stoch_windows": [(10, 14), (14, 20), (20, 25)],
+                "macd_params": [(8, 17, 5), (12, 26, 9), (16, 34, 7)],
             }
         elif timeframe == TimeFrame.MIN_30:
             # 30分钟框架：中等周期
             return {
-                'ma_windows': [8, 10, 15, 20, 30, 40],
-                'ema_spans': [8, 12, 15, 20, 26, 30],
-                'lb_windows': [8, 12, 15, 20],
-                'rsi_windows': [14, 20, 25],
-                'bb_windows': [20, 25, 30],
-                'atr_windows': [14, 20, 25],
-                'mstd_windows': [12, 20, 25],
-                'stoch_windows': [(14, 20), (20, 25), (25, 30)],
-                'macd_params': [(12, 26, 9), (16, 34, 7), (20, 42, 8)]
+                "ma_windows": [8, 10, 15, 20, 30, 40],
+                "ema_spans": [8, 12, 15, 20, 26, 30],
+                "lb_windows": [8, 12, 15, 20],
+                "rsi_windows": [14, 20, 25],
+                "bb_windows": [20, 25, 30],
+                "atr_windows": [14, 20, 25],
+                "mstd_windows": [12, 20, 25],
+                "stoch_windows": [(14, 20), (20, 25), (25, 30)],
+                "macd_params": [(12, 26, 9), (16, 34, 7), (20, 42, 8)],
             }
         elif timeframe == TimeFrame.MIN_60:
             # 60分钟框架：中等偏长周期
             return {
-                'ma_windows': [10, 15, 20, 30, 40, 50],
-                'ema_spans': [12, 15, 20, 26, 30, 40],
-                'lb_windows': [10, 15, 20, 25],
-                'rsi_windows': [14, 20, 30],
-                'bb_windows': [20, 30, 40],
-                'atr_windows': [14, 20, 30],
-                'mstd_windows': [15, 25, 35],
-                'stoch_windows': [(14, 20), (20, 30), (30, 40)],
-                'macd_params': [(12, 26, 9), (16, 34, 7), (20, 42, 8)]
+                "ma_windows": [10, 15, 20, 30, 40, 50],
+                "ema_spans": [12, 15, 20, 26, 30, 40],
+                "lb_windows": [10, 15, 20, 25],
+                "rsi_windows": [14, 20, 30],
+                "bb_windows": [20, 30, 40],
+                "atr_windows": [14, 20, 30],
+                "mstd_windows": [15, 25, 35],
+                "stoch_windows": [(14, 20), (20, 30), (30, 40)],
+                "macd_params": [(12, 26, 9), (16, 34, 7), (20, 42, 8)],
             }
         else:  # DAILY
             # 日线框架：长周期，趋势跟踪
             return {
-                'ma_windows': [10, 20, 30, 40, 50, 60, 80, 100],
-                'ema_spans': [12, 20, 26, 30, 40, 50, 60],
-                'lb_windows': [10, 20, 30, 40],
-                'rsi_windows': [14, 20, 30, 60],
-                'bb_windows': [20, 30, 40, 50],
-                'atr_windows': [14, 20, 30, 60],
-                'mstd_windows': [20, 30, 40, 60],
-                'stoch_windows': [(14, 20), (20, 30), (30, 60)],
-                'macd_params': [(12, 26, 9), (16, 34, 7), (20, 42, 8)]
+                "ma_windows": [10, 20, 30, 40, 50, 60, 80, 100],
+                "ema_spans": [12, 20, 26, 30, 40, 50, 60],
+                "lb_windows": [10, 20, 30, 40],
+                "rsi_windows": [14, 20, 30, 60],
+                "bb_windows": [20, 30, 40, 50],
+                "atr_windows": [14, 20, 30, 60],
+                "mstd_windows": [20, 30, 40, 60],
+                "stoch_windows": [(14, 20), (20, 30), (30, 60)],
+                "macd_params": [(12, 26, 9), (16, 34, 7), (20, 42, 8)],
             }
 
     def _check_available_indicators(self) -> List[str]:
@@ -707,10 +799,34 @@ class EnhancedFactorCalculator:
         available_indicators = []
         # VectorBT 核心指标
         vbt_indicators = [
-            'MA', 'MACD', 'RSI', 'BBANDS', 'STOCH', 'ATR', 'OBV', 'MSTD',
-            'BOLB', 'FIXLB', 'FMAX', 'FMEAN', 'FMIN', 'FSTD', 'LEXLB',
-            'MEANLB', 'OHLCSTCX', 'OHLCSTX', 'RAND', 'RANDNX', 'RANDX',
-            'RPROB', 'RPROBCX', 'RPROBNX', 'RPROBX', 'STCX', 'STX', 'TRENDLB'
+            "MA",
+            "MACD",
+            "RSI",
+            "BBANDS",
+            "STOCH",
+            "ATR",
+            "OBV",
+            "MSTD",
+            "BOLB",
+            "FIXLB",
+            "FMAX",
+            "FMEAN",
+            "FMIN",
+            "FSTD",
+            "LEXLB",
+            "MEANLB",
+            "OHLCSTCX",
+            "OHLCSTX",
+            "RAND",
+            "RANDNX",
+            "RANDX",
+            "RPROB",
+            "RPROBCX",
+            "RPROBNX",
+            "RPROBX",
+            "STCX",
+            "STX",
+            "TRENDLB",
         ]
 
         for indicator in vbt_indicators:
@@ -719,15 +835,37 @@ class EnhancedFactorCalculator:
 
         # TA-Lib 指标 (如果可用)
         try:
-            if hasattr(vbt, 'talib'):
+            if hasattr(vbt, "talib"):
                 # 尝试获取一些常见的TA-Lib指标
-                common_talib = ['SMA', 'EMA', 'WMA', 'DEMA', 'TEMA', 'TRIMA', 'KAMA', 'MAMA',
-                               'T3', 'RSI', 'STOCH', 'STOCHF', 'STOCHRSI', 'MACD', 'MACDEXT',
-                               'MACDFIX', 'BBANDS', 'MIDPOINT', 'SAR', 'SAREXT', 'ADX', 'ADXR', 'APO']
+                common_talib = [
+                    "SMA",
+                    "EMA",
+                    "WMA",
+                    "DEMA",
+                    "TEMA",
+                    "TRIMA",
+                    "KAMA",
+                    "MAMA",
+                    "T3",
+                    "RSI",
+                    "STOCH",
+                    "STOCHF",
+                    "STOCHRSI",
+                    "MACD",
+                    "MACDEXT",
+                    "MACDFIX",
+                    "BBANDS",
+                    "MIDPOINT",
+                    "SAR",
+                    "SAREXT",
+                    "ADX",
+                    "ADXR",
+                    "APO",
+                ]
                 for indicator in common_talib:
                     try:
                         vbt.talib(indicator)
-                        available_indicators.append(f'TA_{indicator}')
+                        available_indicators.append(f"TA_{indicator}")
                     except:
                         pass
         except:
@@ -743,51 +881,55 @@ class EnhancedFactorCalculator:
             return 0
 
         def to_series(value, column_name):
-            index = getattr(value, 'index', getattr(result, 'index', None))
+            index = getattr(value, "index", getattr(result, "index", None))
             return ensure_series(value, index, column_name)
 
         # MACD系列指标
-        if hasattr(result, 'macd') and hasattr(result, 'signal'):
-            factor_data[f'{name}_MACD'] = to_series(result.macd, f'{name}_MACD')
-            factor_data[f'{name}_Signal'] = to_series(result.signal, f'{name}_Signal')
-            hist = getattr(result, 'hist', None)
+        if hasattr(result, "macd") and hasattr(result, "signal"):
+            factor_data[f"{name}_MACD"] = to_series(result.macd, f"{name}_MACD")
+            factor_data[f"{name}_Signal"] = to_series(result.signal, f"{name}_Signal")
+            hist = getattr(result, "hist", None)
             if hist is not None:
-                factor_data[f'{name}_Hist'] = to_series(hist, f'{name}_Hist')
+                factor_data[f"{name}_Hist"] = to_series(hist, f"{name}_Hist")
                 return 3
             return 2
 
         # 随机指标
-        if hasattr(result, 'percent_k') and hasattr(result, 'percent_d'):
-            factor_data[f'{name}_K'] = to_series(result.percent_k, f'{name}_K')
-            factor_data[f'{name}_D'] = to_series(result.percent_d, f'{name}_D')
+        if hasattr(result, "percent_k") and hasattr(result, "percent_d"):
+            factor_data[f"{name}_K"] = to_series(result.percent_k, f"{name}_K")
+            factor_data[f"{name}_D"] = to_series(result.percent_d, f"{name}_D")
             return 2
 
-        if hasattr(result, 'slowk') and hasattr(result, 'slowd'):
-            factor_data[f'{name}_K'] = to_series(result.slowk, f'{name}_K')
-            factor_data[f'{name}_D'] = to_series(result.slowd, f'{name}_D')
+        if hasattr(result, "slowk") and hasattr(result, "slowd"):
+            factor_data[f"{name}_K"] = to_series(result.slowk, f"{name}_K")
+            factor_data[f"{name}_D"] = to_series(result.slowd, f"{name}_D")
             return 2
 
-        if hasattr(result, 'fastk') and hasattr(result, 'fastd'):
-            factor_data[f'{name}_K'] = to_series(result.fastk, f'{name}_K')
-            factor_data[f'{name}_D'] = to_series(result.fastd, f'{name}_D')
+        if hasattr(result, "fastk") and hasattr(result, "fastd"):
+            factor_data[f"{name}_K"] = to_series(result.fastk, f"{name}_K")
+            factor_data[f"{name}_D"] = to_series(result.fastd, f"{name}_D")
             return 2
 
         # BOLB指标 (Binary Oscillator with Lower Bounds)
-        if type(result).__name__ == 'BOLB' and hasattr(result, 'labels'):
+        if type(result).__name__ == "BOLB" and hasattr(result, "labels"):
             factor_data[name] = to_series(result.labels, name)
             return 1
 
         # 布林带系列指标
-        if hasattr(result, 'upper') and hasattr(result, 'middle') and hasattr(result, 'lower'):
-            factor_data[f'{name}_Upper'] = to_series(result.upper, f'{name}_Upper')
-            factor_data[f'{name}_Middle'] = to_series(result.middle, f'{name}_Middle')
-            factor_data[f'{name}_Lower'] = to_series(result.lower, f'{name}_Lower')
+        if (
+            hasattr(result, "upper")
+            and hasattr(result, "middle")
+            and hasattr(result, "lower")
+        ):
+            factor_data[f"{name}_Upper"] = to_series(result.upper, f"{name}_Upper")
+            factor_data[f"{name}_Middle"] = to_series(result.middle, f"{name}_Middle")
+            factor_data[f"{name}_Lower"] = to_series(result.lower, f"{name}_Lower")
             bb_width = (result.upper - result.lower) / result.middle
-            factor_data[f'{name}_Width'] = to_series(bb_width, f'{name}_Width')
+            factor_data[f"{name}_Width"] = to_series(bb_width, f"{name}_Width")
             return 4
 
         # CDL模式指标
-        if 'CDL' in name.upper():
+        if "CDL" in name.upper():
             try:
                 extracted = extract_vbt_labels(result, name)
                 if extracted is not None:
@@ -795,7 +937,7 @@ class EnhancedFactorCalculator:
                     logger.debug(f"CDL模式指标 {name} 通过extract_vbt_labels处理成功")
                     return 1
 
-                for attr in ['labels', 'integer', 'real', 'values']:
+                for attr in ["labels", "integer", "real", "values"]:
                     if hasattr(result, attr):
                         value = getattr(result, attr)
                         factor_data[name] = to_series(value, name)
@@ -809,31 +951,35 @@ class EnhancedFactorCalculator:
                 return 0
 
         # OBV及其它单输出指标
-        for attr in ['obv', 'atr', 'rsi', 'ma', 'mstd']:
+        for attr in ["obv", "atr", "rsi", "ma", "mstd"]:
             if hasattr(result, attr):
                 factor_data[name] = to_series(getattr(result, attr), name)
                 return 1
 
         # AROON 指标（双输出）
-        if 'AROON' in name.upper() and hasattr(result, 'aroonup') and hasattr(result, 'aroondown'):
-            factor_data[f'{name}_up'] = to_series(result.aroonup, f'{name}_up')
-            factor_data[f'{name}_down'] = to_series(result.aroondown, f'{name}_down')
+        if (
+            "AROON" in name.upper()
+            and hasattr(result, "aroonup")
+            and hasattr(result, "aroondown")
+        ):
+            factor_data[f"{name}_up"] = to_series(result.aroonup, f"{name}_up")
+            factor_data[f"{name}_down"] = to_series(result.aroondown, f"{name}_down")
             logger.debug(f"AROON指标 {name} 双输出提取成功")
             return 2
 
-        if hasattr(result, 'real'):
+        if hasattr(result, "real"):
             factor_data[name] = to_series(result.real, name)
             return 1
 
-        if hasattr(result, 'output'):
+        if hasattr(result, "output"):
             factor_data[name] = to_series(result.output, name)
             return 1
 
         # 多输出指标的通用处理 (namedtuple 等)
-        if hasattr(result, '_fields') and hasattr(result, '_asdict'):
+        if hasattr(result, "_fields") and hasattr(result, "_asdict"):
             count = 0
             for key, value in result._asdict().items():
-                factor_data[f'{name}_{key}'] = to_series(value, f'{name}_{key}')
+                factor_data[f"{name}_{key}"] = to_series(value, f"{name}_{key}")
                 count += 1
             return count
 
@@ -847,7 +993,11 @@ class EnhancedFactorCalculator:
             factor_data[name] = extracted_labels.rename(name)
             return 1
 
-        if hasattr(result, 'iloc') or hasattr(result, 'values') or isinstance(result, (pd.Series, np.ndarray, list, tuple)):
+        if (
+            hasattr(result, "iloc")
+            or hasattr(result, "values")
+            or isinstance(result, (pd.Series, np.ndarray, list, tuple))
+        ):
             factor_data[name] = to_series(result, name)
             return 1
 
@@ -858,9 +1008,15 @@ class EnhancedFactorCalculator:
             logger.warning(f"无法处理指标 {name} 的结果类型: {type(result)} ({e})")
             return 0
 
-    def _calculate_manual_indicators(self, factor_data: Dict, price: pd.Series,
-                                   high: pd.Series, low: pd.Series, volume: pd.Series,
-                                   all_periods: bool = False):
+    def _calculate_manual_indicators(
+        self,
+        factor_data: Dict,
+        price: pd.Series,
+        high: pd.Series,
+        low: pd.Series,
+        volume: pd.Series,
+        all_periods: bool = False,
+    ):
         """手动计算额外技术指标"""
 
         # 威廉指标系列
@@ -869,7 +1025,7 @@ class EnhancedFactorCalculator:
             highest_high = high.rolling(window=window).max()
             lowest_low = low.rolling(window=window).min()
             willr = (highest_high - price) / (highest_high - lowest_low + 1e-8) * -100
-            factor_data[f'WILLR{window}'] = willr
+            factor_data[f"WILLR{window}"] = willr
 
         # 商品通道指数系列
         cci_windows = [10, 14, 20] if all_periods else [14]
@@ -878,47 +1034,56 @@ class EnhancedFactorCalculator:
             sma_tp = tp.rolling(window=window).mean()
             mad = np.abs(tp - sma_tp).rolling(window=window).mean()
             cci = (tp - sma_tp) / (0.015 * mad + 1e-8)
-            factor_data[f'CCI{window}'] = cci
+            factor_data[f"CCI{window}"] = cci
 
         # 价格动量指标系列
         momentum_periods = [1, 3, 5, 8, 10, 12, 15, 20] if all_periods else [5, 10, 20]
         for period in momentum_periods:
             momentum = price / price.shift(period) - 1
-            factor_data[f'Momentum{period}'] = momentum
+            factor_data[f"Momentum{period}"] = momentum
 
         # 价格位置指标系列
-        position_windows = [5, 8, 10, 12, 15, 20, 25, 30] if all_periods else [5, 10, 20]
+        position_windows = (
+            [5, 8, 10, 12, 15, 20, 25, 30] if all_periods else [5, 10, 20]
+        )
         for window in position_windows:
-            position = (price - price.rolling(window=window).min()) / \
-                     (price.rolling(window=window).max() - price.rolling(window=window).min() + 1e-8)
-            factor_data[f'Position{window}'] = position
+            position = (price - price.rolling(window=window).min()) / (
+                price.rolling(window=window).max()
+                - price.rolling(window=window).min()
+                + 1e-8
+            )
+            factor_data[f"Position{window}"] = position
 
         # 趋势强度指标系列
         trend_windows = [5, 8, 10, 12, 15, 20, 25] if all_periods else [5, 10, 20]
         for window in trend_windows:
-            trend = (price - price.rolling(window=window).mean()) / \
-                   (price.rolling(window=window).std() + 1e-8)
-            factor_data[f'Trend{window}'] = trend
+            trend = (price - price.rolling(window=window).mean()) / (
+                price.rolling(window=window).std() + 1e-8
+            )
+            factor_data[f"Trend{window}"] = trend
 
         # 成交量指标系列
         volume_windows = [10, 15, 20, 25, 30] if all_periods else [20]
         for window in volume_windows:
             volume_sma = volume.rolling(window=window).mean()
             volume_ratio = volume / (volume_sma + 1e-8)
-            factor_data[f'Volume_Ratio{window}'] = volume_ratio
+            factor_data[f"Volume_Ratio{window}"] = volume_ratio
 
             volume_momentum = volume / volume.shift(window) - 1
-            factor_data[f'Volume_Momentum{window}'] = volume_momentum
+            factor_data[f"Volume_Momentum{window}"] = volume_momentum
 
         # VWAP (成交量加权平均价)
         vwap_windows = [10, 15, 20, 25, 30] if all_periods else [20]
         for window in vwap_windows:
             typical_price = (high + low + price) / 3
-            vwap = (typical_price * volume).rolling(window=window).sum() / \
-                   (volume.rolling(window=window).sum() + 1e-8)
-            factor_data[f'VWAP{window}'] = vwap
+            vwap = (typical_price * volume).rolling(window=window).sum() / (
+                volume.rolling(window=window).sum() + 1e-8
+            )
+            factor_data[f"VWAP{window}"] = vwap
 
-    def _clean_factor_data_intelligently(self, factors_df: pd.DataFrame, timeframe: str = None) -> pd.DataFrame:
+    def _clean_factor_data_intelligently(
+        self, factors_df: pd.DataFrame, timeframe: str = None
+    ) -> pd.DataFrame:
         """智能清理因子数据 - Linus风格的不丢失数据原则"""
 
         # 关键原则：不删除任何原始数据的时间点
@@ -926,21 +1091,62 @@ class EnhancedFactorCalculator:
 
         # 识别不同类型的指标及其所需的历史数据
         indicator_periods = {
-            'MA': [5, 10, 20, 30, 60], 'MA3': 3, 'MA5': 5, 'MA8': 8, 'MA10': 10,
-            'MA12': 12, 'MA15': 15, 'MA20': 20, 'MA25': 25, 'MA30': 30, 'MA40': 40,
-            'MA50': 50, 'MA60': 60, 'MA80': 80, 'MA100': 100, 'MA120': 120, 'MA150': 150, 'MA200': 200,
-            'EMA': [5, 10, 20, 30, 60], 'EMA3': 3, 'EMA5': 5, 'EMA8': 8, 'EMA12': 12,
-            'EMA15': 15, 'EMA20': 20, 'EMA26': 26, 'EMA30': 30, 'EMA40': 40, 'EMA50': 50, 'EMA60': 60,
-            'RSI': [3, 6, 9, 12, 14, 18, 21, 25, 30], 'RSI3': 3, 'RSI6': 6, 'RSI9': 9,
-            'RSI12': 12, 'RSI14': 14, 'RSI18': 18, 'RSI21': 21, 'RSI25': 25, 'RSI30': 30,
-            'MACD': 26, 'BB': [10, 12, 15, 20, 25, 30], 'STOCH': 14, 'ATR': [7, 14, 21, 28],
-            'MSTD': [5, 10, 15, 20, 25, 30], 'WILLR': [9, 14, 18, 21], 'CCI': [10, 14, 20],
-            'Momentum': [1, 3, 5, 8, 10, 12, 15, 20], 'Position': [5, 8, 10, 12, 15, 20, 25, 30],
-            'Trend': [5, 8, 10, 12, 15, 20, 25], 'Volume': [10, 15, 20, 25, 30], 'VWAP': [10, 15, 20, 25, 30]
+            "MA": [5, 10, 20, 30, 60],
+            "MA3": 3,
+            "MA5": 5,
+            "MA8": 8,
+            "MA10": 10,
+            "MA12": 12,
+            "MA15": 15,
+            "MA20": 20,
+            "MA25": 25,
+            "MA30": 30,
+            "MA40": 40,
+            "MA50": 50,
+            "MA60": 60,
+            "MA80": 80,
+            "MA100": 100,
+            "MA120": 120,
+            "MA150": 150,
+            "MA200": 200,
+            "EMA": [5, 10, 20, 30, 60],
+            "EMA3": 3,
+            "EMA5": 5,
+            "EMA8": 8,
+            "EMA12": 12,
+            "EMA15": 15,
+            "EMA20": 20,
+            "EMA26": 26,
+            "EMA30": 30,
+            "EMA40": 40,
+            "EMA50": 50,
+            "EMA60": 60,
+            "RSI": [3, 6, 9, 12, 14, 18, 21, 25, 30],
+            "RSI3": 3,
+            "RSI6": 6,
+            "RSI9": 9,
+            "RSI12": 12,
+            "RSI14": 14,
+            "RSI18": 18,
+            "RSI21": 21,
+            "RSI25": 25,
+            "RSI30": 30,
+            "MACD": 26,
+            "BB": [10, 12, 15, 20, 25, 30],
+            "STOCH": 14,
+            "ATR": [7, 14, 21, 28],
+            "MSTD": [5, 10, 15, 20, 25, 30],
+            "WILLR": [9, 14, 18, 21],
+            "CCI": [10, 14, 20],
+            "Momentum": [1, 3, 5, 8, 10, 12, 15, 20],
+            "Position": [5, 8, 10, 12, 15, 20, 25, 30],
+            "Trend": [5, 8, 10, 12, 15, 20, 25],
+            "Volume": [10, 15, 20, 25, 30],
+            "VWAP": [10, 15, 20, 25, 30],
         }
 
         # 特殊处理15min时间框架的数据质量问题
-        if timeframe == '15min':
+        if timeframe == "15min":
             logger.info(f"检测到15min时间框架，应用特殊数据清理逻辑")
 
             # 15min框架可能有数据重采样导致的时间对齐问题
@@ -952,7 +1158,9 @@ class EnhancedFactorCalculator:
 
                 if null_count > 0:
                     null_ratio = null_count / total_count
-                    logger.info(f"  列 {col}: 空值率 {null_ratio:.2%} ({null_count}/{total_count})")
+                    logger.info(
+                        f"  列 {col}: 空值率 {null_ratio:.2%} ({null_count}/{total_count})"
+                    )
 
                     # 对空值率过高的列进行特殊处理
                     if null_ratio > 0.5:  # 超过50%空值
@@ -960,7 +1168,9 @@ class EnhancedFactorCalculator:
                         first_valid_idx = factors_cleaned[col].first_valid_index()
                         if first_valid_idx is not None:
                             # 从第一个有效值开始进行更积极的填充
-                            factors_cleaned.loc[first_valid_idx:, col] = factors_cleaned.loc[first_valid_idx:, col].ffill()
+                            factors_cleaned.loc[first_valid_idx:, col] = (
+                                factors_cleaned.loc[first_valid_idx:, col].ffill()
+                            )
 
                             # 如果还有空值，使用向后填充
                             if factors_cleaned[col].isnull().sum() > 0:
@@ -970,12 +1180,14 @@ class EnhancedFactorCalculator:
                             if factors_cleaned[col].isnull().sum() > 0:
                                 factors_cleaned[col] = factors_cleaned[col].fillna(0)
 
-                            logger.info(f"  列 {col} 已修复，剩余空值: {factors_cleaned[col].isnull().sum()}")
+                            logger.info(
+                                f"  列 {col} 已修复，剩余空值: {factors_cleaned[col].isnull().sum()}"
+                            )
 
         # 标准的智能数据清理逻辑
         for col in factors_cleaned.columns:
             # 跳过已经处理过的15min列
-            if timeframe == '15min' and factors_cleaned[col].isnull().sum() == 0:
+            if timeframe == "15min" and factors_cleaned[col].isnull().sum() == 0:
                 continue
 
             # 找出该指标需要的周期
@@ -989,13 +1201,15 @@ class EnhancedFactorCalculator:
                     break
 
             # 只对技术指标进行前向填充，不删除任何行
-            if not col.startswith('Volume_') and not col.startswith('OBV_'):
+            if not col.startswith("Volume_") and not col.startswith("OBV_"):
                 # 找到第一个有效值的位置
                 first_valid_idx = factors_cleaned[col].first_valid_index()
                 if first_valid_idx is not None:
                     # 将第一个有效值之前的NaN保持原样（体现历史数据不足）
                     # 从第一个有效值开始，对后续的NaN进行前向填充
-                    factors_cleaned.loc[first_valid_idx:, col] = factors_cleaned.loc[first_valid_idx:, col].ffill()
+                    factors_cleaned.loc[first_valid_idx:, col] = factors_cleaned.loc[
+                        first_valid_idx:, col
+                    ].ffill()
             else:
                 # 成交量指标可以直接前向填充
                 factors_cleaned[col] = factors_cleaned[col].ffill()
@@ -1006,35 +1220,82 @@ class EnhancedFactorCalculator:
     def get_factor_categories(self) -> Dict[str, List[str]]:
         """获取因子类别信息"""
         categories = {
-            "移动平均线": [f"MA{w}" for w in [3, 5, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120, 150, 200]] +
-                       [f"EMA{s}" for s in [3, 5, 8, 12, 15, 20, 26, 30, 40, 50, 60]],
-            "MACD指标": [f"MACD_{f}_{s}_{sig}" for f, s, sig in
-                       [(6, 13, 6), (8, 17, 9), (12, 26, 9), (15, 30, 12), (6, 19, 6), (12, 30, 6), (8, 21, 9)]],
+            "移动平均线": [
+                f"MA{w}"
+                for w in [
+                    3,
+                    5,
+                    8,
+                    10,
+                    12,
+                    15,
+                    20,
+                    25,
+                    30,
+                    40,
+                    50,
+                    60,
+                    80,
+                    100,
+                    120,
+                    150,
+                    200,
+                ]
+            ]
+            + [f"EMA{s}" for s in [3, 5, 8, 12, 15, 20, 26, 30, 40, 50, 60]],
+            "MACD指标": [
+                f"MACD_{f}_{s}_{sig}"
+                for f, s, sig in [
+                    (6, 13, 6),
+                    (8, 17, 9),
+                    (12, 26, 9),
+                    (15, 30, 12),
+                    (6, 19, 6),
+                    (12, 30, 6),
+                    (8, 21, 9),
+                ]
+            ],
             "RSI指标": [f"RSI{w}" for w in [3, 6, 9, 12, 14, 18, 21, 25, 30]],
-            "布林带": [f"BB_{w}_{a}" for w, a in
-                     [(10, 1.5), (12, 2.0), (15, 2.0), (20, 2.0), (20, 2.5), (25, 2.0), (30, 2.0)]],
-            "随机指标": [f"STOCH_{k}_{d}" for k, d in [(9, 3), (14, 3), (14, 5), (18, 6)]],
+            "布林带": [
+                f"BB_{w}_{a}"
+                for w, a in [
+                    (10, 1.5),
+                    (12, 2.0),
+                    (15, 2.0),
+                    (20, 2.0),
+                    (20, 2.5),
+                    (25, 2.0),
+                    (30, 2.0),
+                ]
+            ],
+            "随机指标": [
+                f"STOCH_{k}_{d}" for k, d in [(9, 3), (14, 3), (14, 5), (18, 6)]
+            ],
             "ATR指标": [f"ATR{w}" for w in [7, 14, 21, 28]],
             "波动率指标": [f"MSTD{w}" for w in [5, 10, 15, 20, 25, 30]],
-            "成交量指标": ["OBV"] + [f"OBV_SMA{w}" for w in [5, 10, 15, 20]] +
-                           [f"Volume_Ratio{w}" for w in [10, 15, 20, 25, 30]] +
-                           [f"Volume_Momentum{w}" for w in [10, 15, 20, 25, 30]] +
-                           [f"VWAP{w}" for w in [10, 15, 20, 25, 30]],
+            "成交量指标": ["OBV"]
+            + [f"OBV_SMA{w}" for w in [5, 10, 15, 20]]
+            + [f"Volume_Ratio{w}" for w in [10, 15, 20, 25, 30]]
+            + [f"Volume_Momentum{w}" for w in [10, 15, 20, 25, 30]]
+            + [f"VWAP{w}" for w in [10, 15, 20, 25, 30]],
             "威廉指标": [f"WILLR{w}" for w in [9, 14, 18, 21]],
             "商品通道": [f"CCI{w}" for w in [10, 14, 20]],
             "动量指标": [f"Momentum{w}" for w in [1, 3, 5, 8, 10, 12, 15, 20]],
             "位置指标": [f"Position{w}" for w in [5, 8, 10, 12, 15, 20, 25, 30]],
-            "趋势强度": [f"Trend{w}" for w in [5, 8, 10, 12, 15, 20, 25]]
+            "趋势强度": [f"Trend{w}" for w in [5, 8, 10, 12, 15, 20, 25]],
         }
 
         # 计算每个类别的指标数量
         total_indicators = sum(len(indicators) for indicators in categories.values())
-        logger.info(f"因子类别统计: {len(categories)} 个大类，共 {total_indicators} 个指标")
+        logger.info(
+            f"因子类别统计: {len(categories)} 个大类，共 {total_indicators} 个指标"
+        )
 
         for category, indicators in categories.items():
             logger.info(f"  {category}: {len(indicators)} 个指标")
 
         return categories
+
 
 # 测试函数
 def test_enhanced_calculator():
@@ -1042,20 +1303,20 @@ def test_enhanced_calculator():
     logger.info("测试增强版因子计算器...")
 
     # 创建测试数据
-    dates = pd.date_range('2025-01-01', periods=100, freq='5min')
-    test_data = pd.DataFrame({
-        'open': np.random.uniform(100, 200, 100),
-        'high': np.random.uniform(100, 200, 100),
-        'low': np.random.uniform(100, 200, 100),
-        'close': np.random.uniform(100, 200, 100),
-        'volume': np.random.uniform(1000, 10000, 100)
-    }, index=dates)
+    dates = pd.date_range("2025-01-01", periods=100, freq="5min")
+    test_data = pd.DataFrame(
+        {
+            "open": np.random.uniform(100, 200, 100),
+            "high": np.random.uniform(100, 200, 100),
+            "low": np.random.uniform(100, 200, 100),
+            "close": np.random.uniform(100, 200, 100),
+            "volume": np.random.uniform(1000, 10000, 100),
+        },
+        index=dates,
+    )
 
     # 测试基础配置
-    basic_config = IndicatorConfig(
-        enable_all_periods=False,
-        memory_efficient=True
-    )
+    basic_config = IndicatorConfig(enable_all_periods=False, memory_efficient=True)
 
     calculator = EnhancedFactorCalculator(basic_config)
 
@@ -1063,7 +1324,9 @@ def test_enhanced_calculator():
     factors = calculator.calculate_comprehensive_factors(test_data, TimeFrame.MIN_5)
 
     if factors is not None:
-        logger.info(f"✅ 测试成功: 生成 {len(factors.columns)} 个因子，{len(factors)} 个数据点")
+        logger.info(
+            f"✅ 测试成功: 生成 {len(factors.columns)} 个因子，{len(factors)} 个数据点"
+        )
 
         # 获取因子类别信息
         categories = calculator.get_factor_categories()
@@ -1073,6 +1336,7 @@ def test_enhanced_calculator():
     else:
         logger.error("❌ 测试失败: 因子计算失败")
         return None
+
 
 if __name__ == "__main__":
     test_enhanced_calculator()

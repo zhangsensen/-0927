@@ -1,0 +1,209 @@
+---
+alwaysApply: false
+---
+# 🔴 CRITICAL FIX ENFORCEMENT - 严格修复执行指令
+# 量化工程危机修复强制执行规则
+
+**ENFORCEMENT MODE**: 🚨 CRITICAL
+**COMPLIANCE**: MANDATORY (100%)
+**OVERRIDE**: ALL OTHER RULES
+
+You are a Senior Quantitative Engineer in CRISIS RESPONSE MODE. The following P0 issues are SYSTEM-CRITICAL and must be fixed IMMEDIATELY. No exceptions, no delays, no negotiations.
+
+## 🚨 IMMEDIATE MANDATORY FIXES (ZERO TOLERANCE)
+
+### P0.1: Future Function (Lookahead Bias) - EXTREME RISK 🚨
+
+**STATUS**: UNACCEPTABLE - IMMEDIATE ACTION REQUIRED
+**LOCATION**: `professional_factor_screener.py:956-980`
+**CODE**:
+```python
+# 🚨 FORBIDDEN - MUST BE ELIMINATED
+for horizon in horizons:
+    future_returns = aligned_returns.shift(-horizon)  # ❌ CRITICAL VIOLATION
+```
+
+**MANDATORY FIX**:
+```python
+# ✅ REQUIRED CORRECTION
+for horizon in horizons:
+    aligned_returns = aligned_returns.shift(horizon)  # No future data leakage
+```
+
+**ACCEPTANCE CRITERIA**:
+- NO `shift(-)` operations ANYWHERE in the codebase
+- NO variable names containing "future" for predictive calculations
+- TIME-SERIES ALIGNMENT must be FORWARD-ONLY
+
+### P0.2: Naked Exception Handling - SECURITY RISK 🚨
+
+**STATUS**: UNACCEPTABLE - IMMEDIATE ACTION REQUIRED
+**LOCATION**: `enhanced_result_manager.py:68`
+**CODE**:
+```python
+# 🚨 FORBIDDEN - MUST BE ELIMINATED
+except:  # ❌ SECURITY VULNERABILITY
+    return []
+```
+
+**MANDATORY FIX**:
+```python
+# ✅ REQUIRED CORRECTION
+except FileNotFoundError:
+    self.logger.warning(f"Session index file not found: {self.sessions_index_file}")
+    return []
+except json.JSONDecodeError as e:
+    self.logger.error(f"Session index file format error: {e}")
+    return []
+except Exception as e:
+    self.logger.error(f"Unexpected error in session loading: {e}")
+    return []
+```
+
+**ACCEPTANCE CRITERIA**:
+- NO bare `except:` statements anywhere
+- SPECIFIC exception types REQUIRED
+- PROPER error logging MANDATORY
+
+## 🔧 ENFORCEMENT PROTOCOL
+
+### CODE REVIEW CHECKLIST (100% COMPLIANCE)
+
+Before ANY commit, you MUST verify:
+
+#### Future Function Prevention:
+- [ ] Search ALL `shift(-` occurrences and eliminate
+- [ ] Search ALL `lead_` variable names and eliminate
+- [ ] Search ALL `future_` variable names in predictive contexts and eliminate
+- [ ] Verify time-series alignment is forward-only
+- [ ] Run temporal validation tests
+
+#### Exception Handling Compliance:
+- [ ] Search ALL bare `except:` statements and eliminate
+- [ ] Verify ALL exceptions have specific types
+- [ ] Verify ALL exceptions have proper logging
+- [ ] Verify ALL exceptions have graceful degradation
+
+#### P0 Validation:
+- [ ] Future function check: `grep -r "shift\(" . --exclude-dir=.git`
+- [ ] Exception handling check: `grep -r "except:" . --exclude-dir=.git`
+- [ ] Run P0 validation tests: `python -m pytest tests/test_p0_critical.py -v`
+
+### FORCED WORKFLOW
+
+1. **IMMEDIATE STOP** - Do not proceed with any other work
+2. **FIX P0.1** - Eliminate all future function violations
+3. **FIX P0.2** - Replace all naked exceptions
+4. **VALIDATE** - Run comprehensive P0 tests
+5. **VERIFY** - Confirm no P0 violations remain
+6. **REPORT** - Provide detailed fix confirmation
+
+## 🚫 FORBIDDEN PATTERNS (ZERO TOLERANCE)
+
+**ABSOLUTELY FORBIDDEN**:
+```python
+# 🚨 CRITICAL VIOLATIONS
+shift(-1)          # Future data leakage
+shift(-horizon)     # Future data leakage
+lead_time          # Future variable naming
+future_prices      # Future variable naming
+except:           # Security vulnerability
+```
+
+**REQUIRED PATTERNS**:
+```python
+# ✅ MANDATORY COMPLIANCE
+shift(1)            # Forward-only operations
+historical_data    # Clear variable naming
+aligned_returns    # Proper temporal naming
+except ExceptionType: # Specific exception handling
+```
+
+## 🔍 VERIFICATION COMMANDS
+
+Run these commands BEFORE any commit:
+
+```bash
+# Critical validation checks
+echo "🔍 CHECKING FOR FUTURE FUNCTION VIOLATIONS..."
+grep -r "shift\(" factor_system/ --include="*.py" | grep "\-"
+
+echo "🔍 CHECKING FOR NAKED EXCEPTIONS..."
+grep -r "except:" factor_system/ --include="*.py"
+
+echo "🔍 CHECKING FOR FUTURE VARIABLE NAMES..."
+grep -r "\bfuture_" factor_system/ --include="*.py"
+grep -r "\blead_" factor_system/ --include="*.py"
+
+echo "🔍 RUNNING P0 VALIDATION..."
+python -c "
+import os
+import re
+
+def check_critical_violations():
+    violations = []
+
+    for root, dirs, files in os.walk('factor_system/factor_screening'):
+        for file in files:
+            if file.endswith('.py'):
+                filepath = os.path.join(root, file)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    lines = content.split('\n')
+
+                for i, line in enumerate(lines, 1):
+                    if 'shift(' in line and '-' in line:
+                        violations.append(f'{filepath}:{i}: {line.strip()}')
+                    if line.strip() == 'except:':
+                        violations.append(f'{filepath}:{i}: {line.strip()}')
+                    if re.search(r'\bfuture_|\blead_', line):
+                        violations.append(f'{filepath}:{i}: {line.strip()}')
+
+    if violations:
+        print('🚨 CRITICAL VIOLATIONS FOUND:')
+        for v in violations:
+            print(f'  {v}')
+        return False
+    else:
+        print('✅ NO CRITICAL VIOLATIONS')
+        return True
+
+check_critical_violations()
+"
+```
+
+## ⚡ IMMEDIATE ACTION REQUIRED
+
+**IF VIOLATIONS FOUND**:
+1. 🛑 STOP ALL OTHER WORK IMMEDIATELY
+2. 🔧 FIX ALL CRITICAL VIOLATIONS
+3. ✅ RE-RUN VERIFICATION CHECKS
+4. 📋 PROVIDE FIX CONFIRMATION REPORT
+5. 🚀 PROCEED ONLY AFTER 100% COMPLIANCE
+
+## 🎯 SUCCESS CRITERIA
+
+**P0 RESOLUTION ACHIEVED WHEN**:
+- ✅ Zero future function violations
+- ✅ Zero naked exception statements
+- ✅ All temporal operations are forward-only
+- ✅ All exceptions are properly typed and logged
+- ✅ P0 validation tests pass 100%
+- ✅ Code review checklist fully compliant
+
+## 📋 COMPLIANCE REPORTING
+
+After completing fixes, provide:
+1. **Fix Summary**: List of all changes made
+2. **Verification Results**: Command output confirming no violations
+3. **Test Results**: P0 test suite execution results
+4. **Impact Assessment**: System stability improvements
+
+**REMEMBER**: P0 issues are SYSTEM-CRITICAL. There is no room for compromise, delay, or partial solutions. Complete compliance is MANDATORY.
+
+---
+
+**ENFORCEMENT STATUS**: 🚨 ACTIVE
+**COMPLIANCE LEVEL**: 100% MANDATORY
+**TOLERANCE**: ZERO
+**OVERDUE**: IMMEDIATE ACTION REQUIRED

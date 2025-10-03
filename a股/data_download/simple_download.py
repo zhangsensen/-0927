@@ -4,10 +4,12 @@
 Linus风格：简单就是美
 """
 
-import yfinance as yf
-import pandas as pd
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+
+import pandas as pd
+import yfinance as yf
+
 
 def download_stock_data(ticker_symbol, output_dir):
     """下载股票数据，简单直接"""
@@ -26,8 +28,10 @@ def download_stock_data(ticker_symbol, output_dir):
     daily_data = yf.download(ticker_symbol, start=start_date, end=end_date)
     if not daily_data.empty:
         daily_data = daily_data.reset_index()
-        daily_data['Date'] = daily_data['Date'].dt.strftime('%Y-%m-%d')
-        daily_file = os.path.join(stock_dir, f"{ticker_symbol}_1d_{end_date.strftime('%Y-%m-%d')}.csv")
+        daily_data["Date"] = daily_data["Date"].dt.strftime("%Y-%m-%d")
+        daily_file = os.path.join(
+            stock_dir, f"{ticker_symbol}_1d_{end_date.strftime('%Y-%m-%d')}.csv"
+        )
         daily_data.to_csv(daily_file, index=False)
         print(f"日线数据已保存: {daily_file}")
         print(f"日线数据条数: {len(daily_data)}")
@@ -37,18 +41,24 @@ def download_stock_data(ticker_symbol, output_dir):
     # 下载小时线数据
     print(f"下载小时线数据...")
     try:
-        hourly_data = yf.download(ticker_symbol, start=start_date, end=end_date, interval='1h')
+        hourly_data = yf.download(
+            ticker_symbol, start=start_date, end=end_date, interval="1h"
+        )
         if not hourly_data.empty:
             hourly_data = hourly_data.reset_index()
             # 确保列名正确
-            if 'Datetime' in hourly_data.columns:
-                hourly_data = hourly_data.rename(columns={'Datetime': 'Date'})
-            hourly_data['Date'] = pd.to_datetime(hourly_data['Date']).dt.strftime('%Y-%m-%d %H:%M')
+            if "Datetime" in hourly_data.columns:
+                hourly_data = hourly_data.rename(columns={"Datetime": "Date"})
+            hourly_data["Date"] = pd.to_datetime(hourly_data["Date"]).dt.strftime(
+                "%Y-%m-%d %H:%M"
+            )
 
             # 简单去重
             hourly_data = hourly_data.drop_duplicates()
 
-            hourly_file = os.path.join(stock_dir, f"{ticker_symbol}_1h_{end_date.strftime('%Y-%m-%d')}.csv")
+            hourly_file = os.path.join(
+                stock_dir, f"{ticker_symbol}_1h_{end_date.strftime('%Y-%m-%d')}.csv"
+            )
             hourly_data.to_csv(hourly_file, index=False)
             print(f"小时线数据已保存: {hourly_file}")
             print(f"小时线数据条数: {len(hourly_data)}")
@@ -58,6 +68,7 @@ def download_stock_data(ticker_symbol, output_dir):
         print(f"小时线数据下载出错: {e}")
 
     print(f"{ticker_symbol} 数据下载完成\n")
+
 
 def main():
     """主函数"""
@@ -80,6 +91,7 @@ def main():
             print(f"下载 {ticker} 失败: {e}")
 
     print("所有数据下载完成！")
+
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,7 @@
 ## 模板文件
 
 1. **single_screening_template.yaml** - 单个筛选任务配置模板
-2. **batch_screening_template.yaml** - 批量筛选任务配置模板  
+2. **batch_screening_template.yaml** - 批量筛选任务配置模板
 3. **high_freq_template.yaml** - 高频交易优化配置模板
 4. **deep_analysis_template.yaml** - 深度分析配置模板
 

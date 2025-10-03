@@ -7,8 +7,9 @@ A comprehensive factor screening system for multi-timeframe analysis.
 __version__ = "0.1.0"
 __author__ = "Quant Team"
 
-from .data.data_loader import MultiTimeframeDataLoader
+try:
+    from .data.data_loader import MultiTimeframeDataLoader  # type: ignore
+except ImportError:  # pragma: no cover - 在最小依赖环境中容忍缺失
+    MultiTimeframeDataLoader = None
 
-__all__ = [
-    "MultiTimeframeDataLoader"
-]
+__all__ = ["MultiTimeframeDataLoader"]

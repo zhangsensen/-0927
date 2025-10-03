@@ -1,7 +1,6 @@
 """工具模块"""
 
-from .path_utils import PathStandardizer
 from .dependency_checker import DependencyChecker
+from .path_utils import PathStandardizer
 
-__all__ = ['PathStandardizer', 'DependencyChecker']
-
+__all__ = ["PathStandardizer", "DependencyChecker"]
