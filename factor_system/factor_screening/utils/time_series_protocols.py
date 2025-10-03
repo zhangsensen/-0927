@@ -54,6 +54,10 @@ class SafeTimeSeriesProcessor(Generic[T]):
     def __init__(self, strict_mode: bool = True):
         self.strict_mode = strict_mode
         self.operation_log = []
+
+    def shift_backward(self, data: T, periods: int) -> T:
+        """显式禁止向后 shift，保持与协议一致"""
+        raise NotImplementedError("向后shift（未来函数）被禁止使用")
     
     def validate_temporal_alignment(self, 
                                    factor_data: pd.Series, 

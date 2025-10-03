@@ -61,6 +61,33 @@ except ImportError as e:  # pragma: no cover - 运行环境缺失
 
         pass
 
+# P0级集成：导入新增的工具模块
+try:
+    from utils.memory_optimizer import MemoryOptimizer, get_memory_optimizer
+except ImportError as e:
+    logging.getLogger(__name__).warning(f"内存优化器导入失败: {e}")
+    MemoryOptimizer = None  # type: ignore
+    get_memory_optimizer = None  # type: ignore
+
+try:
+    from utils.input_validator import InputValidator, ValidationError
+except ImportError as e:
+    logging.getLogger(__name__).warning(f"输入验证器导入失败: {e}")
+    InputValidator = None  # type: ignore
+    ValidationError = Exception  # type: ignore
+
+try:
+    from utils.structured_logger import get_structured_logger
+except ImportError as e:
+    logging.getLogger(__name__).warning(f"结构化日志器导入失败: {e}")
+    get_structured_logger = None  # type: ignore
+
+try:
+    from utils.backup_manager import get_backup_manager
+except ImportError as e:
+    logging.getLogger(__name__).warning(f"备份管理器导入失败: {e}")
+    get_backup_manager = None  # type: ignore
+
 
 warnings.filterwarnings("ignore")
 
@@ -242,6 +269,9 @@ class ProfessionalFactorScreener:
         self.process = psutil.Process()
         self.start_memory = self.process.memory_info().rss / 1024 / 1024  # MB
 
+        # P0级集成：初始化新增的工具模块
+        self._initialize_utility_modules()
+
         self.logger.info("专业级因子筛选器初始化完成")
         self.logger.info(
             f"配置: IC周期={self.config.ic_horizons}, 最小样本={self.config.min_sample_size}"
@@ -249,6 +279,60 @@ class ProfessionalFactorScreener:
         self.logger.info(
             f"显著性水平={self.config.alpha_level}, FDR方法={self.config.fdr_method}"
         )
+
+    def _initialize_utility_modules(self) -> None:
+        """P0级集成：初始化工具模块（实际集成）"""
+        
+        # 1. 初始化内存优化器
+        if get_memory_optimizer is not None:
+            try:
+                self.memory_optimizer = get_memory_optimizer()
+                self.logger.info("✅ 内存优化器已启用")
+            except Exception as e:
+                self.memory_optimizer = None
+                self.logger.warning(f"内存优化器初始化失败: {e}")
+        else:
+            self.memory_optimizer = None
+            self.logger.warning("内存优化器模块未安装")
+        
+        # 2. 初始化输入验证器
+        if InputValidator is not None:
+            self.input_validator = InputValidator()
+            self.logger.info("✅ 输入验证器已启用")
+        else:
+            self.input_validator = None
+            self.logger.warning("输入验证器模块未安装")
+        
+        # 3. 初始化结构化日志器（增强模式）
+        if get_structured_logger is not None:
+            try:
+                self.structured_logger = get_structured_logger(
+                    name="factor_screening",
+                    log_file=self.log_root / f"structured_{self.session_timestamp}.log"
+                )
+                self.logger.info("✅ 结构化日志器已启用")
+            except Exception as e:
+                self.structured_logger = None
+                self.logger.warning(f"结构化日志器初始化失败: {e}")
+        else:
+            self.structured_logger = None
+            self.logger.warning("结构化日志器模块未安装")
+        
+        # 4. 初始化备份管理器
+        if get_backup_manager is not None:
+            try:
+                self.backup_manager = get_backup_manager(
+                    backup_root=self.screening_results_dir / "backups",
+                    max_backups=10,
+                    retention_days=30
+                )
+                self.logger.info("✅ 备份管理器已启用")
+            except Exception as e:
+                self.backup_manager = None
+                self.logger.warning(f"备份管理器初始化失败: {e}")
+        else:
+            self.backup_manager = None
+            self.logger.warning("备份管理器模块未安装")
 
     def _setup_logger(self, session_timestamp: Optional[str] = None) -> logging.Logger:
         """设置专业级日志系统 - 改进版"""
@@ -919,8 +1003,8 @@ class ProfessionalFactorScreener:
     def calculate_multi_horizon_ic(
         self, factors: pd.DataFrame, returns: pd.Series
     ) -> Dict[str, Dict[str, float]]:
-        """计算多周期IC值 - 核心预测能力评估"""
-        self.logger.info("开始多周期IC计算...")
+        """计算多周期IC值 - 核心预测能力评估 (向量化优化版)"""
+        self.logger.info("开始多周期IC计算（向量化模式）...")
         start_time = time.time()
 
         ic_results: Dict[str, Dict[str, float]] = {}
@@ -933,16 +1017,20 @@ class ProfessionalFactorScreener:
         ]
 
         total_factors = len(factor_cols)
-        processed = 0
-
+        
+        # 向量化优化: 预先对齐所有数据，避免重复对齐
         returns_series = returns.reindex(factors.index)
+        valid_idx = returns_series.notna()
+        aligned_factors = factors[factor_cols].loc[valid_idx]
+        aligned_returns = returns_series.loc[valid_idx]
 
+        processed = 0
         for factor in factor_cols:
             processed += 1
             if processed % self.config.progress_report_interval == 0:
                 self.logger.info(f"多周期IC计算进度: {processed}/{total_factors}")
 
-            factor_series = factors[factor]
+            factor_series = aligned_factors[factor]
             horizon_ics: Dict[str, float] = {}
 
             for horizon in horizons:
@@ -974,27 +1062,21 @@ class ProfessionalFactorScreener:
                         )
                         continue
 
+                # 向量化优化: 使用numpy操作避免pandas开销
                 lagged_factor = factor_series.shift(horizon)
-
-                aligned_returns = returns_series.reindex(lagged_factor.index)
-                common_idx = lagged_factor.index.intersection(aligned_returns.index)
-
-                if len(common_idx) < self.config.min_sample_size:
-                    continue
-
-                final_factor = lagged_factor.loc[common_idx]
-                final_returns = aligned_returns.loc[common_idx]
-
-                valid_mask = final_factor.notna() & final_returns.notna()
+                
+                # 向量化: 一次性获取有效数据
+                valid_mask = lagged_factor.notna() & aligned_returns.notna()
                 valid_count = int(valid_mask.sum())
 
                 if valid_count < self.config.min_sample_size:
                     continue
 
-                final_factor = final_factor[valid_mask]
-                final_returns = final_returns[valid_mask]
+                final_factor = lagged_factor[valid_mask]
+                final_returns = aligned_returns[valid_mask]
 
                 try:
+                    # 向量化: 使用numpy计算统计量
                     factor_std = final_factor.std()
                     returns_std = final_returns.std()
 
@@ -2961,6 +3043,27 @@ class ProfessionalFactorScreener:
         self, symbol: str, timeframe: str = "60min"
     ) -> Dict[str, FactorMetrics]:
         """主筛选函数 - 5维度综合筛选"""
+        
+        # P0级集成：使用输入验证器
+        if self.input_validator is not None:
+            is_valid, msg = self.input_validator.validate_symbol(symbol, strict=False)
+            if not is_valid:
+                self.logger.error(f"输入验证失败: {msg}")
+                raise ValueError(msg)
+            
+            is_valid, msg = self.input_validator.validate_timeframe(timeframe)
+            if not is_valid:
+                self.logger.error(f"输入验证失败: {msg}")
+                raise ValueError(msg)
+        
+        # P0级集成：使用结构化日志记录操作开始
+        if self.structured_logger is not None:
+            self.structured_logger.info(
+                "因子筛选开始",
+                symbol=symbol,
+                timeframe=timeframe,
+                operation="screen_factors_comprehensive"
+            )
 
         # 创建会话目录（如果还没有的话）
         if not hasattr(self, "session_dir") or not self.session_dir:

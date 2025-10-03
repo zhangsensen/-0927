@@ -1,16 +1,19 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Core logic lives in `factor_system/`; `factor_screening/` hosts the production screener, utilities, and the reference tests under `tests/`. Configuration templates sit in `factor_system/factor_screening/configs/` and top-level `configs/` for experimental runs. Market data inputs are staged in `data/` and `raw/`, while generated artifacts land in `output/` and tool-specific `cache/`. Use `docs/` for internal reports and keep notebooks or exploratory scripts inside component-level `scripts/` folders to maintain clarity.
+Core factor models and utilities reside in `factor_system/`, with the production screener under `factor_system/factor_screening/`. Shared configs live in `factor_system/factor_screening/configs/`, while experimental templates sit in top-level `configs/`. Data inputs are staged in `data/` (curated) and `raw/` (vendor dumps). Generated artifacts flow to `output/` and intermediate caches to `cache/`. Use `docs/` for internal reports, and keep exploratory notebooks inside each component's `scripts/` directory to avoid polluting the main modules.
 
 ## Build, Test, and Development Commands
-Bootstrap the workspace with `make install` (runs `uv sync --dev` and installs hooks). Format consistently via `make format`, then lint with `make lint` before opening a pull request. Run the unit suite using `make test`; add `make test-cov` when you need coverage details. For an end-to-end smoke run, use `make run-example`, which triggers `professional_factor_screener.py` with the default multi-timeframe config.
+Run `make install` once to sync dependencies via `uv` and install pre-commit hooks. Use `make format` before committing to enforce Black and isort. Lint with `make lint`, and execute `make test` for the unit suite. Add `make test-cov` when chasing coverage diffs. For a quick end-to-end check, run `make run-example`, which invokes `professional_factor_screener.py` using the default multi-timeframe config.
 
 ## Coding Style & Naming Conventions
-Target Python 3.11 and follow Black’s 88-character line budget with 4-space indentation. Imports should respect the isort Black profile; avoid relative wildcards. Type hints are expected, as `mypy` runs in strict mode. Name modules and configs in snake_case (`enhanced_result_manager.py`, `0700_multi_timeframe_config.yaml`), and prefer descriptive suffixes such as `_manager`, `_pipeline`, or `_analyzer` to reflect responsibilities.
+Target Python 3.11 with 4-space indentation and Black’s 88-character limit. Organize imports with the isort Black profile; avoid relative wildcards and keep domain packages grouped. Type hints are mandatory; strict `mypy` gates: missing annotations will fail CI. Name modules and configs in snake_case, e.g. `enhanced_result_manager.py` or `0700_multi_timeframe_config.yaml`, and favor descriptive suffixes like `_pipeline`, `_manager`, or `_analyzer`.
 
 ## Testing Guidelines
-Pytest discovers files named `test_*.py` or `*_test.py` inside `factor_system/factor_screening/tests/`; mirror that pattern for new suites. Mark long-running jobs with `@pytest.mark.slow` or `integration` so they can be deselected. Aim to keep coverage stable by checking `make test-cov` locally and watching the HTML report for gaps in critical factor calculators. Each new feature should include at least one focused unit test plus an integration check when data pipelines are touched.
+Pytest discovers files named `test_*.py` or `*_test.py` under `factor_system/factor_screening/tests/`. Write focused unit tests for new factor calculators and mark slow paths with `@pytest.mark.slow` or `integration`. Monitor coverage with `make test-cov` and review the HTML report for gaps in critical signal generation.
 
 ## Commit & Pull Request Guidelines
-History follows Conventional Commit prefixes (`feat`, `chore`, `fix`, `refactor`); include a concise scope and use English summaries even when domain terms are Chinese. For pull requests, provide: a problem statement, bullet summary of changes, linked issues or task IDs, and a short checklist of validation commands executed (tests, lint, example run). Attach relevant output snippets or screenshots for analytics updates so reviewers can reproduce the results.
+Follow Conventional Commits (`feat: screening`, `fix: loader`). Each PR should include a problem statement, bullet summary of updates, linked issues or task IDs, and the commands you ran (`make lint`, `make test`, etc.). Attach relevant output snippets or figures when updating analytics so reviewers can replicate results.
+
+## Security & Configuration Tips
+Keep secrets and API keys outside the repo; reference them via environment variables consumed by configs. When editing YAML configs, duplicate existing templates in `factor_system/factor_screening/configs/` to preserve defaults, and never commit vendor data placed in `raw/`.

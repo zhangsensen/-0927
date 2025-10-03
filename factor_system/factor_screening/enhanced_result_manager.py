@@ -14,11 +14,16 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import yaml
+
+# 配置中文字体支持，避免matplotlib警告
+matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']
+matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 logger = logging.getLogger(__name__)
 
@@ -441,79 +446,104 @@ class EnhancedResultManager:
     def _save_visualization_charts(
         self, session_dir: Path, results: Dict[str, Any], screening_stats: Dict[str, Any]
     ) -> None:
-        """保存可视化图表"""
+        """保存可视化图表（串行版，matplotlib线程不安全）"""
         charts_dir = session_dir / "charts"
         charts_dir.mkdir(exist_ok=True)
 
+        # 注意：matplotlib在macOS上不是线程安全的，使用串行生成
+        # from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        def generate_score_distribution():
+            """生成因子得分分布图"""
+            try:
+                scores = [factor.comprehensive_score for factor in results.values()]
+                fig = plt.figure(figsize=(10, 6))
+                plt.hist(scores, bins=30, alpha=0.7, color="skyblue", edgecolor="black")
+                plt.title("因子综合得分分布")
+                plt.xlabel("综合得分")
+                plt.ylabel("因子数量")
+                plt.grid(True, alpha=0.3)
+                plt.savefig(
+                    charts_dir / "score_distribution.png", dpi=300, bbox_inches="tight"
+                )
+                plt.close(fig)
+                return "score_distribution.png"
+            except Exception as e:
+                logger.warning(f"生成得分分布图失败: {e}")
+                return None
+        
+        def generate_radar_chart():
+            """生成雷达图"""
+            try:
+                top_factors = sorted(
+                    results.values(), key=lambda x: x.comprehensive_score, reverse=True
+                )[:5]
+
+                fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(projection="polar"))
+
+                categories = ["预测能力", "稳定性", "独立性", "实用性", "适应性"]
+                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+                angles += angles[:1]  # 闭合
+
+                for i, factor in enumerate(top_factors):
+                    values = [
+                        factor.predictive_score,
+                        factor.stability_score,
+                        factor.independence_score,
+                        factor.practicality_score,
+                        factor.adaptability_score,
+                    ]
+                    values += values[:1]  # 闭合
+
+                    ax.plot(angles, values, "o-", linewidth=2, label=factor.name)
+                    ax.fill(angles, values, alpha=0.25)
+
+                ax.set_xticks(angles[:-1])
+                ax.set_xticklabels(categories)
+                ax.set_ylim(0, 1)
+                ax.set_title("顶级因子五维度评分对比", pad=20)
+                ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.0))
+
+                plt.savefig(
+                    charts_dir / "top_factors_radar.png", dpi=300, bbox_inches="tight"
+                )
+                plt.close(fig)
+                return "top_factors_radar.png"
+            except Exception as e:
+                logger.warning(f"生成雷达图失败: {e}")
+                return None
+        
+        def generate_pie_chart():
+            """生成饼图"""
+            try:
+                factor_types: Dict[str, int] = {}
+                for factor in results.values():
+                    factor_type = factor.type or "Unknown"
+                    factor_types[factor_type] = factor_types.get(factor_type, 0) + 1
+
+                fig = plt.figure(figsize=(8, 8))
+                plt.pie(
+                    list(factor_types.values()),
+                    labels=list(factor_types.keys()),
+                    autopct="%1.1f%%"
+                )
+                plt.title("因子类型分布")
+                plt.savefig(
+                    charts_dir / "factor_types_distribution.png",
+                    dpi=300,
+                    bbox_inches="tight",
+                )
+                plt.close(fig)
+                return "factor_types_distribution.png"
+            except Exception as e:
+                logger.warning(f"生成饼图失败: {e}")
+                return None
+        
+        # 串行生成所有图表（matplotlib线程不安全）
         try:
-            # 1. 因子得分分布图
-            scores = [factor.comprehensive_score for factor in results.values()]
-            plt.figure(figsize=(10, 6))
-            plt.hist(scores, bins=30, alpha=0.7, color="skyblue", edgecolor="black")
-            plt.title("因子综合得分分布")
-            plt.xlabel("综合得分")
-            plt.ylabel("因子数量")
-            plt.grid(True, alpha=0.3)
-            plt.savefig(
-                charts_dir / "score_distribution.png", dpi=300, bbox_inches="tight"
-            )
-            plt.close()
-
-            # 2. 顶级因子雷达图
-            top_factors = sorted(
-                results.values(), key=lambda x: x.comprehensive_score, reverse=True
-            )[:5]
-
-            fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(projection="polar"))
-
-            categories = ["预测能力", "稳定性", "独立性", "实用性", "适应性"]
-            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-            angles += angles[:1]  # 闭合
-
-            for i, factor in enumerate(top_factors):
-                values = [
-                    factor.predictive_score,
-                    factor.stability_score,
-                    factor.independence_score,
-                    factor.practicality_score,
-                    factor.adaptability_score,
-                ]
-                values += values[:1]  # 闭合
-
-                ax.plot(angles, values, "o-", linewidth=2, label=factor.name)
-                ax.fill(angles, values, alpha=0.25)
-
-            ax.set_xticks(angles[:-1])
-            ax.set_xticklabels(categories)
-            ax.set_ylim(0, 1)
-            ax.set_title("顶级因子五维度评分对比", pad=20)
-            ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.0))
-
-            plt.savefig(
-                charts_dir / "top_factors_radar.png", dpi=300, bbox_inches="tight"
-            )
-            plt.close()
-
-            # 3. 因子类型分布饼图
-            factor_types: Dict[str, int] = {}
-            for factor in results.values():
-                factor_type = factor.type or "Unknown"
-                factor_types[factor_type] = factor_types.get(factor_type, 0) + 1
-
-            plt.figure(figsize=(8, 8))
-            plt.pie(
-                list(factor_types.values()),
-                labels=list(factor_types.keys()),
-                autopct="%1.1f%%"
-            )
-            plt.title("因子类型分布")
-            plt.savefig(
-                charts_dir / "factor_types_distribution.png",
-                dpi=300,
-                bbox_inches="tight",
-            )
-            plt.close()
-
+            generate_score_distribution()
+            generate_radar_chart()
+            generate_pie_chart()
         except Exception as e:
             logger.warning(f"生成可视化图表失败: {e}")
 
