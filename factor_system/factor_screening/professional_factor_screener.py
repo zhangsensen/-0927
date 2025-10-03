@@ -18,6 +18,7 @@ import json
 import logging
 import time
 import warnings
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -3147,25 +3148,37 @@ class ProfessionalFactorScreener:
             )
 
         # P0-1修复：智能会话管理，避免批量处理中的重复创建
-        if not hasattr(self, "session_dir") or not self.session_dir:
-            # 检测是否为批量多时间框架模式
-            if hasattr(self, "multi_tf_session_dir") and self.multi_tf_session_dir:
-                # 批量模式：使用主会话目录，为每个时间框架创建子目录
-                tf_session_id = f"{symbol}_{timeframe}_{self.session_timestamp}"
-                self.session_dir = self.multi_tf_session_dir / "timeframes" / tf_session_id
-                self.session_dir.mkdir(parents=True, exist_ok=True)
-                session_id = tf_session_id
-                self.logger.info(f"📁 批量模式-创建时间框架子会话: {timeframe}")
-            else:
+        in_multi_tf_mode = hasattr(self, "multi_tf_session_dir") and self.multi_tf_session_dir
+        current_session_dir = None
+
+        if in_multi_tf_mode:
+            # 批量模式：强制为当前时间框架切换到专属子目录
+            tf_session_dir = (
+                self.multi_tf_session_dir
+                / "timeframes"
+                / f"{symbol}_{timeframe}_{self.session_timestamp}"
+            )
+            tf_session_dir.mkdir(parents=True, exist_ok=True)
+            self.session_dir = tf_session_dir
+            session_id = tf_session_dir.name
+            current_session_dir = tf_session_dir
+            self.logger.info(
+                f"📁 批量模式-切换时间框架子会话: {timeframe}",
+                extra={"session_dir": str(tf_session_dir)}
+            )
+        else:
+            if not hasattr(self, "session_dir") or not self.session_dir:
                 # 单独模式：创建独立会话目录
                 session_id = f"{symbol}_{timeframe}_{self.session_timestamp}"
                 self.session_dir = self.screening_results_dir / session_id
                 self.session_dir.mkdir(parents=True, exist_ok=True)
+                current_session_dir = self.session_dir
                 self.logger.info(f"📁 创建独立会话目录: {self.session_dir}")
-        else:
-            # 使用现有会话目录，避免重复日志
-            session_id = self.session_dir.name
-            self.logger.debug(f"复用现有会话目录: {self.session_dir}")
+            else:
+                # 使用现有会话目录，避免重复日志
+                session_id = self.session_dir.name
+                current_session_dir = self.session_dir
+                self.logger.debug(f"复用现有会话目录: {self.session_dir}")
 
         start_time = time.time()
         self.logger.info(f"开始5维度因子筛选: {symbol} {timeframe}")
@@ -3483,6 +3496,10 @@ class ProfessionalFactorScreener:
         except Exception as e:
             self.logger.error(f"因子筛选失败: {str(e)}")
             raise
+        finally:
+            if in_multi_tf_mode:
+                # 批量模式：避免状态泄漏到下一时间框架
+                self.session_dir = None
 
     def generate_screening_report(
         self,
@@ -3843,10 +3860,11 @@ def main():
                 print("\n📈 生成统一汇总报告...")
                 if all_results:
                     _generate_multi_timeframe_summary(
-                        batch_screener.session_dir,
+                        batch_screener.multi_tf_session_dir,
                         batch_config["batch_name"],
                         all_results,
                         batch_config["screening_configs"],
+                        logger=batch_screener.logger,
                     )
 
                 print("\n✅ 多时间框架分析完成:")
@@ -3972,7 +3990,11 @@ def main():
 
 
 def _generate_multi_timeframe_summary(
-    session_dir, batch_name: str, all_results: Dict, screening_configs: List[Dict]
+    session_dir,
+    batch_name: str,
+    all_results: Dict,
+    screening_configs: List[Dict],
+    logger: Optional[logging.Logger] = None,
 ) -> None:
     """生成统一的多时间框架汇总报告
 
@@ -3984,11 +4006,12 @@ def _generate_multi_timeframe_summary(
     """
     from datetime import datetime
 
-    print("📊 生成多时间框架汇总报告...")
+    summary_logger = logger or logging.getLogger(__name__)
+    summary_logger.info("📊 生成多时间框架汇总报告...")
 
     # 检查是否有有效结果
     if not all_results:
-        print("⚠️ 没有数据生成汇总报告")
+        summary_logger.warning("⚠️ 没有数据生成汇总报告")
         return
 
     # 创建汇总数据结构
@@ -4034,7 +4057,7 @@ def _generate_multi_timeframe_summary(
                 best_factors_overall.append(summary_item)
 
     if not summary_data:
-        print("⚠️ 没有数据生成汇总报告")
+        summary_logger.warning("⚠️ 没有数据生成汇总报告")
         return
 
     # 创建汇总DataFrame
@@ -4048,7 +4071,10 @@ def _generate_multi_timeframe_summary(
     summary_path = session_dir / summary_filename
 
     summary_df.to_csv(summary_path, index=False, encoding="utf-8")
-    print(f"✅ 多时间框架汇总报告已保存: {summary_path}")
+    summary_logger.info(
+        "✅ 多时间框架汇总报告已保存",
+        extra={"summary_path": str(summary_path)}
+    )
 
     # 生成最佳因子综合排行
     if best_factors_overall:
@@ -4061,7 +4087,10 @@ def _generate_multi_timeframe_summary(
         best_filename = f"{batch_name}_best_factors_overall_{timestamp}.csv"
         best_path = session_dir / best_filename
         best_df_sorted.to_csv(best_path, index=False, encoding="utf-8")
-        print(f"✅ 最佳因子综合排行已保存: {best_path}")
+        summary_logger.info(
+            "✅ 最佳因子综合排行已保存",
+            extra={"best_factors_path": str(best_path)}
+        )
 
         # 输出Top 10最佳因子到控制台
         print("\n🏆 Top 10 最佳因子 (跨所有时间框架):")
@@ -4078,85 +4107,149 @@ def _generate_multi_timeframe_summary(
             )
 
     # 生成统计摘要
-    _generate_batch_statistics(session_dir, batch_name, all_results, timestamp)
+    _generate_batch_statistics(
+        session_dir,
+        batch_name,
+        all_results,
+        timestamp,
+        logger=logger,
+    )
 
 
 def _generate_batch_statistics(
-    session_dir, batch_name: str, all_results: Dict, timestamp: str
+    session_dir,
+    batch_name: str,
+    all_results: Dict[str, Dict[str, FactorMetrics]],
+    timestamp: str,
+    logger: Optional[logging.Logger] = None,
 ) -> None:
     """生成批量处理统计摘要"""
 
     import pandas as pd
+    from datetime import datetime
 
-    print("📈 生成批量处理统计摘要...")
+    stats_logger = logger or logging.getLogger(__name__)
+    stats_logger.info("📈 生成批量处理统计摘要...", extra={"batch_name": batch_name})
 
-    stats_data = []
-    total_factors_processed = 0
-    total_tier1_factors = 0
-    total_tier2_factors = 0
+    stats_data: List[Dict[str, Any]] = []
+    overall_totals = Counter()
 
-    for tf_key, result in all_results.items():
-        if result and "session_info" in result:
-            symbol = tf_key.split("_")[0]
-            timeframe = tf_key.split("_")[1] if "_" in tf_key else "unknown"
+    for tf_key, tf_results in all_results.items():
+        if not tf_results:
+            continue
 
-            session_info = result["session_info"]
-            screening_results = result.get("screening_results", {})
+        symbol = tf_key.split("_")[0]
+        timeframe = tf_key[len(symbol) + 1 :] if "_" in tf_key else "unknown"
 
-            # 统计各等级因子数量
-            tier_counts = screening_results.get("tier_counts", {})
-            tier1_count = tier_counts.get("Tier 1 (≥0.8)", 0)
-            tier2_count = tier_counts.get("Tier 2 (0.6-0.8)", 0)
-            total_count = screening_results.get("total_factors", 0)
+        total_count = len(tf_results)
+        if total_count == 0:
+            continue
 
-            total_factors_processed += total_count
-            total_tier1_factors += tier1_count
-            total_tier2_factors += tier2_count
+        tier_counter = Counter((metrics.tier or "未分级") for metrics in tf_results.values())
+        significant_count = sum(1 for metrics in tf_results.values() if metrics.is_significant)
+        top_count = sum(1 for metrics in tf_results.values() if metrics.comprehensive_score >= 0.8)
+        avg_score = float(np.mean([metrics.comprehensive_score for metrics in tf_results.values()]))
 
-            stats_item = {
-                "symbol": symbol,
-                "timeframe": timeframe,
+        stats_item = {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "total_factors": total_count,
+            "significant_factors": significant_count,
+            "tier1_factors": tier_counter.get("Tier 1", 0),
+            "tier2_factors": tier_counter.get("Tier 2", 0),
+            "tier3_factors": tier_counter.get("Tier 3", 0),
+            "not_recommended": tier_counter.get("不推荐", 0),
+            "top_factors": top_count,
+            "average_score": round(avg_score, 6),
+        }
+        stats_data.append(stats_item)
+
+        overall_totals.update(
+            {
                 "total_factors": total_count,
-                "tier1_factors": tier1_count,
-                "tier2_factors": tier2_count,
-                "tier1_ratio": tier1_count / total_count if total_count > 0 else 0,
-                "start_time": session_info.get("start_time", ""),
-                "status": session_info.get("status", "unknown"),
+                "significant_factors": significant_count,
+                "tier1_factors": stats_item["tier1_factors"],
+                "tier2_factors": stats_item["tier2_factors"],
+                "tier3_factors": stats_item["tier3_factors"],
+                "not_recommended": stats_item["not_recommended"],
+                "top_factors": top_count,
             }
-            stats_data.append(stats_item)
+        )
 
-    if stats_data:
-        stats_df = pd.DataFrame(stats_data)
+        stats_logger.info("时间框架统计", extra={**stats_item})
 
-        # 保存统计摘要
-        stats_filename = f"{batch_name}_batch_statistics_{timestamp}.csv"
-        stats_path = session_dir / stats_filename
-        stats_df.to_csv(stats_path, index=False, encoding="utf-8")
-        print(f"✅ 批量处理统计摘要已保存: {stats_path}")
+    if not stats_data:
+        stats_logger.warning("⚠️ 批量统计摘要无数据")
+        return
 
-        # 输出统计摘要到控制台
-        print("\n📊 批量处理统计摘要:")
-        print("=" * 80)
-        print(f"处理时间框架数量: {len(stats_data)}")
-        print(f"总处理因子数: {total_factors_processed}")
-        print(f"总Tier 1因子数: {total_tier1_factors}")
-        print(f"总Tier 2因子数: {total_tier2_factors}")
+    stats_df = pd.DataFrame(stats_data)
 
-        if total_factors_processed > 0:
-            overall_tier1_ratio = total_tier1_factors / total_factors_processed
-            overall_tier2_ratio = total_tier2_factors / total_factors_processed
-            print(f"整体Tier 1比例: {overall_tier1_ratio:.1%}")
-            print(f"整体Tier 2比例: {overall_tier2_ratio:.1%}")
+    # 保存统计摘要 CSV
+    stats_filename = f"{batch_name}_batch_statistics_{timestamp}.csv"
+    stats_path = session_dir / stats_filename
+    stats_df.to_csv(stats_path, index=False, encoding="utf-8")
+    stats_logger.info(
+        "✅ 批量处理统计摘要已保存",
+        extra={"batch_statistics_path": str(stats_path)},
+    )
 
-            # 按时间框架统计
-            print("\n各时间框架详细统计:")
-            for _, stats in stats_df.iterrows():
-                print(
-                    f"  {stats['symbol']}-{stats['timeframe']:>8}: "
-                    f"总计 {stats['total_factors']:>3} 个 | "
-                    f"Tier1 {stats['tier1_factors']:>2} 个 ({stats['tier1_ratio']:.1%}) | "
-                    f"Tier2 {stats['tier2_factors']:>2} 个"
-                )
+    # 保存统计摘要 JSON
+    summary_payload = {
+        "batch_name": batch_name,
+        "generated_at": datetime.now().isoformat(),
+        "timeframes": stats_data,
+        "overall": dict(overall_totals),
+    }
+    stats_json_path = session_dir / f"{batch_name}_batch_statistics_{timestamp}.json"
+    with open(stats_json_path, "w", encoding="utf-8") as fp:
+        json.dump(summary_payload, fp, ensure_ascii=False, indent=2)
+    stats_logger.info(
+        "✅ 批量统计JSON已保存",
+        extra={"batch_statistics_json": str(stats_json_path)},
+    )
+
+    # 控制台输出（保持原有人机提示）
+    print("\n📊 批量处理统计摘要:")
+    print("=" * 80)
+    print(f"处理时间框架数量: {len(stats_data)}")
+    print(f"总处理因子数: {overall_totals['total_factors']}")
+    print(f"总显著因子数: {overall_totals['significant_factors']}")
+    print(f"总Tier 1因子数: {overall_totals['tier1_factors']}")
+    print(f"总Tier 2因子数: {overall_totals['tier2_factors']}")
+
+    total_factors = overall_totals["total_factors"] or 1
+    overall_tier1_ratio = overall_totals["tier1_factors"] / total_factors
+    overall_tier2_ratio = overall_totals["tier2_factors"] / total_factors
+
+    print(f"整体Tier 1比例: {overall_tier1_ratio:.1%}")
+    print(f"整体Tier 2比例: {overall_tier2_ratio:.1%}")
+
+    stats_logger.info(
+        "整体Tier比例",
+        extra={
+            "overall_tier1_ratio": overall_tier1_ratio,
+            "overall_tier2_ratio": overall_tier2_ratio,
+        },
+    )
+
+    print("\n各时间框架详细统计:")
+    for stats_item in stats_data:
+        print(
+            f"  {stats_item['symbol']}-{stats_item['timeframe']:>8}: "
+            f"总计 {stats_item['total_factors']:>3} 个 | "
+            f"显著 {stats_item['significant_factors']:>3} 个 | "
+            f"Tier1 {stats_item['tier1_factors']:>2} 个 | "
+            f"Tier2 {stats_item['tier2_factors']:>2} 个"
+        )
+
+    stats_logger.info(
+        "✅ 批量处理统计摘要生成完成",
+        extra={
+            "timeframe_count": len(stats_data),
+            "total_factors": overall_totals["total_factors"],
+            "significant_factors": overall_totals["significant_factors"],
+        },
+    )
 
 
 if __name__ == "__main__":
