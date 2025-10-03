@@ -61,14 +61,7 @@ except ImportError as e:  # pragma: no cover - 运行环境缺失
 
         pass
 
-# P0级集成：导入新增的工具模块
-try:
-    from utils.memory_optimizer import MemoryOptimizer, get_memory_optimizer
-except ImportError as e:
-    logging.getLogger(__name__).warning(f"内存优化器导入失败: {e}")
-    MemoryOptimizer = None  # type: ignore
-    get_memory_optimizer = None  # type: ignore
-
+# P0级集成：导入实际使用的工具模块（诚实版）
 try:
     from utils.input_validator import InputValidator, ValidationError
 except ImportError as e:
@@ -82,11 +75,9 @@ except ImportError as e:
     logging.getLogger(__name__).warning(f"结构化日志器导入失败: {e}")
     get_structured_logger = None  # type: ignore
 
-try:
-    from utils.backup_manager import get_backup_manager
-except ImportError as e:
-    logging.getLogger(__name__).warning(f"备份管理器导入失败: {e}")
-    get_backup_manager = None  # type: ignore
+# 已移除未使用的模块导入（Linus原则：诚实反映实际状态）
+# - memory_optimizer: 当前系统内存使用正常，无需复杂监控
+# - backup_manager: 文件系统已足够，无需过度工程化
 
 
 warnings.filterwarnings("ignore")
@@ -283,17 +274,8 @@ class ProfessionalFactorScreener:
     def _initialize_utility_modules(self) -> None:
         """P0级集成：初始化工具模块（实际集成）"""
         
-        # 1. 初始化内存优化器
-        if get_memory_optimizer is not None:
-            try:
-                self.memory_optimizer = get_memory_optimizer()
-                self.logger.info("✅ 内存优化器已启用")
-            except Exception as e:
-                self.memory_optimizer = None
-                self.logger.warning(f"内存优化器初始化失败: {e}")
-        else:
-            self.memory_optimizer = None
-            self.logger.warning("内存优化器模块未安装")
+        # 1. 内存优化器 - 已移除（Linus原则：当前系统工作正常，无需复杂化）
+        self.memory_optimizer = None
         
         # 2. 初始化输入验证器
         if InputValidator is not None:
@@ -318,21 +300,8 @@ class ProfessionalFactorScreener:
             self.structured_logger = None
             self.logger.warning("结构化日志器模块未安装")
         
-        # 4. 初始化备份管理器
-        if get_backup_manager is not None:
-            try:
-                self.backup_manager = get_backup_manager(
-                    backup_root=self.screening_results_dir / "backups",
-                    max_backups=10,
-                    retention_days=30
-                )
-                self.logger.info("✅ 备份管理器已启用")
-            except Exception as e:
-                self.backup_manager = None
-                self.logger.warning(f"备份管理器初始化失败: {e}")
-        else:
-            self.backup_manager = None
-            self.logger.warning("备份管理器模块未安装")
+        # 4. 备份管理器 - 已移除（Linus原则：文件系统已足够，无需过度工程化）
+        self.backup_manager = None
 
     def _setup_logger(self, session_timestamp: Optional[str] = None) -> logging.Logger:
         """设置专业级日志系统 - 改进版"""
