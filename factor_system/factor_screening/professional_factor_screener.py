@@ -3146,15 +3146,26 @@ class ProfessionalFactorScreener:
                 operation="screen_factors_comprehensive"
             )
 
-        # P0-1修复：避免重复会话创建和日志
+        # P0-1修复：智能会话管理，避免批量处理中的重复创建
         if not hasattr(self, "session_dir") or not self.session_dir:
-            session_id = f"{symbol}_{timeframe}_{self.session_timestamp}"
-            self.session_dir = self.screening_results_dir / session_id
-            self.session_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.info(f"📁 创建会话目录: {self.session_dir}")
+            # 检测是否为批量多时间框架模式
+            if hasattr(self, "multi_tf_session_dir") and self.multi_tf_session_dir:
+                # 批量模式：使用主会话目录，为每个时间框架创建子目录
+                tf_session_id = f"{symbol}_{timeframe}_{self.session_timestamp}"
+                self.session_dir = self.multi_tf_session_dir / "timeframes" / tf_session_id
+                self.session_dir.mkdir(parents=True, exist_ok=True)
+                session_id = tf_session_id
+                self.logger.info(f"📁 批量模式-创建时间框架子会话: {timeframe}")
+            else:
+                # 单独模式：创建独立会话目录
+                session_id = f"{symbol}_{timeframe}_{self.session_timestamp}"
+                self.session_dir = self.screening_results_dir / session_id
+                self.session_dir.mkdir(parents=True, exist_ok=True)
+                self.logger.info(f"📁 创建独立会话目录: {self.session_dir}")
         else:
             # 使用现有会话目录，避免重复日志
             session_id = self.session_dir.name
+            self.logger.debug(f"复用现有会话目录: {self.session_dir}")
 
         start_time = time.time()
         self.logger.info(f"开始5维度因子筛选: {symbol} {timeframe}")
@@ -3278,11 +3289,36 @@ class ProfessionalFactorScreener:
             # 4. 统计显著性检验
             self.logger.info("步骤4: 统计显著性检验...")
 
-            # 收集p值
+            # P0-3修复：改进p值收集逻辑，确保显著性判断一致性
             p_values = {}
             for factor, ic_data in all_metrics["multi_horizon_ic"].items():
-                # 使用1日IC的p值作为主要显著性指标
-                p_values[factor] = ic_data.get("p_value_1d", 1.0)
+                # 优先使用1日IC的p值，如果无效则使用最小的有效p值
+                p_1d = ic_data.get("p_value_1d", 1.0)
+                
+                if p_1d < 1.0 and p_1d > 0.0:
+                    # 1日p值有效，直接使用
+                    p_values[factor] = p_1d
+                else:
+                    # 1日p值无效，收集所有周期的p值
+                    all_p_values = []
+                    for h in self.config.ic_horizons:
+                        p_val = ic_data.get(f"p_value_{h}d", 1.0)
+                        if 0.0 < p_val < 1.0:  # 有效p值
+                            all_p_values.append(p_val)
+                    
+                    if all_p_values:
+                        # 使用最小的有效p值（最显著的）
+                        p_values[factor] = min(all_p_values)
+                        self.logger.debug(
+                            f"因子 {factor}: 1日p值无效({p_1d:.6f})，"
+                            f"使用最小p值({min(all_p_values):.6f})"
+                        )
+                    else:
+                        # 所有p值都无效，设为1.0（不显著）
+                        p_values[factor] = 1.0
+                        self.logger.warning(
+                            f"因子 {factor}: 所有周期p值均无效，设为不显著"
+                        )
 
             all_metrics["p_values"] = p_values
 
@@ -3297,6 +3333,24 @@ class ProfessionalFactorScreener:
 
             all_metrics["corrected_p_values"] = corrected_p
             all_metrics["adaptive_alpha"] = adaptive_alpha
+            
+            # P0-3修复：添加显著性判断调试日志
+            significant_factors = []
+            for factor, corrected_p_val in corrected_p.items():
+                if corrected_p_val < adaptive_alpha:
+                    significant_factors.append(factor)
+                    ic_data = all_metrics["multi_horizon_ic"][factor]
+                    ic_1d = ic_data.get("ic_1d", 0.0)
+                    self.logger.debug(
+                        f"显著因子: {factor}, IC_1d={ic_1d:.6f}, "
+                        f"原始p={p_values[factor]:.6f}, "
+                        f"校正p={corrected_p_val:.6f}, α={adaptive_alpha:.6f}"
+                    )
+            
+            self.logger.info(
+                f"FDR校正完成: {len(significant_factors)}/{len(corrected_p)} 个因子显著 "
+                f"(α={adaptive_alpha:.6f})"
+            )
 
             # 5. 综合评分
             self.logger.info("步骤5: 综合评分...")
@@ -3715,20 +3769,27 @@ def main():
                 batch_screener = ProfessionalFactorScreener(data_root=data_root)
                 batch_screener.screening_results_dir = Path(output_dir)
 
-                # 创建统一的批量会话目录
+                # P0-1修复：创建统一的批量会话目录，避免重复创建
                 from datetime import datetime
 
                 batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 batch_session_id = (
                     f"{batch_config['batch_name']}_multi_timeframe_{batch_timestamp}"
                 )
-                batch_screener.session_dir = (
+                
+                # 设置多时间框架会话目录（关键修复）
+                batch_screener.multi_tf_session_dir = (
                     batch_screener.screening_results_dir / batch_session_id
                 )
-                batch_screener.session_dir.mkdir(parents=True, exist_ok=True)
+                batch_screener.multi_tf_session_dir.mkdir(parents=True, exist_ok=True)
                 batch_screener.session_timestamp = batch_timestamp
+                
+                # 创建时间框架子目录结构
+                timeframes_dir = batch_screener.multi_tf_session_dir / "timeframes"
+                timeframes_dir.mkdir(exist_ok=True)
 
-                print(f"📁 批量会话目录: {batch_screener.session_dir}")
+                print(f"📁 批量会话目录: {batch_screener.multi_tf_session_dir}")
+                print(f"📁 时间框架子目录: {timeframes_dir}")
 
                 for i, sub_config in enumerate(batch_config["screening_configs"], 1):
                     try:
