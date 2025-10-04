@@ -22,10 +22,11 @@ by `vectorbt`.
 
 | Module | Responsibility |
 | --- | --- |
-| [`config.py`](./config.py) | Dataclasses that store trading, execution, and runtime toggles. |
-| [`factor_interface.py`](./factor_interface.py) | Utilities that read the screener output directory and aggregate factor scores per symbol/timeframe. |
-| [`strategy_core.py`](./strategy_core.py) | Candidate selection and signal generation (RSI + Bollinger + volume reversal). |
-| [`backtest_engine.py`](./backtest_engine.py) | `vectorbt`-based engines for single-asset and portfolio-level simulations. |
+| [`config.py`](./config.py) | Dataclasses that store trading, execution, runtime toggles, and fusion rules. |
+| [`factor_interface.py`](./factor_interface.py) | Utilities that read the screener output directory and build factor panels per symbol/timeframe. |
+| [`fusion.py`](./fusion.py) | Helper that fuses factor panels into composite scores across timeframes. |
+| [`strategy_core.py`](./strategy_core.py) | Candidate selection and signal generation (RSI + Bollinger + volume reversal) with multi-timeframe coordination. |
+| [`backtest_engine.py`](./backtest_engine.py) | `vectorbt`-based engines for single-asset and portfolio-level simulations supporting multi-frequency inputs. |
 | [`review_tools.py`](./review_tools.py) | Convenience helpers to inspect stats, trades, and charts. |
 | [`__init__.py`](./__init__.py) | Public exports for downstream scripts and notebooks. |
 | [`DEVELOPMENT_PLAN.md`](./DEVELOPMENT_PLAN.md) | Roadmap that tracks open tasks and milestones. |
@@ -55,8 +56,10 @@ session is expected to match the folder layout produced by
 ```
 
 The strategy layer consumes `top_factors_detailed.json` to compute aggregate
-scores for each symbol. Market OHLCV data should be supplied separately (e.g.,
-via `MultiTimeframeFactorStore` or another loader in your notebooks/scripts).
+scores for each symbol. `FactorScoreLoader.load_factor_panels` returns a
+MultiIndex DataFrame keyed by `(symbol, timeframe, factor_name)` with flattened
+factor metrics. Market OHLCV data should be supplied separately (e.g., via
+`MultiTimeframeFactorStore`) as a dictionary of timeframes per symbol.
 
 ---
 
@@ -81,16 +84,21 @@ arguments, the defaults encoded in
 
 ## 5. Typical Workflow
 
-1. **Discover scores** – Use `FactorScoreLoader` to read the latest screening
-   session and convert the scores into a ranked `Series`.
-2. **Select candidates** – Feed the scores into `StrategyCore.select_candidates`
-   (optionally with universe constraints) to choose the top symbols.
-3. **Generate signals** – Run `StrategyCore.build_signals_for_symbol` for each
-   symbol with the corresponding OHLCV data to obtain `entries`/`exits`.
-4. **Backtest** – Call `run_portfolio_backtest` with a dictionary of per-symbol
-   close prices and signals; obtain a `BacktestArtifacts` bundle containing the
-   `vectorbt.Portfolio` plus metadata.
-5. **Review** – Use functions from `review_tools.py` to print statistics, inspect
+1. **Discover scores** – Use `FactorScoreLoader.load_factor_panels` to read the
+   latest screening session into per-symbol, per-timeframe factor panels.
+2. **Fuse composites** – Run `FactorFusionEngine.fuse` (automatically invoked by
+   `StrategyCore.select_candidates`) to produce composite scores that respect
+   the runtime fusion rules (daily trend, hourly confirmation, intraday timing).
+3. **Select candidates** – Call `StrategyCore.select_candidates` with the target
+   universe; the method now pulls all required timeframes, fuses them, and ranks
+   symbols by the composite score.
+4. **Generate signals** – Provide nested OHLCV data to
+   `StrategyCore.build_signal_universe`. The core checks daily trend and hourly
+   confirmation before emitting intraday entry/exit signals.
+5. **Backtest** – Call `run_portfolio_backtest` with a dictionary of
+   `{symbol: {timeframe: ohlcv_df}}` plus the generated signals; obtain a
+   `BacktestArtifacts` bundle containing the `vectorbt.Portfolio` plus metadata.
+6. **Review** – Use functions from `review_tools.py` to print statistics, inspect
    trades, or render charts.
 
 ---
@@ -105,48 +113,52 @@ import vectorbt as vbt
 
 from hk_midfreq import (
     BacktestArtifacts,
+    FactorFusionEngine,
     FactorScoreLoader,
     StrategyCore,
     run_portfolio_backtest,
 )
 
-# 1) Load factor scores (auto-detects latest session under 因子筛选/)
+# 1) Load factor panels (auto-detects latest session under 因子筛选/)
 score_loader = FactorScoreLoader()
-factor_scores = score_loader.load_scores_as_series(["0700.HK", "9988.HK", "3690.HK"])
+panels = score_loader.load_factor_panels(
+    symbols=["0700.HK", "9988.HK", "3690.HK"],
+    timeframes=("daily", "60min", "15min", "5min"),
+)
 
-# 2) Choose candidates
+# 2) Fuse and rank (optional manual step; StrategyCore does this internally)
+fusion = FactorFusionEngine()
+fused = fusion.fuse(panels)
+
+# 3) Prepare multi-timeframe price data (replace with your actual loader)
+price_data: dict[str, dict[str, pd.DataFrame]] = {}
+for symbol in fused.index:
+    price_data[symbol] = {
+        "daily": load_daily_ohlcv(symbol),
+        "60min": load_hourly_ohlcv(symbol),
+        "15min": load_intraday_ohlcv(symbol, "15min"),
+        "5min": load_intraday_ohlcv(symbol, "5min"),
+    }
+
+# 4) Generate signals with multi-timeframe gating
 core = StrategyCore()
-selected = core.select_candidates(factor_scores, top_n=core.trading_config.max_positions)
+signals = core.build_signal_universe(price_data)
 
-# 3) Prepare price data (replace with your actual loader)
-price_data: dict[str, pd.Series] = {
-    symbol: load_close_series(symbol)  # user-defined helper
-    for symbol in selected
-}
-volume_data: dict[str, pd.Series] = {
-    symbol: load_volume_series(symbol)
-    for symbol in selected
-}
-
-signals = {}
-for symbol in selected:
-    close = price_data[symbol]
-    volume = volume_data[symbol]
-    signals[symbol] = core.build_signals_for_symbol(close=close, volume=volume)
-
-# 4) Run portfolio backtest
+# 5) Run portfolio backtest using multi-frequency prices
 artifacts: BacktestArtifacts = run_portfolio_backtest(price_data, signals)
 portfolio = artifacts.portfolio
 
-# 5) Inspect results
+# 6) Inspect results
 portfolio.stats()
 portfolio.trades.records_readable.head()
 portfolio.plot().show()
 ```
 
-Replace `load_close_series` / `load_volume_series` with the appropriate data
-retrieval functions (e.g., `MultiTimeframeFactorStore`). All portfolio sizing
-and friction rules default to the values declared in `config.py`.
+Replace the `load_*` helpers with the appropriate data retrieval functions
+(e.g., `MultiTimeframeFactorStore`). All portfolio sizing and friction rules
+default to the values declared in `config.py`. The backtest engine now detects
+the entry timeframe from each `StrategySignals` object and automatically pulls
+the matching OHLCV DataFrame from the nested price dictionary.
 
 ---
 
