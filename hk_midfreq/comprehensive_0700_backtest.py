@@ -14,11 +14,11 @@ Date: 2025-10-04
 """
 
 import json
+import math
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence
 
-import numpy as np
 import pandas as pd
 import vectorbt as vbt
 from dataclasses import dataclass
@@ -28,15 +28,13 @@ warnings.filterwarnings('ignore')
 
 from hk_midfreq import (
     FactorScoreLoader,
-    StrategyCore, 
     StrategySignals,
     run_single_asset_backtest,
     TradingConfig,
     ExecutionConfig,
     StrategyRuntimeConfig,
-    print_review,
-    compile_review
 )
+from hk_midfreq.strategy_core import FactorDescriptor, generate_factor_signals
 
 
 @dataclass
@@ -80,13 +78,13 @@ class Comprehensive0700Backtester:
             base_output_dir=self.session_dir.parent
         )
         
-        # 时间框架映射
+        # 时间框架映射（统一使用60m等标签，避免1h/60min混用）
         self.timeframe_mapping = {
-            "5min": "5min",
-            "15min": "15m", 
+            "5min": "5m",
+            "15min": "15m",
             "30min": "30m",
             "60min": "60m",
-            "daily": "1day"
+            "daily": "1day",
         }
         
         self.results: List[BacktestResult] = []
@@ -133,70 +131,80 @@ class Comprehensive0700Backtester:
         
         return df
     
-    def create_custom_signals(self, 
-                            close: pd.Series, 
-                            volume: pd.Series,
-                            factor_names: List[str],
-                            timeframe: str,
-                            factor_weights: Optional[Dict[str, float]] = None) -> StrategySignals:
-        """基于指定因子创建交易信号"""
-        
-        # 计算技术指标
-        rsi = vbt.RSI.run(close, window=14).rsi
-        bb = vbt.BBANDS.run(close, window=20, alpha=2.0)
-        
-        # 成交量比率
-        volume_ma = volume.rolling(20).mean()
-        volume_ratio = volume / volume_ma
-        
-        # 基础信号逻辑（反转策略）
-        oversold = rsi < 30
-        overbought = rsi > 70
-        bb_lower_touch = close <= bb.lower
-        bb_upper_touch = close >= bb.upper
-        high_volume = volume_ratio > 1.5
-        
-        # 入场信号：超卖 + 布林带下轨 + 高成交量
-        entries = oversold & bb_lower_touch & high_volume
-        
-        # 出场信号：超买 或 布林带上轨
-        exits = overbought | bb_upper_touch
-        
-        # 如果指定了因子权重，可以在这里调整信号强度
-        if factor_weights:
-            # 简化处理：根据权重调整信号概率
-            weight_sum = sum(factor_weights.values())
-            signal_strength = weight_sum / len(factor_weights) if factor_weights else 1.0
-            
-            # 随机采样调整信号频率
-            np.random.seed(42)
-            random_mask = np.random.random(len(entries)) < signal_strength
-            entries = entries & random_mask
-        
-        return StrategySignals(
+    def _build_factor_signal(
+        self, timeframe: str, factor_name: str, price_data: pd.DataFrame
+    ) -> StrategySignals:
+        """使用 `generate_factor_signals` 生成指定因子的信号"""
+
+        close = price_data["close"].dropna()
+        volume = price_data.get("volume")
+        descriptor = FactorDescriptor(name=factor_name, timeframe=timeframe)
+        return generate_factor_signals(
             symbol="0700.HK",
             timeframe=timeframe,
-            entries=entries,
-            exits=exits,
-            stop_loss=0.02,      # 2% 止损
-            take_profit=0.06     # 6% 止盈
+            close=close,
+            volume=volume,
+            descriptor=descriptor,
+            hold_days=self.trading_config.hold_days,
+            stop_loss=self.execution_config.stop_loss,
+            take_profit=self.execution_config.primary_take_profit(),
         )
+
+    def _aggregate_signals(
+        self,
+        symbol: str,
+        timeframe: str,
+        signals: Sequence[StrategySignals],
+        index: pd.Index,
+        vote_threshold: Optional[int] = None,
+    ) -> StrategySignals:
+        """对多个信号取投票结果 (至少半数同意)。"""
+
+        if not signals:
+            raise ValueError("信号列表为空，无法聚合")
+
+        frame = pd.DataFrame(index=index)
+        exit_frame = pd.DataFrame(index=index)
+
+        for idx, signal in enumerate(signals):
+            frame[f"entry_{idx}"] = signal.entries.reindex(index, fillna=False)
+            exit_frame[f"exit_{idx}"] = signal.exits.reindex(index, fillna=False)
+
+        required_votes = vote_threshold or math.ceil(len(signals) / 2)
+        entries = frame.sum(axis=1) >= required_votes
+        exits = exit_frame.sum(axis=1) >= required_votes
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=timeframe,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=self.execution_config.stop_loss,
+            take_profit=self.execution_config.primary_take_profit(),
+        )
+
+    @staticmethod
+    def _align_to_daily(series: pd.Series, daily_index: pd.DatetimeIndex) -> pd.Series:
+        """将任意时间频率的布尔序列聚合到日频。"""
+
+        if series.empty:
+            return pd.Series(False, index=daily_index)
+
+        normalized = series.fillna(False).astype(bool)
+        grouped = normalized.groupby(normalized.index.normalize()).any()
+        return grouped.reindex(daily_index, fill_value=False)
     
     def run_single_factor_backtest(self, timeframe: str, factor_name: str) -> BacktestResult:
         """单因子回测"""
         print(f"\n🔍 执行单因子回测: {factor_name} ({timeframe})")
-        
+
         # 加载数据
         price_data = self.load_price_data(timeframe)
-        close = price_data['close']
-        volume = price_data['volume']
-        
-        # 创建信号
-        signals = self.create_custom_signals(close, volume, [factor_name], timeframe)
-        
+        signals = self._build_factor_signal(timeframe, factor_name, price_data)
+
         # 执行回测
         portfolio = run_single_asset_backtest(
-            close=close,
+            close=price_data['close'],
             signals=signals,
             trading_config=self.trading_config,
             execution_config=self.execution_config
@@ -229,23 +237,26 @@ class Comprehensive0700Backtester:
         # 加载因子
         factors = self.load_factor_scores(timeframe)
         top_factors = factors[:top_n]
-        
+
         factor_names = [f['name'] for f in top_factors]
-        factor_weights = {f['name']: f['comprehensive_score'] for f in top_factors}
-        
         print(f"   选中因子: {factor_names}")
-        
+
         # 加载数据
         price_data = self.load_price_data(timeframe)
-        close = price_data['close']
-        volume = price_data['volume']
-        
-        # 创建加权信号
-        signals = self.create_custom_signals(close, volume, factor_names, timeframe, factor_weights)
-        
+        signal_bundles = [
+            self._build_factor_signal(timeframe, factor_name, price_data)
+            for factor_name in factor_names
+        ]
+        signals = self._aggregate_signals(
+            symbol="0700.HK",
+            timeframe=timeframe,
+            signals=signal_bundles,
+            index=price_data.index,
+        )
+
         # 执行回测
         portfolio = run_single_asset_backtest(
-            close=close,
+            close=price_data['close'],
             signals=signals,
             trading_config=self.trading_config,
             execution_config=self.execution_config
@@ -274,40 +285,64 @@ class Comprehensive0700Backtester:
     def run_multi_tf_backtest(self, timeframes: List[str], top_n: int = 3) -> BacktestResult:
         """多时间框架回测 - 使用日线数据但融合多时间框架因子"""
         print(f"\n🔍 执行多时间框架回测: {timeframes} (Top {top_n} 每框架)")
-        
-        # 收集所有时间框架的顶级因子
-        all_factors = {}
+
+        daily_data = self.load_price_data("daily")
+        daily_index = daily_data.index
+
+        entry_votes = pd.DataFrame(index=daily_index)
+        exit_votes = pd.DataFrame(index=daily_index)
+        factor_counter = 0
+
         for tf in timeframes:
             try:
                 factors = self.load_factor_scores(tf)
-                top_factors = factors[:top_n]
-                for factor in top_factors:
-                    factor_key = f"{factor['name']}_{tf}"
-                    all_factors[factor_key] = factor['comprehensive_score']
-                print(f"   {tf}: {[f['name'] for f in top_factors]}")
             except FileNotFoundError:
-                print(f"   ⚠️  跳过 {tf}: 数据文件不存在")
+                print(f"   ⚠️  跳过 {tf}: 因子文件不存在")
                 continue
-        
-        if not all_factors:
-            raise ValueError("没有找到任何有效的因子数据")
-        
-        # 使用日线数据进行回测（数据最完整）
-        price_data = self.load_price_data("daily")
-        close = price_data['close']
-        volume = price_data['volume']
-        
-        # 创建融合信号
-        signals = self.create_custom_signals(
-            close, volume, 
-            list(all_factors.keys()), 
-            "daily",  # 使用日线数据
-            all_factors
+
+            if not factors:
+                continue
+
+            top_factors = factors[:top_n]
+            try:
+                tf_price = self.load_price_data(tf)
+            except FileNotFoundError:
+                print(f"   ⚠️  跳过 {tf}: 价格数据缺失")
+                continue
+
+            print(f"   {tf}: {[f['name'] for f in top_factors]}")
+            for factor in top_factors:
+                bundle = self._build_factor_signal(tf, factor['name'], tf_price)
+                if tf == "daily":
+                    entries = bundle.entries.reindex(daily_index, fillna=False)
+                    exits = bundle.exits.reindex(daily_index, fillna=False)
+                else:
+                    entries = self._align_to_daily(bundle.entries, daily_index)
+                    exits = self._align_to_daily(bundle.exits, daily_index)
+
+                column_name = f"{factor['name']}_{tf}"
+                entry_votes[column_name] = entries
+                exit_votes[column_name] = exits
+                factor_counter += 1
+
+        if factor_counter == 0:
+            raise ValueError("没有找到任何可用的多时间框架因子")
+
+        vote_threshold = math.ceil(factor_counter / 2)
+        combined_entries = entry_votes.sum(axis=1) >= vote_threshold
+        combined_exits = exit_votes.sum(axis=1) >= vote_threshold
+
+        signals = StrategySignals(
+            symbol="0700.HK",
+            timeframe="daily",
+            entries=combined_entries.astype(bool),
+            exits=combined_exits.astype(bool),
+            stop_loss=self.execution_config.stop_loss,
+            take_profit=self.execution_config.primary_take_profit(),
         )
-        
-        # 执行回测
+
         portfolio = run_single_asset_backtest(
-            close=close,
+            close=daily_data['close'],
             signals=signals,
             trading_config=self.trading_config,
             execution_config=self.execution_config

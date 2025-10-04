@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 import numpy as np
@@ -104,6 +105,127 @@ def hk_reversal_logic(
         stop_loss=DEFAULT_EXECUTION_CONFIG.stop_loss,
         take_profit=DEFAULT_EXECUTION_CONFIG.primary_take_profit(),
     )
+
+
+@dataclass(frozen=True)
+class FactorDescriptor:
+    """Minimal payload describing a selected factor for signal generation."""
+
+    name: str
+    timeframe: str
+    metadata: Mapping[str, object] | None = None
+
+
+def _normalize_timeframe_label(label: str) -> str:
+    """Normalize timeframe aliases (e.g. ``60min`` -> ``60m``)."""
+
+    lowered = label.lower()
+    if lowered in {"60m", "60min", "1h"}:
+        return "60m"
+    if lowered in {"30m", "30min"}:
+        return "30m"
+    if lowered in {"15m", "15min"}:
+        return "15m"
+    if lowered in {"5m", "5min"}:
+        return "5m"
+    if lowered in {"1d", "1day", "daily", "day"}:
+        return "1day"
+    return lowered
+
+
+def _compute_stochrsi(
+    close: pd.Series,
+    timeperiod: int,
+    fastk_period: int,
+    fastd_period: int,
+) -> tuple[pd.Series, pd.Series]:
+    """Return the %K and %D series for a classic StochRSI calculation."""
+
+    if close.empty:
+        raise ValueError("Close price series cannot be empty when computing StochRSI")
+
+    rsi = vbt.RSI.run(close, window=timeperiod).rsi
+    lowest = rsi.rolling(window=timeperiod, min_periods=timeperiod).min()
+    highest = rsi.rolling(window=timeperiod, min_periods=timeperiod).max()
+    denominator = (highest - lowest).replace(0.0, np.nan)
+    stoch_rsi = (rsi - lowest) / denominator
+    stoch_rsi = stoch_rsi.clip(lower=0.0, upper=1.0).ffill().fillna(0.0)
+
+    fastk = (
+        stoch_rsi.rolling(window=fastk_period, min_periods=fastk_period).mean().fillna(0.0)
+    )
+    fastd = (
+        fastk.rolling(window=fastd_period, min_periods=fastd_period).mean().fillna(0.0)
+    )
+    return fastk * 100.0, fastd * 100.0
+
+
+def _parse_stochrsi_params(name: str) -> tuple[int, int, int, str]:
+    """Extract ``timeperiod``, ``fastk`` and ``fastd`` settings and target line from the factor name."""
+
+    tokens = name.split("_")
+    timeperiod = 14
+    fastk = 5
+    fastd = 3
+    line = "k"
+
+    for token in tokens:
+        match = re.search(r"timeperiod(\d+)", token)
+        if match:
+            timeperiod = int(match.group(1))
+        match = re.search(r"fastk(?:_period)?(\d+)", token)
+        if match:
+            fastk = int(match.group(1))
+        match = re.search(r"fastd(?:_period)?(\d+)", token)
+        if match:
+            fastd = int(match.group(1))
+        if token.lower() in {"k", "d"}:
+            line = token.lower()
+
+    if name.endswith("_K"):
+        line = "k"
+    elif name.endswith("_D"):
+        line = "d"
+
+    return timeperiod, fastk, fastd, line
+
+
+def generate_factor_signals(
+    symbol: str,
+    timeframe: str,
+    close: pd.Series,
+    volume: Optional[pd.Series],
+    descriptor: FactorDescriptor,
+    hold_days: int,
+    stop_loss: float,
+    take_profit: float,
+) -> StrategySignals:
+    """Translate a factor descriptor into deterministic entry/exit signals."""
+
+    normalized_tf = _normalize_timeframe_label(timeframe)
+    factor_name = descriptor.name
+    if factor_name.startswith("TA_STOCHRSI"):
+        timeperiod, fastk, fastd, line = _parse_stochrsi_params(factor_name)
+        k_series, d_series = _compute_stochrsi(close, timeperiod, fastk, fastd)
+        target = k_series if line == "k" else d_series
+
+        oversold = 20.0
+        overbought = 80.0
+        crosses_up = (target.shift(1) <= oversold) & (target > oversold)
+        crosses_down = (target.shift(1) >= overbought) & (target < overbought)
+        entries = crosses_up.fillna(False)
+        exits = crosses_down.fillna(False) | _compute_time_based_exits(entries, hold_days)
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    raise ValueError(f"Unsupported factor for signal generation: {factor_name}")
 
 
 class StrategyCore:
@@ -222,6 +344,38 @@ class StrategyCore:
             return self.runtime_config.default_timeframe
         return next(iter(frames.keys()), None)
 
+    def _resolve_top_factor(
+        self, symbol: str, timeframe: str
+    ) -> Optional[FactorDescriptor]:
+        if self._last_factor_panel is None or self._last_factor_panel.empty:
+            return None
+
+        normalized_tf = _normalize_timeframe_label(timeframe)
+        panel = self._last_factor_panel.reset_index()
+        panel["normalized_timeframe"] = panel["timeframe"].map(
+            lambda tf: _normalize_timeframe_label(str(tf))
+        )
+
+        subset = panel[
+            (panel["symbol"] == symbol)
+            & (panel["normalized_timeframe"] == normalized_tf)
+        ]
+        if subset.empty:
+            return None
+
+        ordered = subset.sort_values(by="rank")
+        best = ordered.iloc[0]
+        metadata = {
+            key: best[key]
+            for key in ordered.columns
+            if key not in {"symbol", "timeframe", "factor_name", "normalized_timeframe"}
+        }
+        return FactorDescriptor(
+            name=str(best["factor_name"]),
+            timeframe=normalized_tf,
+            metadata=metadata,
+        )
+
     def generate_signals_for_symbol(
         self,
         symbol: str,
@@ -242,6 +396,23 @@ class StrategyCore:
         if "close" not in data or "volume" not in data:
             return None
 
+        descriptor = self._resolve_top_factor(symbol, entry_timeframe)
+        if descriptor is not None:
+            try:
+                return generate_factor_signals(
+                    symbol=symbol,
+                    timeframe=entry_timeframe,
+                    close=data["close"],
+                    volume=data.get("volume"),
+                    descriptor=descriptor,
+                    hold_days=self.trading_config.hold_days,
+                    stop_loss=self.execution_config.stop_loss,
+                    take_profit=self.execution_config.primary_take_profit(),
+                )
+            except Exception:
+                # Fallback to legacy logic if factor-driven path fails
+                pass
+
         signal_bundle = hk_reversal_logic(
             close=data["close"],
             volume=data["volume"],
@@ -249,7 +420,7 @@ class StrategyCore:
         )
         return StrategySignals(
             symbol=symbol,
-            timeframe=entry_timeframe,
+            timeframe=_normalize_timeframe_label(entry_timeframe),
             entries=signal_bundle.entries,
             exits=signal_bundle.exits,
             stop_loss=self.execution_config.stop_loss,
@@ -288,4 +459,10 @@ class StrategyCore:
         return signals
 
 
-__all__ = ["StrategyCore", "StrategySignals", "hk_reversal_logic"]
+__all__ = [
+    "FactorDescriptor",
+    "StrategyCore",
+    "StrategySignals",
+    "generate_factor_signals",
+    "hk_reversal_logic",
+]
