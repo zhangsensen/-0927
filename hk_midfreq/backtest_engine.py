@@ -59,8 +59,6 @@ def run_single_asset_backtest(
         fees=execution_config.transaction_cost,
         slippage=execution_config.slippage,
         size=size,
-        stop_loss=signals.stop_loss,
-        take_profit=signals.take_profit,
         direction="longonly",
     )
     return portfolio
@@ -169,8 +167,6 @@ def run_portfolio_backtest(
         init_cash=trading_config.capital,
         fees=execution_config.transaction_cost,
         slippage=execution_config.slippage,
-        stop_loss=execution_config.stop_loss,
-        take_profit=execution_config.primary_take_profit(),
         size=size_df,
         direction="longonly",
     )

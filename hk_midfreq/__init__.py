@@ -17,6 +17,7 @@ from hk_midfreq.config import (
 from hk_midfreq.factor_interface import FactorScoreLoader, SymbolScore, load_factor_scores
 from hk_midfreq.fusion import FactorFusionEngine, FusedScores
 from hk_midfreq.strategy_core import StrategyCore, StrategySignals, hk_reversal_logic
+from hk_midfreq.review_tools import print_review, compile_review, portfolio_statistics, trade_overview
 
 __all__ = [
     "backtest_engine",
@@ -41,4 +42,8 @@ __all__ = [
     "StrategyCore",
     "StrategySignals",
     "hk_reversal_logic",
+    "print_review",
+    "compile_review",
+    "portfolio_statistics",
+    "trade_overview",
 ]
