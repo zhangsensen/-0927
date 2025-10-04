@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -53,10 +53,12 @@ class FactorScoreLoader:
         sessions = self.list_sessions()
         return sessions[0] if sessions else None
 
-    def load_factor_table(
-        self, symbol: str, timeframe: Optional[str] = None, top_n: Optional[int] = None
-    ) -> pd.DataFrame:
-        """Load raw factor rows for ``symbol`` from the selected session."""
+    def _iter_factor_frames(
+        self,
+        symbols: Optional[Sequence[str]] = None,
+        timeframes: Optional[Sequence[str]] = None,
+    ) -> Iterator[Tuple[str, str, pd.DataFrame]]:
+        """Yield normalized factor tables for each symbol/timeframe combination."""
 
         session_dir = self.resolve_session()
         if session_dir is None:
@@ -68,26 +70,63 @@ class FactorScoreLoader:
                 f"`timeframes` directory missing under {session_dir}"
             )
 
-        frames: List[pd.DataFrame] = []
+        symbol_filter = set(symbols) if symbols is not None else None
+        timeframe_filter = set(timeframes) if timeframes is not None else None
+
         for candidate_dir in timeframe_dir.iterdir():
             if not candidate_dir.is_dir():
                 continue
-            if not candidate_dir.name.startswith(f"{symbol}_"):
+
+            parts = candidate_dir.name.split("_")
+            if len(parts) < 2:
                 continue
-            tf = candidate_dir.name.split("_")[1]
-            if timeframe is not None and tf != timeframe:
+            symbol, tf = parts[0], parts[1]
+
+            if symbol_filter is not None and symbol not in symbol_filter:
                 continue
+            if timeframe_filter is not None and tf not in timeframe_filter:
+                continue
+
             top_factors_file = candidate_dir / "top_factors_detailed.json"
             if not top_factors_file.exists():
                 continue
+
             with top_factors_file.open("r", encoding="utf-8") as handle:
-                data = json.load(handle)
-            if not data:
+                raw_data = json.load(handle)
+
+            if not raw_data:
                 continue
-            df = pd.DataFrame(data)
-            df["symbol"] = symbol
-            df["timeframe"] = tf
-            frames.append(df)
+
+            normalized = pd.json_normalize(raw_data)
+            normalized.rename(
+                columns={
+                    "name": "factor_name",
+                    "key_metrics.mean_ic": "mean_ic",
+                    "key_metrics.ic_ir": "ic_ir",
+                    "key_metrics.rolling_ic_mean": "rolling_ic_mean",
+                    "key_metrics.vif": "vif",
+                    "key_metrics.turnover_rate": "turnover_rate",
+                    "key_metrics.transaction_cost": "transaction_cost",
+                },
+                inplace=True,
+            )
+            normalized["symbol"] = symbol
+            normalized["timeframe"] = tf
+
+            yield symbol, tf, normalized
+
+    def load_factor_table(
+        self, symbol: str, timeframe: Optional[str] = None, top_n: Optional[int] = None
+    ) -> pd.DataFrame:
+        """Load raw factor rows for ``symbol`` from the selected session."""
+
+        frames = [
+            frame
+            for _, _, frame in self._iter_factor_frames(
+                symbols=[symbol],
+                timeframes=[timeframe] if timeframe is not None else None,
+            )
+        ]
 
         if not frames:
             raise FileNotFoundError(
@@ -99,6 +138,53 @@ class FactorScoreLoader:
         if top_n is not None:
             table = table.head(top_n)
         return table
+
+    def load_factor_panels(
+        self,
+        symbols: Optional[Sequence[str]] = None,
+        timeframes: Optional[Sequence[str]] = None,
+        max_factors: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Return a MultiIndex panel of factors keyed by (symbol, timeframe)."""
+
+        frames: List[pd.DataFrame] = []
+        for _, _, frame in self._iter_factor_frames(symbols=symbols, timeframes=timeframes):
+            if max_factors is not None and len(frame) > max_factors:
+                frame = frame.nsmallest(max_factors, columns="rank")
+            frames.append(frame)
+
+        if not frames:
+            empty = pd.DataFrame(
+                columns=[
+                    "rank",
+                    "factor_name",
+                    "comprehensive_score",
+                    "predictive_score",
+                    "stability_score",
+                    "independence_score",
+                    "practicality_score",
+                    "adaptability_score",
+                    "is_significant",
+                    "tier",
+                    "type",
+                    "description",
+                    "mean_ic",
+                    "ic_ir",
+                    "rolling_ic_mean",
+                    "vif",
+                    "turnover_rate",
+                    "transaction_cost",
+                    "symbol",
+                    "timeframe",
+                ]
+            )
+            empty.set_index(["symbol", "timeframe", "factor_name"], inplace=True)
+            return empty
+
+        panel = pd.concat(frames, ignore_index=True)
+        panel.sort_values(by="rank", inplace=True)
+        panel.set_index(["symbol", "timeframe", "factor_name"], inplace=True)
+        return panel
 
     def load_symbol_scores(
         self,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
 import pandas as pd
@@ -77,9 +77,37 @@ def _build_matrix(
     return pd.DataFrame(columns, index=index)
 
 
+def _coerce_signal(
+    symbol: str,
+    payload: StrategySignals | Mapping[str, Any],
+    execution_config: ExecutionConfig,
+) -> StrategySignals:
+    if isinstance(payload, StrategySignals):
+        return payload
+    if isinstance(payload, Mapping):
+        entries = payload.get("entries")
+        exits = payload.get("exits")
+        if entries is None or exits is None:
+            raise ValueError(f"Missing entries/exits for symbol {symbol}")
+        timeframe = payload.get("timeframe", "")
+        stop_loss = float(payload.get("stop_loss", execution_config.stop_loss))
+        take_profit = float(
+            payload.get("take_profit", execution_config.primary_take_profit())
+        )
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=str(timeframe),
+            entries=pd.Series(entries),
+            exits=pd.Series(exits),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+    raise TypeError(f"Unsupported signal payload for symbol {symbol}: {type(payload)!r}")
+
+
 def run_portfolio_backtest(
-    price_data: Mapping[str, pd.DataFrame],
-    signals: Mapping[str, StrategySignals],
+    price_data: Mapping[str, Mapping[str, pd.DataFrame] | pd.DataFrame],
+    signals: Mapping[str, StrategySignals | Mapping[str, Any]],
     trading_config: TradingConfig = DEFAULT_TRADING_CONFIG,
     execution_config: ExecutionConfig = DEFAULT_EXECUTION_CONFIG,
 ) -> Optional[BacktestArtifacts]:
@@ -92,11 +120,26 @@ def run_portfolio_backtest(
     entries_map: Dict[str, pd.Series] = {}
     exits_map: Dict[str, pd.Series] = {}
 
-    for symbol, signal in signals.items():
-        data = price_data.get(symbol)
-        if data is None or "close" not in data:
+    for symbol, payload in signals.items():
+        try:
+            signal = _coerce_signal(symbol, payload, execution_config)
+        except (TypeError, ValueError):
             continue
-        close_series = data["close"].dropna()
+
+        raw_prices = price_data.get(symbol)
+        if raw_prices is None:
+            continue
+        if isinstance(raw_prices, Mapping):
+            frame = raw_prices.get(signal.timeframe)
+            if frame is None and signal.timeframe:
+                frame = raw_prices.get(signal.timeframe.lower())
+            if frame is None and raw_prices:
+                frame = next(iter(raw_prices.values()))
+        else:
+            frame = raw_prices
+        if frame is None or "close" not in frame:
+            continue
+        close_series = frame["close"].dropna()
         close_columns[symbol] = close_series
         entries_map[symbol] = signal.entries
         exits_map[symbol] = signal.exits
