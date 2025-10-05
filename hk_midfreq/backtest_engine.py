@@ -47,8 +47,8 @@ def run_single_asset_backtest(
     if close.empty:
         raise ValueError("Close price series is empty")
 
-    entries = signals.entries.reindex(close.index).fillna(False)
-    exits = signals.exits.reindex(close.index).fillna(False)
+    entries = signals.entries.reindex(close.index, fill_value=False)
+    exits = signals.exits.reindex(close.index, fill_value=False)
     size = _position_size_from_prices(close, trading_config)
 
     portfolio = vbt.Portfolio.from_signals(
@@ -65,13 +65,15 @@ def run_single_asset_backtest(
 
 
 def _build_matrix(
-    data: Mapping[str, pd.Series], index: pd.Index, fill_value: float | bool = 0.0
+    data: Mapping[str, pd.Series],
+    index: pd.Index,
+    fill_value: float | bool = 0.0,
 ) -> pd.DataFrame:
     """Align a mapping of series to a shared index."""
 
     columns = {}
     for symbol, series in data.items():
-        columns[symbol] = series.reindex(index).fillna(fill_value)
+        columns[symbol] = series.reindex(index, fill_value=fill_value)
     return pd.DataFrame(columns, index=index)
 
 
@@ -100,7 +102,9 @@ def _coerce_signal(
             stop_loss=stop_loss,
             take_profit=take_profit,
         )
-    raise TypeError(f"Unsupported signal payload for symbol {symbol}: {type(payload)!r}")
+    raise TypeError(
+        f"Unsupported signal payload for symbol {symbol}: {type(payload)!r}"
+    )
 
 
 def run_portfolio_backtest(
@@ -157,8 +161,8 @@ def run_portfolio_backtest(
 
     allocation = trading_config.allocation_per_position()
     size_df = close_df.apply(lambda col: np.floor(allocation / col), axis=0)
-    size_df.replace([np.inf, -np.inf], 0.0, inplace=True)
-    size_df.fillna(0.0, inplace=True)
+    size_df = size_df.replace([np.inf, -np.inf], 0.0)
+    size_df = size_df.fillna(0.0)
 
     portfolio = vbt.Portfolio.from_signals(
         close=close_df,
@@ -174,4 +178,8 @@ def run_portfolio_backtest(
     return BacktestArtifacts(portfolio=portfolio, signals=dict(signals))
 
 
-__all__ = ["BacktestArtifacts", "run_single_asset_backtest", "run_portfolio_backtest"]
+__all__ = [
+    "BacktestArtifacts",
+    "run_single_asset_backtest",
+    "run_portfolio_backtest",
+]

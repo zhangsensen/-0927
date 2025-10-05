@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 import numpy as np
@@ -82,7 +82,7 @@ def hk_reversal_logic(
     if close.empty:
         raise ValueError("Close series cannot be empty")
 
-    aligned_volume = volume.reindex(close.index).fillna(method="ffill")
+    aligned_volume = volume.reindex(close.index).ffill()
 
     rsi = vbt.RSI.run(close, window=rsi_window).rsi
     bb = vbt.BBANDS.run(close, window=bb_window)
@@ -152,7 +152,9 @@ def _compute_stochrsi(
     stoch_rsi = stoch_rsi.clip(lower=0.0, upper=1.0).ffill().fillna(0.0)
 
     fastk = (
-        stoch_rsi.rolling(window=fastk_period, min_periods=fastk_period).mean().fillna(0.0)
+        stoch_rsi.rolling(window=fastk_period, min_periods=fastk_period)
+        .mean()
+        .fillna(0.0)
     )
     fastd = (
         fastk.rolling(window=fastd_period, min_periods=fastd_period).mean().fillna(0.0)
@@ -204,6 +206,8 @@ def generate_factor_signals(
 
     normalized_tf = _normalize_timeframe_label(timeframe)
     factor_name = descriptor.name
+
+    # StochRSI 因子
     if factor_name.startswith("TA_STOCHRSI"):
         timeperiod, fastk, fastd, line = _parse_stochrsi_params(factor_name)
         k_series, d_series = _compute_stochrsi(close, timeperiod, fastk, fastd)
@@ -214,7 +218,9 @@ def generate_factor_signals(
         crosses_up = (target.shift(1) <= oversold) & (target > oversold)
         crosses_down = (target.shift(1) >= overbought) & (target < overbought)
         entries = crosses_up.fillna(False)
-        exits = crosses_down.fillna(False) | _compute_time_based_exits(entries, hold_days)
+        exits = crosses_down.fillna(False) | _compute_time_based_exits(
+            entries, hold_days
+        )
 
         return StrategySignals(
             symbol=symbol,
@@ -225,7 +231,196 @@ def generate_factor_signals(
             take_profit=take_profit,
         )
 
-    raise ValueError(f"Unsupported factor for signal generation: {factor_name}")
+    # RSI 因子
+    elif factor_name.startswith("RSI") or factor_name.startswith("TA_RSI"):
+        # 提取RSI周期参数
+        period = 14  # 默认值
+        if "RSI" in factor_name:
+            import re
+
+            match = re.search(r"RSI(\d+)", factor_name)
+            if match:
+                period = int(match.group(1))
+
+        rsi = vbt.RSI.run(close, window=period).rsi
+        oversold = 30.0
+        overbought = 70.0
+
+        crosses_up = (rsi.shift(1) <= oversold) & (rsi > oversold)
+        crosses_down = (rsi.shift(1) >= overbought) & (rsi < overbought)
+        entries = crosses_up.fillna(False)
+        exits = crosses_down.fillna(False) | _compute_time_based_exits(
+            entries, hold_days
+        )
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    # STOCH 随机指标
+    elif factor_name.startswith("STOCH"):
+        # 提取参数
+        k_period = 14
+        d_period = 3
+        import re
+
+        # STOCH_14_5 格式
+        match = re.search(r"STOCH_(\d+)_(\d+)", factor_name)
+        if match:
+            k_period = int(match.group(1))
+            d_period = int(match.group(2))
+
+        stoch = vbt.STOCH.run(close, close, close, k_period, d_period)
+        target = stoch.percent_k  # 使用%K线
+
+        oversold = 20.0
+        overbought = 80.0
+        crosses_up = (target.shift(1) <= oversold) & (target > oversold)
+        crosses_down = (target.shift(1) >= overbought) & (target < overbought)
+        entries = crosses_up.fillna(False)
+        exits = crosses_down.fillna(False) | _compute_time_based_exits(
+            entries, hold_days
+        )
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    # Williams %R 指标
+    elif factor_name.startswith("WILLR") or factor_name.startswith("TA_WILLR"):
+        # 提取周期参数
+        period = 14
+        import re
+
+        match = re.search(r"WILLR(\d+)", factor_name)
+        if match:
+            period = int(match.group(1))
+
+        # 手动计算Williams %R
+        high_roll = close.rolling(window=period).max()
+        low_roll = close.rolling(window=period).min()
+        willr = -100 * (high_roll - close) / (high_roll - low_roll)
+        willr = willr.fillna(0)
+
+        oversold = -80.0
+        overbought = -20.0
+
+        crosses_up = (willr.shift(1) <= oversold) & (willr > oversold)
+        crosses_down = (willr.shift(1) >= overbought) & (willr < overbought)
+        entries = crosses_up.fillna(False)
+        exits = crosses_down.fillna(False) | _compute_time_based_exits(
+            entries, hold_days
+        )
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    # STOCHF 快速随机指标
+    elif factor_name.startswith("TA_STOCHF"):
+        # 使用标准STOCH计算，但参数更敏感
+        k_period = 14
+        d_period = 3
+
+        stoch = vbt.STOCH.run(close, close, close, k_period, d_period)
+        target = stoch.percent_k  # 使用%K线
+
+        oversold = 20.0
+        overbought = 80.0
+        crosses_up = (target.shift(1) <= oversold) & (target > oversold)
+        crosses_down = (target.shift(1) >= overbought) & (target < overbought)
+        entries = crosses_up.fillna(False)
+        exits = crosses_down.fillna(False) | _compute_time_based_exits(
+            entries, hold_days
+        )
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    # 蜡烛图形态因子 - 使用简化的反转逻辑
+    elif factor_name.startswith("TA_CDL") or factor_name.startswith("CDL"):
+        # 对于蜡烛图形态，使用价格动量作为代理
+        returns = close.pct_change()
+        volatility = returns.rolling(20).std()
+
+        # 寻找反转信号：大幅下跌后的反弹
+        big_drop = returns < -2 * volatility
+        recovery = returns.shift(-1) > 0  # 下一期反弹
+        entries = (big_drop & recovery).fillna(False)
+        exits = _compute_time_based_exits(entries, hold_days)
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    # 均值回归因子 (MEANLB等)
+    elif "MEAN" in factor_name or "LB" in factor_name:
+        # 使用布林带均值回归策略
+        bb = vbt.BBANDS.run(close, window=20, alpha=2.0)
+
+        # 价格触及下轨时买入
+        entries = (close <= bb.lower).fillna(False)
+        # 价格回到中轨时卖出
+        exits = (close >= bb.middle).fillna(False) | _compute_time_based_exits(
+            entries, hold_days
+        )
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=entries.astype(bool),
+            exits=exits.astype(bool),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    # 通用回退策略 - 使用传统反转逻辑
+    else:
+        print(f"⚠️  因子 {factor_name} 暂不支持，使用通用反转策略")
+        fallback_volume = (
+            volume if volume is not None else pd.Series(1000000, index=close.index)
+        )
+        fallback_signals = hk_reversal_logic(
+            close=close,
+            volume=fallback_volume,
+            hold_days=hold_days,
+        )
+
+        # 手动创建新的StrategySignals对象
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=normalized_tf,
+            entries=fallback_signals.entries,
+            exits=fallback_signals.exits,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
 
 
 class StrategyCore:
@@ -290,9 +485,7 @@ class StrategyCore:
         limit = top_n or self.trading_config.max_positions
         return composite.sort_values(ascending=False).head(limit).index.tolist()
 
-    def _passes_trend_filter(
-        self, frames: Mapping[str, pd.DataFrame]
-    ) -> bool:
+    def _passes_trend_filter(self, frames: Mapping[str, pd.DataFrame]) -> bool:
         trend_tf = self.runtime_config.fusion.trend_timeframe
         if not trend_tf or trend_tf not in frames:
             return True
@@ -312,9 +505,7 @@ class StrategyCore:
         moving_average = close.rolling(window=window).mean()
         return bool(close.iloc[-1] >= moving_average.iloc[-1])
 
-    def _passes_confirmation_filter(
-        self, frames: Mapping[str, pd.DataFrame]
-    ) -> bool:
+    def _passes_confirmation_filter(self, frames: Mapping[str, pd.DataFrame]) -> bool:
         confirmation_tf = self.runtime_config.fusion.confirmation_timeframe
         if not confirmation_tf or confirmation_tf not in frames:
             return True
@@ -368,7 +559,13 @@ class StrategyCore:
         metadata = {
             key: best[key]
             for key in ordered.columns
-            if key not in {"symbol", "timeframe", "factor_name", "normalized_timeframe"}
+            if key
+            not in {
+                "symbol",
+                "timeframe",
+                "factor_name",
+                "normalized_timeframe",
+            }
         }
         return FactorDescriptor(
             name=str(best["factor_name"]),
@@ -429,9 +626,7 @@ class StrategyCore:
 
     def build_signal_universe(
         self,
-        price_data: Mapping[
-            str, Mapping[str, pd.DataFrame] | pd.DataFrame
-        ],
+        price_data: Mapping[str, Mapping[str, pd.DataFrame] | pd.DataFrame],
         timeframe: Optional[str] = None,
     ) -> Dict[str, StrategySignals]:
         """Generate signals for the selected candidate universe."""

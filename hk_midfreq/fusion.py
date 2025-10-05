@@ -68,7 +68,10 @@ class FactorFusionEngine:
         confirmation_tf = fusion_cfg.confirmation_timeframe
         if confirmation_tf:
             confirmation_score = scores.get(confirmation_tf)
-            if pd.notna(confirmation_score) and confirmation_score < fusion_cfg.confirmation_threshold:
+            if (
+                pd.notna(confirmation_score)
+                and confirmation_score < fusion_cfg.confirmation_threshold
+            ):
                 return np.nan
 
         weights = pd.Series(fusion_cfg.timeframe_weights, dtype=float)
@@ -96,7 +99,9 @@ class FactorFusionEngine:
         grouped = panel.groupby(level=["symbol", "timeframe"], sort=False)
         timeframe_scores = grouped.apply(self._aggregate_timeframe)
         timeframe_scores.name = "score"
-        timeframe_matrix = timeframe_scores.unstack(level="timeframe")
+        timeframe_matrix = timeframe_scores.pivot_table(
+            index="symbol", columns="timeframe", values="score"
+        )
 
         composite = timeframe_matrix.apply(self._combine_timeframes, axis=1)
         timeframe_matrix["composite_score"] = composite

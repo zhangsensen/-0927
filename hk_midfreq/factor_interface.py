@@ -9,7 +9,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from hk_midfreq.config import StrategyRuntimeConfig, DEFAULT_RUNTIME_CONFIG
+from hk_midfreq.config import DEFAULT_RUNTIME_CONFIG, StrategyRuntimeConfig
 
 
 @dataclass(frozen=True)
@@ -98,7 +98,7 @@ class FactorScoreLoader:
                 continue
 
             normalized = pd.json_normalize(raw_data)
-            normalized.rename(
+            normalized = normalized.rename(
                 columns={
                     "name": "factor_name",
                     "key_metrics.mean_ic": "mean_ic",
@@ -107,8 +107,7 @@ class FactorScoreLoader:
                     "key_metrics.vif": "vif",
                     "key_metrics.turnover_rate": "turnover_rate",
                     "key_metrics.transaction_cost": "transaction_cost",
-                },
-                inplace=True,
+                }
             )
             normalized["symbol"] = symbol
             normalized["timeframe"] = tf
@@ -116,7 +115,10 @@ class FactorScoreLoader:
             yield symbol, tf, normalized
 
     def load_factor_table(
-        self, symbol: str, timeframe: Optional[str] = None, top_n: Optional[int] = None
+        self,
+        symbol: str,
+        timeframe: Optional[str] = None,
+        top_n: Optional[int] = None,
     ) -> pd.DataFrame:
         """Load raw factor rows for ``symbol`` from the selected session."""
 
@@ -134,7 +136,7 @@ class FactorScoreLoader:
             )
 
         table = pd.concat(frames, ignore_index=True)
-        table.sort_values(by="rank", inplace=True)
+        table = table.sort_values(by="rank")
         if top_n is not None:
             table = table.head(top_n)
         return table
@@ -148,7 +150,9 @@ class FactorScoreLoader:
         """Return a MultiIndex panel of factors keyed by (symbol, timeframe)."""
 
         frames: List[pd.DataFrame] = []
-        for _, _, frame in self._iter_factor_frames(symbols=symbols, timeframes=timeframes):
+        for _, _, frame in self._iter_factor_frames(
+            symbols=symbols, timeframes=timeframes
+        ):
             if max_factors is not None and len(frame) > max_factors:
                 frame = frame.nsmallest(max_factors, columns="rank")
             frames.append(frame)
@@ -178,12 +182,12 @@ class FactorScoreLoader:
                     "timeframe",
                 ]
             )
-            empty.set_index(["symbol", "timeframe", "factor_name"], inplace=True)
+            empty = empty.set_index(["symbol", "timeframe", "factor_name"])
             return empty
 
         panel = pd.concat(frames, ignore_index=True)
-        panel.sort_values(by="rank", inplace=True)
-        panel.set_index(["symbol", "timeframe", "factor_name"], inplace=True)
+        panel = panel.sort_values(by="rank")
+        panel = panel.set_index(["symbol", "timeframe", "factor_name"])
         return panel
 
     def load_symbol_scores(
@@ -221,12 +225,66 @@ class FactorScoreLoader:
             )
         return results
 
+    def load_factor_time_series(
+        self,
+        symbol: str,
+        timeframe: str,
+        factor_names: List[str],
+        factor_data_dir: Optional[Path] = None,
+    ) -> pd.DataFrame:
+        """Load factor time series data for a symbol and timeframe."""
+
+        if factor_data_dir is None:
+            factor_data_dir = Path(
+                "/Users/zhangshenshen/深度量化0927/factor_system/因子输出"
+            )
+
+        # Construct filename pattern
+        timeframe_path = factor_data_dir / timeframe
+        if not timeframe_path.exists():
+            raise FileNotFoundError(f"Timeframe directory not found: {timeframe_path}")
+
+        # Find the most recent factor file for this symbol and timeframe
+        pattern = f"{symbol}_{timeframe}_factors_*.parquet"
+        import glob
+
+        files = glob.glob(str(timeframe_path / pattern))
+
+        if not files:
+            raise FileNotFoundError(
+                f"No factor data file found for {symbol} {timeframe} in {timeframe_path}"
+            )
+
+        # Use the most recent file
+        latest_file = max(
+            files,
+            key=lambda x: x.split("_")[-2] + x.split("_")[-1].replace(".parquet", ""),
+        )
+
+        # Load the factor data
+        factor_data = pd.read_parquet(latest_file)
+
+        # Filter to only include requested factors
+        available_factors = [f for f in factor_names if f in factor_data.columns]
+        missing_factors = set(factor_names) - set(available_factors)
+
+        if missing_factors:
+            print(f"Warning: Missing factors {missing_factors} in {latest_file}")
+
+        if not available_factors:
+            raise ValueError(f"No requested factors found in {latest_file}")
+
+        # Return only the requested factor columns
+        factor_df = factor_data[available_factors].copy()
+
+        return factor_df
+
     def scores_to_series(self, scores: Iterable[SymbolScore]) -> pd.Series:
         """Convert ``SymbolScore`` objects to a descending ``Series``."""
 
         mapping: Dict[str, float] = {score.symbol: score.score for score in scores}
         series = pd.Series(mapping, name="factor_score")
-        series.sort_values(ascending=False, inplace=True)
+        series = series.sort_values(ascending=False)
         return series
 
     def load_scores_as_series(
@@ -246,7 +304,10 @@ class FactorScoreLoader:
         return self.scores_to_series(scores)
 
     def load_all_symbols(
-        self, timeframe: Optional[str] = None, top_n: int = 5, agg: str = "mean"
+        self,
+        timeframe: Optional[str] = None,
+        top_n: int = 5,
+        agg: str = "mean",
     ) -> pd.Series:
         """Inspect the session folder to load scores for every tracked symbol."""
 

@@ -38,7 +38,7 @@ class FusionConfig:
         ):
             if tf and tf not in ordered:
                 ordered.append(tf)
-        # Include any explicitly weighted timeframes so the loader can fetch them
+        # Include explicitly weighted timeframes for the loader to fetch
         for tf in self.timeframe_weights.keys():
             if tf and tf not in ordered:
                 ordered.append(tf)
@@ -82,7 +82,7 @@ class StrategyRuntimeConfig:
     """High-level toggles for the HK mid-frequency workflow."""
 
     strategy_name: str = "HK_MIDFREQ_REVERSAL"
-    base_output_dir: Path = Path("因子筛选")
+    base_output_dir: Path = Path("../factor_system/factor_screening/因子筛选")
     default_timeframe: str = "60min"
     fusion: FusionConfig = field(default_factory=FusionConfig)
     trend_ma_window: int = 20

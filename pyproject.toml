@@ -35,6 +35,7 @@ dependencies = [
     "mplfinance>=0.12.10b0",
     "polars>=1.33.1",
     "numba>=0.62.0",
+    "pandas-vet>=2023.8.2",
 ]
 
 # 可选依赖（按需安装）

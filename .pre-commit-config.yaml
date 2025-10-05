@@ -34,7 +34,12 @@ repos:
     rev: v1.18.2
     hooks:
       - id: mypy
-        additional_dependencies: [types-all]
+        additional_dependencies:
+          - types-requests
+          - types-pyyaml
+          - types-seaborn
+          - types-psutil
+          - types-pytz
         args: [--ignore-missing-imports]
         exclude: ^tests/
 
