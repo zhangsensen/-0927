@@ -15,7 +15,8 @@ import ast
 import re
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
+
 
 class FutureFunctionChecker(ast.NodeVisitor):
     """AST访问器，检测未来函数使用"""
@@ -29,59 +30,74 @@ class FutureFunctionChecker(ast.NodeVisitor):
         if isinstance(node.func, ast.Attribute):
             if isinstance(node.func.attr, str):
                 attr = node.func.attr.lower()
-                if attr in ['shift', 'lead']:
+                if attr in ["shift", "lead"]:
                     # 检查参数
-                    if (len(node.args) > 0 and
-                        isinstance(node.args[0], ast.UnaryOp) and
-                        isinstance(node.args[0].op, ast.USub) and
-                        isinstance(node.args[0].operand, ast.Constant)):
+                    if (
+                        len(node.args) > 0
+                        and isinstance(node.args[0], ast.UnaryOp)
+                        and isinstance(node.args[0].op, ast.USub)
+                        and isinstance(node.args[0].operand, ast.Constant)
+                    ):
 
-                        if isinstance(node.args[0].operand.value, int) and node.args[0].operand.value < 0:
-                            self.issues.append({
-                                'file': self.current_file,
-                                'line': node.lineno,
-                                'type': 'negative_shift',
-                                'code': ast.get_source_segment(node),
-                                'message': f"发现未来函数: shift({node.args[0].operand.value})"
-                            })
+                        if (
+                            isinstance(node.args[0].operand.value, int)
+                            and node.args[0].operand.value < 0
+                        ):
+                            self.issues.append(
+                                {
+                                    "file": self.current_file,
+                                    "line": node.lineno,
+                                    "type": "negative_shift",
+                                    "code": ast.get_source_segment(node),
+                                    "message": f"发现未来函数: shift({node.args[0].operand.value})",
+                                }
+                            )
 
         elif isinstance(node.func, ast.Name):
-            if isinstance(node.func.id, str) and node.func.id.lower() in ['future', 'lead']:
-                self.issues.append({
-                    'file': self.current_file,
-                    'line': node.lineno,
-                    'type': 'future_variable',
-                    'code': ast.get_source_segment(node),
-                    'message': f"发现未来变量: {node.func.id}"
-                })
+            if isinstance(node.func.id, str) and node.func.id.lower() in [
+                "future",
+                "lead",
+            ]:
+                self.issues.append(
+                    {
+                        "file": self.current_file,
+                        "line": node.lineno,
+                        "type": "future_variable",
+                        "code": ast.get_source_segment(node),
+                        "message": f"发现未来变量: {node.func.id}",
+                    }
+                )
 
         self.generic_visit(node)
+
 
 def check_file_for_future_functions(file_path: Path) -> List[dict]:
     """检查单个文件的未来函数使用"""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         # 正则表达式快速检查
         patterns = [
-            r'\.shift\(-\d+\)',  # .shift(-n)
-            r'future_\w+',     # future_变量
-            r'lead_\w+',       # lead_变量
+            r"\.shift\(-\d+\)",  # .shift(-n)
+            r"future_\w+",  # future_变量
+            r"lead_\w+",  # lead_变量
         ]
 
         issues = []
         for pattern in patterns:
             matches = re.finditer(pattern, content)
             for match in matches:
-                line_num = content[:match.start()].count('\n') + 1
-                issues.append({
-                    'file': file_path,
-                    'line': line_num,
-                    'type': 'regex_match',
-                    'code': match.group(),
-                    'message': f"发现可疑模式: {match.group()}"
-                })
+                line_num = content[: match.start()].count("\n") + 1
+                issues.append(
+                    {
+                        "file": file_path,
+                        "line": line_num,
+                        "type": "regex_match",
+                        "code": match.group(),
+                        "message": f"发现可疑模式: {match.group()}",
+                    }
+                )
 
         # AST深度检查
         try:
@@ -99,6 +115,7 @@ def check_file_for_future_functions(file_path: Path) -> List[dict]:
         print(f"❌ 检查文件失败 {file_path}: {e}")
         return []
 
+
 def main():
     """主函数"""
     print("🔍 开始扫描未来函数使用...")
@@ -110,7 +127,7 @@ def main():
     all_issues = []
 
     for file_path in python_files:
-        if file_path.name == 'check_future_functions.py':
+        if file_path.name == "check_future_functions.py":
             continue  # 跳过检查脚本本身
 
         issues = check_file_for_future_functions(file_path)
@@ -124,18 +141,18 @@ def main():
         # 按文件分组
         issues_by_file = {}
         for issue in all_issues:
-            file_path = issue['file']
+            file_path = issue["file"]
             if file_path not in issues_by_file:
                 issues_by_file[file_path] = []
             issues_by_file[file_path].append(issue)
 
         for file_path, issues in sorted(issues_by_file.items()):
             print(f"\n📁 文件: {file_path}")
-            for issue in sorted(issues, key=lambda x: x['line']):
+            for issue in sorted(issues, key=lambda x: x["line"]):
                 print(f"  🚨 第{issue['line']}行: {issue['message']}")
                 print(f"     代码: {issue['code']}")
 
-        print(f"\n📊 统计:")
+        print("\n📊 统计:")
         print(f"  - 总问题数: {len(all_issues)}")
         print(f"  - 涉及文件: {len(issues_by_file)}")
 
@@ -143,6 +160,7 @@ def main():
     else:
         print("✅ 未发现未来函数使用")
         return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

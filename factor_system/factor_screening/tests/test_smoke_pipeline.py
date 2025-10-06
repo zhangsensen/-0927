@@ -1,11 +1,15 @@
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from config_manager import ScreeningConfig
-from professional_factor_screener import ProfessionalFactorScreener
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from config_manager import ScreeningConfig  # noqa: E402
+from professional_factor_screener import ProfessionalFactorScreener  # noqa: E402
 
 
 @pytest.fixture()
@@ -62,5 +66,5 @@ def test_smoke_pipeline(tmp_config: ScreeningConfig) -> None:
     result = screener.screen_factors_comprehensive("0005.HK", "daily")
 
     assert result
-    assert all(isinstance(v.comprehensive_score, float) for v in result.values())
+    assert all(isinstance(v.comprehensive_score, float) for v in result.to_numpy()())
     assert Path(screener.screening_results_dir).exists()

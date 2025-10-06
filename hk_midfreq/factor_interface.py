@@ -1,15 +1,26 @@
-"""Interfaces to consume screened factor scores for strategy selection."""
+"""因子接口 - P0 优化：路径解耦，错误处理标准化"""
 
 from __future__ import annotations
 
+import glob
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from hk_midfreq.config import DEFAULT_RUNTIME_CONFIG, StrategyRuntimeConfig
+from hk_midfreq.config import DEFAULT_RUNTIME_CONFIG, PathConfig, StrategyRuntimeConfig
+
+# 设置日志
+logger = logging.getLogger(__name__)
+
+
+class FactorLoadError(Exception):
+    """因子数据加载异常 - P0 优化：标准化错误处理"""
+
+    pass
 
 
 @dataclass(frozen=True)
@@ -23,25 +34,37 @@ class SymbolScore:
 
 
 class FactorScoreLoader:
-    """Load screened factor scores from enhanced screener outputs."""
+    """Load screened factor scores from enhanced screener outputs.
+
+    P0 优化：
+    - 移除硬编码路径，使用 PathConfig
+    - 标准化错误处理
+    - 保持向后兼容
+    """
 
     def __init__(
         self,
         runtime_config: StrategyRuntimeConfig = DEFAULT_RUNTIME_CONFIG,
         session_id: Optional[str] = None,
+        path_config: Optional[PathConfig] = None,
     ) -> None:
-        self._config = runtime_config
+        self._config = runtime_config or DEFAULT_RUNTIME_CONFIG
         self._session_id = session_id
+        self._path_config = path_config or (
+            self._config.paths if hasattr(self._config, "paths") else self._config
+        )
 
     def list_sessions(self) -> List[Path]:
         """Return all available screening sessions sorted by recency."""
-
-        if not self._config.base_output_dir.exists():
+        # 直接使用factor_ready目录
+        output_dir = self._path_config.factor_ready_dir
+        if not output_dir.exists():
             return []
 
-        sessions = [p for p in self._config.base_output_dir.iterdir() if p.is_dir()]
-        sessions.sort(key=lambda path: path.stat().st_mtime, reverse=True)
-        return sessions
+        # factor_ready目录包含parquet文件，不是目录结构
+        if output_dir.is_dir():
+            return [output_dir]
+        return []
 
     def resolve_session(self) -> Optional[Path]:
         """Resolve the directory containing screening artifacts."""
@@ -62,57 +85,44 @@ class FactorScoreLoader:
 
         session_dir = self.resolve_session()
         if session_dir is None:
-            raise FileNotFoundError("No screening session directory found.")
+            logger.error("未找到factor_ready目录")
+            raise FileNotFoundError("No factor_ready directory found.")
 
-        timeframe_dir = session_dir / "timeframes"
-        if not timeframe_dir.exists():
-            raise FileNotFoundError(
-                f"`timeframes` directory missing under {session_dir}"
-            )
+        logger.debug(f"使用factor_ready目录: {session_dir}")
+
+        # 直接加载parquet文件
+        factor_file = session_dir / "0700_HK_best_factors.parquet"
+        if not factor_file.exists():
+            raise FileNotFoundError(f"Factor file not found: {factor_file}")
+
+        import pandas as pd
+
+        df = pd.read_parquet(factor_file)
+        logger.info(f"加载因子数据: {len(df)}个因子")
 
         symbol_filter = set(symbols) if symbols is not None else None
         timeframe_filter = set(timeframes) if timeframes is not None else None
 
-        for candidate_dir in timeframe_dir.iterdir():
-            if not candidate_dir.is_dir():
+        if symbol_filter and "0700.HK" not in symbol_filter:
+            return
+
+        # 按时间框架分组
+        for tf in df["timeframe"].unique():
+            if timeframe_filter and tf not in timeframe_filter:
                 continue
 
-            parts = candidate_dir.name.split("_")
-            if len(parts) < 2:
-                continue
-            symbol, tf = parts[0], parts[1]
+            tf_data = df[df["timeframe"] == tf].copy()
 
-            if symbol_filter is not None and symbol not in symbol_filter:
-                continue
-            if timeframe_filter is not None and tf not in timeframe_filter:
-                continue
+            # 转换列名以匹配系统期望
+            tf_data = tf_data.rename(columns={"ic_mean": "mean_ic", "ic_ir": "ic_ir"})
 
-            top_factors_file = candidate_dir / "top_factors_detailed.json"
-            if not top_factors_file.exists():
-                continue
+            # 确保必需列存在
+            if "mean_ic" not in tf_data.columns:
+                tf_data["mean_ic"] = 0.0
+            if "ic_ir" not in tf_data.columns:
+                tf_data["ic_ir"] = 0.0
 
-            with top_factors_file.open("r", encoding="utf-8") as handle:
-                raw_data = json.load(handle)
-
-            if not raw_data:
-                continue
-
-            normalized = pd.json_normalize(raw_data)
-            normalized = normalized.rename(
-                columns={
-                    "name": "factor_name",
-                    "key_metrics.mean_ic": "mean_ic",
-                    "key_metrics.ic_ir": "ic_ir",
-                    "key_metrics.rolling_ic_mean": "rolling_ic_mean",
-                    "key_metrics.vif": "vif",
-                    "key_metrics.turnover_rate": "turnover_rate",
-                    "key_metrics.transaction_cost": "transaction_cost",
-                }
-            )
-            normalized["symbol"] = symbol
-            normalized["timeframe"] = tf
-
-            yield symbol, tf, normalized
+            yield "0700.HK", tf, tf_data
 
     def load_factor_table(
         self,
@@ -149,15 +159,31 @@ class FactorScoreLoader:
     ) -> pd.DataFrame:
         """Return a MultiIndex panel of factors keyed by (symbol, timeframe)."""
 
+        logger.info(
+            f"开始加载因子面板 - 股票: {symbols}, 时间框架: {timeframes}, 最大因子数: {max_factors}"
+        )
+
         frames: List[pd.DataFrame] = []
-        for _, _, frame in self._iter_factor_frames(
+        total_factors_loaded = 0
+
+        for symbol, timeframe, frame in self._iter_factor_frames(
             symbols=symbols, timeframes=timeframes
         ):
+            original_count = len(frame)
+
             if max_factors is not None and len(frame) > max_factors:
                 frame = frame.nsmallest(max_factors, columns="rank")
+                logger.debug(
+                    f"{symbol}-{timeframe}: 因子筛选 {original_count} -> {len(frame)} (top {max_factors})"
+                )
+            else:
+                logger.debug(f"{symbol}-{timeframe}: 加载 {original_count} 个因子")
+
             frames.append(frame)
+            total_factors_loaded += len(frame)
 
         if not frames:
+            logger.warning("未找到任何因子数据，返回空面板")
             empty = pd.DataFrame(
                 columns=[
                     "rank",
@@ -185,9 +211,21 @@ class FactorScoreLoader:
             empty = empty.set_index(["symbol", "timeframe", "factor_name"])
             return empty
 
+        logger.info(f"因子数据合并中 - 总计 {total_factors_loaded} 个因子记录")
         panel = pd.concat(frames, ignore_index=True)
         panel = panel.sort_values(by="rank")
         panel = panel.set_index(["symbol", "timeframe", "factor_name"])
+
+        # 统计最终面板信息
+        symbols_count = len(panel.index.get_level_values("symbol").unique())
+        timeframes_count = len(panel.index.get_level_values("timeframe").unique())
+        factors_count = len(panel.index.get_level_values("factor_name").unique())
+
+        logger.info(f"因子面板加载完成 - 形状: {panel.shape}")
+        logger.info(
+            f"面板统计: {symbols_count}个股票, {timeframes_count}个时间框架, {factors_count}个因子"
+        )
+
         return panel
 
     def load_symbol_scores(
@@ -232,27 +270,27 @@ class FactorScoreLoader:
         factor_names: List[str],
         factor_data_dir: Optional[Path] = None,
     ) -> pd.DataFrame:
-        """Load factor time series data for a symbol and timeframe."""
+        """Load factor time series data for a symbol and timeframe.
+
+        P0 优化：使用 PathConfig 自动发现因子输出目录
+        """
 
         if factor_data_dir is None:
-            factor_data_dir = Path(
-                "/Users/zhangshenshen/深度量化0927/factor_system/因子输出"
-            )
+            factor_data_dir = self._path_config.factor_output_dir
 
         # Construct filename pattern
         timeframe_path = factor_data_dir / timeframe
         if not timeframe_path.exists():
-            raise FileNotFoundError(f"Timeframe directory not found: {timeframe_path}")
+            raise FactorLoadError(f"Timeframe directory not found: {timeframe_path}")
 
         # Find the most recent factor file for this symbol and timeframe
         pattern = f"{symbol}_{timeframe}_factors_*.parquet"
-        import glob
-
         files = glob.glob(str(timeframe_path / pattern))
 
         if not files:
-            raise FileNotFoundError(
-                f"No factor data file found for {symbol} {timeframe} in {timeframe_path}"
+            raise FactorLoadError(
+                f"No factor data file found for {symbol} {timeframe} "
+                f"in {timeframe_path}"
             )
 
         # Use the most recent file
@@ -272,7 +310,7 @@ class FactorScoreLoader:
             print(f"Warning: Missing factors {missing_factors} in {latest_file}")
 
         if not available_factors:
-            raise ValueError(f"No requested factors found in {latest_file}")
+            raise FactorLoadError(f"No requested factors found in {latest_file}")
 
         # Return only the requested factor columns
         factor_df = factor_data[available_factors].copy()

@@ -1,0 +1,76 @@
+# HK Mid-frequency Trading Settings
+# 港股中频交易配置
+
+# ========== 日志配置 ==========
+log:
+  level: "DEBUG"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  rotating:
+    max_bytes: 10485760  # 10 MB
+    backup_count: 5
+  session_isolated: true  # 强制会话级日志隔离
+  
+  # stdout/stderr 重定向配置
+  redirect_stdout: true  # 重定向标准输出到会话日志
+  redirect_stderr: true  # 重定向标准错误到会话日志
+  stdout_filename: "stdout.log"  # 标准输出文件名
+  stderr_filename: "stderr.log"  # 标准错误文件名
+  preserve_console: true  # 同时保持控制台输出
+
+# ========== 路径配置 ==========
+paths:
+  # 项目根目录会自动检测，无需配置
+  # 以下为相对路径
+  raw_data: "raw/HK"
+  factor_screening: "factor_system/factor_ready"  # 英文名
+  factor_output: "factor_system/factor_output"  # 英文名
+  backtest_results: "hk_midfreq/backtest_results"
+
+# ========== 回测配置 ==========
+backtest:
+  initial_cash: 1000000.0
+  commission: 0.002  # 0.2%
+  slippage: 0.05  # HKD
+  leverage: 1.0
+  validate_results: true  # 验证回测结果完整性
+
+# ========== 图表配置 ==========
+charts:
+  dpi: 150
+  figsize: [12, 8]
+  style: "seaborn-v0_8-darkgrid"
+  min_file_size_kb: 3  # 最小文件大小 (kB)，低于此值抛异常
+  raise_on_empty: true  # 空图表时抛异常
+
+# ========== 因子配置 ==========
+factors:
+  clean_column_names: true  # 清洗列名，移除非法字符
+  allowed_chars: "[^0-9A-Za-z_]"  # 非法字符正则
+  max_factors: 50  # 最大因子数量
+
+# ========== 环境快照 ==========
+environment:
+  snapshot_enabled: true  # 启用环境快照
+  save_pip_freeze: true
+  save_conda_env: true
+  save_system_info: true
+
+# ========== 多时间框架配置 ==========
+multi_timeframe:
+  default_timeframes: ["5min", "15min", "30min", "60min", "daily"]
+  min_timeframes: 3  # 最少需要的时间框架数量
+  fusion_method: "weighted_average"  # 融合方法
+
+# ========== 数据验证 ==========
+data_validation:
+  check_missing: true
+  check_duplicates: true
+  check_sorted: true
+  min_data_points: 100
+
+# ========== 性能配置 ==========
+performance:
+  vectorized: true
+  use_cache: true
+  parallel_loading: false  # 暂时关闭并行加载
+  max_workers: 4

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
@@ -20,6 +21,9 @@ from hk_midfreq.config import (
 )
 from hk_midfreq.factor_interface import FactorScoreLoader
 from hk_midfreq.fusion import FactorFusionEngine
+
+# 设置日志
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -163,7 +167,7 @@ def _compute_stochrsi(
 
 
 def _parse_stochrsi_params(name: str) -> tuple[int, int, int, str]:
-    """Extract ``timeperiod``, ``fastk`` and ``fastd`` settings and target line from the factor name."""
+    """Extract timeperiod, fastk, fastd settings and target line from name."""
 
     tokens = name.split("_")
     timeperiod = 14
@@ -451,7 +455,10 @@ class StrategyCore:
         """Select candidate symbols based on aggregated factor scores."""
 
         symbols = list(universe)
+        logger.info(f"开始候选股票筛选 - 输入股票池: {len(symbols)}个标的")
+
         if not symbols:
+            logger.warning("股票池为空，无法进行候选筛选")
             return []
 
         timeframes: Sequence[str] | None
@@ -460,70 +467,127 @@ class StrategyCore:
         else:
             timeframes = self.runtime_config.fusion.ordered_timeframes()
 
+        logger.info(f"使用时间框架: {timeframes}")
+        max_factors = self.trading_config.max_positions * 2
+        logger.debug(f"最大因子数量: {max_factors}")
+
         try:
+            logger.debug("开始加载因子面板数据...")
             panel = self.factor_loader.load_factor_panels(
                 symbols=symbols,
                 timeframes=timeframes,
-                max_factors=self.trading_config.max_positions * 2,
+                max_factors=max_factors,
             )
-        except FileNotFoundError:
+            logger.info(f"因子面板加载完成 - 形状: {panel.shape}")
+        except FileNotFoundError as e:
+            logger.error(f"因子数据文件未找到: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"因子面板加载失败: {e}")
             return []
 
         self._last_factor_panel = panel
         if panel.empty:
+            logger.warning("因子面板为空，无法进行筛选")
             return []
 
+        logger.debug("开始因子融合...")
         fused = self.fusion_engine.fuse(panel)
         self._last_fused_scores = fused
+
         if fused.empty or "composite_score" not in fused.columns:
+            logger.warning("因子融合失败或缺少composite_score列")
             return []
 
         composite = fused["composite_score"].dropna()
         if composite.empty:
+            logger.warning("复合评分为空，无有效候选股票")
             return []
 
+        logger.info(f"有效复合评分数量: {len(composite)}")
+        logger.debug(
+            f"复合评分统计: 最高={composite.max():.4f}, 最低={composite.min():.4f}, 均值={composite.mean():.4f}"
+        )
+
         limit = top_n or self.trading_config.max_positions
-        return composite.sort_values(ascending=False).head(limit).index.tolist()
+        selected = composite.sort_values(ascending=False).head(limit).index.tolist()
+
+        logger.info(f"候选筛选完成 - 选中 {len(selected)} 个标的: {selected}")
+
+        # 记录每个选中标的的评分
+        for i, symbol in enumerate(selected):
+            score = composite.loc[symbol]
+            logger.debug(f"排名 {i+1}: {symbol} = {score:.4f}")
+
+        return selected
 
     def _passes_trend_filter(self, frames: Mapping[str, pd.DataFrame]) -> bool:
         trend_tf = self.runtime_config.fusion.trend_timeframe
+        logger.debug(f"趋势过滤器检查 - 时间框架: {trend_tf}")
+
         if not trend_tf or trend_tf not in frames:
+            logger.debug("趋势时间框架未配置或数据缺失，跳过趋势过滤")
             return True
 
         data = frames[trend_tf]
         if "close" not in data:
+            logger.debug("趋势数据缺少close列，跳过趋势过滤")
             return True
 
         close = data["close"].dropna()
         if close.empty:
+            logger.debug("趋势数据close列为空，跳过趋势过滤")
             return True
 
         window = max(self.runtime_config.trend_ma_window, 1)
         if len(close) < window:
+            logger.debug(f"趋势数据长度不足 ({len(close)} < {window})，跳过趋势过滤")
             return True
 
         moving_average = close.rolling(window=window).mean()
-        return bool(close.iloc[-1] >= moving_average.iloc[-1])
+        current_price = close.iloc[-1]
+        current_ma = moving_average.iloc[-1]
+
+        trend_up = current_price >= current_ma
+        logger.debug(
+            f"趋势过滤结果: 当前价格={current_price:.4f}, MA({window})={current_ma:.4f}, 趋势向上={trend_up}"
+        )
+
+        return bool(trend_up)
 
     def _passes_confirmation_filter(self, frames: Mapping[str, pd.DataFrame]) -> bool:
         confirmation_tf = self.runtime_config.fusion.confirmation_timeframe
+        logger.debug(f"确认过滤器检查 - 时间框架: {confirmation_tf}")
+
         if not confirmation_tf or confirmation_tf not in frames:
+            logger.debug("确认时间框架未配置或数据缺失，跳过确认过滤")
             return True
 
         data = frames[confirmation_tf]
         if "close" not in data:
+            logger.debug("确认数据缺少close列，跳过确认过滤")
             return True
 
         close = data["close"].dropna()
         if close.empty:
+            logger.debug("确认数据close列为空，跳过确认过滤")
             return True
 
         window = max(self.runtime_config.confirmation_ma_window, 1)
         if len(close) < window:
+            logger.debug(f"确认数据长度不足 ({len(close)} < {window})，跳过确认过滤")
             return True
 
         moving_average = close.rolling(window=window).mean()
-        return bool(close.iloc[-1] >= moving_average.iloc[-1])
+        current_price = close.iloc[-1]
+        current_ma = moving_average.iloc[-1]
+
+        confirmation_up = current_price >= current_ma
+        logger.debug(
+            f"确认过滤结果: 当前价格={current_price:.4f}, MA({window})={current_ma:.4f}, 确认向上={confirmation_up}"
+        )
+
+        return bool(confirmation_up)
 
     def _select_entry_timeframe(
         self, frames: Mapping[str, pd.DataFrame]
@@ -580,23 +644,43 @@ class StrategyCore:
     ) -> Optional[StrategySignals]:
         """Create strategy signals for a single symbol using multi-timeframe data."""
 
+        logger.info(f"开始为 {symbol} 生成交易信号")
+        logger.debug(f"可用时间框架: {list(frames.keys())}")
+
+        # 趋势过滤
         if not self._passes_trend_filter(frames):
-            return None
-        if not self._passes_confirmation_filter(frames):
+            logger.info(f"{symbol} 未通过趋势过滤器，跳过信号生成")
             return None
 
+        # 确认过滤
+        if not self._passes_confirmation_filter(frames):
+            logger.info(f"{symbol} 未通过确认过滤器，跳过信号生成")
+            return None
+
+        # 选择入场时间框架
         entry_timeframe = self._select_entry_timeframe(frames)
         if entry_timeframe is None:
+            logger.warning(f"{symbol} 无可用的入场时间框架")
             return None
+
+        logger.info(f"{symbol} 选择入场时间框架: {entry_timeframe}")
 
         data = frames[entry_timeframe]
         if "close" not in data or "volume" not in data:
+            logger.warning(f"{symbol} 入场时间框架数据缺少close或volume列")
             return None
 
+        logger.debug(
+            f"{symbol} 入场数据形状: {data.shape}, 时间范围: {data.index[0]} 到 {data.index[-1]}"
+        )
+
+        # 尝试基于因子的信号生成
         descriptor = self._resolve_top_factor(symbol, entry_timeframe)
         if descriptor is not None:
+            factor_name = getattr(descriptor, "name", "unknown")
+            logger.info(f"{symbol} 使用因子信号生成 - 因子: {factor_name}")
             try:
-                return generate_factor_signals(
+                signals = generate_factor_signals(
                     symbol=symbol,
                     timeframe=entry_timeframe,
                     close=data["close"],
@@ -606,16 +690,22 @@ class StrategyCore:
                     stop_loss=self.execution_config.stop_loss,
                     take_profit=self.execution_config.primary_take_profit(),
                 )
-            except Exception:
-                # Fallback to legacy logic if factor-driven path fails
-                pass
+                logger.info(
+                    f"{symbol} 因子信号生成成功 - 入场信号数: {signals.entries.sum()}"
+                )
+                return signals
+            except Exception as e:
+                logger.warning(f"{symbol} 因子信号生成失败: {e}，回退到传统逻辑")
 
+        # 回退到传统反转逻辑
+        logger.info(f"{symbol} 使用传统反转逻辑生成信号")
         signal_bundle = hk_reversal_logic(
             close=data["close"],
             volume=data["volume"],
             hold_days=self.trading_config.hold_days,
         )
-        return StrategySignals(
+
+        signals = StrategySignals(
             symbol=symbol,
             timeframe=_normalize_timeframe_label(entry_timeframe),
             entries=signal_bundle.entries,
@@ -623,6 +713,15 @@ class StrategyCore:
             stop_loss=self.execution_config.stop_loss,
             take_profit=self.execution_config.primary_take_profit(),
         )
+
+        logger.info(
+            f"{symbol} 传统信号生成完成 - 入场信号数: {signals.entries.sum()}, 出场信号数: {signals.exits.sum()}"
+        )
+        logger.debug(
+            f"{symbol} 风险参数 - 止损: {signals.stop_loss:.2%}, 止盈: {signals.take_profit:.2%}"
+        )
+
+        return signals
 
     def build_signal_universe(
         self,
@@ -643,6 +742,14 @@ class StrategyCore:
 
         universe = list(expanded.keys())
         candidates = self.select_candidates(universe, timeframe=timeframe)
+        if not candidates:
+            fallback_signals: Dict[str, StrategySignals] = {}
+            for symbol, frames in expanded.items():
+                signal = self.generate_signals_for_symbol(symbol=symbol, frames=frames)
+                if signal is not None:
+                    fallback_signals[symbol] = signal
+            return fallback_signals
+
         signals: Dict[str, StrategySignals] = {}
         for symbol in candidates:
             frames = expanded.get(symbol)

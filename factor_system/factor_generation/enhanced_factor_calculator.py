@@ -9,15 +9,14 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from itertools import product
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 import vectorbt as vbt
 
 # 导入配置
-from config import get_config, setup_logging
+from config import setup_logging
 
 # 简化的时间框架定义
 
@@ -55,7 +54,7 @@ def extract_vbt_labels(vbt_result, name: Optional[str] = None):
             return ensure_series(vbt_result, vbt_result.index, name or vbt_result.name)
 
         if hasattr(vbt_result, "values"):
-            return ensure_series(vbt_result.values, index, name)
+            return ensure_series(vbt_result.to_numpy(), index, name)
 
         return ensure_series(vbt_result, index, name)
     except Exception as e:
@@ -146,7 +145,7 @@ def extract_vbt_indicator(vbt_result, name: Optional[str] = None):
                 return ensure_series(series, series.index, name or series.name)
 
         if hasattr(vbt_result, "values"):
-            return ensure_series(vbt_result.values, index, name)
+            return ensure_series(vbt_result.to_numpy(), index, name)
 
         return ensure_series(vbt_result, index, name)
     except Exception as e:
@@ -231,7 +230,10 @@ class EnhancedFactorCalculator:
         logger.info("增强版因子计算器初始化完成")
 
         logger.info(
-            f"配置: MA={self.config.enable_ma}, MACD={self.config.enable_macd}, RSI={self.config.enable_rsi}"
+            "配置: MA=%s, MACD=%s, RSI=%s",
+            self.config.enable_ma,
+            self.config.enable_macd,
+            self.config.enable_rsi,
         )
 
     def calculate_comprehensive_factors(
@@ -272,131 +274,208 @@ class EnhancedFactorCalculator:
                 logger.info(f"{timeframe.value} 使用MA窗口: {ma_windows}")
 
                 for window in ma_windows:
-                    calc = lambda w=window: vbt.MA.run(price, window=w).ma.rename(
-                        f"MA{w}"
-                    )
-                    factor_calculations.append((f"MA{window}", calc))
+
+                    def create_ma_calc(w):
+                        def calc():
+                            return vbt.MA.run(price, window=w).ma.rename(f"MA{w}")
+
+                        return calc
+
+                    factor_calculations.append((f"MA{window}", create_ma_calc(window)))
 
             # 2. 指数移动平均 - 根据时间框架调整
             if self.config.enable_ema:
                 ema_spans = timeframe_params["ema_spans"]
                 logger.info(f"{timeframe.value} 使用EMA窗口: {ema_spans}")
 
+                def create_ema_calc(span: int) -> Callable[[], pd.Series]:
+                    def calc() -> pd.Series:
+                        return (
+                            price.ewm(span=span, adjust=False)
+                            .mean()
+                            .rename(f"EMA{span}")
+                        )
+
+                    return calc
+
                 for span in ema_spans:
-                    calc = (
-                        lambda s=span: price.ewm(span=s, adjust=False)
-                        .mean()
-                        .rename(f"EMA{s}")
-                    )
-                    factor_calculations.append((f"EMA{span}", calc))
+                    factor_calculations.append((f"EMA{span}", create_ema_calc(span)))
 
             # 3. MACD指标系列 - 根据时间框架调整参数
             if self.config.enable_macd and "MACD" in available_indicators:
                 macd_params = timeframe_params["macd_params"]
                 logger.info(f"{timeframe.value} 使用MACD参数: {macd_params}")
 
+                def create_macd_calc(
+                    fast: int, slow: int, signal: int
+                ) -> Callable[[], Any]:
+                    def calc() -> Any:
+                        return vbt.MACD.run(
+                            price,
+                            fast_window=fast,
+                            slow_window=slow,
+                            signal_window=signal,
+                        )
+
+                    return calc
+
                 for fast, slow, signal in macd_params:
-                    calc = lambda f=fast, s=slow, sig=signal: (
-                        vbt.MACD.run(
-                            price, fast_window=f, slow_window=s, signal_window=sig
+                    factor_calculations.append(
+                        (
+                            f"MACD_{fast}_{slow}_{signal}",
+                            create_macd_calc(fast, slow, signal),
                         )
                     )
-                    factor_calculations.append((f"MACD_{fast}_{slow}_{signal}", calc))
 
             # 4. RSI系列
             if self.config.enable_rsi and "RSI" in available_indicators:
                 rsi_windows = timeframe_params["rsi_windows"]
                 logger.info(f"{timeframe.value} 使用RSI窗口: {rsi_windows}")
 
+                def create_rsi_calc(window: int) -> Callable[[], pd.Series]:
+                    def calc() -> pd.Series:
+                        return vbt.RSI.run(price, window=window).rsi.rename(
+                            f"RSI{window}"
+                        )
+
+                    return calc
+
                 for window in rsi_windows:
-                    calc = lambda w=window: vbt.RSI.run(price, window=w).rsi.rename(
-                        f"RSI{w}"
+                    factor_calculations.append(
+                        (f"RSI{window}", create_rsi_calc(window))
                     )
-                    factor_calculations.append((f"RSI{window}", calc))
 
             # 5. 布林带系列
             if self.config.enable_bbands and "BBANDS" in available_indicators:
                 bb_windows = timeframe_params["bb_windows"]
                 logger.info(f"{timeframe.value} 使用BB窗口: {bb_windows}")
 
+                def create_bb_calc(
+                    window: int, alpha: float = 2.0
+                ) -> Callable[[], Any]:
+                    def calc() -> Any:
+                        return vbt.BBANDS.run(price, window=window, alpha=alpha)
+
+                    return calc
+
                 for window in bb_windows:
-                    alpha = 2.0  # 标准alpha
-                    calc = lambda w=window, a=alpha: (
-                        vbt.BBANDS.run(price, window=w, alpha=a)
+                    factor_calculations.append(
+                        (f"BB_{window}_2.0", create_bb_calc(window))
                     )
-                    factor_calculations.append((f"BB_{window}_{alpha}", calc))
 
             # 6. 随机指标
             if self.config.enable_stoch and "STOCH" in available_indicators:
                 stoch_windows = timeframe_params["stoch_windows"]
                 logger.info(f"{timeframe.value} 使用STOCH窗口: {stoch_windows}")
 
+                def create_stoch_calc(
+                    k_window: int, d_window: int
+                ) -> Callable[[], Any]:
+                    def calc() -> Any:
+                        return extract_vbt_indicator(
+                            vbt.STOCH.run(
+                                high, low, price, k_window=k_window, d_window=d_window
+                            )
+                        )
+
+                    return calc
+
                 for k_window, d_window in stoch_windows:
-                    calc = lambda k=k_window, d=d_window: (
-                        extract_vbt_indicator(
-                            vbt.STOCH.run(high, low, price, k_window=k, d_window=d)
+                    factor_calculations.append(
+                        (
+                            f"STOCH_{k_window}_{d_window}",
+                            create_stoch_calc(k_window, d_window),
                         )
                     )
-                    factor_calculations.append((f"STOCH_{k_window}_{d_window}", calc))
 
             # 7. 平均真实范围
             if self.config.enable_atr and "ATR" in available_indicators:
                 atr_windows = timeframe_params["atr_windows"]
                 logger.info(f"{timeframe.value} 使用ATR窗口: {atr_windows}")
 
+                def create_atr_calc(window: int) -> Callable[[], pd.Series]:
+                    def calc() -> pd.Series:
+                        return vbt.ATR.run(high, low, price, window=window).atr.rename(
+                            f"ATR{window}"
+                        )
+
+                    return calc
+
                 for window in atr_windows:
-                    calc = lambda w=window: vbt.ATR.run(
-                        high, low, price, window=w
-                    ).atr.rename(f"ATR{w}")
-                    factor_calculations.append((f"ATR{window}", calc))
+                    factor_calculations.append(
+                        (f"ATR{window}", create_atr_calc(window))
+                    )
 
             # 8. 移动标准差 (波动率)
             if self.config.enable_mstd and "MSTD" in available_indicators:
                 mstd_windows = timeframe_params["mstd_windows"]
                 logger.info(f"{timeframe.value} 使用MSTD窗口: {mstd_windows}")
 
+                def create_mstd_calc(window: int) -> Callable[[], pd.Series]:
+                    def calc() -> pd.Series:
+                        return vbt.MSTD.run(price, window=window).mstd.rename(
+                            f"MSTD{window}"
+                        )
+
+                    return calc
+
                 for window in mstd_windows:
-                    calc = lambda w=window: vbt.MSTD.run(price, window=w).mstd.rename(
-                        f"MSTD{w}"
+                    factor_calculations.append(
+                        (f"MSTD{window}", create_mstd_calc(window))
                     )
-                    factor_calculations.append((f"MSTD{window}", calc))
 
             # 9. OBV指标
             if self.config.enable_obv and "OBV" in available_indicators:
-                calc = lambda: vbt.OBV.run(price, volume).obv.rename("OBV")
-                factor_calculations.append(("OBV", calc))
+
+                def create_obv_calc() -> Callable[[], pd.Series]:
+                    def calc() -> pd.Series:
+                        return vbt.OBV.run(price, volume).obv.rename("OBV")
+
+                    return calc
+
+                factor_calculations.append(("OBV", create_obv_calc()))
 
                 # OBV移动平均
                 obv_ma_windows = (
                     [5, 10, 15, 20] if self.config.enable_all_periods else [20]
                 )
+
+                def create_obv_ma_calc(window: int) -> Callable[[], pd.Series]:
+                    def calc() -> pd.Series:
+                        obv_series = factor_data.get("OBV")
+                        if obv_series is None:
+                            obv_series = create_obv_calc()()
+                            factor_data["OBV"] = obv_series
+                        return vbt.MA.run(obv_series, window=window).ma.rename(
+                            f"OBV_SMA{window}"
+                        )
+
+                    return calc
+
                 for window in obv_ma_windows:
-                    calc = lambda w=window: vbt.MA.run(
-                        factor_data["OBV"], window=w
-                    ).ma.rename(f"OBV_SMA{w}")
-                    factor_calculations.append((f"OBV_SMA{window}", calc))
+                    factor_calculations.append(
+                        (f"OBV_SMA{window}", create_obv_ma_calc(window))
+                    )
 
             # 10. 其他VectorBT高级指标
             if self.config.enable_all_periods:
                 # Bollinger Band相关指标
                 if "BOLB" in available_indicators:
                     # BOLB直接返回结果对象，不需要rename
-                    calc = lambda: vbt.BOLB.run(price, window=20)
-                    factor_calculations.append(("BOLB_20", calc))
+                    def create_bolb_calc() -> Callable[[], Any]:
+                        def calc() -> Any:
+                            return vbt.BOLB.run(price, window=20)
+
+                        return calc
+
+                    factor_calculations.append(("BOLB_20", create_bolb_calc()))
 
                 # Fixed Lookback指标 - 暂时禁用，存在参数和rename方法问题
-                # if 'FIXLB' in available_indicators:
-                #     for window in [5, 10, 20]:
-                #         calc = lambda w=window: vbt.FIXLB.run(price, window=w).rename(f'FIXLB{w}')
-                #         factor_calculations.append((f'FIXLB{window}', calc))
+                # TODO: 若启用 FIXLB，可在此遍历窗口并调用 vbt.FIXLB.run(...)
+                # 然后 rename 为 FIXLB{window}
 
                 # 统计指标 - 暂时禁用，存在rename方法问题
-                # for stat_func, stat_name in [(vbt.FMAX, 'FMAX'), (vbt.FMEAN, 'FMEAN'),
-                #                              (vbt.FMIN, 'FMIN'), (vbt.FSTD, 'FSTD')]:
-                #     if stat_name in available_indicators:
-                #         for window in [5, 10, 20]:
-                #             calc = lambda w=window, func=stat_func, name=stat_name: func.run(price, window=w).rename(f'{name}{w}')
-                #             factor_calculations.append((f'{stat_name}{window}', calc))
+                # TODO: 若启用 FMAX/FMEAN/FMIN/FSTD，需运行对应函数并重命名
 
                 # 其他移动平均指标 - 根据时间框架调整窗口
                 for lb_func, lb_name in [
@@ -410,52 +489,34 @@ class EnhancedFactorCalculator:
                             f"{timeframe.value} 使用{lb_name}窗口: {lb_windows}"
                         )
 
+                        def create_lb_calc(
+                            window: int, func: Any, name: str
+                        ) -> Callable[[], Any]:
+                            def calc() -> Any:
+                                if name == "LEXLB":
+                                    return extract_vbt_labels(
+                                        func.run(price, pos_th=0.1, neg_th=-0.1)
+                                    )
+                                if name == "TRENDLB":
+                                    return extract_vbt_labels(
+                                        func.run(price, pos_th=0.1, neg_th=-0.1, mode=0)
+                                    )
+                                return extract_vbt_labels(
+                                    func.run(price, window=window)
+                                )
+
+                            return calc
+
                         for window in lb_windows:
-                            if lb_name in ["LEXLB"]:
-                                # LEXLB只需要close, pos_th, neg_th
-                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(
-                                    func.run(price, pos_th=0.1, neg_th=-0.1)
+                            factor_calculations.append(
+                                (
+                                    f"{lb_name}{window}",
+                                    create_lb_calc(window, lb_func, lb_name),
                                 )
-                            elif lb_name in ["TRENDLB"]:
-                                # TRENDLB需要close, pos_th, neg_th, mode
-                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(
-                                    func.run(price, pos_th=0.1, neg_th=-0.1, mode=0)
-                                )
-                            else:
-                                # MEANLB只需要close, window
-                                calc = lambda w=window, func=lb_func, name=lb_name: extract_vbt_labels(
-                                    func.run(price, window=w)
-                                )
-                            factor_calculations.append((f"{lb_name}{window}", calc))
+                            )
 
-                # OHLC统计指标 - 暂时禁用，存在rename方法问题
-                # ohlc_funcs = [(vbt.OHLCSTCX, 'OHLCSTCX'), (vbt.OHLCSTX, 'OHLCSTX')]
-                # for ohlc_func, ohlc_name in ohlc_funcs:
-                #     if ohlc_name in available_indicators:
-                #         calc = lambda func=ohlc_func, name=ohlc_name: func.run(ohlc_dict=price).rename(name)
-                #         factor_calculations.append((ohlc_name, calc))
-
-                # 随机指标和概率指标 - 暂时禁用，存在rename方法问题
-                # rand_funcs = [(vbt.RAND, 'RAND'), (vbt.RANDNX, 'RANDNX'), (vbt.RANDX, 'RANDX')]
-                # for rand_func, rand_name in rand_funcs:
-                #     if rand_name in available_indicators:
-                #         calc = lambda func=rand_func, name=rand_name: func.run(input_shape=len(price)).rename(name)
-                #         factor_calculations.append((rand_name, calc))
-
-                # 概率相关指标 - 暂时禁用，存在rename方法问题
-                # prob_funcs = [(vbt.RPROB, 'RPROB'), (vbt.RPROBCX, 'RPROBCX'),
-                #              (vbt.RPROBNX, 'RPROBNX'), (vbt.RPROBX, 'RPROBX')]
-                # for prob_func, prob_name in prob_funcs:
-                #     if prob_name in available_indicators:
-                #         calc = lambda func=prob_func, name=prob_name: func.run(input_shape=len(price)).rename(name)
-                #         factor_calculations.append((prob_name, calc))
-
-                # Supertrend指标 - 暂时禁用，存在rename方法问题
-                # st_funcs = [(vbt.STCX, 'STCX'), (vbt.STX, 'STX')]
-                # for st_func, st_name in st_funcs:
-                #     if st_name in available_indicators:
-                #         calc = lambda func=st_func, name=st_name: func.run(high=high, low=low, close=price).rename(name)
-                #         factor_calculations.append((st_name, calc))
+                # TODO: 以下指标 (OHLC/RAND/RPROB/ST*) 暂未启用。
+                # 若后续启用，需要在此根据各指标的 run(...) 结果进行 rename。
 
             # 11. TA-Lib指标 (如果可用)
             if hasattr(vbt, "talib") and self.config.enable_all_periods:
@@ -702,13 +763,13 @@ class EnhancedFactorCalculator:
             factors_df = pd.DataFrame(factor_data, index=df.index)
 
             logger.info(f"原始因子数据形状: {factors_df.shape}")
-            logger.info(f"因子数据空值统计: {factors_df.isnull().sum().sum()}")
+            logger.info(f"因子数据空值统计: {factors_df.isna().sum().sum()}")
 
             # 智能数据清理 - 保持Linus风格的不丢失数据原则
             factors_df = self._clean_factor_data_intelligently(factors_df)
 
             calc_time = time.time() - start_time
-            logger.info(f"综合因子计算完成:")
+            logger.info("综合因子计算完成:")
             logger.info(f"  - 总计算指标数: {len(factor_calculations)}")
             logger.info(f"  - 成功计算: {successful_calcs} 个")
             logger.info(f"  - 失败: {failed_calcs} 个")
@@ -866,9 +927,11 @@ class EnhancedFactorCalculator:
                     try:
                         vbt.talib(indicator)
                         available_indicators.append(f"TA_{indicator}")
-                    except:
+                    except Exception:
+                        # 指标不可用，跳过
                         pass
-        except:
+        except Exception:
+            # TA-Lib 不可用，跳过所有技术指标
             pass
 
         return available_indicators
@@ -1147,13 +1210,13 @@ class EnhancedFactorCalculator:
 
         # 特殊处理15min时间框架的数据质量问题
         if timeframe == "15min":
-            logger.info(f"检测到15min时间框架，应用特殊数据清理逻辑")
+            logger.info("检测到15min时间框架，应用特殊数据清理逻辑")
 
             # 15min框架可能有数据重采样导致的时间对齐问题
             # 增加更积极的数据填充策略
             for col in factors_cleaned.columns:
                 # 统计当前的空值情况
-                null_count = factors_cleaned[col].isnull().sum()
+                null_count = factors_cleaned[col].isna().sum()
                 total_count = len(factors_cleaned)
 
                 if null_count > 0:
@@ -1173,31 +1236,29 @@ class EnhancedFactorCalculator:
                             )
 
                             # 如果还有空值，使用向后填充
-                            if factors_cleaned[col].isnull().sum() > 0:
+                            if factors_cleaned[col].isna().sum() > 0:
                                 factors_cleaned[col] = factors_cleaned[col].bfill()
 
                             # 最后，如果仍然有空值（说明整个列都是空的），用0填充
-                            if factors_cleaned[col].isnull().sum() > 0:
+                            if factors_cleaned[col].isna().sum() > 0:
                                 factors_cleaned[col] = factors_cleaned[col].fillna(0)
 
+                            remaining_nulls = factors_cleaned[col].isna().sum()
                             logger.info(
-                                f"  列 {col} 已修复，剩余空值: {factors_cleaned[col].isnull().sum()}"
+                                "  列 %s 已修复，剩余空值: %d",
+                                col,
+                                remaining_nulls,
                             )
 
         # 标准的智能数据清理逻辑
         for col in factors_cleaned.columns:
             # 跳过已经处理过的15min列
-            if timeframe == "15min" and factors_cleaned[col].isnull().sum() == 0:
+            if timeframe == "15min" and factors_cleaned[col].isna().sum() == 0:
                 continue
 
             # 找出该指标需要的周期
-            required_period = 60  # 默认值（最保守）
-            for indicator, periods in indicator_periods.items():
+            for indicator in indicator_periods:
                 if indicator in col:
-                    if isinstance(periods, list):
-                        required_period = max(periods)
-                    else:
-                        required_period = periods
                     break
 
             # 只对技术指标进行前向填充，不删除任何行
@@ -1286,7 +1347,9 @@ class EnhancedFactorCalculator:
         }
 
         # 计算每个类别的指标数量
-        total_indicators = sum(len(indicators) for indicators in categories.values())
+        total_indicators = sum(
+            len(indicators) for indicators in categories.to_numpy()()
+        )
         logger.info(
             f"因子类别统计: {len(categories)} 个大类，共 {total_indicators} 个指标"
         )

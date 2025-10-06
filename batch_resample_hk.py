@@ -21,8 +21,8 @@ omitted.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -91,11 +91,11 @@ class _SimpleHKResampler:
             aggregations["volume"] = "sum"
 
         if not aggregations:
-            raise ValueError("Input data must contain OHLC or volume columns for resampling")
+            raise ValueError(
+                "Input data must contain OHLC or volume columns for resampling"
+            )
 
-        resampled = (
-            data.resample(rule, label="right", closed="right").agg(aggregations)
-        )
+        resampled = data.resample(rule, label="right", closed="right").agg(aggregations)
         resampled.dropna(how="all", inplace=True)
         if "close" in resampled.columns:
             resampled = resampled[resampled["close"].notna()]
@@ -166,7 +166,9 @@ def batch_resample_all_1m(
                     print(f"  {tf} 失败: {exc}")
                     continue
 
-                output_file = output_dir / f"{stock_code}_{normalized_tf}_{date_range}.parquet"
+                output_file = (
+                    output_dir / f"{stock_code}_{normalized_tf}_{date_range}.parquet"
+                )
                 resampled.to_parquet(output_file)
                 compression_ratio = original_rows / max(len(resampled), 1)
                 print(
@@ -210,7 +212,9 @@ def main() -> None:
     args = _parse_args()
     data_root = args.data_root or Path("raw/HK")
     output_dir = args.output_dir
-    batch_resample_all_1m(data_root=data_root, output_dir=output_dir, timeframes=args.timeframes)
+    batch_resample_all_1m(
+        data_root=data_root, output_dir=output_dir, timeframes=args.timeframes
+    )
 
 
 if __name__ == "__main__":

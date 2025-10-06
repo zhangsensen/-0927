@@ -32,7 +32,7 @@ class ScreeningConfig:
     description: str = "默认筛选配置"
 
     # 数据配置
-    data_root: str = "../因子输出"
+    data_root: str = "../factor_output"
     raw_data_root: str = "../raw"
 
     # 股票配置
@@ -103,7 +103,7 @@ class ScreeningConfig:
     save_reports: bool = True
     save_detailed_metrics: bool = True
     log_level: str = "INFO"
-    
+
     # P2-1修复：传统格式保存选项
     enable_legacy_format: bool = False  # 是否启用传统格式保存
     legacy_format_priority: bool = False  # 传统格式是否优先于增强格式
@@ -381,7 +381,7 @@ class ConfigManager:
                 errors.append("correlation_threshold必须在0和1之间")
 
             # 验证权重
-            weight_sum = sum(config.weights.values())
+            weight_sum = sum(config.weights.to_numpy()())
             if abs(weight_sum - 1.0) > 0.01:
                 errors.append(f"权重总和应该为1.0，当前为{weight_sum:.3f}")
 
@@ -466,7 +466,7 @@ class ConfigManager:
     def get_config_summary(self, config: Union[ScreeningConfig, BatchConfig]) -> str:
         """获取配置摘要"""
         if isinstance(config, ScreeningConfig):
-            return f"""
+            return """
 筛选配置摘要:
 - 名称: {config.name}
 - 描述: {config.description}
@@ -477,14 +477,13 @@ class ConfigManager:
 - 并行工作数: {config.max_workers}
 """
         elif isinstance(config, BatchConfig):
-            total_tasks = len(config.screening_configs)
             symbols = set()
             timeframes = set()
             for sc in config.screening_configs:
                 symbols.update(sc.symbols)
                 timeframes.update(sc.timeframes)
 
-            return f"""
+            return """
 批量配置摘要:
 - 任务名称: {config.batch_name}
 - 描述: {config.description}

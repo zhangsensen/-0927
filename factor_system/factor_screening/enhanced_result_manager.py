@@ -22,8 +22,8 @@ import seaborn as sns
 import yaml
 
 # 配置中文字体支持，避免matplotlib警告
-matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']
-matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+matplotlib.rcParams["font.sans-serif"] = ["Arial Unicode MS", "SimHei", "DejaVu Sans"]
+matplotlib.rcParams["axes.unicode_minus"] = False  # 解决负号显示问题
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,9 @@ class EnhancedResultManager:
                     elif isinstance(data, dict):
                         return [data]
                     else:
-                        logger.warning(f"会话索引文件格式异常，期望list或dict，得到{type(data)}")
+                        logger.warning(
+                            f"会话索引文件格式异常，期望list或dict，得到{type(data)}"
+                        )
                         return []
             except FileNotFoundError:
                 logger.warning(f"会话索引文件不存在: {self.sessions_index_file}")
@@ -241,7 +243,6 @@ class EnhancedResultManager:
             },
         }
 
-
         from professional_factor_screener import ProfessionalFactorScreener
 
         with open(
@@ -256,7 +257,7 @@ class EnhancedResultManager:
 
         # 3. 顶级因子详细信息 (JSON)
         top_factors = sorted(
-            results.values(), key=lambda x: x.comprehensive_score, reverse=True
+            results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
         )[:20]
         top_factors_data = []
 
@@ -278,7 +279,7 @@ class EnhancedResultManager:
                     "mean_ic": round(factor.predictive_power_mean_ic, 4),
                     "ic_ir": round(factor.ic_ir, 4),
                     "rolling_ic_mean": round(factor.rolling_ic_mean, 4),
-                    "vif": round(factor.vif_score, 4) if factor.vif_score else None,
+                    "vi": round(factor.vif_score, 4) if factor.vif_score else None,
                     "turnover_rate": round(factor.turnover_rate, 4),
                     "transaction_cost": round(factor.transaction_cost, 4),
                 },
@@ -298,7 +299,10 @@ class EnhancedResultManager:
             )
 
     def _save_configuration_data(
-        self, session_dir: Path, config: Any, data_quality_info: Optional[Dict[str, Any]]
+        self,
+        session_dir: Path,
+        config: Any,
+        data_quality_info: Optional[Dict[str, Any]],
     ) -> None:
         """保存配置和数据质量信息"""
 
@@ -383,7 +387,7 @@ class EnhancedResultManager:
 
             # 顶级因子列表
             top_factors = sorted(
-                results.values(), key=lambda x: x.comprehensive_score, reverse=True
+                results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
             )[:10]
             f.write("🏆 前10名顶级因子\n")
             for i, factor in enumerate(top_factors, 1):
@@ -426,7 +430,7 @@ class EnhancedResultManager:
 
             f.write("## 顶级因子分析\n")
             top_factors = sorted(
-                results.values(), key=lambda x: x.comprehensive_score, reverse=True
+                results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
             )[:10]
             f.write(
                 "| 排名 | 因子名称 | 综合得分 | 预测能力 | 稳定性 | 独立性 | 实用性 |\n"
@@ -444,7 +448,10 @@ class EnhancedResultManager:
                 )
 
     def _save_visualization_charts(
-        self, session_dir: Path, results: Dict[str, Any], screening_stats: Dict[str, Any]
+        self,
+        session_dir: Path,
+        results: Dict[str, Any],
+        screening_stats: Dict[str, Any],
     ) -> None:
         """保存可视化图表（串行版，matplotlib线程不安全）"""
         charts_dir = session_dir / "charts"
@@ -452,11 +459,11 @@ class EnhancedResultManager:
 
         # 注意：matplotlib在macOS上不是线程安全的，使用串行生成
         # from concurrent.futures import ThreadPoolExecutor, as_completed
-        
+
         def generate_score_distribution():
             """生成因子得分分布图"""
             try:
-                scores = [factor.comprehensive_score for factor in results.values()]
+                scores = [factor.comprehensive_score for factor in results.to_numpy()()]
                 fig = plt.figure(figsize=(10, 6))
                 plt.hist(scores, bins=30, alpha=0.7, color="skyblue", edgecolor="black")
                 plt.title("因子综合得分分布")
@@ -471,18 +478,24 @@ class EnhancedResultManager:
             except Exception as e:
                 logger.warning(f"生成得分分布图失败: {e}")
                 return None
-        
+
         def generate_radar_chart():
             """生成雷达图"""
             try:
                 top_factors = sorted(
-                    results.values(), key=lambda x: x.comprehensive_score, reverse=True
+                    results.to_numpy()(),
+                    key=lambda x: x.comprehensive_score,
+                    reverse=True,
                 )[:5]
 
-                fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(projection="polar"))
+                fig, ax = plt.subplots(
+                    figsize=(10, 8), subplot_kw=dict(projection="polar")
+                )
 
                 categories = ["预测能力", "稳定性", "独立性", "实用性", "适应性"]
-                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+                angles = np.linspace(
+                    0, 2 * np.pi, len(categories), endpoint=False
+                ).tolist()
                 angles += angles[:1]  # 闭合
 
                 for i, factor in enumerate(top_factors):
@@ -512,20 +525,20 @@ class EnhancedResultManager:
             except Exception as e:
                 logger.warning(f"生成雷达图失败: {e}")
                 return None
-        
+
         def generate_pie_chart():
             """生成饼图"""
             try:
                 factor_types: Dict[str, int] = {}
-                for factor in results.values():
+                for factor in results.to_numpy()():
                     factor_type = factor.type or "Unknown"
                     factor_types[factor_type] = factor_types.get(factor_type, 0) + 1
 
                 fig = plt.figure(figsize=(8, 8))
                 plt.pie(
-                    list(factor_types.values()),
+                    list(factor_types.to_numpy()()),
                     labels=list(factor_types.keys()),
-                    autopct="%1.1f%%"
+                    autopct="%1.1f%%",
                 )
                 plt.title("因子类型分布")
                 plt.savefig(
@@ -538,7 +551,7 @@ class EnhancedResultManager:
             except Exception as e:
                 logger.warning(f"生成饼图失败: {e}")
                 return None
-        
+
         # 串行生成所有图表（matplotlib线程不安全）
         try:
             generate_score_distribution()
@@ -547,12 +560,14 @@ class EnhancedResultManager:
         except Exception as e:
             logger.warning(f"生成可视化图表失败: {e}")
 
-    def _save_factor_correlation_analysis(self, session_dir: Path, results: Dict[str, Any]) -> None:
+    def _save_factor_correlation_analysis(
+        self, session_dir: Path, results: Dict[str, Any]
+    ) -> None:
         """保存因子相关性分析"""
         try:
             # 提取顶级因子的关键指标
             top_factors = sorted(
-                results.values(), key=lambda x: x.comprehensive_score, reverse=True
+                results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
             )[:20]
 
             correlation_data = []
@@ -572,7 +587,7 @@ class EnhancedResultManager:
                 )
 
             correlation_df = pd.DataFrame(correlation_data)
-            correlation_df.set_index("name", inplace=True)
+            correlation_df = correlation_df.set_index("name")
 
             # 保存相关性矩阵
             correlation_matrix = correlation_df.corr()
@@ -591,7 +606,7 @@ class EnhancedResultManager:
                 cmap="coolwarm",
                 center=0,
                 square=True,
-                fmt=".2f",
+                fmt=".2",
             )
             plt.title("顶级因子指标相关性热力图")
             plt.tight_layout()
@@ -603,7 +618,9 @@ class EnhancedResultManager:
         except Exception as e:
             logger.warning(f"生成因子相关性分析失败: {e}")
 
-    def _save_ic_time_series_analysis(self, session_dir: Path, results: Dict[str, Any]) -> None:
+    def _save_ic_time_series_analysis(
+        self, session_dir: Path, results: Dict[str, Any]
+    ) -> None:
         """保存IC时间序列分析"""
         try:
             # 这里需要从results中提取IC时间序列数据
@@ -615,14 +632,14 @@ class EnhancedResultManager:
                 "available_metrics": {
                     "mean_ic_values": {
                         factor.name: factor.predictive_power_mean_ic
-                        for factor in results.values()
+                        for factor in results.to_numpy()()
                     },
                     "ic_ir_values": {
-                        factor.name: factor.ic_ir for factor in results.values()
+                        factor.name: factor.ic_ir for factor in results.to_numpy()()
                     },
                     "rolling_ic_means": {
                         factor.name: factor.rolling_ic_mean
-                        for factor in results.values()
+                        for factor in results.to_numpy()()
                     },
                 },
             }
@@ -653,7 +670,7 @@ class EnhancedResultManager:
     ) -> ScreeningSession:
         """生成会话摘要"""
 
-        top_factor = max(results.values(), key=lambda x: x.comprehensive_score)
+        top_factor = max(results.to_numpy()(), key=lambda x: x.comprehensive_score)
 
         return ScreeningSession(
             session_id=session_dir.name,
@@ -662,9 +679,11 @@ class EnhancedResultManager:
             timeframe=timeframe,
             config_hash=str(hash(str(config)))[:8],
             total_factors=len(results),
-            significant_factors=sum(1 for f in results.values() if f.is_significant),
+            significant_factors=sum(
+                1 for f in results.to_numpy()() if f.is_significant
+            ),
             high_score_factors=sum(
-                1 for f in results.values() if f.comprehensive_score > 0.6
+                1 for f in results.to_numpy()() if f.comprehensive_score > 0.6
             ),
             total_time_seconds=screening_stats.get("total_time", 0),
             memory_used_mb=screening_stats.get("memory_used_mb", 0),
@@ -731,7 +750,7 @@ class EnhancedResultManager:
     def _count_factors_by_tier(self, results: Dict[str, Any]) -> Dict[str, int]:
         """统计各层级因子数量"""
         tier_counts: Dict[str, int] = {}
-        for factor in results.values():
+        for factor in results.to_numpy()():
             tier = factor.tier or "Unknown"
             tier_counts[tier] = tier_counts.get(tier, 0) + 1
         return tier_counts
@@ -745,7 +764,7 @@ class EnhancedResultManager:
             "poor (<0.4)": 0,
         }
 
-        for factor in results.values():
+        for factor in results.to_numpy()():
             score = factor.comprehensive_score
             if score > 0.8:
                 distribution["excellent (>0.8)"] += 1
@@ -771,7 +790,10 @@ class EnhancedResultManager:
         return recommendations
 
     def get_session_history(
-        self, symbol: Optional[str] = None, timeframe: Optional[str] = None, limit: int = 10
+        self,
+        symbol: Optional[str] = None,
+        timeframe: Optional[str] = None,
+        limit: int = 10,
     ) -> List[ScreeningSession]:
         """获取会话历史"""
         sessions = []

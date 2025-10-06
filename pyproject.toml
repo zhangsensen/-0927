@@ -36,6 +36,7 @@ dependencies = [
     "polars>=1.33.1",
     "numba>=0.62.0",
     "pandas-vet>=2023.8.2",
+    "httpx[socks]>=0.28.1",
 ]
 
 # 可选依赖（按需安装）

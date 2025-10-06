@@ -8,9 +8,8 @@
 
 import json
 import logging
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Union
 
 import yaml
 from professional_factor_screener import ScreeningConfig
@@ -75,7 +74,7 @@ class ConfigLoader:
             # 交易成本参数
             commission_rate=trading_costs.get("commission_rate", 0.002),
             slippage_bps=trading_costs.get("slippage_bps", 5.0),
-            market_impact_coeff=trading_costs.get("market_impact_coeff", 0.1),
+            market_impact_coeff=trading_costs.get("market_impact_coef", 0.1),
             # 筛选阈值
             min_ic_threshold=thresholds.get("min_ic_threshold", 0.02),
             min_ir_threshold=thresholds.get("min_ir_threshold", 0.5),
@@ -143,7 +142,7 @@ class ConfigLoader:
             "trading_costs": {
                 "commission_rate": config.commission_rate,
                 "slippage_bps": config.slippage_bps,
-                "market_impact_coeff": config.market_impact_coeff,
+                "market_impact_coef": config.market_impact_coeff,
             },
             "screening_thresholds": {
                 "min_ic_threshold": config.min_ic_threshold,
@@ -369,7 +368,7 @@ def demo_config_loader():
         yaml_config_path = Path(__file__).parent / "config" / "screening_config.yaml"
         if yaml_config_path.exists():
             config = ConfigLoader.load_from_yaml(yaml_config_path)
-            print(f"✅ YAML配置加载成功")
+            print("✅ YAML配置加载成功")
             print(f"   - IC周期: {config.ic_horizons}")
             print(f"   - 显著性水平: {config.alpha_level}")
             print(f"   - 权重分配: 预测{config.weight_predictive:.0%}")
@@ -379,7 +378,7 @@ def demo_config_loader():
         print(f"❌ YAML配置加载失败: {str(e)}")
 
     # 2. 配置验证
-    print(f"\n2. 配置验证:")
+    print("\n2. 配置验证:")
     default_config = ScreeningConfig()
     validation = ConfigLoader.validate_config(default_config)
 
@@ -394,14 +393,14 @@ def demo_config_loader():
         print(f"   警告: {warning}")
 
     # 3. 预设配置
-    print(f"\n3. 预设配置:")
+    print("\n3. 预设配置:")
     presets = ConfigLoader.create_preset_configs()
 
     for name, config in presets.items():
         print(f"   📋 {name}: IC周期{config.ic_horizons}, α={config.alpha_level}")
 
     # 4. 保存配置示例
-    print(f"\n4. 保存配置示例:")
+    print("\n4. 保存配置示例:")
     try:
         output_dir = Path(__file__).parent / "config"
         output_dir.mkdir(exist_ok=True)

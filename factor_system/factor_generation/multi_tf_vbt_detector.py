@@ -8,18 +8,15 @@
 import argparse
 import logging
 import os
-import sys
 import time
 import warnings
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
-import vectorbt as vbt
 
 try:
     import pyarrow.parquet as pq
@@ -107,7 +104,7 @@ class MultiTimeframeFactorStore:
         self.timeframe_files: Dict[str, Path] = {}
         self.factor_names = {}
 
-        logger.info(f"初始化分离存储因子数据访问器")
+        logger.info("初始化分离存储因子数据访问器")
         logger.info(f"数据根目录: {self.data_root}")
 
         # 如果指定了symbol，自动加载所有时间框架数据
@@ -143,18 +140,23 @@ class MultiTimeframeFactorStore:
 
                     if row_count is not None:
                         logger.info(
-                            f"  {timeframe.value}: {row_count} 行, {len(self.factor_names[timeframe.value])} 个因子"
+                            "  %s: %s 行, %s 个因子",
+                            timeframe.value,
+                            row_count,
+                            len(self.factor_names[timeframe.value]),
                         )
                     else:
                         logger.info(
-                            f"  {timeframe.value}: 未能读取行数, {len(self.factor_names[timeframe.value])} 个因子"
+                            "  %s: 未能读取行数, %s 个因子",
+                            timeframe.value,
+                            len(self.factor_names[timeframe.value]),
                         )
                 else:
-                    logger.warning(f"未找到 {timeframe.value} 因子文件: {pattern}")
+                    logger.warning("未找到 %s 因子文件: %s", timeframe.value, pattern)
             else:
-                logger.warning(f"时间框架目录不存在: {timeframe_dir}")
+                logger.warning("时间框架目录不存在: %s", timeframe_dir)
 
-        logger.info(f"成功加载 {len(self.timeframe_files)} 个时间框架数据")
+        logger.info("成功加载 %s 个时间框架数据", len(self.timeframe_files))
 
     def _inspect_parquet(self, file_path: Path) -> Tuple[List[str], Optional[int]]:
         """读取Parquet文件的列名和行数信息。"""
@@ -433,9 +435,11 @@ class MultiTimeframeVBTDetector:
                 df = pd.read_parquet(found_file)
 
                 # 数据预处理
-                df["timestamp"] = pd.to_datetime(df["timestamp"])
-                df.set_index("timestamp", inplace=True)
-                df.sort_index(inplace=True)
+                df = (
+                    df.assign(timestamp=pd.to_datetime(df["timestamp"]))
+                    .set_index("timestamp")
+                    .sort_index()
+                )
 
                 logger.info(
                     f"{timeframe.value} 数据: {len(df)} 行 (文件: {found_file.name})"
@@ -565,7 +569,7 @@ class MultiTimeframeVBTDetector:
         engine_rows = len(factors_df)
         repaired_rows = len(factors_reindexed)
 
-        logger.info(f"数据修复统计:")
+        logger.info("数据修复统计:")
         logger.info(f"  - 原始数据行数: {original_rows}")
         logger.info(f"  - 引擎输出行数: {engine_rows}")
         logger.info(f"  - 修复后行数: {repaired_rows}")
@@ -673,7 +677,9 @@ class MultiTimeframeVBTDetector:
                         # 记录被删除的列以便后续分析
                         if vectorbt_columns_found > 0:
                             logger.warning(
-                                f"建议检查enhanced_factor_calculator.py中以下指标的extract_vbt_indicator/extract_vbt_labels应用: {', '.join(columns_to_drop)}"
+                                "建议检查enhanced_factor_calculator.py中以下指标的"
+                                "extract_vbt_indicator/extract_vbt_labels应用: %s",
+                                ", ".join(columns_to_drop),
                             )
                     else:
                         logger.error(
@@ -711,7 +717,7 @@ class MultiTimeframeVBTDetector:
 
         # 2. 计算各时间框架因子
         logger.info(f"\n{'='*60}")
-        logger.info(f"步骤2: 计算各时间框架因子")
+        logger.info("步骤2: 计算各时间框架因子")
         logger.info(f"{'='*60}")
 
         timeframe_factors = {}
@@ -725,30 +731,30 @@ class MultiTimeframeVBTDetector:
 
         # 3. 分离保存各时间框架因子数据（避免冗余）
         logger.info(f"\n{'='*60}")
-        logger.info(f"步骤3: 分离保存各时间框架因子数据")
+        logger.info("步骤3: 分离保存各时间框架因子数据")
         logger.info(f"{'='*60}")
 
         saved_files = self.save_timeframe_factors_separately(timeframe_factors, symbol)
 
         # 4. 统计信息
         calc_time = time.time() - total_start_time
-        logger.info(f"\n{'='*60}")
-        logger.info(f"多时间框架因子分析完成")
-        logger.info(f"{'='*60}")
-        logger.info(f"总耗时: {calc_time:.3f}秒")
-        logger.info(f"处理时间框架: {len(timeframe_factors)}")
+        logger.info("\n%s", "=" * 60)
+        logger.info("多时间框架因子分析完成")
+        logger.info("%s", "=" * 60)
+        logger.info("总耗时: %.3f秒", calc_time)
+        logger.info("处理时间框架: %d", len(timeframe_factors))
 
         # 计算存储效率（现在每个时间框架独立存储）
         total_separate_rows = sum(
             len(factors_df) for factors_df in timeframe_factors.values()
         )
 
-        logger.info(f"存储效率分析（简化版）:")
-        logger.info(f"  各时间框架独立存储总数据点: {total_separate_rows}")
-        logger.info(f"  各时间框架独立处理，无冗余数据")
-        logger.info(f"  存储效率: 100% (无冗余)")
+        logger.info("存储效率分析（简化版）:")
+        logger.info("  各时间框架独立存储总数据点: %d", total_separate_rows)
+        logger.info("  各时间框架独立处理，无冗余数据")
+        logger.info("  存储效率: 100% (无冗余)")
 
-        logger.info(f"输出文件:")
+        logger.info("输出文件:")
         for timeframe, file_path in saved_files.items():
             logger.info(f"  {timeframe}: {file_path}")
 
@@ -795,7 +801,7 @@ def main():
         print(f"存储策略: {result.get('storage_strategy', 'unknown')}")
         print(f"计算耗时: {result['calculation_time']:.2f}秒")
 
-        print(f"\n📁 分离存储文件:")
+        print("\n📁 分离存储文件:")
         for timeframe, file_info in result.get("timeframe_details", {}).items():
             info = (
                 file_info
@@ -806,20 +812,20 @@ def main():
                 f"  {timeframe}: {info.get('factors', '?')} 因子, {info.get('data_points', '?')} 数据点"
             )
 
-        print(f"\n💾 存储效率提升:")
-        print(f"  避免冗余数据点: 9067")
-        print(f"  存储效率: 57.7% -> 100%")
+        print("\n💾 存储效率提升:")
+        print("  避免冗余数据点: 9067")
+        print("  存储效率: 57.7% -> 100%")
 
         # 记录执行完成日志
-        logger.info(f"=== 执行会话完成 ===")
-        logger.info(f"分析成功: {result['symbol']}")
-        logger.info(f"总耗时: {result['calculation_time']:.2f}秒")
-        logger.info(f"处理时间框架: {result['timeframes_processed']}")
-        logger.info(f"日志文件位置: {log_file_path}")
+        logger.info("=== 执行会话完成 ===")
+        logger.info("分析成功: %s", result["symbol"])
+        logger.info("总耗时: %.2f秒", result["calculation_time"])
+        logger.info("处理时间框架: %s", result["timeframes_processed"])
+        logger.info("日志文件位置: %s", log_file_path)
     else:
         print(f"❌ 分析失败: {result.get('error', '未知错误')}")
-        logger.error(f"❌ 执行会话失败: {result.get('error', '未知错误')}")
-        logger.error(f"日志文件位置: {log_file_path}")
+        logger.error("❌ 执行会话失败: %s", result.get("error", "未知错误"))
+        logger.error("日志文件位置: %s", log_file_path)
 
 
 if __name__ == "__main__":

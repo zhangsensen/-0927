@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 专业级量化交易因子筛选系统 - 5维度筛选框架
 作者：量化首席工程师
@@ -20,17 +21,17 @@ import time
 import warnings
 from collections import Counter
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-# 导入配置类
-from config_manager import ScreeningConfig  # type: ignore
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
 import psutil
 import yaml
+
+# 导入配置类
+from config_manager import ScreeningConfig  # type: ignore
 from scipy import stats
 
 # 导入因子对齐工具
@@ -42,7 +43,6 @@ try:
     )
 except ImportError as e:
     # 如果导入失败，提供回退方案
-    import logging
     logging.getLogger(__name__).warning(f"因子对齐工具导入失败: {e}")
     FactorFileAligner = None
 
@@ -52,9 +52,10 @@ except ImportError as e:
     def validate_factor_alignment(*args: Any, **kwargs: Any) -> Tuple[bool, str]:
         return True, "对齐验证工具不可用"
 
+
 try:
     from utils.temporal_validator import TemporalValidationError, TemporalValidator
-except ImportError as e:  # pragma: no cover - 运行环境缺失
+except ImportError:  # pragma: no cover - 运行环境缺失
     TemporalValidator = None  # type: ignore
 
     class TemporalValidationError(Exception):
@@ -62,11 +63,12 @@ except ImportError as e:  # pragma: no cover - 运行环境缺失
 
         pass
 
+
 # P0级集成：导入实际使用的工具模块（诚实版）
 try:
     from utils.input_validator import InputValidator, ValidationError
-except ImportError as e:
-    logging.getLogger(__name__).warning(f"输入验证器导入失败: {e}")
+except ImportError:
+    logging.getLogger(__name__).warning("输入验证器导入失败")
     InputValidator = None  # type: ignore
     ValidationError = Exception  # type: ignore
 
@@ -138,6 +140,7 @@ class FactorMetrics:
     # 统计显著性
     p_value: float = 1.0
     corrected_p_value: float = 1.0
+    bennett_score: float = 0.0
     is_significant: bool = False
 
     # 综合评分
@@ -185,7 +188,9 @@ class ProfessionalFactorScreener:
             return str(obj)
         return obj
 
-    def __init__(self, data_root: Optional[str] = None, config: Optional[ScreeningConfig] = None):
+    def __init__(
+        self, data_root: Optional[str] = None, config: Optional[ScreeningConfig] = None
+    ):
         """初始化筛选器
 
         Args:
@@ -200,7 +205,7 @@ class ProfessionalFactorScreener:
         elif data_root:
             self.data_root = Path(data_root)
         else:
-            self.data_root = Path("../因子输出")  # 默认因子数据目录（相对路径）
+            self.data_root = Path("../factor_output")  # 默认因子数据目录（相对路径）
 
         # 设置日志和缓存路径
         self.log_root = Path(getattr(self.config, "log_root", "./logs/screening"))
@@ -239,9 +244,7 @@ class ProfessionalFactorScreener:
                 self.temporal_validator = TemporalValidator(strict_mode=True)
                 self.logger.info("✅ 时间序列验证器已启用")
             except Exception as validator_error:
-                self.logger.warning(
-                    "时间序列验证器初始化失败: %s", validator_error
-                )
+                self.logger.warning("时间序列验证器初始化失败: %s", validator_error)
                 self.temporal_validator = None
         else:
             self.logger.warning("时间序列验证器模块未安装，跳过运行时校验")
@@ -274,10 +277,10 @@ class ProfessionalFactorScreener:
 
     def _initialize_utility_modules(self) -> None:
         """P0级集成：初始化工具模块（实际集成）"""
-        
+
         # 1. 内存优化器 - 已移除（Linus原则：当前系统工作正常，无需复杂化）
         self.memory_optimizer = None
-        
+
         # 2. 初始化输入验证器
         if InputValidator is not None:
             self.input_validator = InputValidator()
@@ -285,13 +288,13 @@ class ProfessionalFactorScreener:
         else:
             self.input_validator = None
             self.logger.warning("输入验证器模块未安装")
-        
+
         # 3. 初始化结构化日志器（增强模式）
         if get_structured_logger is not None:
             try:
                 self.structured_logger = get_structured_logger(
                     name="factor_screening",
-                    log_file=self.log_root / f"structured_{self.session_timestamp}.log"
+                    log_file=self.log_root / f"structured_{self.session_timestamp}.log",
                 )
                 self.logger.info("✅ 结构化日志器已启用")
             except Exception as e:
@@ -300,7 +303,7 @@ class ProfessionalFactorScreener:
         else:
             self.structured_logger = None
             self.logger.warning("结构化日志器模块未安装")
-        
+
         # 4. 备份管理器 - 已移除（Linus原则：文件系统已足够，无需过度工程化）
         self.backup_manager = None
 
@@ -342,7 +345,8 @@ class ProfessionalFactorScreener:
 
         # 创建格式器
         formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s"
+            "%(asctime)s - %(name)s - %(levelname)s - "
+            "[%(funcName)s:%(lineno)d] - %(message)s"
         )
         file_handler.setFormatter(formatter)
         console_handler.setFormatter(formatter)
@@ -369,12 +373,12 @@ class ProfessionalFactorScreener:
             meta.update(
                 {
                     "total_periods": len(factor_data),
-                    "missing_periods": factor_data.isnull().sum(),
-                    "missing_ratio": factor_data.isnull().sum() / len(factor_data),
+                    "missing_periods": factor_data.isna().sum(),
+                    "missing_ratio": factor_data.isna().sum() / len(factor_data),
                     "first_valid_index": self._find_first_non_missing_index(
                         factor_data
                     ),
-                    "valid_ratio": 1 - (factor_data.isnull().sum() / len(factor_data)),
+                    "valid_ratio": 1 - (factor_data.isna().sum() / len(factor_data)),
                 }
             )
 
@@ -579,7 +583,7 @@ class ProfessionalFactorScreener:
 
         for factor_name in factors_df.columns:
             factor_data = factors_df[factor_name]
-            missing_count = factor_data.isnull().sum()
+            missing_count = factor_data.isna().sum()
 
             if missing_count == 0:
                 handling_report["handled_factors"].append(factor_name)
@@ -646,7 +650,7 @@ class ProfessionalFactorScreener:
             issues_found.append(f"移除非数值列: {non_numeric_cols}")
 
         # 2. 智能缺失值处理 - 核心改进
-        if factors_df.isnull().any().any():
+        if factors_df.isna().any().any():
             self.logger.info("开始智能缺失值处理...")
             factor_metadata = self._generate_factor_metadata(factors_df)
             factors_df, handling_report = self.smart_missing_value_handling(
@@ -690,9 +694,9 @@ class ProfessionalFactorScreener:
         for col in factors_df.select_dtypes(include=[np.number]).columns:
             col_std = factors_df[col].std()
             col_nunique = factors_df[col].nunique()
-            
+
             # K线形态指标特殊处理：允许二值常量（0/1模式）
-            if col.startswith('TA_CDL'):
+            if col.startswith("TA_CDL"):
                 # K线形态指标：只有当完全无变化且只有一个值时才删除
                 if col_nunique <= 1:
                     constant_cols.append(col)
@@ -703,14 +707,14 @@ class ProfessionalFactorScreener:
 
         if constant_cols:
             # 区分K线形态指标和其他常量列
-            cdl_cols = [col for col in constant_cols if col.startswith('TA_CDL')]
-            other_cols = [col for col in constant_cols if not col.startswith('TA_CDL')]
-            
+            cdl_cols = [col for col in constant_cols if col.startswith("TA_CDL")]
+            other_cols = [col for col in constant_cols if not col.startswith("TA_CDL")]
+
             if cdl_cols:
                 self.logger.info(f"移除无变化K线形态指标: {cdl_cols}")
             if other_cols:
                 self.logger.warning(f"移除常量列: {other_cols}")
-                
+
             factors_df = factors_df.drop(columns=constant_cols)
             issues_found.append(f"移除常量列: {constant_cols}")
 
@@ -885,7 +889,7 @@ class ProfessionalFactorScreener:
 
         # 原始数据路径 - 使用配置或相对路径
         if hasattr(self.config, "raw_data_root") and self.config.raw_data_root:
-            raw_data_path = Path(self.config.raw_data_root)
+            raw_data_path = Path(self.config.raw_data_root) / "HK"
         else:
             raw_data_path = self.data_root.parent / "raw" / "HK"
 
@@ -1005,7 +1009,7 @@ class ProfessionalFactorScreener:
         ]
 
         total_factors = len(factor_cols)
-        
+
         # 向量化优化: 预先对齐所有数据，避免重复对齐
         returns_series = returns.reindex(factors.index)
         valid_idx = returns_series.notna()
@@ -1023,18 +1027,18 @@ class ProfessionalFactorScreener:
 
             for horizon in horizons:
                 if horizon < 0:
-                    self.logger.warning(
-                        f"忽略非法预测周期 {horizon}，因子 {factor}"
-                    )
+                    self.logger.warning(f"忽略非法预测周期 {horizon}，因子 {factor}")
                     continue
 
                 if self.temporal_validator is not None:
                     try:
-                        is_valid, message = self.temporal_validator.validate_time_alignment(
-                            factor_series,
-                            returns_series,
-                            horizon,
-                            context=f"IC-{factor}",
+                        is_valid, message = (
+                            self.temporal_validator.validate_time_alignment(
+                                factor_series,
+                                returns_series,
+                                horizon,
+                                context=f"IC-{factor}",
+                            )
                         )
                     except Exception as validation_error:
                         self.logger.warning(
@@ -1052,7 +1056,7 @@ class ProfessionalFactorScreener:
 
                 # 向量化优化: 使用numpy操作避免pandas开销
                 lagged_factor = factor_series.shift(horizon)
-                
+
                 # 向量化: 一次性获取有效数据
                 valid_mask = lagged_factor.notna() & aligned_returns.notna()
                 valid_count = int(valid_mask.sum())
@@ -1207,8 +1211,8 @@ class ProfessionalFactorScreener:
             if len(common_idx) < window + 20:
                 continue
 
-            final_factor = factor_series.loc[common_idx].values
-            final_returns = returns_series.loc[common_idx].values
+            final_factor = factor_series.loc[common_idx].to_numpy()
+            final_returns = returns_series.loc[common_idx].to_numpy()
 
             # Linus模式：完全向量化的滚动窗口计算
             try:
@@ -1217,7 +1221,9 @@ class ProfessionalFactorScreener:
 
                 # 创建滑动窗口视图 - 一次生成所有窗口
                 factor_windows = sliding_window_view(final_factor, window_shape=window)
-                returns_windows = sliding_window_view(final_returns, window_shape=window)
+                returns_windows = sliding_window_view(
+                    final_returns, window_shape=window
+                )
 
                 # 数值稳定性预处理：过滤异常窗口
                 factor_stds = np.std(factor_windows, axis=1)
@@ -1225,10 +1231,10 @@ class ProfessionalFactorScreener:
 
                 # 向量化过滤：保留数值稳定的窗口
                 valid_mask = (
-                    (factor_stds > 1e-8) &
-                    (returns_stds > 1e-8) &
-                    (np.max(np.abs(factor_windows), axis=1) <= 1e10) &
-                    (np.max(np.abs(returns_windows), axis=1) <= 100)
+                    (factor_stds > 1e-8)
+                    & (returns_stds > 1e-8)
+                    & (np.max(np.abs(factor_windows), axis=1) <= 1e10)
+                    & (np.max(np.abs(returns_windows), axis=1) <= 100)
                 )
 
                 if np.sum(valid_mask) < 10:  # 至少需要10个有效窗口
@@ -1242,13 +1248,17 @@ class ProfessionalFactorScreener:
                 # 使用更快的Pearson相关系数近似（向量化）
 
                 # 中心化数据
-                factor_centered = valid_factor_windows - np.mean(valid_factor_windows, axis=1, keepdims=True)
-                returns_centered = valid_returns_windows - np.mean(valid_returns_windows, axis=1, keepdims=True)
+                factor_centered = valid_factor_windows - np.mean(
+                    valid_factor_windows, axis=1, keepdims=True
+                )
+                returns_centered = valid_returns_windows - np.mean(
+                    valid_returns_windows, axis=1, keepdims=True
+                )
 
                 # 向量化相关系数计算
                 numerator = np.sum(factor_centered * returns_centered, axis=1)
-                factor_norm = np.sqrt(np.sum(factor_centered ** 2, axis=1))
-                returns_norm = np.sqrt(np.sum(returns_centered ** 2, axis=1))
+                factor_norm = np.sqrt(np.sum(factor_centered**2, axis=1))
+                returns_norm = np.sqrt(np.sum(returns_centered**2, axis=1))
 
                 # 除零保护
                 denominator = factor_norm * returns_norm
@@ -1262,9 +1272,10 @@ class ProfessionalFactorScreener:
 
                 # 数值范围检查
                 rolling_ics = rolling_ics[
-                    (rolling_ics >= -1.0) & (rolling_ics <= 1.0) &
-                    ~np.isnan(rolling_ics) &
-                    ~np.isinf(rolling_ics)
+                    (rolling_ics >= -1.0)
+                    & (rolling_ics <= 1.0)
+                    & ~np.isnan(rolling_ics)
+                    & ~np.isinf(rolling_ics)
                 ]
 
                 if len(rolling_ics) >= 10:
@@ -1275,7 +1286,9 @@ class ProfessionalFactorScreener:
 
                     # 稳定性指标
                     stability = 1 - (rolling_ic_std / (abs(rolling_ic_mean) + 1e-8))
-                    consistency = np.sum(rolling_ics_array * rolling_ic_mean > 0) / len(rolling_ics_array)
+                    consistency = np.sum(rolling_ics_array * rolling_ic_mean > 0) / len(
+                        rolling_ics_array
+                    )
 
                     rolling_ic_results[factor] = {
                         "rolling_ic_mean": float(rolling_ic_mean),
@@ -1288,7 +1301,9 @@ class ProfessionalFactorScreener:
 
             except ImportError:
                 # 降级方案：使用pandas rolling（比原循环快10-100倍）
-                self.logger.warning(f"sliding_window_view不可用，使用降级方案计算因子 {factor}")
+                self.logger.warning(
+                    f"sliding_window_view不可用，使用降级方案计算因子 {factor}"
+                )
 
                 factor_df = pd.Series(final_factor)
                 returns_df = pd.Series(final_returns)
@@ -1299,16 +1314,19 @@ class ProfessionalFactorScreener:
 
                 # 过滤异常值
                 rolling_ics = rolling_ics[
-                    (rolling_ics >= -1.0) & (rolling_ics <= 1.0) &
-                    ~np.isnan(rolling_ics) &
-                    ~np.isinf(rolling_ics)
+                    (rolling_ics >= -1.0)
+                    & (rolling_ics <= 1.0)
+                    & ~np.isnan(rolling_ics)
+                    & ~np.isinf(rolling_ics)
                 ]
 
                 if len(rolling_ics) >= 10:
                     rolling_ic_mean = float(rolling_ics.mean())
                     rolling_ic_std = float(rolling_ics.std())
                     stability = 1 - (rolling_ic_std / (abs(rolling_ic_mean) + 1e-8))
-                    consistency = float(np.sum(rolling_ics * rolling_ic_mean > 0) / len(rolling_ics))
+                    consistency = float(
+                        np.sum(rolling_ics * rolling_ic_mean > 0) / len(rolling_ics)
+                    )
 
                     rolling_ic_results[factor] = {
                         "rolling_ic_mean": rolling_ic_mean,
@@ -1469,7 +1487,10 @@ class ProfessionalFactorScreener:
                 # 检查是否所有VIF都小于阈值
                 if max_vif <= vif_threshold:
                     self.logger.info(
-                        f"VIF递归完成: 迭代{iteration}次，保留{len(remaining_factors)}个因子，最大VIF={max_vif:.2f}"
+                        "VIF递归完成: 迭代%s次，保留%s个因子，最大VIF=%.2f",
+                        iteration,
+                        len(remaining_factors),
+                        max_vif,
                     )
                     return vif_values
 
@@ -1566,14 +1587,16 @@ class ProfessionalFactorScreener:
 
             try:
                 # P0-2修复：使用更稳定的求解方法
-                beta, residuals, rank, singular_vals = np.linalg.lstsq(X, y, rcond=1e-15)
-                
+                beta, residuals, rank, singular_vals = np.linalg.lstsq(
+                    X, y, rcond=1e-15
+                )
+
                 # 检查求解质量
                 if rank < X.shape[1]:
                     # 矩阵不满秩，设为阈值
                     vif_results[factor] = 5.0
                     continue
-                    
+
             except np.linalg.LinAlgError as err:
                 self.logger.debug(f"VIF最小二乘求解失败 {factor}: {err}")
                 vif_results[factor] = 5.0  # 设为阈值而非极大值
@@ -1602,7 +1625,7 @@ class ProfessionalFactorScreener:
             else:
                 vif = 1.0 / (1.0 - r_squared)
                 vif = float(np.clip(vif, 1.0, 50.0))  # 限制VIF范围
-            
+
             vif_results[factor] = vif
 
         return vif_results
@@ -1777,7 +1800,9 @@ class ProfessionalFactorScreener:
             cost_efficiency = 1 / (1 + total_cost)
 
             # 换手频率
-            change_frequency = (factor_change > self.config.factor_change_threshold).mean()  # 因子变化频率
+            change_frequency = (
+                factor_change > self.config.factor_change_threshold
+            ).mean()  # 因子变化频率
 
             cost_analysis[factor] = {
                 "turnover_rate": turnover_rate,
@@ -1936,12 +1961,14 @@ class ProfessionalFactorScreener:
         # P1-3修复：改进换手率异常处理，避免强制裁剪掩盖问题
         if turnover_rate > 2.0:
             # 分析异常原因
-            extreme_changes = valid_changes[valid_changes > valid_changes.quantile(0.95)]
+            extreme_changes = valid_changes[
+                valid_changes > valid_changes.quantile(0.95)
+            ]
             if len(extreme_changes) > len(valid_changes) * 0.1:
                 # 如果超过10%的变化都很大，可能是因子设计问题
                 self.logger.warning(
                     f"因子 {factor_name} turnover率异常高 ({turnover_rate:.6f})，"
-                    f"可能存在因子设计问题，建议检查计算逻辑"
+                    "可能存在因子设计问题，建议检查计算逻辑"
                 )
                 # 使用更保守的估计：95%分位数
                 conservative_rate = valid_changes.quantile(0.95)
@@ -2236,7 +2263,7 @@ class ProfessionalFactorScreener:
         if significant_ratio < 0.05 and sample_size and sample_size < 500:
             self.logger.warning(
                 f"显著因子比例过低({significant_ratio:.1%})，"
-                f"建议检查数据质量或考虑增加样本量"
+                "建议检查数据质量或考虑增加样本量"
             )
         elif significant_ratio > 0.20:
             self.logger.info(
@@ -2246,7 +2273,9 @@ class ProfessionalFactorScreener:
 
         return corrected_p, adaptive_alpha
 
-    def bonferroni_correction(self, p_values: Dict[str, float]) -> Tuple[Dict[str, float], float]:
+    def bonferroni_correction(
+        self, p_values: Dict[str, float]
+    ) -> Tuple[Dict[str, float], float]:
         """Bonferroni校正"""
         if not p_values:
             return {}, self.config.alpha_level
@@ -2271,22 +2300,29 @@ class ProfessionalFactorScreener:
         comprehensive_results = {}
 
         # 获取所有因子名称
-        all_factors = set()
-        for metric_dict in all_metrics.values():
+        all_factors: Set[str] = set()
+        for metric_key, metric_dict in all_metrics.items():
             if isinstance(metric_dict, dict):
                 all_factors.update(metric_dict.keys())
 
-        for factor in all_factors:
+        if not all_factors:
+            self.logger.warning("综合评分阶段未找到任何因子数据")
+            return comprehensive_results
+
+        # 预构建便于访问的指标表
+        def _get_metric(metric_name: str, factor: str, default: Any = None) -> Any:
+            mapping = all_metrics.get(metric_name, {})
+            if isinstance(mapping, dict):
+                return mapping.get(factor, default)
+            return default
+
+        for factor in sorted(all_factors):
             metrics = FactorMetrics(name=factor)
 
             # 1. 预测能力评分 (35%)
             predictive_score = 0.0
-            if (
-                "multi_horizon_ic" in all_metrics
-                and factor in all_metrics["multi_horizon_ic"]
-            ):
-                ic_data = all_metrics["multi_horizon_ic"][factor]
-
+            ic_data = _get_metric("multi_horizon_ic", factor, {})
+            if ic_data:
                 # 提取各周期IC
                 metrics.ic_1d = ic_data.get("ic_1d", 0.0)
                 metrics.ic_3d = ic_data.get("ic_3d", 0.0)
@@ -2309,8 +2345,8 @@ class ProfessionalFactorScreener:
                     # 预测能力得分
                     predictive_score = min(metrics.ic_mean * 10, 1.0)  # 标准化到[0,1]
 
-            if "ic_decay" in all_metrics and factor in all_metrics["ic_decay"]:
-                decay_data = all_metrics["ic_decay"][factor]
+            decay_data = _get_metric("ic_decay", factor, {})
+            if decay_data:
                 metrics.ic_decay_rate = decay_data.get("decay_rate", 0.0)
                 metrics.ic_longevity = decay_data.get("ic_longevity", 0)
 
@@ -2322,8 +2358,8 @@ class ProfessionalFactorScreener:
 
             # 2. 稳定性评分 (25%)
             stability_score = 0.0
-            if "rolling_ic" in all_metrics and factor in all_metrics["rolling_ic"]:
-                rolling_data = all_metrics["rolling_ic"][factor]
+            rolling_data = _get_metric("rolling_ic", factor, {})
+            if rolling_data:
                 metrics.rolling_ic_mean = rolling_data.get("rolling_ic_mean", 0.0)
                 metrics.rolling_ic_std = rolling_data.get("rolling_ic_std", 0.0)
                 metrics.rolling_ic_stability = rolling_data.get(
@@ -2335,11 +2371,8 @@ class ProfessionalFactorScreener:
                     metrics.rolling_ic_stability + metrics.ic_consistency
                 ) / 2
 
-            if (
-                "cross_section_stability" in all_metrics
-                and factor in all_metrics["cross_section_stability"]
-            ):
-                cs_data = all_metrics["cross_section_stability"][factor]
+            cs_data = _get_metric("cross_section_stability", factor, {})
+            if cs_data:
                 metrics.cross_section_stability = cs_data.get(
                     "cross_section_stability", 0.0
                 )
@@ -2353,100 +2386,90 @@ class ProfessionalFactorScreener:
 
             # 3. 独立性评分 (20%)
             independence_score = 1.0  # 默认满分
-            if "vif_scores" in all_metrics and factor in all_metrics["vif_scores"]:
-                metrics.vif_score = all_metrics["vif_scores"][factor]
+            vif_score = _get_metric("vif_scores", factor)
+            if vif_score is not None:
+                metrics.vif_score = float(vif_score)
                 vif_penalty = min(metrics.vif_score / self.config.vif_threshold, 2.0)
                 independence_score *= 1 / (1 + vif_penalty)
 
-            if "correlation_matrix" in all_metrics:
-                corr_matrix = all_metrics["correlation_matrix"]
-                if factor in corr_matrix.columns:
-                    factor_corrs = corr_matrix[factor].drop(factor, errors="ignore")
-                    if len(factor_corrs) > 0:
-                        metrics.correlation_max = factor_corrs.abs().max()
-                        corr_penalty = max(0, metrics.correlation_max - 0.5) * 2
-                        independence_score *= 1 - corr_penalty
+            corr_matrix = all_metrics.get("correlation_matrix")
+            if isinstance(corr_matrix, pd.DataFrame) and factor in corr_matrix.columns:
+                factor_corrs = corr_matrix[factor].drop(factor, errors="ignore")
+                if len(factor_corrs) > 0:
+                    metrics.correlation_max = float(factor_corrs.abs().max())
+                    corr_penalty = max(0, metrics.correlation_max - 0.5) * 2
+                    independence_score *= max(0.0, 1 - corr_penalty)
 
-            if (
-                "information_increment" in all_metrics
-                and factor in all_metrics["information_increment"]
-            ):
-                metrics.information_increment = all_metrics["information_increment"][
-                    factor
-                ]
+            information_increment = _get_metric("information_increment", factor)
+            if information_increment is not None:
+                metrics.information_increment = float(information_increment)
                 # 信息增量奖励
-                info_bonus = max(0, metrics.information_increment) * 5
+                info_bonus = max(0.0, metrics.information_increment) * 5
                 independence_score = min(independence_score + info_bonus, 1.0)
 
-            metrics.independence_score = max(0, independence_score)
+            metrics.independence_score = max(0.0, independence_score)
 
             # 4. 实用性评分 (15%)
             practicality_score = 1.0
-            if (
-                "trading_costs" in all_metrics
-                and factor in all_metrics["trading_costs"]
-            ):
-                cost_data = all_metrics["trading_costs"][factor]
+            cost_data = _get_metric("trading_costs", factor, {})
+            if cost_data:
                 metrics.turnover_rate = cost_data.get("turnover_rate", 0.0)
                 metrics.transaction_cost = cost_data.get("total_cost", 0.0)
                 metrics.cost_efficiency = cost_data.get("cost_efficiency", 0.0)
 
-                practicality_score = metrics.cost_efficiency
+                practicality_score = metrics.cost_efficiency or practicality_score
 
-            if (
-                "liquidity_requirements" in all_metrics
-                and factor in all_metrics["liquidity_requirements"]
-            ):
-                liq_data = all_metrics["liquidity_requirements"][factor]
-                metrics.liquidity_demand = liq_data.get("liquidity_demand", 0.0)
-                metrics.capacity_score = liq_data.get("capacity_score", 0.0)
+            liquidity_data = _get_metric("liquidity_requirements", factor, {})
+            if liquidity_data:
+                metrics.liquidity_requirement = liquidity_data.get(
+                    "liquidity_requirement", 0.0
+                )
+                metrics.volume_coverage_ratio = liquidity_data.get(
+                    "volume_coverage_ratio", 0.0
+                )
+                liquidity_penalty = max(0.0, 1 - metrics.volume_coverage_ratio)
+                practicality_score *= max(0.0, 1 - liquidity_penalty)
 
-                # 综合实用性
-                practicality_score = (practicality_score + metrics.capacity_score) / 2
+            metrics.practicality_score = max(0.0, practicality_score)
 
-            metrics.practicality_score = practicality_score
+            # 5. 适应性评分 (5%)
+            adaptability_score = 0.0
+            reversal_data = _get_metric("reversal_effects", factor, {})
+            if reversal_data:
+                metrics.reversal_effect = reversal_data.get("reversal_effect", 0.0)
+                adaptability_score += max(0.0, metrics.reversal_effect)
 
-            # 5. 短周期适应性评分 (5%)
-            adaptability_score = 0.5  # 默认中性
-            if (
-                "reversal_effects" in all_metrics
-                and factor in all_metrics["reversal_effects"]
-            ):
-                rev_data = all_metrics["reversal_effects"][factor]
-                metrics.reversal_effect = rev_data.get("reversal_effect", 0.0)
-                reversal_strength = rev_data.get("reversal_strength", 0.0)
+            momentum_data = _get_metric("momentum_persistence", factor, {})
+            if momentum_data:
+                metrics.momentum_persistence = momentum_data.get(
+                    "momentum_persistence", 0.0
+                )
+                adaptability_score += max(0.0, metrics.momentum_persistence)
 
-                # 适度的反转效应是好的
-                adaptability_score += min(reversal_strength * 0.5, 0.3)
+            volatility_data = _get_metric("volatility_sensitivity", factor, {})
+            if volatility_data:
+                metrics.volatility_sensitivity = volatility_data.get(
+                    "volatility_sensitivity", 0.0
+                )
+                adaptability_score += max(0.0, metrics.volatility_sensitivity)
 
-            if (
-                "momentum_persistence" in all_metrics
-                and factor in all_metrics["momentum_persistence"]
-            ):
-                mom_data = all_metrics["momentum_persistence"][factor]
-                metrics.momentum_persistence = mom_data.get("momentum_persistence", 0.0)
-
-                # 动量持续性奖励
-                adaptability_score += abs(metrics.momentum_persistence) * 0.2
-
-            if (
-                "volatility_sensitivity" in all_metrics
-                and factor in all_metrics["volatility_sensitivity"]
-            ):
-                vol_data = all_metrics["volatility_sensitivity"][factor]
-                vol_stability = vol_data.get("stability_score", 0.0)
-
-                # 波动率稳定性奖励
-                adaptability_score = (adaptability_score + vol_stability) / 2
-
-            metrics.adaptability_score = min(adaptability_score, 1.0)
+            metrics.adaptability_score = min(adaptability_score / 3, 1.0)
 
             # 综合评分计算
-            if hasattr(self.config, 'weights') and self.config.weights:
-                # 使用config_manager.py中的weights字典
-                weights = self.config.weights
+            custom_weights = getattr(self.config, "weights", None)
+            if custom_weights:
+                weights = {
+                    "predictive_power": float(
+                        custom_weights.get("predictive_power", 0.35)
+                    ),
+                    "stability": float(custom_weights.get("stability", 0.25)),
+                    "independence": float(custom_weights.get("independence", 0.20)),
+                    "practicality": float(custom_weights.get("practicality", 0.15)),
+                    "short_term_fitness": float(
+                        custom_weights.get("short_term_fitness", 0.05)
+                    ),
+                }
             else:
-                # 使用默认权重
                 weights = {
                     "predictive_power": 0.35,
                     "stability": 0.25,
@@ -2454,39 +2477,40 @@ class ProfessionalFactorScreener:
                     "practicality": 0.15,
                     "short_term_fitness": 0.05,
                 }
+
             total_weight = sum(weights.values())
             if not np.isclose(total_weight, 1.0, rtol=1e-6):
-                self.logger.error(f"权重配置错误: 总和={total_weight:.6f}, 应为1.0")
+                self.logger.error(
+                    "权重配置错误: 总和=%.6f, 应为1.0 -- 当前权重=%s",
+                    total_weight,
+                    weights,
+                )
                 raise ValueError("权重配置错误 - 系统完整性检查失败")
 
-            metrics.comprehensive_score = (
-                metrics.predictive_score * weights["predictive_power"]
-                + metrics.stability_score * weights["stability"]
-                + metrics.independence_score * weights["independence"]
-                + metrics.practicality_score * weights["practicality"]
-                + metrics.adaptability_score * weights["short_term_fitness"]
+            metrics.comprehensive_score = float(
+                weights["predictive_power"] * metrics.predictive_score
+                + weights["stability"] * metrics.stability_score
+                + weights["independence"] * metrics.independence_score
+                + weights["practicality"] * metrics.practicality_score
+                + weights["short_term_fitness"] * metrics.adaptability_score
             )
 
-            # 统计显著性
-            if "p_values" in all_metrics and factor in all_metrics["p_values"]:
-                metrics.p_value = all_metrics["p_values"][factor]
+            # 显著性标记
+            corrected_p_vals = _get_metric("corrected_p_values", factor)
+            bennett_scores = _get_metric("bennett_scores", factor)
+            metrics.corrected_p_value = (
+                float(corrected_p_vals)
+                if corrected_p_vals is not None
+                else metrics.corrected_p_value
+            )
+            metrics.bennett_score = (
+                float(bennett_scores) if bennett_scores is not None else 0.0
+            )
 
-            if (
-                "corrected_p_values" in all_metrics
-                and factor in all_metrics["corrected_p_values"]
-            ):
-                metrics.corrected_p_value = all_metrics["corrected_p_values"][factor]
-                # 修复：使用adaptive_alpha而不是固定的self.config.alpha_level
-                adaptive_alpha = all_metrics.get("adaptive_alpha", self.config.alpha_level)
-                metrics.is_significant = (
-                    metrics.corrected_p_value < adaptive_alpha
-                )
-
-            # P1-1修复：添加因子等级分类逻辑
-            metrics.tier = self._classify_factor_tier(
-                metrics.comprehensive_score, 
-                metrics.is_significant,
-                metrics.ic_mean
+            metrics.is_significant = (
+                metrics.corrected_p_value <= self.config.alpha_level
+                if metrics.corrected_p_value is not None
+                else False
             )
 
             comprehensive_results[factor] = metrics
@@ -2495,16 +2519,13 @@ class ProfessionalFactorScreener:
         return comprehensive_results
 
     def _classify_factor_tier(
-        self, 
-        comprehensive_score: float, 
-        is_significant: bool, 
-        ic_mean: float
+        self, comprehensive_score: float, is_significant: bool, ic_mean: float
     ) -> str:
         """P1-1修复：因子等级分类逻辑
-        
+
         分级标准：
         - Tier 1 (≥0.8): 核心因子，强烈推荐
-        - Tier 2 (0.6-0.8): 重要因子，推荐使用  
+        - Tier 2 (0.6-0.8): 重要因子，推荐使用
         - Tier 3 (0.4-0.6): 备用因子，特定条件使用
         - 不推荐 (<0.4): 不建议使用
         """
@@ -2517,7 +2538,7 @@ class ProfessionalFactorScreener:
             base_tier = "Tier 3"
         else:
             base_tier = "不推荐"
-        
+
         # 显著性和IC调整
         if is_significant and abs(ic_mean) >= 0.05:
             # 显著且IC较强，维持或提升等级
@@ -2531,7 +2552,7 @@ class ProfessionalFactorScreener:
                 return "Tier 2"
             elif base_tier == "Tier 2":
                 return "Tier 3"
-        
+
         return base_tier
 
     # ==================== 主筛选函数 ====================
@@ -2732,11 +2753,10 @@ class ProfessionalFactorScreener:
             if p_1d >= 1.0:
                 # 如果1日p值无效，使用所有周期中最小的p值
                 all_p_values = [
-                    ic_data.get(f"p_value_{h}d", 1.0) 
-                    for h in self.config.ic_horizons
+                    ic_data.get(f"p_value_{h}d", 1.0) for h in self.config.ic_horizons
                 ]
                 p_1d = min([p for p in all_p_values if p < 1.0] or [1.0])
-            
+
             p_values[factor] = p_1d
 
         all_metrics["p_values"] = p_values
@@ -2764,10 +2784,12 @@ class ProfessionalFactorScreener:
         screening_stats = {
             "total_factors": len(comprehensive_results),
             "significant_factors": sum(
-                1 for m in comprehensive_results.values() if m.is_significant
+                1 for metric in comprehensive_results.values() if metric.is_significant
             ),
             "high_score_factors": sum(
-                1 for m in comprehensive_results.values() if m.comprehensive_score > 0.7
+                1
+                for metric in comprehensive_results.values()
+                if metric.comprehensive_score > 0.7
             ),
             "total_time": duration,
             "sample_size": len(factors_aligned),
@@ -2784,9 +2806,12 @@ class ProfessionalFactorScreener:
         )
         self.logger.info(f"✅ {symbol} {timeframe} 筛选完成，耗时: {duration:.2f}秒")
         self.logger.info(f"   总因子数: {len(comprehensive_results)}")
-        self.logger.info(
-            f"   顶级因子数: {sum(1 for m in comprehensive_results.values() if m.comprehensive_score >= 0.8)}"
+        top_factor_count = sum(
+            1
+            for metric in comprehensive_results.values()
+            if metric.comprehensive_score >= 0.8
         )
+        self.logger.info("   顶级因子数: %s", top_factor_count)
 
         return comprehensive_results
 
@@ -2826,38 +2851,41 @@ class ProfessionalFactorScreener:
         for tf in timeframes:
             if tf in all_results:
                 tf_results = all_results[tf]
+                metrics_list = list(tf_results.values())
                 tf_summary = {
-                    "total_factors": len(tf_results),
-            "significant_factors": sum(
-                1
-                for m in tf_results.values()
-                if m.corrected_p_value < self.config.alpha_level
-            ),
+                    "total_factors": len(metrics_list),
+                    "significant_factors": sum(
+                        1
+                        for metric in metrics_list
+                        if metric.corrected_p_value < self.config.alpha_level
+                    ),
                     "top_factors": sum(
-                        1 for m in tf_results.values() if m.comprehensive_score >= 0.8
+                        1
+                        for metric in metrics_list
+                        if metric.comprehensive_score >= 0.8
                     ),
                     "average_ic": (
-                        sum(m.ic_mean for m in tf_results.values()) / len(tf_results)
-                        if tf_results
-                        else 0
+                        float(np.mean([metric.ic_mean for metric in metrics_list]))
+                        if metrics_list
+                        else 0.0
                     ),
                     "average_score": (
-                        sum(m.comprehensive_score for m in tf_results.values())
-                        / len(tf_results)
-                        if tf_results
-                        else 0
+                        float(
+                            np.mean(
+                                [metric.comprehensive_score for metric in metrics_list]
+                            )
+                        )
+                        if metrics_list
+                        else 0.0
                     ),
                 }
                 summary["timeframe_summary"][tf] = tf_summary
 
-                # 顶级因子列表
                 top_factors = sorted(
                     [(name, metrics) for name, metrics in tf_results.items()],
                     key=lambda x: x[1].comprehensive_score,
                     reverse=True,
-                )[
-                    :10
-                ]  # 取前10个
+                )[:10]
                 summary["top_factors_by_timeframe"][tf] = [
                     {
                         "factor": name,
@@ -2869,25 +2897,24 @@ class ProfessionalFactorScreener:
 
         # 跨时间框架分析 - 寻找共识因子
         if len(all_results) > 1:
-            # 找出在多个时间框架中都表现优秀的因子
-            factor_performance = {}
+            factor_performance: Dict[str, Dict[str, float]] = {}
             for tf, tf_results in all_results.items():
                 for factor_name, metrics in tf_results.items():
-                    if factor_name not in factor_performance:
-                        factor_performance[factor_name] = {}
-                    factor_performance[factor_name][tf] = metrics.comprehensive_score
+                    factor_performance.setdefault(factor_name, {})[
+                        tf
+                    ] = metrics.comprehensive_score
 
-            # 计算共识因子（在超过一半的时间框架中得分>=0.7的因子）
             consensus_threshold = 0.7
             min_timeframes = max(1, len(timeframes) // 2)
 
             consensus_factors = []
             for factor_name, tf_scores in factor_performance.items():
+                scores = list(tf_scores.values())
                 high_score_count = sum(
-                    1 for score in tf_scores.values() if score >= consensus_threshold
+                    1 for score in scores if score >= consensus_threshold
                 )
                 if high_score_count >= min_timeframes:
-                    avg_score = sum(tf_scores.values()) / len(tf_scores)
+                    avg_score = float(np.mean(scores))
                     consensus_factors.append(
                         {
                             "factor": factor_name,
@@ -2897,9 +2924,8 @@ class ProfessionalFactorScreener:
                         }
                     )
 
-            # 按平均分数排序
             consensus_factors.sort(key=lambda x: x["average_score"], reverse=True)
-            summary["consensus_factors"] = consensus_factors[:20]  # 取前20个共识因子
+            summary["consensus_factors"] = consensus_factors[:20]
 
         return summary
 
@@ -3071,8 +3097,13 @@ class ProfessionalFactorScreener:
                     all_results[timeframe] = tf_results
                     successful_timeframes.append(timeframe)
 
-                    main_logger.info(
-                        f"✅ {timeframe} 筛选完成 - 顶级因子数: {sum(1 for m in tf_results.values() if m.comprehensive_score >= 0.8)}"
+                    top_factor_count_tf = sum(
+                        1 for metric in tf_results if metric.comprehensive_score >= 0.8
+                    )
+                    self.logger.info(
+                        "✅ %s 筛选完成 - 顶级因子数: %s",
+                        timeframe,
+                        top_factor_count_tf,
                     )
 
                 except Exception as e:
@@ -3097,15 +3128,16 @@ class ProfessionalFactorScreener:
             main_logger.info(
                 f"   成功时间框架: {len(successful_timeframes)}/{len(timeframes)}"
             )
-            main_logger.info(
-                f"   失败时间框架: {', '.join(failed_timeframes) if failed_timeframes else '无'}"
-            )
+            failed_summary = ", ".join(failed_timeframes) if failed_timeframes else "无"
+            main_logger.info("   失败时间框架: %s", failed_summary)
 
             # 计算总体统计
-            total_factors = sum(len(results) for results in all_results.values())
+            total_factors = sum(len(result) for result in all_results.values())
             total_top_factors = sum(
-                sum(1 for m in results.values() if m.comprehensive_score >= 0.8)
-                for results in all_results.values()
+                sum(
+                    1 for metric in result.values() if metric.comprehensive_score >= 0.8
+                )
+                for result in all_results.values()
             )
 
             main_logger.info(f"   总因子数: {total_factors}")
@@ -3127,30 +3159,32 @@ class ProfessionalFactorScreener:
         self, symbol: str, timeframe: str = "60min"
     ) -> Dict[str, FactorMetrics]:
         """主筛选函数 - 5维度综合筛选"""
-        
+
         # P0级集成：使用输入验证器
         if self.input_validator is not None:
             is_valid, msg = self.input_validator.validate_symbol(symbol, strict=False)
             if not is_valid:
                 self.logger.error(f"输入验证失败: {msg}")
                 raise ValueError(msg)
-            
+
             is_valid, msg = self.input_validator.validate_timeframe(timeframe)
             if not is_valid:
                 self.logger.error(f"输入验证失败: {msg}")
                 raise ValueError(msg)
-        
+
         # P0级集成：使用结构化日志记录操作开始
         if self.structured_logger is not None:
             self.structured_logger.info(
                 "因子筛选开始",
                 symbol=symbol,
                 timeframe=timeframe,
-                operation="screen_factors_comprehensive"
+                operation="screen_factors_comprehensive",
             )
 
         # P0-1修复：智能会话管理，避免批量处理中的重复创建
-        in_multi_tf_mode = hasattr(self, "multi_tf_session_dir") and self.multi_tf_session_dir
+        in_multi_tf_mode = (
+            hasattr(self, "multi_tf_session_dir") and self.multi_tf_session_dir
+        )
         current_session_dir = None
 
         if in_multi_tf_mode:
@@ -3166,7 +3200,7 @@ class ProfessionalFactorScreener:
             current_session_dir = tf_session_dir
             self.logger.info(
                 f"📁 批量模式-切换时间框架子会话: {timeframe}",
-                extra={"session_dir": str(tf_session_dir)}
+                extra={"session_dir": str(tf_session_dir)},
             )
         else:
             if not hasattr(self, "session_dir") or not self.session_dir:
@@ -3199,10 +3233,16 @@ class ProfessionalFactorScreener:
             # 添加诊断日志 - 关键修复
             self.logger.info("数据对齐前诊断:")
             self.logger.info(
-                f"  因子数据: {len(factors)} 行, 时间 {factors.index.min()} 到 {factors.index.max()}"
+                "  因子数据: %s 行, 时间 %s 到 %s",
+                len(factors),
+                factors.index.min(),
+                factors.index.max(),
             )
             self.logger.info(
-                f"  价格数据: {len(close_prices)} 行, 时间 {close_prices.index.min()} 到 {close_prices.index.max()}"
+                "  价格数据: %s 行, 时间 %s 到 %s",
+                len(close_prices),
+                close_prices.index.min(),
+                close_prices.index.max(),
             )
 
             # 时间对齐
@@ -3309,7 +3349,7 @@ class ProfessionalFactorScreener:
             for factor, ic_data in all_metrics["multi_horizon_ic"].items():
                 # 优先使用1日IC的p值，如果无效则使用最小的有效p值
                 p_1d = ic_data.get("p_value_1d", 1.0)
-                
+
                 if p_1d < 1.0 and p_1d > 0.0:
                     # 1日p值有效，直接使用
                     p_values[factor] = p_1d
@@ -3320,7 +3360,7 @@ class ProfessionalFactorScreener:
                         p_val = ic_data.get(f"p_value_{h}d", 1.0)
                         if 0.0 < p_val < 1.0:  # 有效p值
                             all_p_values.append(p_val)
-                    
+
                     if all_p_values:
                         # 使用最小的有效p值（最显著的）
                         p_values[factor] = min(all_p_values)
@@ -3348,7 +3388,7 @@ class ProfessionalFactorScreener:
 
             all_metrics["corrected_p_values"] = corrected_p
             all_metrics["adaptive_alpha"] = adaptive_alpha
-            
+
             # P0-3修复：添加显著性判断调试日志
             significant_factors = []
             for factor, corrected_p_val in corrected_p.items():
@@ -3361,7 +3401,7 @@ class ProfessionalFactorScreener:
                         f"原始p={p_values[factor]:.6f}, "
                         f"校正p={corrected_p_val:.6f}, α={adaptive_alpha:.6f}"
                     )
-            
+
             self.logger.info(
                 f"FDR校正完成: {len(significant_factors)}/{len(corrected_p)} 个因子显著 "
                 f"(α={adaptive_alpha:.6f})"
@@ -3385,11 +3425,17 @@ class ProfessionalFactorScreener:
             self.logger.info(f"  - 因子总数: {len(comprehensive_results)}")
 
             # 统计各维度表现
-            significant_count = sum(
-                1 for m in comprehensive_results.values() if m.is_significant
+            def _count_metrics(
+                data: Dict[str, FactorMetrics],
+                predicate: Callable[[FactorMetrics], bool],
+            ) -> int:
+                return sum(1 for metric in data.values() if predicate(metric))
+
+            significant_count = _count_metrics(
+                comprehensive_results, lambda metric: metric.is_significant
             )
-            high_score_count = sum(
-                1 for m in comprehensive_results.values() if m.comprehensive_score > 0.7
+            high_score_count = _count_metrics(
+                comprehensive_results, lambda metric: metric.comprehensive_score > 0.7
             )
 
             self.logger.info(f"  - 显著因子: {significant_count}")
@@ -3481,7 +3527,11 @@ class ProfessionalFactorScreener:
                     self.logger.info("根据配置启用传统格式保存")
                     try:
                         self.save_comprehensive_screening_info(
-                            comprehensive_results, symbol, timeframe, screening_stats, data_quality_info
+                            comprehensive_results,
+                            symbol,
+                            timeframe,
+                            screening_stats,
+                            data_quality_info,
                         )
                         self.logger.info("传统格式保存完成")
                     except Exception as e:
@@ -3597,9 +3647,7 @@ class ProfessionalFactorScreener:
 
         # 1. 保存详细的CSV报告
         csv_path = base_dir / f"{base_filename}.csv"
-        self.generate_screening_report(
-            results, str(csv_path), symbol, timeframe
-        )
+        self.generate_screening_report(results, str(csv_path), symbol, timeframe)
 
         # 2. 保存筛选过程统计信息
         stats_path = base_dir / "screening_statistics.json"
@@ -3713,7 +3761,8 @@ class ProfessionalFactorScreener:
 
         # 筛选条件
         filtered_results = []
-        for metrics in results.values():
+        iterable = results.values() if isinstance(results, dict) else list(results)
+        for metrics in iterable:
             if metrics.comprehensive_score >= min_score:
                 if not require_significant or metrics.is_significant:
                     filtered_results.append(metrics)
@@ -3770,17 +3819,21 @@ def main():
 
                 # 获取第一个配置的数据根和输出目录
                 first_config = batch_config["screening_configs"][0]
-                data_root = first_config.get("data_root", "../因子输出")
-                output_dir = first_config.get("output_dir", "./因子筛选")
+                data_root = first_config.get("data_root", "../factor_output")
+                output_dir = first_config.get("output_dir", "./screening_results")
 
                 print(f"📁 数据目录: {data_root}")
                 print(f"📁 输出目录: {output_dir}")
-                
+
                 # P2-2修复：增强批量处理信息透明度
-                print(f"\n📋 批量处理详细信息:")
-                print(f"  - 预计处理时间: ~{len(batch_config['screening_configs']) * 2}分钟")
-                print(f"  - 内存使用预估: ~500MB")
-                print(f"  - 并行处理: {'启用' if batch_config.get('enable_parallel', True) else '禁用'}")
+                print("\n📋 批量处理详细信息:")
+                print(
+                    f"  - 预计处理时间: ~{len(batch_config['screening_configs']) * 2}分钟"
+                )
+                print("  - 内存使用预估: ~500MB")
+                print(
+                    f"  - 并行处理: {'启用' if batch_config.get('enable_parallel', True) else '禁用'}"
+                )
                 print(f"  - 工作进程数: {batch_config.get('max_workers', 4)}")
                 print("=" * 80)
 
@@ -3795,14 +3848,14 @@ def main():
                 batch_session_id = (
                     f"{batch_config['batch_name']}_multi_timeframe_{batch_timestamp}"
                 )
-                
+
                 # 设置多时间框架会话目录（关键修复）
                 batch_screener.multi_tf_session_dir = (
                     batch_screener.screening_results_dir / batch_session_id
                 )
                 batch_screener.multi_tf_session_dir.mkdir(parents=True, exist_ok=True)
                 batch_screener.session_timestamp = batch_timestamp
-                
+
                 # 创建时间框架子目录结构
                 timeframes_dir = batch_screener.multi_tf_session_dir / "timeframes"
                 timeframes_dir.mkdir(exist_ok=True)
@@ -3820,8 +3873,12 @@ def main():
                         print(f"   股票: {sub_config['symbols'][0]}")
                         print(f"   时间框架: {sub_config['timeframes'][0]}")
                         from datetime import datetime, timedelta
+
                         print(f"   开始时间: {datetime.now().strftime('%H:%M:%S')}")
-                        print(f"   预计完成时间: {(datetime.now() + timedelta(minutes=2)).strftime('%H:%M:%S')}")
+                        print(
+                            "   预计完成时间: "
+                            f"{(datetime.now() + timedelta(minutes=2)).strftime('%H:%M:%S')}"
+                        )
                         print("   " + "-" * 50)
 
                         # 使用同一个筛选器执行筛选（复用会话目录）
@@ -3839,19 +3896,30 @@ def main():
                         # P2-2修复：详细完成报告
                         end_time = time.time()
                         duration = end_time - start_time
-                        significant_count = sum(1 for m in result.values() if m.is_significant)
-                        high_score_count = sum(1 for m in result.values() if m.comprehensive_score >= 0.6)
-                        
+                        significant_count = sum(
+                            metric.is_significant for metric in result.values()
+                        )
+                        high_score_count = sum(
+                            metric.comprehensive_score >= 0.6
+                            for metric in result.values()
+                        )
+
                         successful_tasks += 1
                         print(f"   ✅ 完成: 耗时 {duration:.1f}秒")
                         print(f"      - 总因子: {len(result)}")
                         print(f"      - 显著因子: {significant_count}")
                         print(f"      - 高分因子: {high_score_count}")
-                        print(f"      - 完成时间: {datetime.now().strftime('%H:%M:%S')}")
-                        
+                        print(
+                            f"      - 完成时间: {datetime.now().strftime('%H:%M:%S')}"
+                        )
+
                         # 进度条显示
-                        progress = i / len(batch_config['screening_configs']) * 100
-                        print(f"   📈 总体进度: {progress:.1f}% ({i}/{len(batch_config['screening_configs'])})")
+                        progress = i / len(batch_config["screening_configs"]) * 100
+                        total_msg = (
+                            "   📈 总体进度: "
+                            f"{progress:.1f}% ({i}/{len(batch_config['screening_configs'])})"
+                        )
+                        self.logger.info(total_msg)
 
                     except Exception as e:
                         failed_tasks += 1
@@ -3921,8 +3989,8 @@ def main():
                 print(f"⚠️ 默认配置加载失败，使用内置配置: {e}")
                 from config_manager import ScreeningConfig
             config = ScreeningConfig(
-                data_root="../因子输出",
-                output_dir="./因子筛选",
+                data_root="../factor_output",
+                output_dir="./screening_results",
                 ic_horizons=[1, 3, 5, 10, 20],
                 min_sample_size=100,
                 alpha_level=0.05,
@@ -4074,8 +4142,7 @@ def _generate_multi_timeframe_summary(
 
     summary_df.to_csv(summary_path, index=False, encoding="utf-8")
     summary_logger.info(
-        "✅ 多时间框架汇总报告已保存",
-        extra={"summary_path": str(summary_path)}
+        "✅ 多时间框架汇总报告已保存", extra={"summary_path": str(summary_path)}
     )
 
     # 生成最佳因子综合排行
@@ -4090,8 +4157,7 @@ def _generate_multi_timeframe_summary(
         best_path = session_dir / best_filename
         best_df_sorted.to_csv(best_path, index=False, encoding="utf-8")
         summary_logger.info(
-            "✅ 最佳因子综合排行已保存",
-            extra={"best_factors_path": str(best_path)}
+            "✅ 最佳因子综合排行已保存", extra={"best_factors_path": str(best_path)}
         )
 
         # 输出Top 10最佳因子到控制台
@@ -4127,8 +4193,9 @@ def _generate_batch_statistics(
 ) -> None:
     """生成批量处理统计摘要"""
 
-    import pandas as pd
     from datetime import datetime
+
+    import pandas as pd
 
     stats_logger = logger or logging.getLogger(__name__)
     stats_logger.info("📈 生成批量处理统计摘要...", extra={"batch_name": batch_name})
@@ -4147,10 +4214,18 @@ def _generate_batch_statistics(
         if total_count == 0:
             continue
 
-        tier_counter = Counter((metrics.tier or "未分级") for metrics in tf_results.values())
-        significant_count = sum(1 for metrics in tf_results.values() if metrics.is_significant)
-        top_count = sum(1 for metrics in tf_results.values() if metrics.comprehensive_score >= 0.8)
-        avg_score = float(np.mean([metrics.comprehensive_score for metrics in tf_results.values()]))
+        tier_counter = Counter(
+            (metrics.tier or "未分级") for metrics in tf_results.values()
+        )
+        significant_count = sum(
+            metrics.is_significant for metrics in tf_results.values()
+        )
+        top_count = sum(
+            metrics.comprehensive_score >= 0.8 for metrics in tf_results.values()
+        )
+        avg_score = float(
+            np.mean([metrics.comprehensive_score for metrics in tf_results.values()])
+        )
 
         stats_item = {
             "symbol": symbol,

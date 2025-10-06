@@ -41,7 +41,7 @@ class PathStandardizer:
             return f"{symbol}.HK"
 
         # 移除现有后缀，添加.HK
-        clean_symbol = re.sub(r"\.[A-Z]+$", "", symbol)
+        clean_symbol = re.sub(r"\.[A-Z]+$", "", symbol)  # noqa: PD005
         return f"{clean_symbol}.HK"
 
     @staticmethod

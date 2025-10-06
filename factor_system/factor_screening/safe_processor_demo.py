@@ -13,14 +13,15 @@
 
 import os
 import sys
-import pandas as pd
+
 import numpy as np
-from datetime import datetime
+import pandas as pd
 
 # 添加项目路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
-sys.path.insert(0, os.path.join(current_dir, 'utils'))
+sys.path.insert(0, os.path.join(current_dir, "utils"))
+
 
 def demo_safe_processor():
     """演示安全处理器的使用"""
@@ -35,25 +36,23 @@ def demo_safe_processor():
         print("✅ 安全处理器创建成功")
 
         # 创建示例数据
-        dates = pd.date_range('2023-01-01', periods=100, freq='D')
+        dates = pd.date_range("2023-01-01", periods=100, freq="D")
         np.random.seed(42)  # 确保结果可重现
 
         # 价格数据
         price_data = pd.Series(
-            100 + np.random.randn(100).cumsum(),
-            index=dates,
-            name='price'
+            100 + np.random.randn(100).cumsum(), index=dates, name="price"
         )
 
         # 因子数据（动量因子）
         factor_data = price_data.pct_change(20).dropna()
-        factor_data.name = 'momentum_20d'
+        factor_data.name = "momentum_20d"
 
         # 收益数据
         return_data = price_data.pct_change().dropna()
-        return_data.name = 'return_1d'
+        return_data.name = "return_1d"
 
-        print(f"📊 数据创建完成:")
+        print("📊 数据创建完成:")
         print(f"   - 价格数据: {len(price_data)} 个数据点")
         print(f"   - 因子数据: {len(factor_data)} 个数据点")
         print(f"   - 收益数据: {len(return_data)} 个数据点")
@@ -70,23 +69,26 @@ def demo_safe_processor():
         forward_shifted = processor.shift_forward(factor_data, periods=5)
         print(f"   - 原始数据长度: {len(factor_data)}")
         print(f"   - Shift后长度: {len(forward_shifted)}")
-        print(f"   - Shift操作: ✅ 安全（仅使用历史数据）")
+        print("   - Shift操作: ✅ 安全（仅使用历史数据）")
 
         # 演示前向收益计算
         print("\n📈 演示前向收益计算:")
         forward_returns = processor.calculate_forward_returns(price_data, [1, 5, 10])
-        print(f"   - 计算周期: [1, 5, 10] 天")
+        print("   - 计算周期: [1, 5, 10] 天")
         print(f"   - 收益数据形状: {forward_returns.shape}")
         print(f"   - 示例1天收益: {forward_returns['return_1d'].dropna().iloc[0]:.6f}")
         print(f"   - 示例5天收益: {forward_returns['return_5d'].dropna().iloc[0]:.6f}")
 
         # 演示数据验证
         print("\n🔒 演示数据完整性验证:")
-        test_data = pd.DataFrame({
-            'close': price_data,
-            'volume': np.random.randint(1000, 10000, 100),
-            'momentum': factor_data
-        }, index=dates)
+        test_data = pd.DataFrame(
+            {
+                "close": price_data,
+                "volume": np.random.randint(1000, 10000, 100),
+                "momentum": factor_data,
+            },
+            index=dates,
+        )
 
         is_valid = processor.validate_no_future_leakage(test_data)
         print(f"   - 数据完整性检查: {'✅ 通过' if is_valid else '❌ 失败'}")
@@ -106,8 +108,10 @@ def demo_safe_processor():
     except Exception as e:
         print(f"❌ 演示失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def demo_protection_features():
     """演示防护特性"""
@@ -120,17 +124,17 @@ def demo_protection_features():
         processor = SafeTimeSeriesProcessor(strict_mode=True)
 
         # 创建测试数据
-        dates = pd.date_range('2023-01-01', periods=50, freq='D')
+        dates = pd.date_range("2023-01-01", periods=50, freq="D")
         data = pd.Series(np.random.randn(50), index=dates)
 
         print("1. ✅ 向前shift（允许）:")
-        forward_shift = processor.shift_forward(data, periods=3)
-        print(f"   - shift(3): 成功执行")
+        _ = processor.shift_forward(data, periods=3)
+        print("   - shift(3): 成功执行")
 
         print("\n2. ❌ 向后shift（禁止）:")
         try:
             # 这应该抛出异常或方法不存在
-            if hasattr(processor, 'shift_backward'):
+            if hasattr(processor, "shift_backward"):
                 processor.shift_backward(data, periods=-3)
                 print("   - shift(-3): ❌ 未被禁止！")
             else:
@@ -141,25 +145,31 @@ def demo_protection_features():
         print("\n3. 📊 安全数据验证:")
 
         # 安全数据
-        safe_data = pd.DataFrame({
-            'price': data,
-            'volume': np.random.randint(100, 1000, 50),
-            'rsi': np.random.random(50)
-        })
+        safe_data = pd.DataFrame(
+            {
+                "price": data,
+                "volume": np.random.randint(100, 1000, 50),
+                "rsi": np.random.random(50),
+            }
+        )
 
         is_safe = processor.validate_no_future_leakage(safe_data)
         print(f"   - 安全数据验证: {'✅ 通过' if is_safe else '❌ 失败'}")
 
         # 危险数据
-        dangerous_data = pd.DataFrame({
-            'price': data,
-            'future_return': np.random.randn(50),  # 包含future关键词
-            'volume': np.random.randint(100, 1000, 50)
-        })
+        dangerous_data = pd.DataFrame(
+            {
+                "price": data,
+                "future_return": np.random.randn(50),  # 包含future关键词
+                "volume": np.random.randint(100, 1000, 50),
+            }
+        )
 
         try:
             is_dangerous = processor.validate_no_future_leakage(dangerous_data)
-            print(f"   - 危险数据验证: {'❌ 未检测到' if is_dangerous else '✅ 正确检测'}")
+            print(
+                f"   - 危险数据验证: {'❌ 未检测到' if is_dangerous else '✅ 正确检测'}"
+            )
         except ValueError as e:
             print(f"   - 危险数据验证: ✅ 正确检测到问题 ({str(e)[:50]}...)")
 
@@ -168,6 +178,7 @@ def demo_protection_features():
     except Exception as e:
         print(f"❌ 防护特性演示失败: {e}")
         return False
+
 
 def main():
     """主函数"""
@@ -199,6 +210,7 @@ def main():
     else:
         print("⚠️ 部分功能需要进一步调试")
         return 1
+
 
 if __name__ == "__main__":
     exit_code = main()

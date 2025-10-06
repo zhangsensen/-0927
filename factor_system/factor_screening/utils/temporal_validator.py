@@ -11,17 +11,19 @@
 - 提供详细的时间序列验证报告
 """
 
-import pandas as pd
-import numpy as np
-from typing import Optional, Tuple, Dict, Any
 import logging
-from datetime import datetime
+from typing import Any, Dict, Tuple
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+
 class TemporalValidationError(Exception):
     """时间序列验证异常"""
+
     pass
+
 
 class TemporalValidator:
     """时间序列验证器"""
@@ -30,11 +32,13 @@ class TemporalValidator:
         self.strict_mode = strict_mode
         self.validation_log = []
 
-    def validate_time_alignment(self,
-                             factor_data: pd.Series,
-                             return_data: pd.Series,
-                             horizon: int,
-                             context: str = "") -> Tuple[bool, str]:
+    def validate_time_alignment(
+        self,
+        factor_data: pd.Series,
+        return_data: pd.Series,
+        horizon: int,
+        context: str = "",
+    ) -> Tuple[bool, str]:
         """
         验证时间序列对齐性
 
@@ -65,9 +69,7 @@ class TemporalValidator:
             # 检查时间对齐
             common_index = factor_series.index.intersection(return_series.index)
             if len(common_index) < max(30, horizon * 2):  # 至少需要2倍周期的数据
-                message = (
-                    f"{context} 对齐数据不足，需要{horizon * 2}个点，实际{len(common_index)}个"
-                )
+                message = f"{context} 对齐数据不足，需要{horizon * 2}个点，实际{len(common_index)}个"
                 self.validation_log.append(message)
                 return False, message
 
@@ -80,16 +82,12 @@ class TemporalValidator:
                 valid_mask = lagged_factor.notna() & aligned_return.notna()
 
                 if valid_mask.sum() < max(30, horizon * 2):
-                    message = (
-                        f"{context} 有效样本不足，需要{max(30, horizon * 2)}个，实际{valid_mask.sum()}个"
-                    )
+                    message = f"{context} 有效样本不足，需要{max(30, horizon * 2)}个，实际{valid_mask.sum()}个"
                     self.validation_log.append(message)
                     return False, message
 
                 correlation = lagged_factor[valid_mask].corr(aligned_return[valid_mask])
-                logger.debug(
-                    f"{context} IC计算: {correlation:.4f} (horizon={horizon})"
-                )
+                logger.debug(f"{context} IC计算: {correlation:.4f} (horizon={horizon})")
 
             return True, "验证通过"
 
@@ -99,11 +97,13 @@ class TemporalValidator:
             self.validation_log.append(error_msg)
             return False, error_msg
 
-    def validate_ic_calculation(self,
-                           factor_data: pd.Series,
-                           return_data: pd.Series,
-                           ic_horizons: list,
-                           context: str = "") -> Dict[str, Any]:
+    def validate_ic_calculation(
+        self,
+        factor_data: pd.Series,
+        return_data: pd.Series,
+        ic_horizons: list,
+        context: str = "",
+    ) -> Dict[str, Any]:
         """验证IC计算过程"""
 
         results = {}
@@ -133,45 +133,40 @@ class TemporalValidator:
                 valid_mask = lagged_factor.notna() & aligned_return.notna()
 
                 if valid_mask.sum() < 30:
-                    logger.warning(
-                        f"IC-{horizon}d 样本量不足: {valid_mask.sum()}"
-                    )
+                    logger.warning(f"IC-{horizon}d 样本量不足: {valid_mask.sum()}")
 
                 ic = lagged_factor[valid_mask].corr(aligned_return[valid_mask])
 
                 results[horizon] = {
-                    'ic': ic if not pd.isna(ic) else 0.0,
-                    'sample_size': int(valid_mask.sum()),
-                    'is_valid': is_valid
+                    "ic": ic if not pd.isna(ic) else 0.0,
+                    "sample_size": int(valid_mask.sum()),
+                    "is_valid": is_valid,
                 }
 
             except Exception as e:
                 logger.error(f"IC-{horizon}d计算失败: {e}")
-                results[horizon] = {
-                    'ic': 0.0,
-                    'sample_size': 0,
-                    'is_valid': False
-                }
+                results[horizon] = {"ic": 0.0, "sample_size": 0, "is_valid": False}
 
         return results
 
-    def validate_no_future_data(self,
-                              data: pd.DataFrame,
-                              context: str = "") -> bool:
+    def validate_no_future_data(self, data: pd.DataFrame, context: str = "") -> bool:
         """验证数据中不包含未来信息"""
 
         issues = []
 
         # 检查列名
-        future_columns = [col for col in data.columns
-                         if 'future' in col.lower() or 'lead' in col.lower()]
+        future_columns = [
+            col
+            for col in data.columns
+            if "future" in col.lower() or "lead" in col.lower()
+        ]
 
         if future_columns:
             issues.extend([f"发现未来相关列: {future_columns}"])
 
         # 检查数据值（简单的启发式）
         for col in data.columns:
-            if 'price' in col.lower() or 'return' in col.lower():
+            if "price" in col.lower() or "return" in col.lower():
                 if data[col].isna().sum() > len(data) * 0.9:  # 90%以上缺失
                     issues.append(f"列 {col} 缺失值过多，可能存在问题")
 
@@ -199,13 +194,14 @@ class TemporalValidator:
 
         return "\n".join(report)
 
+
 # 全局验证器实例
 temporal_validator = TemporalValidator(strict_mode=True)
 
-def validate_factor_return_alignment(factor_data: pd.Series,
-                                  return_data: pd.Series,
-                                  horizon: int = 1,
-                                  context: str = "") -> bool:
+
+def validate_factor_return_alignment(
+    factor_data: pd.Series, return_data: pd.Series, horizon: int = 1, context: str = ""
+) -> bool:
     """便捷函数：验证因子收益对齐"""
     return temporal_validator.validate_time_alignment(
         factor_data, return_data, horizon, context

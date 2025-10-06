@@ -2,11 +2,84 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Sequence, Tuple
 
 DEFAULT_TAKE_PROFITS = (0.006, 0.01, 0.014, 0.018)
+
+
+def _find_project_root() -> Path:
+    """自动发现项目根目录（包含 factor_system 和 raw 目录）"""
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        if (current / "factor_system").exists() and (current / "raw").exists():
+            return current
+        current = current.parent
+    # 如果找不到，使用环境变量或默认路径
+    if "PROJECT_ROOT" in os.environ:
+        return Path(os.environ["PROJECT_ROOT"])
+    # 默认回退到当前文件的祖父目录
+    return Path(__file__).resolve().parent.parent
+
+
+@dataclass(frozen=True)
+class PathConfig:
+    """统一路径配置 - P0 级优化：消除硬编码路径"""
+
+    project_root: Path = field(default_factory=_find_project_root)
+
+    @property
+    def raw_data_dir(self) -> Path:
+        """原始数据层路径"""
+        return self.project_root / "raw"
+
+    @property
+    def hk_raw_dir(self) -> Path:
+        """港股原始数据路径"""
+        return self.raw_data_dir / "HK"
+
+    @property
+    def factor_system_dir(self) -> Path:
+        """因子系统根目录"""
+        return self.project_root / "factor_system"
+
+    @property
+    def factor_output_dir(self) -> Path:
+        """因子输出层路径 (Factor Output Layer)"""
+        return self.factor_system_dir / "factor_output"
+
+    @property
+    def factor_screening_dir(self) -> Path:
+        """因子筛选层路径 (Factor Screening Results)"""
+        return self.factor_system_dir / "factor_screening" / "screening_results"
+
+    @property
+    def factor_ready_dir(self) -> Path:
+        """优秀因子存储路径"""
+        return self.factor_system_dir / "factor_ready"
+
+    @property
+    def backtest_output_dir(self) -> Path:
+        """回测输出目录 - 带时间戳的会话管理"""
+        return self.project_root / "hk_midfreq" / "backtest_results"
+
+    def validate_paths(self) -> bool:
+        """验证关键路径是否存在"""
+        required_paths = [
+            self.project_root,
+            self.raw_data_dir,
+            self.factor_system_dir,
+        ]
+        return all(p.exists() for p in required_paths)
+
+    def __repr__(self) -> str:
+        return (
+            f"PathConfig(project_root={self.project_root}, "
+            f"hk_raw={self.hk_raw_dir.exists()}, "
+            f"factor_output={self.factor_output_dir.exists()})"
+        )
 
 
 @dataclass(frozen=True)
@@ -82,13 +155,20 @@ class StrategyRuntimeConfig:
     """High-level toggles for the HK mid-frequency workflow."""
 
     strategy_name: str = "HK_MIDFREQ_REVERSAL"
-    base_output_dir: Path = Path("../factor_system/factor_screening/因子筛选")
+    paths: PathConfig = field(default_factory=PathConfig)
     default_timeframe: str = "60min"
     fusion: FusionConfig = field(default_factory=FusionConfig)
     trend_ma_window: int = 20
     confirmation_ma_window: int = 10
 
+    @property
+    def base_output_dir(self) -> Path:
+        """向后兼容：保持原有 API"""
+        return self.paths.factor_screening_dir
 
+
+# 全局默认配置实例
+DEFAULT_PATH_CONFIG = PathConfig()
 DEFAULT_TRADING_CONFIG = TradingConfig()
 DEFAULT_EXECUTION_CONFIG = ExecutionConfig()
 DEFAULT_RUNTIME_CONFIG = StrategyRuntimeConfig()

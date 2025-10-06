@@ -4,13 +4,13 @@
 Linus式简单设计：一个脚本，直接启动，无多余配置
 """
 
-import os
 import sys
 from pathlib import Path
 
 # 添加项目路径
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
+
 
 def main():
     """直接启动0700.HK多时间框架分析"""
@@ -22,7 +22,7 @@ def main():
         print(f"❌ 配置文件不存在: {config_file}")
         sys.exit(1)
 
-    print(f"🚀 启动0700.HK多时间框架因子分析")
+    print("🚀 启动0700.HK多时间框架因子分析")
     print(f"📄 配置文件: {config_file}")
     print("=" * 60)
 
@@ -31,10 +31,7 @@ def main():
         from professional_factor_screener import main as screener_main
 
         # 设置命令行参数
-        sys.argv = [
-            "professional_factor_screener.py",
-            "--config", str(config_file)
-        ]
+        sys.argv = ["professional_factor_screener.py", "--config", str(config_file)]
 
         # 启动分析
         screener_main()
@@ -46,6 +43,7 @@ def main():
     except Exception as e:
         print(f"❌ 分析启动失败: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

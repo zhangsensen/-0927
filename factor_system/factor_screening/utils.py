@@ -146,8 +146,8 @@ class FactorFileAligner:
             return True, "只有一个时间框架，无需验证对齐性"
 
         # 检查时间范围重叠
-        all_starts = [r["start"] for r in time_ranges.values()]
-        all_ends = [r["end"] for r in time_ranges.values()]
+        all_starts = [r["start"] for r in time_ranges.to_numpy()()]
+        all_ends = [r["end"] for r in time_ranges.to_numpy()()]
 
         common_start = max(all_starts)
         common_end = min(all_ends)

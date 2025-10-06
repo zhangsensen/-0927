@@ -45,7 +45,9 @@ def screener(tmp_path: Path) -> ProfessionalFactorScreener:
     return ProfessionalFactorScreener(config=cfg)
 
 
-def test_turnover_rate_handles_cumulative_indicators(screener: ProfessionalFactorScreener) -> None:
+def test_turnover_rate_handles_cumulative_indicators(
+    screener: ProfessionalFactorScreener,
+) -> None:
     dates = pd.date_range("2024-01-01", periods=120, freq="D")
     cumulative = pd.Series(
         np.cumsum(np.full(120, 1000.0)), index=dates, name="OBV_factor"
@@ -74,7 +76,9 @@ def test_turnover_rate_handles_cumulative_indicators(screener: ProfessionalFacto
     assert turnover_cumulative < turnover_oscillator
 
 
-def test_multi_horizon_ic_uses_historical_alignment(screener: ProfessionalFactorScreener) -> None:
+def test_multi_horizon_ic_uses_historical_alignment(
+    screener: ProfessionalFactorScreener,
+) -> None:
     dates = pd.date_range("2024-01-01", periods=40, freq="D")
     factor = pd.DataFrame({"factor_a": np.arange(40, dtype=float)}, index=dates)
     returns = pd.Series(np.arange(40, dtype=float), index=dates)
