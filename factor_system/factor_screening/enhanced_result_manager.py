@@ -257,7 +257,7 @@ class EnhancedResultManager:
 
         # 3. 顶级因子详细信息 (JSON)
         top_factors = sorted(
-            results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
+            results.values(), key=lambda x: x.comprehensive_score, reverse=True
         )[:20]
         top_factors_data = []
 
@@ -387,7 +387,7 @@ class EnhancedResultManager:
 
             # 顶级因子列表
             top_factors = sorted(
-                results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
+                results.values(), key=lambda x: x.comprehensive_score, reverse=True
             )[:10]
             f.write("🏆 前10名顶级因子\n")
             for i, factor in enumerate(top_factors, 1):
@@ -430,7 +430,7 @@ class EnhancedResultManager:
 
             f.write("## 顶级因子分析\n")
             top_factors = sorted(
-                results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
+                results.values(), key=lambda x: x.comprehensive_score, reverse=True
             )[:10]
             f.write(
                 "| 排名 | 因子名称 | 综合得分 | 预测能力 | 稳定性 | 独立性 | 实用性 |\n"
@@ -463,7 +463,7 @@ class EnhancedResultManager:
         def generate_score_distribution():
             """生成因子得分分布图"""
             try:
-                scores = [factor.comprehensive_score for factor in results.to_numpy()()]
+                scores = [factor.comprehensive_score for factor in results.values()]
                 fig = plt.figure(figsize=(10, 6))
                 plt.hist(scores, bins=30, alpha=0.7, color="skyblue", edgecolor="black")
                 plt.title("因子综合得分分布")
@@ -483,7 +483,7 @@ class EnhancedResultManager:
             """生成雷达图"""
             try:
                 top_factors = sorted(
-                    results.to_numpy()(),
+                    results.values(),
                     key=lambda x: x.comprehensive_score,
                     reverse=True,
                 )[:5]
@@ -530,13 +530,13 @@ class EnhancedResultManager:
             """生成饼图"""
             try:
                 factor_types: Dict[str, int] = {}
-                for factor in results.to_numpy()():
+                for factor in results.values():
                     factor_type = factor.type or "Unknown"
                     factor_types[factor_type] = factor_types.get(factor_type, 0) + 1
 
                 fig = plt.figure(figsize=(8, 8))
                 plt.pie(
-                    list(factor_types.to_numpy()()),
+                    list(factor_types.values()),
                     labels=list(factor_types.keys()),
                     autopct="%1.1f%%",
                 )
@@ -567,7 +567,7 @@ class EnhancedResultManager:
         try:
             # 提取顶级因子的关键指标
             top_factors = sorted(
-                results.to_numpy()(), key=lambda x: x.comprehensive_score, reverse=True
+                results.values(), key=lambda x: x.comprehensive_score, reverse=True
             )[:20]
 
             correlation_data = []
@@ -632,14 +632,14 @@ class EnhancedResultManager:
                 "available_metrics": {
                     "mean_ic_values": {
                         factor.name: factor.predictive_power_mean_ic
-                        for factor in results.to_numpy()()
+                        for factor in results.values()
                     },
                     "ic_ir_values": {
-                        factor.name: factor.ic_ir for factor in results.to_numpy()()
+                        factor.name: factor.ic_ir for factor in results.values()
                     },
                     "rolling_ic_means": {
                         factor.name: factor.rolling_ic_mean
-                        for factor in results.to_numpy()()
+                        for factor in results.values()
                     },
                 },
             }
@@ -670,7 +670,7 @@ class EnhancedResultManager:
     ) -> ScreeningSession:
         """生成会话摘要"""
 
-        top_factor = max(results.to_numpy()(), key=lambda x: x.comprehensive_score)
+        top_factor = max(results.values(), key=lambda x: x.comprehensive_score)
 
         return ScreeningSession(
             session_id=session_dir.name,
@@ -680,10 +680,10 @@ class EnhancedResultManager:
             config_hash=str(hash(str(config)))[:8],
             total_factors=len(results),
             significant_factors=sum(
-                1 for f in results.to_numpy()() if f.is_significant
+                1 for f in results.values() if f.is_significant
             ),
             high_score_factors=sum(
-                1 for f in results.to_numpy()() if f.comprehensive_score > 0.6
+                1 for f in results.values() if f.comprehensive_score > 0.6
             ),
             total_time_seconds=screening_stats.get("total_time", 0),
             memory_used_mb=screening_stats.get("memory_used_mb", 0),
@@ -750,7 +750,7 @@ class EnhancedResultManager:
     def _count_factors_by_tier(self, results: Dict[str, Any]) -> Dict[str, int]:
         """统计各层级因子数量"""
         tier_counts: Dict[str, int] = {}
-        for factor in results.to_numpy()():
+        for factor in results.values():
             tier = factor.tier or "Unknown"
             tier_counts[tier] = tier_counts.get(tier, 0) + 1
         return tier_counts
@@ -764,7 +764,7 @@ class EnhancedResultManager:
             "poor (<0.4)": 0,
         }
 
-        for factor in results.to_numpy()():
+        for factor in results.values():
             score = factor.comprehensive_score
             if score > 0.8:
                 distribution["excellent (>0.8)"] += 1

@@ -1,0 +1,30 @@
+{
+  "total_factors": 252,
+  "significant_factors": 3,
+  "high_score_factors": 12,
+  "total_time": 4.8141608238220215,
+  "memory_used_mb": 549.515625,
+  "sample_size": 738,
+  "factors_aligned": 252,
+  "data_alignment_successful": true,
+  "screening_timestamp": "2025-10-03T23:31:21.203134",
+  "symbol": "0700.HK",
+  "timeframe": "60min",
+  "session_metadata": {
+    "symbol": "0700.HK",
+    "timeframe": "60min",
+    "screening_timestamp": "2025-10-03T23:31:21.206002",
+    "total_factors_processed": 252,
+    "factors_by_tier": {
+      "不推荐": 132,
+      "Tier 3": 117,
+      "Tier 2": 3
+    },
+    "score_distribution": {
+      "excellent (>0.8)": 0,
+      "good (0.6-0.8)": 31,
+      "average (0.4-0.6)": 89,
+      "poor (<0.4)": 132
+    }
+  }
+}

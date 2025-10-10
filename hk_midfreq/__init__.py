@@ -6,6 +6,12 @@ P0 优化实现：
 - 错误处理标准化
 """
 
+# 配置Matplotlib中文字体（自动执行，消除告警）
+try:
+    from hk_midfreq.utils import matplotlib_config  # noqa: F401
+except ImportError:
+    pass  # matplotlib未安装，静默跳过
+
 from hk_midfreq.backtest_engine import run_single_asset_backtest
 from hk_midfreq.config import (
     ExecutionConfig,

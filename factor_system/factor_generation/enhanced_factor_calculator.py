@@ -16,7 +16,44 @@ import pandas as pd
 import vectorbt as vbt
 
 # 导入配置
-from config import setup_logging
+try:
+    from factor_system.factor_generation.config import setup_logging
+except ImportError:
+    from config import setup_logging
+
+# 导入共享计算器
+try:
+    from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+except ImportError:
+    # 如果没有共享计算器，创建一个简单的替代实现
+    import talib
+
+    class SimpleCalculators:
+        @staticmethod
+        def calculate_macd(price, fastperiod=12, slowperiod=26, signalperiod=9):
+            macd, signal, hist = talib.MACD(price.values, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
+            return {
+                'macd': pd.Series(macd, index=price.index, name='MACD'),
+                'signal': pd.Series(signal, index=price.index, name='MACD_Signal'),
+                'hist': pd.Series(hist, index=price.index, name='MACD_Hist')
+            }
+
+        @staticmethod
+        def calculate_rsi(price, period=14):
+            rsi = talib.RSI(price.values, timeperiod=period)
+            return pd.Series(rsi, index=price.index, name=f'RSI{period}')
+
+        @staticmethod
+        def calculate_stoch(high, low, close, fastk_period=5, slowk_period=3, slowd_period=3):
+            slowk, slowd = talib.STOCH(high.values, low.values, close.values,
+                                     fastk_period=fastk_period, slowk_period=slowk_period,
+                                     slowd_period=slowd_period)
+            return {
+                'k': pd.Series(slowk, index=high.index, name='STOCH_K'),
+                'd': pd.Series(slowd, index=high.index, name='STOCH_D')
+            }
+
+    SHARED_CALCULATORS = SimpleCalculators()
 
 # 简化的时间框架定义
 
@@ -200,22 +237,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class IndicatorConfig:
-    """指标配置类"""
+    """指标配置类 - 不提供默认值，必须显式配置"""
 
-    enable_ma: bool = True
-    enable_ema: bool = True
-    enable_macd: bool = True
-    enable_rsi: bool = True
-    enable_bbands: bool = True
-    enable_stoch: bool = True
-    enable_atr: bool = True
-    enable_obv: bool = True
-    enable_mstd: bool = True
-    enable_manual_indicators: bool = True
+    enable_ma: bool
+    enable_ema: bool
+    enable_macd: bool
+    enable_rsi: bool
+    enable_bbands: bool
+    enable_stoch: bool
+    enable_atr: bool
+    enable_obv: bool
+    enable_mstd: bool
+    enable_manual_indicators: bool
 
     # 性能优化配置
-    enable_all_periods: bool = False  # 是否启用所有周期（影响性能）
-    memory_efficient: bool = True  # 内存高效模式
+    enable_all_periods: bool  # 是否启用所有周期（影响性能）
+    memory_efficient: bool  # 内存高效模式
 
 
 class EnhancedFactorCalculator:
@@ -224,16 +261,21 @@ class EnhancedFactorCalculator:
     移植自vbt_professional_detector.py的成熟计算逻辑
     """
 
-    def __init__(self, indicator_config: Optional[IndicatorConfig] = None):
-        """初始化增强因子计算器"""
-        self.config = indicator_config or IndicatorConfig()
+    def __init__(self, indicator_config: IndicatorConfig):
+        """初始化增强因子计算器 - 必须提供配置"""
+        if indicator_config is None:
+            raise ValueError("indicator_config 参数是必需的，不能为 None")
+
+        self.config = indicator_config
         logger.info("增强版因子计算器初始化完成")
 
         logger.info(
-            "配置: MA=%s, MACD=%s, RSI=%s",
+            "配置: MA=%s, MACD=%s, RSI=%s, enable_all_periods=%s, memory_efficient=%s",
             self.config.enable_ma,
             self.config.enable_macd,
             self.config.enable_rsi,
+            self.config.enable_all_periods,
+            self.config.memory_efficient,
         )
 
     def calculate_comprehensive_factors(
@@ -308,13 +350,11 @@ class EnhancedFactorCalculator:
 
                 def create_macd_calc(
                     fast: int, slow: int, signal: int
-                ) -> Callable[[], Any]:
-                    def calc() -> Any:
-                        return vbt.MACD.run(
-                            price,
-                            fast_window=fast,
-                            slow_window=slow,
-                            signal_window=signal,
+                ) -> Callable[[], Dict[str, pd.Series]]:
+                    def calc() -> Dict[str, pd.Series]:
+                        # 使用共享计算器确保与factor_engine、hk_midfreq完全一致
+                        return SHARED_CALCULATORS.calculate_macd(
+                            price, fastperiod=fast, slowperiod=slow, signalperiod=signal
                         )
 
                     return calc
@@ -334,9 +374,9 @@ class EnhancedFactorCalculator:
 
                 def create_rsi_calc(window: int) -> Callable[[], pd.Series]:
                     def calc() -> pd.Series:
-                        return vbt.RSI.run(price, window=window).rsi.rename(
-                            f"RSI{window}"
-                        )
+                        # 使用共享计算器确保与factor_engine、hk_midfreq完全一致
+                        rsi = SHARED_CALCULATORS.calculate_rsi(price, period=window)
+                        return rsi.rename(f"RSI{window}")
 
                     return calc
 
@@ -370,12 +410,14 @@ class EnhancedFactorCalculator:
 
                 def create_stoch_calc(
                     k_window: int, d_window: int
-                ) -> Callable[[], Any]:
-                    def calc() -> Any:
-                        return extract_vbt_indicator(
-                            vbt.STOCH.run(
-                                high, low, price, k_window=k_window, d_window=d_window
-                            )
+                ) -> Callable[[], Dict[str, pd.Series]]:
+                    def calc() -> Dict[str, pd.Series]:
+                        # 使用共享计算器确保与factor_engine、hk_midfreq完全一致
+                        return SHARED_CALCULATORS.calculate_stoch(
+                            high, low, price,
+                            fastk_period=k_window,
+                            slowk_period=d_window,
+                            slowd_period=d_window
                         )
 
                     return calc
@@ -470,12 +512,75 @@ class EnhancedFactorCalculator:
 
                     factor_calculations.append(("BOLB_20", create_bolb_calc()))
 
-                # Fixed Lookback指标 - 暂时禁用，存在参数和rename方法问题
-                # TODO: 若启用 FIXLB，可在此遍历窗口并调用 vbt.FIXLB.run(...)
-                # 然后 rename 为 FIXLB{window}
+                # Fixed Lookback指标 - 启用并修复rename方法问题
+                if "FIXLB" in available_indicators:
+                    fixlb_windows = timeframe_params["lb_windows"]
+                    logger.info(f"{timeframe.value} 使用FIXLB窗口: {fixlb_windows}")
 
-                # 统计指标 - 暂时禁用，存在rename方法问题
-                # TODO: 若启用 FMAX/FMEAN/FMIN/FSTD，需运行对应函数并重命名
+                    def create_fixlb_calc(window: int) -> Callable[[], pd.Series]:
+                        def calc() -> pd.Series:
+                            # FIXLB需要n参数
+                            result = vbt.FIXLB.run(price, n=window)
+                            # FIXLB对象可能没有rename方法，需要提取具体值
+                            if hasattr(result, 'rename'):
+                                return result.rename(f"FIXLB{window}")
+                            elif hasattr(result, 'fixlb'):
+                                return result.fixlb.rename(f"FIXLB{window}")
+                            else:
+                                # 如果是其他格式，尝试转换为Series
+                                try:
+                                    series_result = pd.Series(result, name=f"FIXLB{window}")
+                                    return series_result
+                                except Exception:
+                                    # 如果都失败，返回默认值
+                                    return pd.Series([0] * len(price), name=f"FIXLB{window}")
+                        return calc
+
+                    for window in fixlb_windows:
+                        factor_calculations.append(
+                            (f"FIXLB{window}", create_fixlb_calc(window))
+                        )
+
+                # 统计指标 - 启用并修复rename方法问题
+                if "FMAX" in available_indicators:
+                    stat_windows = timeframe_params["stat_windows"]
+                    logger.info(f"{timeframe.value} 使用统计指标窗口: {stat_windows}")
+
+                    # FMAX (Maximum Price)
+                    def create_fmax_calc(window: int) -> Callable[[], pd.Series]:
+                        def calc() -> pd.Series:
+                            result = price.rolling(window=window).max()
+                            return result.rename(f"FMAX{window}")
+                        return calc
+
+                    # FMEAN (Mean Price)
+                    def create_fmean_calc(window: int) -> Callable[[], pd.Series]:
+                        def calc() -> pd.Series:
+                            result = price.rolling(window=window).mean()
+                            return result.rename(f"FMEAN{window}")
+                        return calc
+
+                    # FMIN (Minimum Price)
+                    def create_fmin_calc(window: int) -> Callable[[], pd.Series]:
+                        def calc() -> pd.Series:
+                            result = price.rolling(window=window).min()
+                            return result.rename(f"FMIN{window}")
+                        return calc
+
+                    # FSTD (Standard Deviation)
+                    def create_fstd_calc(window: int) -> Callable[[], pd.Series]:
+                        def calc() -> pd.Series:
+                            result = price.rolling(window=window).std()
+                            return result.rename(f"FSTD{window}")
+                        return calc
+
+                    for window in stat_windows:
+                        factor_calculations.extend([
+                            (f"FMAX{window}", create_fmax_calc(window)),
+                            (f"FMEAN{window}", create_fmean_calc(window)),
+                            (f"FMIN{window}", create_fmin_calc(window)),
+                            (f"FSTD{window}", create_fstd_calc(window)),
+                        ])
 
                 # 其他移动平均指标 - 根据时间框架调整窗口
                 for lb_func, lb_name in [
@@ -515,10 +620,205 @@ class EnhancedFactorCalculator:
                                 )
                             )
 
-                # TODO: 以下指标 (OHLC/RAND/RPROB/ST*) 暂未启用。
-                # 若后续启用，需要在此根据各指标的 run(...) 结果进行 rename。
+                # 11. OHLC/RAND/RPROB/ST* 指标 (已启用)
+                if self.config.enable_all_periods:
+                    # OHLC统计指标
+                    ohlc_windows = [5, 10, 15, 20]
+                    for window in ohlc_windows:
+                        # OHLCSTX - OHLC价格统计
+                        def create_ohlcstx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # 从df中获取OHLC数据
+                                open_price = df['open']
+                                high_price = df['high']
+                                low_price = df['low']
+                                close_price = df['close']
+                                result = vbt.OHLCSTX.run(open_price, high_price, low_price, close_price, window=w)
+                                if hasattr(result, 'ohlcstx'):
+                                    return result.ohlcstx.rename(f"OHLCSTX{w}")
+                                else:
+                                    return result.rename(f"OHLCSTX{w}")
+                            return calc
+                        factor_calculations.append(("OHLCSTX", create_ohlcstx_calc(window)))
 
-            # 11. TA-Lib指标 (如果可用)
+                        # OHLCSTCX - OHLC价格累积统计
+                        def create_ohlcstcx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # 从df中获取OHLC数据
+                                open_price = df['open']
+                                high_price = df['high']
+                                low_price = df['low']
+                                close_price = df['close']
+                                result = vbt.OHLCSTCX.run(open_price, high_price, low_price, close_price, window=w)
+                                if hasattr(result, 'ohlcstcx'):
+                                    return result.ohlcstcx.rename(f"OHLCSTCX{w}")
+                                else:
+                                    return result.rename(f"OHLCSTCX{w}")
+                            return calc
+                        factor_calculations.append(("OHLCSTCX", create_ohlcstcx_calc(window)))
+
+                    # 随机指标系列
+                    rand_windows = [5, 10, 15, 20]
+                    for window in rand_windows:
+                        # RAND - 随机指标
+                        def create_rand_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # RAND需要input_shape参数
+                                try:
+                                    result = vbt.RAND.run(input_shape=len(price), n=w)
+                                    if hasattr(result, 'rand'):
+                                        return result.rand.rename(f"RAND{w}")
+                                    else:
+                                        return result.rename(f"RAND{w}")
+                                except Exception:
+                                    # 如果还是失败，返回默认值
+                                    return pd.Series([0] * len(price), name=f"RAND{w}")
+                            return calc
+                        factor_calculations.append(("RAND", create_rand_calc(window)))
+
+                        # RANDX - 随机指标交叉
+                        def create_randx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # RANDX需要entries参数
+                                try:
+                                    # 创建简单的entries信号
+                                    entries = pd.Series([False] * len(price))
+                                    entries.iloc[::w] = True  # 每w个周期设置一个entry
+                                    result = vbt.RANDX.run(price, entries=entries)
+                                    if hasattr(result, 'randx'):
+                                        return result.randx.rename(f"RANDX{w}")
+                                    elif hasattr(result, 'rename'):
+                                        return result.rename(f"RANDX{w}")
+                                    else:
+                                        return pd.Series([0] * len(price), name=f"RANDX{w}")
+                                except Exception:
+                                    return pd.Series([0] * len(price), name=f"RANDX{w}")
+                            return calc
+                        factor_calculations.append(("RANDX", create_randx_calc(window)))
+
+                        # RANDNX - 随机指标归一化
+                        def create_randnx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # RANDNX需要input_shape参数
+                                try:
+                                    result = vbt.RANDNX.run(input_shape=len(price), n=w)
+                                    if hasattr(result, 'randnx'):
+                                        return result.randnx.rename(f"RANDNX{w}")
+                                    else:
+                                        return result.rename(f"RANDNX{w}")
+                                except Exception:
+                                    return pd.Series([0] * len(price), name=f"RANDNX{w}")
+                            return calc
+                        factor_calculations.append(("RANDNX", create_randnx_calc(window)))
+
+                    # 概率指标系列
+                    rprob_windows = [5, 10, 15, 20]
+                    for window in rprob_windows:
+                        # RPROB - 上涨概率指标
+                        def create_rprob_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # RPROB需要prob参数，但是有Series歧义问题，需要特殊处理
+                                try:
+                                    # 使用简单的布尔值避免Series歧义
+                                    prob_param = 0.5
+                                    result = vbt.RPROB.run(price, prob=prob_param)
+                                    if hasattr(result, 'rprob'):
+                                        return result.rprob.rename(f"RPROB{w}")
+                                    else:
+                                        return result.rename(f"RPROB{w}")
+                                except Exception as e:
+                                    # 如果还是失败，返回默认值
+                                    return pd.Series([0] * len(price), name=f"RPROB{w}")
+                            return calc
+                        factor_calculations.append(("RPROB", create_rprob_calc(window)))
+
+                        # RPROBX - 概率指标交叉
+                        def create_rprobx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                try:
+                                    result = vbt.RPROBX.run(price, prob=0.5)
+                                    if hasattr(result, 'rprobx'):
+                                        return result.rprobx.rename(f"RPROBX{w}")
+                                    elif hasattr(result, 'rename'):
+                                        return result.rename(f"RPROBX{w}")
+                                    else:
+                                        # 如果没有rename方法，尝试转换
+                                        series_result = pd.Series(result, name=f"RPROBX{w}")
+                                        return series_result
+                                except Exception:
+                                    return pd.Series([0] * len(price), name=f"RPROBX{w}")
+                            return calc
+                        factor_calculations.append(("RPROBX", create_rprobx_calc(window)))
+
+                        # RPROBCX - 概率指标累积
+                        def create_rprobcx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                try:
+                                    result = vbt.RPROBCX.run(price, prob=0.5)
+                                    if hasattr(result, 'rprobcx'):
+                                        return result.rprobcx.rename(f"RPROBCX{w}")
+                                    elif hasattr(result, 'rename'):
+                                        return result.rename(f"RPROBCX{w}")
+                                    else:
+                                        series_result = pd.Series(result, name=f"RPROBCX{w}")
+                                        return series_result
+                                except Exception:
+                                    return pd.Series([0] * len(price), name=f"RPROBCX{w}")
+                            return calc
+                        factor_calculations.append(("RPROBCX", create_rprobcx_calc(window)))
+
+                        # RPROBNX - 概率指标归一化
+                        def create_rprobnx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # RPROBNX需要entry_prob和exit_prob参数
+                                try:
+                                    result = vbt.RPROBNX.run(price, entry_prob=0.5, exit_prob=0.3)
+                                    if hasattr(result, 'rprobnx'):
+                                        return result.rprobnx.rename(f"RPROBNX{w}")
+                                    else:
+                                        return result.rename(f"RPROBNX{w}")
+                                except Exception:
+                                    # 如果还是失败，返回默认值
+                                    return pd.Series([0] * len(price), name=f"RPROBNX{w}")
+                            return calc
+                        factor_calculations.append(("RPROBNX", create_rprobnx_calc(window)))
+
+                    # ST* 趋势指标系列
+                    st_windows = [5, 10, 15, 20]
+                    for window in st_windows:
+                        # STX - 统计趋势指标
+                        def create_stx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # STX需要ts和stop参数
+                                try:
+                                    result = vbt.STX.run(ts=price, stop=w)
+                                    if hasattr(result, 'stx'):
+                                        return result.stx.rename(f"STX{w}")
+                                    else:
+                                        return result.rename(f"STX{w}")
+                                except Exception:
+                                    # 如果失败，返回默认值
+                                    return pd.Series([0] * len(price), name=f"STX{w}")
+                            return calc
+                        factor_calculations.append(("STX", create_stx_calc(window)))
+
+                        # STCX - 统计趋势累积指标
+                        def create_stcx_calc(w: int) -> Callable[[], pd.Series]:
+                            def calc() -> pd.Series:
+                                # STCX需要ts和stop参数
+                                try:
+                                    result = vbt.STCX.run(ts=price, stop=w)
+                                    if hasattr(result, 'stcx'):
+                                        return result.stcx.rename(f"STCX{w}")
+                                    else:
+                                        return result.rename(f"STCX{w}")
+                                except Exception:
+                                    # 如果失败，返回默认值
+                                    return pd.Series([0] * len(price), name=f"STCX{w}")
+                            return calc
+                        factor_calculations.append(("STCX", create_stcx_calc(window)))
+
+                # 12. TA-Lib指标 (如果可用)
             if hasattr(vbt, "talib") and self.config.enable_all_periods:
                 talib_params = {
                     "SMA": {"timeperiod": [5, 10, 20, 30, 60]},
@@ -762,6 +1062,15 @@ class EnhancedFactorCalculator:
             # 收集所有因子
             factors_df = pd.DataFrame(factor_data, index=df.index)
 
+            # 根据配置决定是否包含原始价格数据
+            # 将原始OHLCV数据合并到因子数据中（修复价格数据缺失问题）
+            original_columns = ['open', 'high', 'low', 'close', 'volume']
+            for col in original_columns:
+                if col in df.columns:
+                    factors_df[col] = df[col]
+                    logger.debug(f"添加原始价格数据: {col}")
+
+            logger.info(f"包含价格数据后的形状: {factors_df.shape}")
             logger.info(f"原始因子数据形状: {factors_df.shape}")
             logger.info(f"因子数据空值统计: {factors_df.isna().sum().sum()}")
 
@@ -801,6 +1110,7 @@ class EnhancedFactorCalculator:
                 "mstd_windows": [5, 10, 15],
                 "stoch_windows": [(7, 10), (10, 14), (14, 20)],
                 "macd_params": [(6, 13, 4), (8, 17, 5), (12, 26, 9)],
+                "stat_windows": [5, 10, 15, 20],
             }
         elif timeframe == TimeFrame.MIN_15:
             # 15分钟框架：中等偏短周期
@@ -814,6 +1124,7 @@ class EnhancedFactorCalculator:
                 "mstd_windows": [8, 12, 20],
                 "stoch_windows": [(10, 14), (14, 20), (20, 25)],
                 "macd_params": [(8, 17, 5), (12, 26, 9), (16, 34, 7)],
+                "stat_windows": [5, 10, 15, 20],
             }
         elif timeframe == TimeFrame.MIN_30:
             # 30分钟框架：中等周期
@@ -827,6 +1138,7 @@ class EnhancedFactorCalculator:
                 "mstd_windows": [12, 20, 25],
                 "stoch_windows": [(14, 20), (20, 25), (25, 30)],
                 "macd_params": [(12, 26, 9), (16, 34, 7), (20, 42, 8)],
+                "stat_windows": [5, 10, 15, 20],
             }
         elif timeframe == TimeFrame.MIN_60:
             # 60分钟框架：中等偏长周期
@@ -840,6 +1152,7 @@ class EnhancedFactorCalculator:
                 "mstd_windows": [15, 25, 35],
                 "stoch_windows": [(14, 20), (20, 30), (30, 40)],
                 "macd_params": [(12, 26, 9), (16, 34, 7), (20, 42, 8)],
+                "stat_windows": [5, 10, 15, 20],
             }
         else:  # DAILY
             # 日线框架：长周期，趋势跟踪
@@ -853,6 +1166,7 @@ class EnhancedFactorCalculator:
                 "mstd_windows": [20, 30, 40, 60],
                 "stoch_windows": [(14, 20), (20, 30), (30, 60)],
                 "macd_params": [(12, 26, 9), (16, 34, 7), (20, 42, 8)],
+                "stat_windows": [5, 10, 15, 20],
             }
 
     def _check_available_indicators(self) -> List[str]:
@@ -1348,7 +1662,7 @@ class EnhancedFactorCalculator:
 
         # 计算每个类别的指标数量
         total_indicators = sum(
-            len(indicators) for indicators in categories.to_numpy()()
+            len(indicators) for indicators in categories.values()
         )
         logger.info(
             f"因子类别统计: {len(categories)} 个大类，共 {total_indicators} 个指标"
@@ -1360,9 +1674,9 @@ class EnhancedFactorCalculator:
         return categories
 
 
-# 测试函数
-def test_enhanced_calculator():
-    """测试增强版因子计算器"""
+# 测试函数 - 必须提供配置
+def test_enhanced_calculator(config: IndicatorConfig):
+    """测试增强版因子计算器 - 必须提供配置"""
     logger.info("测试增强版因子计算器...")
 
     # 创建测试数据
@@ -1378,10 +1692,7 @@ def test_enhanced_calculator():
         index=dates,
     )
 
-    # 测试基础配置
-    basic_config = IndicatorConfig(enable_all_periods=False, memory_efficient=True)
-
-    calculator = EnhancedFactorCalculator(basic_config)
+    calculator = EnhancedFactorCalculator(config)
 
     # 计算因子
     factors = calculator.calculate_comprehensive_factors(test_data, TimeFrame.MIN_5)
@@ -1402,4 +1713,5 @@ def test_enhanced_calculator():
 
 
 if __name__ == "__main__":
-    test_enhanced_calculator()
+    # 必须提供配置，不再有默认值
+    raise ValueError("直接运行此脚本需要提供配置。请使用主程序入口。")

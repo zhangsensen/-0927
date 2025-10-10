@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 300450.SZ 先导智能技术分析
 短期走势分析框架

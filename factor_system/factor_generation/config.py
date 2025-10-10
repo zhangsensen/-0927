@@ -129,11 +129,11 @@ class SimpleConfig:
 _config = None
 
 
-def get_config() -> SimpleConfig:
+def get_config(config_path: str = None) -> SimpleConfig:
     """获取全局配置实例"""
     global _config
-    if _config is None:
-        _config = SimpleConfig()
+    if _config is None or config_path is not None:
+        _config = SimpleConfig(config_path)
     return _config
 
 

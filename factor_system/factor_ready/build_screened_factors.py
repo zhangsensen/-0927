@@ -10,7 +10,7 @@ from typing import Iterable
 
 BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = BASE_DIR.parent
-SCREENING_ROOT = PROJECT_ROOT / "factor_screening" / "因子筛选"
+SCREENING_ROOT = PROJECT_ROOT / "factor_screening" / "screening_results"
 OUTPUT_DIR = BASE_DIR
 
 

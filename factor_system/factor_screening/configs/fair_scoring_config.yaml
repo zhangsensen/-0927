@@ -1,0 +1,133 @@
+# 公平评分配置 - 解决长短周期因子评分不公平问题
+# 作者：量化首席工程师
+# 版本：1.0.0
+# 日期：2025-10-07
+
+# 公平评分器配置
+fair_scorer:
+  # 统计功效归一化参数
+  enabled: true                     # 启用公平评分
+  reference_sample_size: 1000      # 参考样本量（IC归一化目标）
+  min_reliable_sample: 200         # 最小可靠样本量
+
+  # 时间框架特殊调整参数
+  timeframe_adjustments:
+    # 超高频（轻微惩罚：缺乏经济意义）
+    1min:
+      stability_bonus: 0.0         # 稳定性奖励
+      uncertainty_penalty: 1.0     # 不确定性惩罚因子（1.0=无惩罚）
+      economic_significance_discount: 0.95  # 经济意义折扣（更温和）
+
+    # 高频（标准处理）
+    5min:
+      stability_bonus: 0.0
+      uncertainty_penalty: 1.0
+      economic_significance_discount: 0.9
+
+    15min:
+      stability_bonus: 0.02
+      uncertainty_penalty: 0.95
+      economic_significance_discount: 0.95
+
+    # 中频（适度奖励）
+    30min:
+      stability_bonus: 0.03
+      uncertainty_penalty: 0.9
+      economic_significance_discount: 1.0
+
+    60min:
+      stability_bonus: 0.05
+      uncertainty_penalty: 0.85
+      economic_significance_discount: 1.0
+
+    # 低频（显著奖励：经济意义强）
+    2h:
+      stability_bonus: 0.08
+      uncertainty_penalty: 0.8
+      economic_significance_discount: 1.1
+
+    4h:
+      stability_bonus: 0.10
+      uncertainty_penalty: 0.75
+      economic_significance_discount: 1.15
+
+    1day:
+      stability_bonus: 0.25      # 增加稳定性奖励
+      uncertainty_penalty: 0.85   # 减少惩罚
+      economic_significance_discount: 1.3  # 增加经济意义奖励
+
+# 样本量权重配置（保留原有逻辑，但参数优化）
+sample_weight_params:
+  enable: true
+  min_full_weight_samples: 300     # 降低门槛（原500）
+  weight_power: 0.3                # 更温和的折扣（原0.5）
+
+  # 受影响的维度（预测能力不参与样本量折扣）
+  affected_dimensions:
+    - stability
+    - independence
+    - practicality
+    - adaptability
+
+  # 维度特殊权重
+  dimension_weights:
+    stability: 0.8       # 稳定性需要较大样本
+    independence: 0.7    # 独立性分析需要大样本
+    practicality: 0.9    # 实用性对样本量不敏感
+    adaptability: 0.85   # 适应性中等敏感
+
+# 综合评分权重配置（可按时间框架自定义）
+timeframe_weights:
+  default:
+    predictive_power: 0.35
+    stability: 0.25
+    independence: 0.20
+    practicality: 0.15
+    short_term_fitness: 0.05
+
+  # 长周期更看重预测能力，短周期更看重实用性
+  1min:
+    predictive_power: 0.30
+    stability: 0.20
+    independence: 0.15
+    practicality: 0.25    # 高频交易更看重执行成本
+    short_term_fitness: 0.10
+
+  1day:
+    predictive_power: 0.40    # 长周期投资更看重预测能力
+    stability: 0.30
+    independence: 0.20
+    practicality: 0.05       # 长期投资对交易成本不敏感
+    short_term_fitness: 0.05
+
+# 筛选阈值配置（按时间框架自定义）
+screening_thresholds:
+  default:
+    min_ic_threshold: 0.015
+    min_ir_threshold: 0.35
+    min_robustness_score: 0.6
+
+  # 高频筛选更严格（避免噪音）
+  1min:
+    min_ic_threshold: 0.02     # 更严格的IC阈值
+    min_ir_threshold: 0.4      # 更严格的IR阈值
+    min_robustness_score: 0.7  # 更严格的稳健性要求
+
+  # 长周期筛选更宽松（发现价值）
+  1day:
+    min_ic_threshold: 0.01     # 更宽松的IC阈值
+    min_ir_threshold: 0.3      # 更宽松的IR阈值
+    min_robustness_score: 0.5  # 更宽松的稳健性要求
+
+# 调试和监控配置
+debug:
+  enable_fair_scoring_log: true
+  show_detailed_breakdown: true
+  compare_original_vs_fair: true
+
+  # 输出详细对比报告
+  generate_comparison_report: true
+  comparison_metrics:
+    - score_distribution_by_timeframe
+    - top_factors_comparison
+    - sample_size_impact_analysis

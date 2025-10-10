@@ -1,8 +1,23 @@
 [project]
-name = "quant-trading"
-version = "0.1.0"
-description = "量化交易开发环境"
+name = "factor-engine"
+version = "0.2.0"
+description = "专业级因子计算引擎 - 研究与回测的统一计算核心"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "量化首席工程师", email = "your.email@example.com"},
+]
+keywords = ["quantitative", "factors", "backtesting", "technical-analysis", "trading"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+      "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
 
 # 核心依赖（必须安装）
 dependencies = [
@@ -37,6 +52,7 @@ dependencies = [
     "numba>=0.62.0",
     "pandas-vet>=2023.8.2",
     "httpx[socks]>=0.28.1",
+    "pydantic>=2.0.0",
 ]
 
 # 可选依赖（按需安装）
@@ -105,8 +121,19 @@ dev = [
 
 # 完整安装（包含所有可选依赖）
 all = [
-    "quant-trading[performance,visualization,web,database,scheduling,dev]"
+    "factor-engine[performance,visualization,web,database,scheduling,dev]"
 ]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["factor_system", "factor_system.shared", "factor_system.factor_engine", "factor_system.factor_engine.core", "factor_system.factor_engine.providers", "factor_system.factor_engine.factors", "factor_system.factor_engine.factors.technical", "factor_system.factor_engine.factors.overlap", "factor_system.factor_engine.factors.statistic", "factor_system.factor_engine.factors.pattern", "factor_system.factor_generation", "factor_system.factor_screening", "factor_system.research", "factor_system.utils"]
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+"factor_system" = ["*.yaml", "*.json", "data/*.json"]
 
 [project.urls]
 Homepage = "https://github.com/yourusername/quant-trading"
@@ -114,9 +141,10 @@ Repository = "https://github.com/yourusername/quant-trading.git"
 Documentation = "https://quant-trading.readthedocs.io"
 "Bug Tracker" = "https://github.com/yourusername/quant-trading/issues"
 
-[project.scripts]
-quant-backtest = "quant.cli:backtest"
-quant-data = "quant.cli:data_fetcher"
+# 移除无效的控制台脚本，quant.cli 不存在
+# [project.scripts]
+# quant-backtest = "quant.cli:backtest"
+# quant-data = "quant.cli:data_fetcher"
 
 [tool.black]
 line-length = 88

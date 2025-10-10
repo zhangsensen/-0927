@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **professional-grade quantitative trading development environment** specializing in multi-market analysis with comprehensive factor screening capabilities. The system features:
+This is a **professional-grade quantitative trading development environment** with a unified factor calculation engine. The system features:
 
-1. **A-Share Technical Analysis Framework** (`a股/`) - Chinese stock market analysis with 154 technical indicators
-2. **Professional Factor Screening System** (`factor_system/`) - 5-dimension factor analysis with statistical significance testing
-3. **Multi-Market Support** - Hong Kong (276+ stocks), US (172+ stocks), and A-Share markets
-4. **VectorBT Integration** - 10-50x performance improvement over traditional pandas
+1. **FactorEngine** (`factor_system/factor_engine/`) - Unified factor calculation core ensuring consistency across research, backtesting, and portfolio management
+2. **A-Share Technical Analysis Framework** (`a股/`) - Chinese stock market analysis with 154 technical indicators
+3. **Professional Factor Screening System** (`factor_system/factor_screening/`) - 5-dimension factor analysis with statistical significance testing
+4. **Multi-Market Support** - Hong Kong (276+ stocks), US (172+ stocks), and A-Share markets
+5. **VectorBT Integration** - 10-50x performance improvement over traditional pandas
 
 ## Key Commands
 
@@ -67,6 +68,18 @@ python factor_system/factor_screening/quick_start.py
 python factor_system/factor_screening/batch_screener.py
 ```
 
+### FactorEngine Usage
+```bash
+# Test FactorEngine consistency with factor_generation
+python tests/test_factor_engine_consistency.py
+
+# Install FactorEngine in development mode
+pip install -e .
+
+# List available factors
+python -c "from factor_system.factor_engine import api; print(api.list_available_factors())"
+```
+
 ### Data Processing
 ```bash
 # Batch resample Hong Kong 1-minute data to higher timeframes
@@ -84,6 +97,20 @@ python batch_resample_hk.py
 - `batch_storage_analysis.py` - Storage analysis tool
 - Individual stock directories with OHLCV data
 
+**FactorEngine (`factor_system/factor_engine/`)**
+- `api.py` - Unified API entry point for all factor calculations
+- `core/engine.py` - Main factor calculation engine
+- `core/registry.py` - Factor registration and metadata management
+- `core/cache.py` - Dual-layer caching system (memory + disk)
+- `core/vectorbt_adapter.py` - VectorBT integration for performance
+- `providers/` - Data providers (CSV, Parquet)
+- `factors/` - 100+ technical indicators organized by category:
+  - `technical/` - RSI, MACD, STOCH, WILLR, CCI, etc.
+  - `overlap/` - SMA, EMA, Bollinger Bands, SAR, etc.
+  - `statistic/` - Correlation, regression, statistical functions
+  - `pattern/` - Candlestick pattern recognition
+- `settings.py` - Environment configuration management
+
 **Factor System (`factor_system/`)**
 - `factor_generation/` - Multi-timeframe factor calculation and analysis
   - `enhanced_factor_calculator.py` - 154 technical indicators engine
@@ -95,12 +122,34 @@ python batch_resample_hk.py
   - `cli.py` - Command-line interface
   - `batch_screener.py` - Batch processing
   - `config_manager.py` - Configuration management
+- `shared/factor_calculators.py` - Shared calculation logic ensuring consistency
 - `config/` - Strategy configuration templates
 - `tests/` - Comprehensive test suite
 
+### FactorEngine Architecture
+
+**Unified Factor Calculation Core**
+FactorEngine provides a single source of truth for all factor calculations, ensuring 100% consistency across:
+- Research environments (`factor_generation`)
+- Backtesting systems (`hk_midfreq`)
+- Factor screening (`factor_screening`)
+- Portfolio management
+
+**Factor Categories in FactorEngine**
+- **Technical Indicators** (37 factors): RSI, MACD, STOCH, WILLR, CCI, ADX, ATR, etc.
+- **Overlap Studies** (12 factors): SMA, EMA, WMA, DEMA, TEMA, BBANDS, SAR, etc.
+- **Statistical Functions** (15 factors): Correlation, regression, linear interpolation
+- **Pattern Recognition** (60+ factors): Japanese candlestick patterns via TA-Lib
+
+**Key Design Principles**
+- **Single Responsibility**: Each factor is a separate class inheriting from `BaseFactor`
+- **Caching Strategy**: Dual-layer (memory + disk) caching with configurable TTL
+- **Parallel Processing**: Symbol-level parallelization with configurable job count
+- **Data Provider Abstraction**: Pluggable data sources (CSV, Parquet, database)
+
 ### 154-Indicator System
 
-The system implements **154 technical indicators** organized into categories:
+The system implements **154 technical indicators** across multiple modules:
 
 **Core Technical Indicators (36 factors)**
 - Moving Averages: MA5, MA10, MA20, MA30, MA60, EMA5, EMA12, EMA26
@@ -185,9 +234,25 @@ The professional factor screener implements a comprehensive 5-dimension evaluati
 ## Configuration Management
 
 ### Project Configuration
-- **pyproject.toml**: Modern Python project configuration with uv
+- **pyproject.toml**: Modern Python project configuration with uv, defines "factor-engine" package
 - **Python 3.11+**: Required for all components
 - **Dependencies**: VectorBT, pandas, NumPy, TA-Lib, scikit-learn, etc.
+
+### FactorEngine Configuration
+FactorEngine uses environment variables and settings classes for configuration:
+
+```python
+# Environment variables
+export FACTOR_ENGINE_RAW_DATA_DIR="/data/market/raw"
+export FACTOR_ENGINE_MEMORY_MB="1024"
+export FACTOR_ENGINE_N_JOBS="-1"
+export FACTOR_ENGINE_CACHE_DIR="/cache/factors"
+```
+
+**Pre-configured Environments**
+- **Development**: 200MB cache, 2-hour TTL, single-thread, verbose logging
+- **Research**: 512MB cache, 24-hour TTL, 4-core parallel, info logging
+- **Production**: 1GB cache, 7-day TTL, all-core parallel, warning-only logging
 
 ### Factor System Config
 Configuration is managed through Python classes with YAML support:
@@ -237,6 +302,9 @@ pytest --cov=factor_system
 pytest -m unit          # Unit tests only
 pytest -m integration   # Integration tests only
 pytest -m slow          # Slow tests only
+
+# FactorEngine consistency tests
+python tests/test_factor_engine_consistency.py
 
 # Performance benchmarking
 python factor_system/factor_screening/performance_benchmark.py
@@ -334,6 +402,34 @@ python factor_system/factor_screening/tests/test_basic_functionality.py
 
 ### CLI Usage Examples
 
+**FactorEngine API Usage**
+```python
+from factor_system.factor_engine import api
+from datetime import datetime
+
+# Calculate single factor
+rsi = api.calculate_single_factor(
+    factor_id="RSI",
+    symbol="0700.HK",
+    timeframe="15min",
+    start_date=datetime(2025, 9, 1),
+    end_date=datetime(2025, 9, 30)
+)
+
+# Calculate multiple factors
+factors = api.calculate_factors(
+    factor_ids=["RSI", "MACD", "STOCH"],
+    symbols=["0700.HK", "0005.HK"],
+    timeframe="15min",
+    start_date=datetime(2025, 9, 1),
+    end_date=datetime(2025, 9, 30)
+)
+
+# List available factors
+available_factors = api.list_available_factors()
+factor_categories = api.list_factor_categories()
+```
+
 **Professional Factor Screening**
 ```bash
 # Screen factors for a specific stock
@@ -385,4 +481,82 @@ python factor_system/factor_screening/cli.py config validate screening_config.ya
 - *** p < 0.05: Marginally significant
 - No marker: Not significant
 
-This quantitative trading platform is designed for serious algorithmic trading research with professional-grade factor analysis capabilities optimized for multiple markets.
+## FactorEngine Best Practices
+
+### Installation and Setup
+```bash
+# Install in development mode (recommended)
+pip install -e .
+
+# Verify installation
+python -c "from factor_system.factor_engine import api; print('✅ FactorEngine ready')"
+
+# Run consistency tests
+python tests/test_factor_engine_consistency.py
+```
+
+### Usage Patterns
+```python
+# ✅ RECOMMENDED: Use unified API
+from factor_system.factor_engine import api
+
+# ❌ AVOID: Direct engine instantiation
+from factor_system.factor_engine.core.engine import FactorEngine  # Don't do this
+```
+
+### Performance Optimization
+```python
+# Pre-warm cache for frequently used factors
+api.prewarm_cache(
+    factor_ids=["RSI", "MACD", "STOCH"],
+    symbols=["0700.HK", "0005.HK"],
+    timeframe="15min",
+    start_date=datetime(2025, 1, 1),
+    end_date=datetime(2025, 12, 31)
+)
+
+# Monitor cache performance
+stats = api.get_cache_stats()
+print(f"Cache hit rate: {stats['memory_hit_rate']:.2%}")
+```
+
+### Environment-Specific Configuration
+```python
+# Research environment
+from factor_system.factor_engine.settings import get_research_config
+settings = get_research_config()
+
+# Production environment
+from factor_system.factor_engine.settings import get_production_config
+settings = get_production_config()
+```
+
+## External Integrations
+
+### QuantConnect Integration
+```bash
+# QuantConnect MCP server wrapper
+./quantconnect-mcp-wrapper.sh [command]
+
+# MCP server provides:
+# - Project management and compilation
+# - Backtest execution and analysis
+# - Live algorithm deployment
+# - Data research and factor testing
+```
+
+### Pre-commit Hooks
+The project includes Linus-style pre-commit hooks focused on practical quality:
+- **Future Function Detection**: Prevents look-ahead bias in quantitative strategies
+- **Python Syntax Check**: Ensures code can be executed
+- **Code Formatting**: Black and isort for consistent style
+
+```bash
+# Install pre-commit hooks
+pre-commit install
+
+# Run manually
+pre-commit run --all-files
+```
+
+This quantitative trading platform is designed for serious algorithmic trading research with professional-grade factor analysis capabilities optimized for multiple markets. The unified FactorEngine ensures complete consistency across research, backtesting, and production environments.

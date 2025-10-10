@@ -130,24 +130,9 @@ class SafeTimeSeriesProcessor(Generic[T]):
         self.operation_log.append(f"安全向前shift: {periods}期")
         return result
 
-    def calculate_forward_returns(
-        self, price_data: pd.Series, horizons: List[int]
-    ) -> pd.DataFrame:
-        """计算多周期未来收益率 - 安全方法"""
-        returns_df = pd.DataFrame(index=price_data.index)
-
-        for horizon in horizons:
-            if horizon < 0:
-                raise ValueError(f"不允许负数horizon: {horizon}")
-
-            # 计算收益率：未来价格 / 当前价格 - 1
-            future_price = price_data.shift(-horizon)  # 向前查找未来价格
-            forward_return = future_price / price_data - 1
-
-            returns_df[f"return_{horizon}d"] = forward_return
-            self.operation_log.append(f"计算{horizon}期前向收益率")
-
-        return returns_df
+    # calculate_forward_returns 函数已删除
+# 原函数存在未来函数风险（shift(-horizon)）
+# 生产代码中未使用，直接删除以确保安全性
 
     def validate_no_future_leakage(self, data: pd.DataFrame) -> bool:
         """验证数据中无未来信息泄露"""

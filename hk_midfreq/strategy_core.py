@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
@@ -19,8 +18,11 @@ from hk_midfreq.config import (
     StrategyRuntimeConfig,
     TradingConfig,
 )
-from hk_midfreq.factor_interface import FactorScoreLoader
+from hk_midfreq.factor_interface import FactorLoadError, FactorScoreLoader
 from hk_midfreq.fusion import FactorFusionEngine
+from factor_system.factor_engine import api
+from factor_system.factor_engine.core.registry import get_global_registry
+from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -88,14 +90,15 @@ def hk_reversal_logic(
 
     aligned_volume = volume.reindex(close.index).ffill()
 
-    rsi = vbt.RSI.run(close, window=rsi_window).rsi
-    bb = vbt.BBANDS.run(close, window=bb_window)
+    # 使用共享计算器确保与factor_engine、factor_generation完全一致
+    rsi = SHARED_CALCULATORS.calculate_rsi(close, period=rsi_window)
+    bb = SHARED_CALCULATORS.calculate_bbands(close, period=bb_window)
     rolling_volume = aligned_volume.rolling(
         window=volume_window, min_periods=volume_window
     ).mean()
 
     cond_rsi = rsi < rsi_threshold
-    cond_bb = close <= bb.lower
+    cond_bb = close <= bb['lower']
     cond_vol = aligned_volume >= (rolling_volume * volume_multiplier)
 
     entries = (cond_rsi & cond_bb & cond_vol).fillna(False)
@@ -148,7 +151,8 @@ def _compute_stochrsi(
     if close.empty:
         raise ValueError("Close price series cannot be empty when computing StochRSI")
 
-    rsi = vbt.RSI.run(close, window=timeperiod).rsi
+    # 使用共享计算器确保与factor_engine、factor_generation完全一致
+    rsi = SHARED_CALCULATORS.calculate_rsi(close, period=timeperiod)
     lowest = rsi.rolling(window=timeperiod, min_periods=timeperiod).min()
     highest = rsi.rolling(window=timeperiod, min_periods=timeperiod).max()
     denominator = (highest - lowest).replace(0.0, np.nan)
@@ -196,6 +200,154 @@ def _parse_stochrsi_params(name: str) -> tuple[int, int, int, str]:
     return timeperiod, fastk, fastd, line
 
 
+def generate_multi_factor_signals(
+    symbol: str,
+    timeframe: str,
+    close: pd.Series,
+    volume: Optional[pd.Series],
+    factor_names: List[str],
+    factor_loader: FactorScoreLoader,
+    hold_days: int,
+    stop_loss: float,
+    take_profit: float,
+) -> StrategySignals:
+    """
+    使用多因子融合算法生成交易信号
+
+    Args:
+        symbol: 股票代码
+        timeframe: 时间框架
+        close: 收盘价序列
+        volume: 成交量序列
+        factor_names: 因子名称列表
+        factor_loader: 因子加载器
+        hold_days: 持仓天数
+        stop_loss: 止损比例
+        take_profit: 止盈比例
+
+    Returns:
+        StrategySignals: 交易信号
+    """
+    logger.info(f"{symbol} 开始多因子融合信号生成 - 因子数量: {len(factor_names)}")
+
+    try:
+        # 1. 从factor_output加载因子时间序列数据
+        logger.debug(
+            f"{symbol} 从factor_output加载时间序列: {timeframe} - {len(factor_names)}个因子"
+        )
+        factor_data = factor_loader.load_factor_time_series(
+            symbol=symbol, timeframe=timeframe, factor_names=factor_names
+        )
+
+        logger.info(
+            f"{symbol} 因子时间序列加载成功 - 形状: {factor_data.shape}, 时间范围: {factor_data.index[0]} 到 {factor_data.index[-1]}"
+        )
+        logger.debug(
+            f"{symbol} 价格数据时间范围: {close.index[0]} 到 {close.index[-1]}"
+        )
+
+        # 2. 对齐因子数据和价格数据的时间索引
+        # 确保索引都是DatetimeIndex
+        if not isinstance(factor_data.index, pd.DatetimeIndex):
+            factor_data.index = pd.to_datetime(factor_data.index)
+        if not isinstance(close.index, pd.DatetimeIndex):
+            close.index = pd.to_datetime(close.index)
+
+        # 尝试对齐
+        common_index = close.index.intersection(factor_data.index)
+        logger.debug(f"{symbol} 初次对齐结果 - 重叠数据点: {len(common_index)}")
+
+        # 如果没有重叠，尝试使用reindex进行前向填充
+        if len(common_index) < 20:
+            logger.warning(f"{symbol} 直接对齐失败，尝试使用reindex前向填充")
+            factor_data_aligned = factor_data.reindex(close.index, method="ffill")
+            # 移除NaN行
+            valid_mask = factor_data_aligned.notna().any(axis=1)
+            factor_data_aligned = factor_data_aligned[valid_mask]
+            close_aligned = close[valid_mask]
+            logger.debug(f"{symbol} reindex后有效数据点: {len(factor_data_aligned)}")
+
+            if len(factor_data_aligned) < 20:
+                raise ValueError(
+                    f"对齐后的数据点仍然不足 ({len(factor_data_aligned)} < 20)"
+                )
+        else:
+            factor_data_aligned = factor_data.loc[common_index]
+            close_aligned = close.loc[common_index]
+
+        logger.debug(f"{symbol} 数据对齐完成 - 有效数据点: {len(factor_data_aligned)}")
+
+        # 3. 计算多因子复合得分
+        # 向量化标准化：一次完成所有列的Z-score归一化
+        factor_scores = factor_data_aligned.copy()
+        
+        # 向量化计算mean和std
+        means = factor_scores.mean(axis=0)
+        stds = factor_scores.std(axis=0, ddof=1)
+        
+        # 避免除零：std=0的列设为0
+        stds = stds.replace(0, 1e-10)
+        
+        # 向量化标准化（广播）
+        factor_scores = (factor_scores - means) / stds
+        
+        # 处理NaN（如果std=0导致的）
+        factor_scores = factor_scores.fillna(0.0)
+        
+        # 计算复合得分（等权平均）
+        composite_score = factor_scores.mean(axis=1)
+
+        logger.debug(
+            f"{symbol} 复合得分统计 - 最高: {composite_score.max():.4f}, 最低: {composite_score.min():.4f}, 均值: {composite_score.mean():.4f}"
+        )
+
+        # 4. 基于复合得分生成信号
+        # 入场：复合得分 > 上四分位数
+        # 出场：复合得分 < 下四分位数 或 时间止盈
+        upper_threshold = composite_score.quantile(0.75)
+        lower_threshold = composite_score.quantile(0.25)
+
+        logger.debug(
+            f"{symbol} 信号阈值 - 入场: {upper_threshold:.4f}, 出场: {lower_threshold:.4f}"
+        )
+
+        entries = (composite_score > upper_threshold).astype(bool)
+        exits_score = (composite_score < lower_threshold).astype(bool)
+
+        # 时间止盈
+        time_exits = _compute_time_based_exits(entries, hold_days)
+        exits = exits_score | time_exits
+
+        # 对齐到原始close索引
+        entries_full = pd.Series(False, index=close.index)
+        exits_full = pd.Series(False, index=close.index)
+        entries_full.loc[common_index] = entries
+        exits_full.loc[common_index] = exits
+
+        entry_count = entries_full.sum()
+        exit_count = exits_full.sum()
+
+        logger.info(
+            f"{symbol} 多因子融合信号生成完成 - 入场信号: {entry_count}, 出场信号: {exit_count}"
+        )
+
+        return StrategySignals(
+            symbol=symbol,
+            timeframe=_normalize_timeframe_label(timeframe),
+            entries=entries_full,
+            exits=exits_full,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+
+    except FactorLoadError as e:
+        logger.error(f"{symbol} 因子时间序列加载失败: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"{symbol} 多因子融合信号生成失败: {e}")
+        raise
+
+
 def generate_factor_signals(
     symbol: str,
     timeframe: str,
@@ -206,225 +358,99 @@ def generate_factor_signals(
     stop_loss: float,
     take_profit: float,
 ) -> StrategySignals:
-    """Translate a factor descriptor into deterministic entry/exit signals."""
+    """Translate a factor descriptor into deterministic entry/exit signals.
+
+    为保持研究与回测一致性，所有指标值一律来自统一的FactorEngine，
+    此处仅负责根据因子序列生成交易信号，不再重复实现指标计算。
+    """
 
     normalized_tf = _normalize_timeframe_label(timeframe)
-    factor_name = descriptor.name
+    factor_id = descriptor.name
 
-    # StochRSI 因子
-    if factor_name.startswith("TA_STOCHRSI"):
-        timeperiod, fastk, fastd, line = _parse_stochrsi_params(factor_name)
-        k_series, d_series = _compute_stochrsi(close, timeperiod, fastk, fastd)
-        target = k_series if line == "k" else d_series
+    # 验证因子ID格式
+    if not factor_id.replace('_', '').isalnum():
+        raise ValueError(f"因子ID格式无效: {factor_id}")
 
-        oversold = 20.0
-        overbought = 80.0
-        crosses_up = (target.shift(1) <= oversold) & (target > oversold)
-        crosses_down = (target.shift(1) >= overbought) & (target < overbought)
-        entries = crosses_up.fillna(False)
-        exits = crosses_down.fillna(False) | _compute_time_based_exits(
-            entries, hold_days
+    engine = api.get_engine()
+
+    # 验证因子是否已注册
+    available_factors = engine.registry.list_factors()
+    if factor_id not in available_factors:
+        error_msg = (
+            f"❌ 未注册的因子: '{factor_id}'\n\n"
+            f"为确保回测与研究一致性，禁止使用回退策略。\n\n"
+            f"📋 可用因子列表 ({len(available_factors)}个):\n"
+            f"   {', '.join(sorted(available_factors))}\n\n"
+            f"🔧 解决方案:\n"
+            f"   1. 使用上述已注册的标准因子名\n"
+            f"   2. 或在FactorEngine中实现并注册该因子\n"
+            f"   3. 检查因子配置是否使用了正确的标准格式"
         )
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=entries.astype(bool),
-            exits=exits.astype(bool),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
+    factors = engine.calculate_factors(
+        factor_ids=[factor_id],
+        symbols=[symbol],
+        timeframe=normalized_tf,
+        start_date=close.index.min(),
+        end_date=close.index.max(),
+        use_cache=True,
+    )
 
-    # RSI 因子
-    elif factor_name.startswith("RSI") or factor_name.startswith("TA_RSI"):
-        # 提取RSI周期参数
-        period = 14  # 默认值
-        if "RSI" in factor_name:
-            import re
+    if factors.empty:
+        raise ValueError(f"因子 {factor_id} 计算结果为空，无法生成信号")
 
-            match = re.search(r"RSI(\d+)", factor_name)
-            if match:
-                period = int(match.group(1))
-
-        rsi = vbt.RSI.run(close, window=period).rsi
-        oversold = 30.0
-        overbought = 70.0
-
-        crosses_up = (rsi.shift(1) <= oversold) & (rsi > oversold)
-        crosses_down = (rsi.shift(1) >= overbought) & (rsi < overbought)
-        entries = crosses_up.fillna(False)
-        exits = crosses_down.fillna(False) | _compute_time_based_exits(
-            entries, hold_days
-        )
-
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=entries.astype(bool),
-            exits=exits.astype(bool),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-
-    # STOCH 随机指标
-    elif factor_name.startswith("STOCH"):
-        # 提取参数
-        k_period = 14
-        d_period = 3
-        import re
-
-        # STOCH_14_5 格式
-        match = re.search(r"STOCH_(\d+)_(\d+)", factor_name)
-        if match:
-            k_period = int(match.group(1))
-            d_period = int(match.group(2))
-
-        stoch = vbt.STOCH.run(close, close, close, k_period, d_period)
-        target = stoch.percent_k  # 使用%K线
-
-        oversold = 20.0
-        overbought = 80.0
-        crosses_up = (target.shift(1) <= oversold) & (target > oversold)
-        crosses_down = (target.shift(1) >= overbought) & (target < overbought)
-        entries = crosses_up.fillna(False)
-        exits = crosses_down.fillna(False) | _compute_time_based_exits(
-            entries, hold_days
-        )
-
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=entries.astype(bool),
-            exits=exits.astype(bool),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-
-    # Williams %R 指标
-    elif factor_name.startswith("WILLR") or factor_name.startswith("TA_WILLR"):
-        # 提取周期参数
-        period = 14
-        import re
-
-        match = re.search(r"WILLR(\d+)", factor_name)
-        if match:
-            period = int(match.group(1))
-
-        # 手动计算Williams %R
-        high_roll = close.rolling(window=period).max()
-        low_roll = close.rolling(window=period).min()
-        willr = -100 * (high_roll - close) / (high_roll - low_roll)
-        willr = willr.fillna(0)
-
-        oversold = -80.0
-        overbought = -20.0
-
-        crosses_up = (willr.shift(1) <= oversold) & (willr > oversold)
-        crosses_down = (willr.shift(1) >= overbought) & (willr < overbought)
-        entries = crosses_up.fillna(False)
-        exits = crosses_down.fillna(False) | _compute_time_based_exits(
-            entries, hold_days
-        )
-
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=entries.astype(bool),
-            exits=exits.astype(bool),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-
-    # STOCHF 快速随机指标
-    elif factor_name.startswith("TA_STOCHF"):
-        # 使用标准STOCH计算，但参数更敏感
-        k_period = 14
-        d_period = 3
-
-        stoch = vbt.STOCH.run(close, close, close, k_period, d_period)
-        target = stoch.percent_k  # 使用%K线
-
-        oversold = 20.0
-        overbought = 80.0
-        crosses_up = (target.shift(1) <= oversold) & (target > oversold)
-        crosses_down = (target.shift(1) >= overbought) & (target < overbought)
-        entries = crosses_up.fillna(False)
-        exits = crosses_down.fillna(False) | _compute_time_based_exits(
-            entries, hold_days
-        )
-
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=entries.astype(bool),
-            exits=exits.astype(bool),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-
-    # 蜡烛图形态因子 - 使用简化的反转逻辑
-    elif factor_name.startswith("TA_CDL") or factor_name.startswith("CDL"):
-        # 对于蜡烛图形态，使用价格动量作为代理
-        returns = close.pct_change()
-        volatility = returns.rolling(20).std()
-
-        # 寻找反转信号：大幅下跌后的反弹
-        big_drop = returns < -2 * volatility
-        recovery = returns.shift(-1) > 0  # 下一期反弹
-        entries = (big_drop & recovery).fillna(False)
-        exits = _compute_time_based_exits(entries, hold_days)
-
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=entries.astype(bool),
-            exits=exits.astype(bool),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-
-    # 均值回归因子 (MEANLB等)
-    elif "MEAN" in factor_name or "LB" in factor_name:
-        # 使用布林带均值回归策略
-        bb = vbt.BBANDS.run(close, window=20, alpha=2.0)
-
-        # 价格触及下轨时买入
-        entries = (close <= bb.lower).fillna(False)
-        # 价格回到中轨时卖出
-        exits = (close >= bb.middle).fillna(False) | _compute_time_based_exits(
-            entries, hold_days
-        )
-
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=entries.astype(bool),
-            exits=exits.astype(bool),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-
-    # 通用回退策略 - 使用传统反转逻辑
+    if isinstance(factors.index, pd.MultiIndex):
+        factor_df = factors.xs(symbol, level="symbol")
     else:
-        print(f"⚠️  因子 {factor_name} 暂不支持，使用通用反转策略")
-        fallback_volume = (
-            volume if volume is not None else pd.Series(1000000, index=close.index)
-        )
-        fallback_signals = hk_reversal_logic(
-            close=close,
-            volume=fallback_volume,
-            hold_days=hold_days,
+        factor_df = factors
+
+    # 严格验证列名 - 必须完全匹配
+    if factor_id not in factor_df.columns:
+        available_columns = list(factor_df.columns)
+        raise KeyError(
+            f"因子列 '{factor_id}' 不存在。\n"
+            f"可用列: {available_columns}\n"
+            f"请确保因子计算返回的列名与请求的factor_id完全一致"
         )
 
-        # 手动创建新的StrategySignals对象
-        return StrategySignals(
-            symbol=symbol,
-            timeframe=normalized_tf,
-            entries=fallback_signals.entries,
-            exits=fallback_signals.exits,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
+    factor_series = factor_df[factor_id].reindex(close.index).ffill()
+
+    # 检查因子数据有效性
+    if factor_series.isna().all():
+        raise ValueError(f"因子 {factor_id} 全部为NaN，无法生成信号")
+
+    # 检查有效数据点数量
+    valid_values = factor_series.dropna()
+    if len(valid_values) < 10:  # 至少需要10个有效值点
+        raise ValueError(f"因子 {factor_id} 有效数据点不足 ({len(valid_values)})")
+
+    # 因子标准化后基于分位数生成信号
+    normalized = (factor_series - factor_series.mean()) / factor_series.std(ddof=0)
+    normalized = normalized.fillna(0.0)
+
+    upper_threshold = normalized.quantile(0.75)
+    lower_threshold = normalized.quantile(0.25)
+
+    entries = (normalized > upper_threshold).fillna(False)
+    exits_score = (normalized < lower_threshold).fillna(False)
+    exits_time = _compute_time_based_exits(entries, hold_days)
+    exits = exits_score | exits_time
+
+    logger.info(
+        f"生成信号完成 - {symbol} {factor_id}: "
+        f"入场{entries.sum()}次, 出场{exits.sum()}次"
+    )
+
+    return StrategySignals(
+        symbol=symbol,
+        timeframe=normalized_tf,
+        entries=entries.astype(bool),
+        exits=exits.astype(bool),
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+    )
 
 
 class StrategyCore:
@@ -674,54 +700,62 @@ class StrategyCore:
             f"{symbol} 入场数据形状: {data.shape}, 时间范围: {data.index[0]} 到 {data.index[-1]}"
         )
 
-        # 尝试基于因子的信号生成
-        descriptor = self._resolve_top_factor(symbol, entry_timeframe)
-        if descriptor is not None:
-            factor_name = getattr(descriptor, "name", "unknown")
-            logger.info(f"{symbol} 使用因子信号生成 - 因子: {factor_name}")
-            try:
-                signals = generate_factor_signals(
+        # 1. 从factor_ready获取优秀因子列表
+        if self._last_factor_panel is None or self._last_factor_panel.empty:
+            logger.warning(f"{symbol} 因子面板为空，无法使用多因子融合")
+            return None
+
+        # 获取该symbol和timeframe的所有优秀因子
+        normalized_tf = _normalize_timeframe_label(entry_timeframe)
+        panel = self._last_factor_panel.reset_index()
+        panel["normalized_timeframe"] = panel["timeframe"].map(
+            lambda tf: _normalize_timeframe_label(str(tf))
+        )
+
+        subset = panel[
+            (panel["symbol"] == symbol)
+            & (panel["normalized_timeframe"] == normalized_tf)
+        ]
+
+        if subset.empty:
+            logger.warning(f"{symbol} 在 {entry_timeframe} 时间框架下没有优秀因子")
+            return None
+
+        # 按rank排序，选择top 50个因子
+        top_factors = subset.sort_values(by="rank").head(50)
+        factor_names = top_factors["factor_name"].tolist()
+
+        logger.info(f"{symbol} 从factor_ready筛选出 {len(factor_names)} 个优秀因子")
+        logger.debug(f"{symbol} 前10个因子: {factor_names[:10]}")
+
+        # 2. 使用多因子融合算法生成信号
+        try:
+            logger.info(
+                f"{symbol} 使用多因子融合算法生成信号 - 因子数量: {len(factor_names)}"
+            )
+            signals = generate_multi_factor_signals(
                     symbol=symbol,
                     timeframe=entry_timeframe,
                     close=data["close"],
                     volume=data.get("volume"),
-                    descriptor=descriptor,
+                factor_names=factor_names,
+                factor_loader=self.factor_loader,
                     hold_days=self.trading_config.hold_days,
                     stop_loss=self.execution_config.stop_loss,
                     take_profit=self.execution_config.primary_take_profit(),
                 )
-                logger.info(
-                    f"{symbol} 因子信号生成成功 - 入场信号数: {signals.entries.sum()}"
-                )
-                return signals
-            except Exception as e:
-                logger.warning(f"{symbol} 因子信号生成失败: {e}，回退到传统逻辑")
-
-        # 回退到传统反转逻辑
-        logger.info(f"{symbol} 使用传统反转逻辑生成信号")
-        signal_bundle = hk_reversal_logic(
-            close=data["close"],
-            volume=data["volume"],
-            hold_days=self.trading_config.hold_days,
-        )
-
-        signals = StrategySignals(
-            symbol=symbol,
-            timeframe=_normalize_timeframe_label(entry_timeframe),
-            entries=signal_bundle.entries,
-            exits=signal_bundle.exits,
-            stop_loss=self.execution_config.stop_loss,
-            take_profit=self.execution_config.primary_take_profit(),
-        )
-
-        logger.info(
-            f"{symbol} 传统信号生成完成 - 入场信号数: {signals.entries.sum()}, 出场信号数: {signals.exits.sum()}"
-        )
-        logger.debug(
-            f"{symbol} 风险参数 - 止损: {signals.stop_loss:.2%}, 止盈: {signals.take_profit:.2%}"
-        )
-
-        return signals
+            logger.info(
+                f"{symbol} 多因子融合信号生成成功 - 入场信号数: {signals.entries.sum()}"
+            )
+            return signals
+        except FactorLoadError as e:
+            logger.error(f"{symbol} 因子时间序列加载失败: {e}")
+            logger.error(f"严格模式：禁止降级到传统逻辑")
+            return None
+        except Exception as e:
+            logger.error(f"{symbol} 多因子融合信号生成失败: {e}")
+            logger.error(f"严格模式：禁止降级到传统逻辑")
+            return None
 
     def build_signal_universe(
         self,

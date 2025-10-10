@@ -1,0 +1,2542 @@
+{
+  "metadata": {
+    "version": "2.0",
+    "created_at": "2025-10-06",
+    "last_updated": "2025-10-06T23:31:44.016759",
+    "description": "因子注册表 - 完整154指标迁移到factor_engine",
+    "total_factors": 96
+  },
+  "factors": {
+    "RSI_14": {
+      "factor_id": "RSI_14",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "subcategory": "momentum",
+      "description": "14期相对强弱指标",
+      "parameters": {
+        "period": 14
+      },
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "performance": {
+        "comprehensive_score": 0.75,
+        "ic_mean": 0.023,
+        "ic_ir": 1.2,
+        "sharpe": 0.45,
+        "coverage": 0.95
+      },
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "STOCH_14_3": {
+      "factor_id": "STOCH_14_3",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "subcategory": "momentum",
+      "description": "随机指标 K=14, D=3",
+      "parameters": {
+        "fastk_period": 14,
+        "slowk_period": 3,
+        "slowd_period": 3
+      },
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "performance": {
+        "comprehensive_score": 0.7548,
+        "ic_mean": 0.025,
+        "ic_ir": 1.3,
+        "sharpe": 0.48,
+        "coverage": 0.93
+      },
+      "applicable_markets": [
+        "HK"
+      ],
+      "applicable_timeframes": [
+        "15min",
+        "30min",
+        "60min"
+      ]
+    },
+    "WILLR_14": {
+      "factor_id": "WILLR_14",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "subcategory": "momentum",
+      "description": "威廉指标 14期",
+      "parameters": {
+        "period": 14
+      },
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "performance": {
+        "comprehensive_score": 0.7533,
+        "ic_mean": 0.022,
+        "ic_ir": 1.1,
+        "sharpe": 0.43,
+        "coverage": 0.96
+      },
+      "applicable_markets": [
+        "HK"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TA_CDL3INSIDE": {
+      "factor_id": "TA_CDL3INSIDE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "subcategory": "candlestick",
+      "description": "三内部形态",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "performance": {
+        "comprehensive_score": 0.8143,
+        "ic_mean": 0.031,
+        "ic_ir": 1.5,
+        "sharpe": 0.52,
+        "coverage": 0.88
+      },
+      "applicable_markets": [
+        "HK"
+      ],
+      "applicable_timeframes": [
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MEANLB_20": {
+      "factor_id": "MEANLB_20",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistical",
+      "subcategory": "mean_reversion",
+      "description": "20期回归均值因子",
+      "parameters": {
+        "period": 20
+      },
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "performance": {
+        "comprehensive_score": 0.72,
+        "ic_mean": 0.02,
+        "ic_ir": 1.0,
+        "sharpe": 0.4,
+        "coverage": 0.92
+      },
+      "applicable_markets": [
+        "HK"
+      ],
+      "applicable_timeframes": [
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TA_STOCHRSI_14_K": {
+      "factor_id": "TA_STOCHRSI_14_K",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "subcategory": "momentum",
+      "description": "Stochastic RSI K线",
+      "parameters": {
+        "timeperiod": 14,
+        "fastk_period": 5,
+        "fastd_period": 3
+      },
+      "dependencies": [
+        "RSI_14"
+      ],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "performance": {
+        "comprehensive_score": 0.8962,
+        "ic_mean": 0.035,
+        "ic_ir": 1.8,
+        "sharpe": 0.58,
+        "coverage": 0.9
+      },
+      "applicable_markets": [
+        "HK"
+      ],
+      "applicable_timeframes": [
+        "15min",
+        "30min",
+        "60min"
+      ]
+    },
+    "ADOSC": {
+      "factor_id": "ADOSC",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ADOSC指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "WILLR": {
+      "factor_id": "WILLR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "WILLR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MINUS_DM": {
+      "factor_id": "MINUS_DM",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "MINUS_DM指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ROCP": {
+      "factor_id": "ROCP",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ROCP指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ADX": {
+      "factor_id": "ADX",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ADX指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MINUS_DI": {
+      "factor_id": "MINUS_DI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "MINUS_DI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MACD": {
+      "factor_id": "MACD",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "MACD指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MOM": {
+      "factor_id": "MOM",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "MOM指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "APO": {
+      "factor_id": "APO",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "APO指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "NATR": {
+      "factor_id": "NATR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "NATR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CMO": {
+      "factor_id": "CMO",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "CMO指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ATR": {
+      "factor_id": "ATR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ATR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ROC": {
+      "factor_id": "ROC",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ROC指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CCI": {
+      "factor_id": "CCI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "CCI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "BOP": {
+      "factor_id": "BOP",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "BOP指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ROCR100": {
+      "factor_id": "ROCR100",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ROCR100指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "OBV": {
+      "factor_id": "OBV",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "OBV指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "STOCH": {
+      "factor_id": "STOCH",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "STOCH指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "AROONOSC": {
+      "factor_id": "AROONOSC",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "AROONOSC指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "PLUS_DI": {
+      "factor_id": "PLUS_DI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "PLUS_DI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ADXR": {
+      "factor_id": "ADXR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ADXR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TRANGE": {
+      "factor_id": "TRANGE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "TRANGE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "PLUS_DM": {
+      "factor_id": "PLUS_DM",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "PLUS_DM指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "RSI": {
+      "factor_id": "RSI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "RSI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "DX": {
+      "factor_id": "DX",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "DX指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TRIX": {
+      "factor_id": "TRIX",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "TRIX指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "PPO": {
+      "factor_id": "PPO",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "PPO指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ULTOSC": {
+      "factor_id": "ULTOSC",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ULTOSC指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "AROON": {
+      "factor_id": "AROON",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "AROON指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "AD": {
+      "factor_id": "AD",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "AD指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "ROCR": {
+      "factor_id": "ROCR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "technical",
+      "description": "ROCR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TEMA": {
+      "factor_id": "TEMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "TEMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MIDPOINT": {
+      "factor_id": "MIDPOINT",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "MIDPOINT指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "SAR": {
+      "factor_id": "SAR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "SAR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "WMA": {
+      "factor_id": "WMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "WMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "SAREXT": {
+      "factor_id": "SAREXT",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "SAREXT指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "EMA": {
+      "factor_id": "EMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "EMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TRIMA": {
+      "factor_id": "TRIMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "TRIMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MIDPRICE": {
+      "factor_id": "MIDPRICE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "MIDPRICE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "DEMA": {
+      "factor_id": "DEMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "DEMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MAMA": {
+      "factor_id": "MAMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "MAMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "KAMA": {
+      "factor_id": "KAMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "KAMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "SMA": {
+      "factor_id": "SMA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "SMA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "HT_TRENDLINE": {
+      "factor_id": "HT_TRENDLINE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "HT_TRENDLINE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "T3": {
+      "factor_id": "T3",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "overlap",
+      "description": "T3指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDL3LINESTRIKE": {
+      "factor_id": "CDL3LINESTRIKE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDL3LINESTRIKE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLCLOSINGMARUBOZU": {
+      "factor_id": "CDLCLOSINGMARUBOZU",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLCLOSINGMARUBOZU指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLBELTHOLD": {
+      "factor_id": "CDLBELTHOLD",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLBELTHOLD指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLDOJI": {
+      "factor_id": "CDLDOJI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLDOJI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLDOJISTAR": {
+      "factor_id": "CDLDOJISTAR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLDOJISTAR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLEVENINGSTAR": {
+      "factor_id": "CDLEVENINGSTAR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLEVENINGSTAR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLHIGHWAVE": {
+      "factor_id": "CDLHIGHWAVE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLHIGHWAVE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLHOMINGPIGEON": {
+      "factor_id": "CDLHOMINGPIGEON",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLHOMINGPIGEON指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDL3OUTSIDE": {
+      "factor_id": "CDL3OUTSIDE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDL3OUTSIDE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLHARAMICROSS": {
+      "factor_id": "CDLHARAMICROSS",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLHARAMICROSS指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLIDENTICAL3CROWS": {
+      "factor_id": "CDLIDENTICAL3CROWS",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLIDENTICAL3CROWS指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLINVERTEDHAMMER": {
+      "factor_id": "CDLINVERTEDHAMMER",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLINVERTEDHAMMER指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDL2CROWS": {
+      "factor_id": "CDL2CROWS",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDL2CROWS指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDL3WHITESOLDIERS": {
+      "factor_id": "CDL3WHITESOLDIERS",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDL3WHITESOLDIERS指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDL3STARSINSOUTH": {
+      "factor_id": "CDL3STARSINSOUTH",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDL3STARSINSOUTH指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLDRAGONFLYDOJI": {
+      "factor_id": "CDLDRAGONFLYDOJI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLDRAGONFLYDOJI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLBREAKAWAY": {
+      "factor_id": "CDLBREAKAWAY",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLBREAKAWAY指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLABANDONEDBABY": {
+      "factor_id": "CDLABANDONEDBABY",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLABANDONEDBABY指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDL3BLACKCROWS": {
+      "factor_id": "CDL3BLACKCROWS",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDL3BLACKCROWS指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLCONCEALBABYSWALL": {
+      "factor_id": "CDLCONCEALBABYSWALL",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLCONCEALBABYSWALL指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLADVANCEBLOCK": {
+      "factor_id": "CDLADVANCEBLOCK",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLADVANCEBLOCK指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLINNECK": {
+      "factor_id": "CDLINNECK",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLINNECK指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLDARKCLOUDCOVER": {
+      "factor_id": "CDLDARKCLOUDCOVER",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLDARKCLOUDCOVER指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLCOUNTERATTACK": {
+      "factor_id": "CDLCOUNTERATTACK",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLCOUNTERATTACK指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLGRAVESTONEDOJI": {
+      "factor_id": "CDLGRAVESTONEDOJI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLGRAVESTONEDOJI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLEVENINGDOJISTAR": {
+      "factor_id": "CDLEVENINGDOJISTAR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLEVENINGDOJISTAR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDL3INSIDE": {
+      "factor_id": "CDL3INSIDE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDL3INSIDE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLHAMMER": {
+      "factor_id": "CDLHAMMER",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLHAMMER指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLHANGINGMAN": {
+      "factor_id": "CDLHANGINGMAN",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLHANGINGMAN指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLHIKKAKE": {
+      "factor_id": "CDLHIKKAKE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLHIKKAKE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLENGULFING": {
+      "factor_id": "CDLENGULFING",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLENGULFING指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLHARAMI": {
+      "factor_id": "CDLHARAMI",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLHARAMI指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CDLGAPSIDESIDEWHITE": {
+      "factor_id": "CDLGAPSIDESIDEWHITE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "pattern",
+      "description": "CDLGAPSIDESIDEWHITE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "MEDPRICE": {
+      "factor_id": "MEDPRICE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "MEDPRICE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "HT_TRENDMODE": {
+      "factor_id": "HT_TRENDMODE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "HT_TRENDMODE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "HT_DCPHASE": {
+      "factor_id": "HT_DCPHASE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "HT_DCPHASE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "STDDEV": {
+      "factor_id": "STDDEV",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "STDDEV指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "LINEARREG": {
+      "factor_id": "LINEARREG",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "LINEARREG指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "HT_SINE": {
+      "factor_id": "HT_SINE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "HT_SINE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "LINEARREG_SLOPE": {
+      "factor_id": "LINEARREG_SLOPE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "LINEARREG_SLOPE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "BETA": {
+      "factor_id": "BETA",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "BETA指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "AVGPRICE": {
+      "factor_id": "AVGPRICE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "AVGPRICE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "LINEARREG_ANGLE": {
+      "factor_id": "LINEARREG_ANGLE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "LINEARREG_ANGLE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "HT_PHASOR": {
+      "factor_id": "HT_PHASOR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "HT_PHASOR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "VAR": {
+      "factor_id": "VAR",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "VAR指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "WCLPRICE": {
+      "factor_id": "WCLPRICE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "WCLPRICE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "LINEARREG_INTERCEPT": {
+      "factor_id": "LINEARREG_INTERCEPT",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "LINEARREG_INTERCEPT指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "CORREL": {
+      "factor_id": "CORREL",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "CORREL指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TSF": {
+      "factor_id": "TSF",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "TSF指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "HT_DCPERIOD": {
+      "factor_id": "HT_DCPERIOD",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "HT_DCPERIOD指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    },
+    "TYPPRICE": {
+      "factor_id": "TYPPRICE",
+      "version": "v1.0",
+      "status": "stable",
+      "category": "statistic",
+      "description": "TYPPRICE指标",
+      "parameters": {},
+      "dependencies": [],
+      "created_at": "2025-10-06",
+      "last_updated": "2025-10-06",
+      "source": "TA-Lib",
+      "applicable_markets": [
+        "HK",
+        "A",
+        "US"
+      ],
+      "applicable_timeframes": [
+        "5min",
+        "15min",
+        "30min",
+        "60min",
+        "daily"
+      ]
+    }
+  },
+  "factor_sets": {
+    "hk_midfreq_core": {
+      "name": "港股中频核心因子集",
+      "description": "经过5维度验证的核心因子组合",
+      "factors": [
+        "TA_STOCHRSI_14_K",
+        "TA_CDL3INSIDE",
+        "WILLR_14",
+        "STOCH_14_3",
+        "MEANLB_20"
+      ],
+      "applicable_markets": [
+        "HK"
+      ],
+      "applicable_timeframes": [
+        "15min",
+        "30min",
+        "60min"
+      ],
+      "created_at": "2025-10-06",
+      "validated": true
+    }
+  },
+  "changelog": [
+    {
+      "date": "2025-10-06",
+      "version": "1.0",
+      "changes": "初始化因子注册表，导入factor_ready中的26个优秀因子元数据"
+    },
+    {
+      "date": "2025-10-06",
+      "version": "2.0",
+      "changes": "完整迁移154个指标到factor_engine: 96个因子已创建",
+      "categories": {
+        "technical": 31,
+        "overlap": 14,
+        "pattern": 33,
+        "statistic": 18
+      }
+    }
+  ]
+}

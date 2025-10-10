@@ -4,7 +4,7 @@
 data:
   root_dir: "/Users/zhangshenshen/深度量化0927/raw/HK"
 
-# 154指标配置
+# 154指标配置 - 启用所有因子
 indicators:
   enable_ma: true
   enable_ema: true
@@ -17,12 +17,16 @@ indicators:
   enable_mstd: true
   enable_manual_indicators: true
   enable_all_periods: true
-  memory_efficient: true
+  memory_efficient: false
+  enable_all_indicators: true  # 启用全部154个技术指标
+  enable_pattern_recognition: true  # 启用K线形态识别
+  enable_statistical_functions: true  # 启用统计函数
 
-# 时间框架配置
+# 时间框架配置 - 统一使用min后缀
 timeframes:
-  enabled: ["5min", "15min", "30min", "60min", "daily"]
-  base_timeframe: "5min"
+  enabled: ["1min", "2min", "3min", "5min", "15min", "30min", "60min", "120min", "240min", "1day"]
+  base_timeframe: "1min"
+  enable_resampling: true  # 启用自动重采样
 
 # 输出配置
 output:
@@ -32,16 +36,43 @@ output:
   include_readable_time: true
   separate_timeframes: true
   create_aligned_version: true
+  separate_by_market: true  # 按市场分别存储
+  include_price_data: true  # 包含原始价格数据
 
 # 日志配置
 logging:
   level: "INFO"
-  file: "multi_tf_detector.log"
+  file: "hk_factor_generation.log"
 
 # 性能配置
 performance:
   parallel_calculation: true
-  memory_limit_mb: 8192
+  memory_limit_mb: 12288
   chunk_size: 10000
   enable_caching: true
   cache_dir: "./cache"
+  max_workers: 6  # HK市场并行工作进程数
+
+# 重采样配置
+resampling:
+  enable: true
+  temp_dir: "./temp_resampled_hk"
+  resample_all_timeframes: true
+  preserve_volume: true
+  high_quality_resampling: true
+
+# 市场配置
+market:
+  name: "HK"
+  timezone: "Asia/Hong_Kong"
+  trading_hours:
+    start: "09:30"
+    end: "16:00"
+  data_validation: true
+
+# 因子验证配置
+validation:
+  enable_quality_check: true
+  remove_constant_columns: true
+  handle_missing_values: true
+  validate_time_series: true

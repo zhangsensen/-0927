@@ -1,0 +1,43 @@
+"""ATR - 技术指标"""
+
+from __future__ import annotations
+
+import pandas as pd
+
+from factor_system.factor_engine.core.base_factor import BaseFactor
+from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
+
+class ATR(BaseFactor):
+    """
+    ATR - 技术指标
+
+    基于VectorBT实现，确保与factor_generation完全一致
+    """
+
+    factor_id = "ATR"
+    version = "v2.0"  # 升级版本，基于VectorBT
+    category = "technical"
+    description = "ATR技术指标（VectorBT实现）"
+
+    def __init__(self, timeperiod: int = 14):
+        super().__init__(timeperiod=timeperiod)
+        self.timeperiod = timeperiod
+        
+    def calculate(self, data: pd.DataFrame) -> pd.Series:
+        """
+        计算ATR - 使用VectorBT确保与factor_generation一致
+
+        Args:
+            data: DataFrame with OHLCV columns
+
+        Returns:
+            ATR values
+        """
+        # 提取所需数据列
+        high = data["high"]
+        low = data["low"]
+        close = data["close"]
+
+        # 使用VectorBT适配器计算，确保与factor_generation完全一致
+        adapter = get_vectorbt_adapter()
+        return adapter.calculate_atr(high , low , close, timeperiod=self.timeperiod)

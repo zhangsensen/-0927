@@ -1,0 +1,70 @@
+# US市场多时间框架因子探测器配置 - 154个技术指标全量生成
+
+# 数据路径配置
+data:
+  root_dir: "/Users/zhangshenshen/深度量化0927/raw/US"
+
+# 154指标配置 - 启用所有因子
+indicators:
+  enable_ma: true
+  enable_ema: true
+  enable_macd: true
+  enable_rsi: true
+  enable_bbands: true
+  enable_stoch: true
+  enable_atr: true
+  enable_obv: true
+  enable_mstd: true
+  enable_manual_indicators: true
+  enable_all_periods: true
+  memory_efficient: true
+  enable_all_indicators: true  # 启用全部154个技术指标
+  enable_pattern_recognition: true  # 启用K线形态识别
+  enable_statistical_functions: true  # 启用统计函数
+
+# 时间框架配置 - 10个完整时间框架
+timeframes:
+  enabled: ["1min", "2min", "3min", "5min", "15min", "30min", "60min", "2h", "4h", "daily"]
+  base_timeframe: "1min"
+  enable_resampling: true  # 启用自动重采样
+
+# 输出配置
+output:
+  directory: "/Users/zhangshenshen/深度量化0927/factor_system/factor_output"
+  format: "parquet"
+  compression: "snappy"
+  include_readable_time: true
+  separate_timeframes: true
+  create_aligned_version: true
+  separate_by_market: true  # 按市场分别存储
+
+# 日志配置
+logging:
+  level: "INFO"
+  file: "us_factor_generation.log"
+
+# 性能配置
+performance:
+  parallel_calculation: true
+  memory_limit_mb: 16384  # US市场数据量大，增加内存限制
+  chunk_size: 10000
+  enable_caching: true
+  cache_dir: "./cache"
+  max_workers: 8  # US市场使用更多并行工作进程
+
+# 重采样配置
+resampling:
+  enable: true
+  temp_dir: "./temp_resampled_us"
+  resample_all_timeframes: true
+  preserve_volume: true
+  high_quality_resampling: true
+
+# 市场配置
+market:
+  name: "US"
+  timezone: "America/New_York"
+  trading_hours:
+    start: "09:30"
+    end: "16:00"
+  data_validation: true

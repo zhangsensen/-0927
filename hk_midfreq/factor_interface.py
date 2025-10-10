@@ -55,26 +55,58 @@ class FactorScoreLoader:
         )
 
     def list_sessions(self) -> List[Path]:
-        """Return all available screening sessions sorted by recency."""
-        # 直接使用factor_ready目录
-        output_dir = self._path_config.factor_ready_dir
-        if not output_dir.exists():
+        """Return available screening artifacts sorted by recency."""
+
+        ready_dir = self._path_config.factor_ready_dir
+        if not ready_dir.exists():
             return []
 
-        # factor_ready目录包含parquet文件，不是目录结构
-        if output_dir.is_dir():
-            return [output_dir]
-        return []
+        if ready_dir.is_file():
+            return [ready_dir]
+
+        parquet_files = sorted(
+            ready_dir.glob("*_best_factors.parquet"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        return parquet_files or [ready_dir]
 
     def resolve_session(self) -> Optional[Path]:
-        """Resolve the directory containing screening artifacts."""
+        """Resolve the artifact (dir or file) containing screening outputs."""
 
         if self._session_id is not None:
-            target = self._config.base_output_dir / self._session_id
-            return target if target.exists() else None
+            candidate = self._config.base_output_dir / self._session_id
+            if candidate.exists():
+                return candidate
 
         sessions = self.list_sessions()
         return sessions[0] if sessions else None
+
+    def _factor_ready_file(self) -> Path:
+        """Locate the best-factor parquet file."""
+
+        session = self.resolve_session()
+        if session is None:
+            raise FileNotFoundError("No factor_ready artifact available")
+
+        if session.is_file():
+            return session
+
+        parquet_files = list(session.glob("*_best_factors.parquet"))
+        if not parquet_files:
+            raise FileNotFoundError(f"No *_best_factors.parquet in {session}")
+
+        latest = max(parquet_files, key=lambda p: p.stat().st_mtime)
+        logger.debug(f"使用因子评分文件: {latest}")
+        return latest
+
+    def _factor_output_dir(self) -> Path:
+        """Return the root directory containing factor time-series."""
+
+        output_dir = self._path_config.factor_output_dir
+        if not output_dir.exists():
+            raise FileNotFoundError(f"factor_output directory not found: {output_dir}")
+        return output_dir
 
     def _iter_factor_frames(
         self,
@@ -83,46 +115,47 @@ class FactorScoreLoader:
     ) -> Iterator[Tuple[str, str, pd.DataFrame]]:
         """Yield normalized factor tables for each symbol/timeframe combination."""
 
-        session_dir = self.resolve_session()
-        if session_dir is None:
-            logger.error("未找到factor_ready目录")
-            raise FileNotFoundError("No factor_ready directory found.")
-
-        logger.debug(f"使用factor_ready目录: {session_dir}")
-
-        # 直接加载parquet文件
-        factor_file = session_dir / "0700_HK_best_factors.parquet"
-        if not factor_file.exists():
-            raise FileNotFoundError(f"Factor file not found: {factor_file}")
-
-        import pandas as pd
+        factor_file = self._factor_ready_file()
 
         df = pd.read_parquet(factor_file)
-        logger.info(f"加载因子数据: {len(df)}个因子")
+        logger.info("加载因子评分数据: %s 因子", len(df))  # noqa: EM102
 
-        symbol_filter = set(symbols) if symbols is not None else None
-        timeframe_filter = set(timeframes) if timeframes is not None else None
+        symbol_filter = set(symbols) if symbols else None
+        timeframe_filter = set(timeframes) if timeframes else None
 
-        if symbol_filter and "0700.HK" not in symbol_filter:
-            return
-
-        # 按时间框架分组
-        for tf in df["timeframe"].unique():
-            if timeframe_filter and tf not in timeframe_filter:
+        for symbol in df["symbol"].unique():
+            if symbol_filter and symbol not in symbol_filter:
                 continue
 
-            tf_data = df[df["timeframe"] == tf].copy()
+            symbol_df = df[df["symbol"] == symbol]
 
-            # 转换列名以匹配系统期望
-            tf_data = tf_data.rename(columns={"ic_mean": "mean_ic", "ic_ir": "ic_ir"})
+            for tf in symbol_df["timeframe"].unique():
+                if timeframe_filter and tf not in timeframe_filter:
+                    continue
 
-            # 确保必需列存在
-            if "mean_ic" not in tf_data.columns:
-                tf_data["mean_ic"] = 0.0
-            if "ic_ir" not in tf_data.columns:
-                tf_data["ic_ir"] = 0.0
+                tf_df = symbol_df[symbol_df["timeframe"] == tf].copy()
 
-            yield "0700.HK", tf, tf_data
+                tf_df = tf_df.rename(
+                    columns={
+                        "ic_mean": "mean_ic",
+                        "ic_ir": "ic_ir",
+                        "predictive_power": "predictive_score",
+                    }
+                )
+
+                if "mean_ic" not in tf_df.columns:
+                    tf_df["mean_ic"] = 0.0
+                if "ic_ir" not in tf_df.columns:
+                    tf_df["ic_ir"] = 0.0
+                if "predictive_score" not in tf_df.columns:
+                    tf_df["predictive_score"] = tf_df.get("comprehensive_score", 0.0)
+
+                # 添加rank列（如果不存在）
+                if "rank" not in tf_df.columns:
+                    tf_df = tf_df.sort_values(by="comprehensive_score", ascending=False)
+                    tf_df["rank"] = range(1, len(tf_df) + 1)
+
+                yield symbol, tf, tf_df
 
     def load_factor_table(
         self,
@@ -142,13 +175,18 @@ class FactorScoreLoader:
 
         if not frames:
             raise FileNotFoundError(
-                f"No factor data found for symbol={symbol} timeframe={timeframe}"
+                f"No factor data found for symbol={symbol} timeframe={timeframe}"  # noqa: EM101
             )
 
         table = pd.concat(frames, ignore_index=True)
-        table = table.sort_values(by="rank")
+
+        if "rank" not in table.columns:
+            table = table.sort_values(by="comprehensive_score", ascending=False)
+            table["rank"] = range(1, len(table) + 1)
+
         if top_n is not None:
-            table = table.head(top_n)
+            table = table.nsmallest(top_n, columns="rank")
+
         return table
 
     def load_factor_panels(
@@ -270,51 +308,43 @@ class FactorScoreLoader:
         factor_names: List[str],
         factor_data_dir: Optional[Path] = None,
     ) -> pd.DataFrame:
-        """Load factor time series data for a symbol and timeframe.
+        """Load factor time series data for a symbol and timeframe."""
 
-        P0 优化：使用 PathConfig 自动发现因子输出目录
-        """
+        output_dir = factor_data_dir or self._factor_output_dir()
 
-        if factor_data_dir is None:
-            factor_data_dir = self._path_config.factor_output_dir
+        timeframe_dir = output_dir / timeframe
+        if not timeframe_dir.exists():
+            raise FactorLoadError(
+                f"Timeframe directory not found: {timeframe_dir}"  # noqa: EM101
+            )
 
-        # Construct filename pattern
-        timeframe_path = factor_data_dir / timeframe
-        if not timeframe_path.exists():
-            raise FactorLoadError(f"Timeframe directory not found: {timeframe_path}")
-
-        # Find the most recent factor file for this symbol and timeframe
         pattern = f"{symbol}_{timeframe}_factors_*.parquet"
-        files = glob.glob(str(timeframe_path / pattern))
+        files = sorted(timeframe_dir.glob(pattern))
 
         if not files:
             raise FactorLoadError(
-                f"No factor data file found for {symbol} {timeframe} "
-                f"in {timeframe_path}"
+                f"No factor data file found for {symbol} {timeframe} in {timeframe_dir}"  # noqa: EM101
             )
 
-        # Use the most recent file
-        latest_file = max(
-            files,
-            key=lambda x: x.split("_")[-2] + x.split("_")[-1].replace(".parquet", ""),
-        )
+        latest_file = max(files, key=lambda p: p.stat().st_mtime)
+        logger.debug(f"使用因子时间序列文件: {latest_file}")
 
-        # Load the factor data
         factor_data = pd.read_parquet(latest_file)
 
-        # Filter to only include requested factors
-        available_factors = [f for f in factor_names if f in factor_data.columns]
-        missing_factors = set(factor_names) - set(available_factors)
+        available = [name for name in factor_names if name in factor_data.columns]
+        missing = sorted(set(factor_names) - set(available))
 
-        if missing_factors:
-            print(f"Warning: Missing factors {missing_factors} in {latest_file}")
+        if missing:
+            logger.warning(
+                "因子时间序列缺失列: %s (文件: %s)", missing, latest_file  # noqa: EM102
+            )
+        if not available:
+            raise FactorLoadError(
+                f"None of the requested factors found in {latest_file}"  # noqa: EM101
+            )
 
-        if not available_factors:
-            raise FactorLoadError(f"No requested factors found in {latest_file}")
-
-        # Return only the requested factor columns
-        factor_df = factor_data[available_factors].copy()
-
+        factor_df = factor_data[available].copy()
+        factor_df = factor_df.sort_index()
         return factor_df
 
     def scores_to_series(self, scores: Iterable[SymbolScore]) -> pd.Series:
