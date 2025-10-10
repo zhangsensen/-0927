@@ -15,20 +15,22 @@
 
 import logging
 import math
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
-import yaml
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
 
 
 @dataclass
 class TimeframeAdjustment:
     """时间框架调整参数"""
-    stability_bonus: float = 0.0          # 稳定性奖励
-    uncertainty_penalty: float = 1.0      # 不确定性惩罚因子
+
+    stability_bonus: float = 0.0  # 稳定性奖励
+    uncertainty_penalty: float = 1.0  # 不确定性惩罚因子
     economic_significance_discount: float = 1.0  # 经济意义折扣
     sample_size_normalization: float = 1.0  # 样本量归一化权重
-    predictive_power_boost: float = 0.0    # 预测能力奖励
+    predictive_power_boost: float = 0.0  # 预测能力奖励
 
 
 class FairScorer:
@@ -45,57 +47,57 @@ class FairScorer:
                 stability_bonus=0.0,
                 uncertainty_penalty=1.0,
                 economic_significance_discount=0.95,  # 轻微惩罚：缺乏经济意义
-                sample_size_normalization=0.3,         # 大样本折扣
-                predictive_power_boost=0.0
+                sample_size_normalization=0.3,  # 大样本折扣
+                predictive_power_boost=0.0,
             ),
             "5min": TimeframeAdjustment(
                 stability_bonus=0.0,
                 uncertainty_penalty=1.0,
                 economic_significance_discount=0.9,
                 sample_size_normalization=0.5,
-                predictive_power_boost=0.0
+                predictive_power_boost=0.0,
             ),
             "15min": TimeframeAdjustment(
                 stability_bonus=0.02,
                 uncertainty_penalty=0.95,
                 economic_significance_discount=0.95,
                 sample_size_normalization=0.7,
-                predictive_power_boost=0.0
+                predictive_power_boost=0.0,
             ),
             "30min": TimeframeAdjustment(
                 stability_bonus=0.03,
                 uncertainty_penalty=0.9,
                 economic_significance_discount=1.0,
                 sample_size_normalization=0.8,
-                predictive_power_boost=0.01
+                predictive_power_boost=0.01,
             ),
             "60min": TimeframeAdjustment(
                 stability_bonus=0.05,
                 uncertainty_penalty=0.85,
                 economic_significance_discount=1.0,
                 sample_size_normalization=0.9,
-                predictive_power_boost=0.02
+                predictive_power_boost=0.02,
             ),
             "2h": TimeframeAdjustment(
                 stability_bonus=0.08,
                 uncertainty_penalty=0.8,
                 economic_significance_discount=1.1,  # 奖励：经济意义强
-                sample_size_normalization=1.0,       # 小样本不惩罚
-                predictive_power_boost=0.05
+                sample_size_normalization=1.0,  # 小样本不惩罚
+                predictive_power_boost=0.05,
             ),
             "4h": TimeframeAdjustment(
                 stability_bonus=0.10,
                 uncertainty_penalty=0.75,
                 economic_significance_discount=1.15,
                 sample_size_normalization=1.0,
-                predictive_power_boost=0.08
+                predictive_power_boost=0.08,
             ),
             "1day": TimeframeAdjustment(
-                stability_bonus=0.25,      # 高稳定性奖励
-                uncertainty_penalty=0.85,   # 减少惩罚
+                stability_bonus=0.25,  # 高稳定性奖励
+                uncertainty_penalty=0.85,  # 减少惩罚
                 economic_significance_discount=1.3,  # 高经济意义奖励
                 sample_size_normalization=1.0,
-                predictive_power_boost=0.15  # 高预测能力奖励
+                predictive_power_boost=0.15,  # 高预测能力奖励
             ),
         }
 
@@ -109,14 +111,14 @@ class FairScorer:
         try:
             config_file = Path(config_path)
             if config_file.exists():
-                with open(config_file, 'r', encoding='utf-8') as f:
+                with open(config_file, "r", encoding="utf-8") as f:
                     config = yaml.safe_load(f)
 
-                fair_config = config.get('fair_scorer', {})
-                self.enabled = fair_config.get('enabled', False)
+                fair_config = config.get("fair_scorer", {})
+                self.enabled = fair_config.get("enabled", False)
 
                 if self.enabled:
-                    tf_adjustments = fair_config.get('timeframe_adjustments', {})
+                    tf_adjustments = fair_config.get("timeframe_adjustments", {})
                     for tf, params in tf_adjustments.items():
                         self.timeframe_adjustments[tf] = TimeframeAdjustment(**params)
 
@@ -137,13 +139,15 @@ class FairScorer:
         self.timeframe_adjustments = self.default_adjustments
         self.logger.info("✅ 使用默认公平评分配置")
 
-    def apply_fair_scoring(self,
-                          original_score: float,
-                          timeframe: str,
-                          sample_size: int,
-                          ic_mean: float,
-                          stability_score: float,
-                          predictive_score: float) -> float:
+    def apply_fair_scoring(
+        self,
+        original_score: float,
+        timeframe: str,
+        sample_size: int,
+        ic_mean: float,
+        stability_score: float,
+        predictive_score: float,
+    ) -> float:
         """
         应用公平评分调整
 
@@ -184,13 +188,15 @@ class FairScorer:
 
             # 大样本折扣：样本越大，权重越低
             if size_ratio > 1.0:
-                sample_weight = adjustment.sample_size_normalization / math.sqrt(size_ratio)
+                sample_weight = adjustment.sample_size_normalization / math.sqrt(
+                    size_ratio
+                )
 
         # 2. 维度权重调整
         adjusted_score = (
-            original_score * 0.4 +  # 保留40%原始分数
-            predictive_score * 0.3 * sample_weight +  # 预测能力权重：样本量敏感
-            stability_score * 0.3  # 稳定性权重：样本量不敏感
+            original_score * 0.4  # 保留40%原始分数
+            + predictive_score * 0.3 * sample_weight  # 预测能力权重：样本量敏感
+            + stability_score * 0.3  # 稳定性权重：样本量不敏感
         )
 
         # 3. 时间框架特定调整
@@ -233,26 +239,29 @@ class FairScorer:
             "predictive_power_boost": adjustment.predictive_power_boost,
         }
 
-    def compare_scores(self,
-                      original_score: float,
-                      adjusted_score: float,
-                      timeframe: str) -> Dict[str, Any]:
+    def compare_scores(
+        self, original_score: float, adjusted_score: float, timeframe: str
+    ) -> Dict[str, Any]:
         """比较原始评分和公平评分的差异"""
         return {
             "timeframe": timeframe,
             "original_score": original_score,
             "adjusted_score": adjusted_score,
             "score_change": adjusted_score - original_score,
-            "percent_change": (adjusted_score - original_score) / original_score * 100 if original_score > 0 else 0,
+            "percent_change": (
+                (adjusted_score - original_score) / original_score * 100
+                if original_score > 0
+                else 0
+            ),
             "adjustment_applied": self.enabled,
-            "adjustment_params": self.get_adjustment_summary(timeframe)
+            "adjustment_params": self.get_adjustment_summary(timeframe),
         }
 
 
 def create_fair_scorer_from_config(config_manager) -> FairScorer:
     """从配置管理器创建公平评分器"""
     # 尝试从配置管理器获取公平评分配置路径
-    fair_config_path = getattr(config_manager, 'fair_scoring_config_path', None)
+    fair_config_path = getattr(config_manager, "fair_scoring_config_path", None)
     if not fair_config_path:
         # 使用默认路径
         fair_config_path = "./configs/fair_scoring_config.yaml"
@@ -266,9 +275,9 @@ if __name__ == "__main__":
 
     # 测试不同时间框架的评分调整
     test_cases = [
-        ("1min", 40000, 0.05, 0.7, 0.8),   # 大样本，短周期
-        ("60min", 800, 0.04, 0.8, 0.6),    # 中等样本，中周期
-        ("1day", 120, 0.06, 0.9, 0.7),     # 小样本，长周期
+        ("1min", 40000, 0.05, 0.7, 0.8),  # 大样本，短周期
+        ("60min", 800, 0.04, 0.8, 0.6),  # 中等样本，中周期
+        ("1day", 120, 0.06, 0.9, 0.7),  # 小样本，长周期
     ]
 
     print("公平评分测试结果:")

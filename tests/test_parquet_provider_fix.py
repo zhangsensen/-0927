@@ -8,14 +8,18 @@
 4. 数据加载功能
 """
 
-import pandas as pd
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
+
+import pandas as pd
+
 
 def test_parquet_provider():
     """测试修复后的ParquetDataProvider"""
     try:
-        from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
+        from factor_system.factor_engine.providers.parquet_provider import (
+            ParquetDataProvider,
+        )
 
         print("🔧 开始测试修复后的ParquetDataProvider...")
 
@@ -43,9 +47,11 @@ def test_parquet_provider():
             print(f"\n⏰ {sample_symbol} 可用时间框架: {timeframes}")
 
         # 测试数据加载（使用实际数据）
-        if available_symbols and 'daily' in provider.get_timeframes(available_symbols[0]):
+        if available_symbols and "daily" in provider.get_timeframes(
+            available_symbols[0]
+        ):
             test_symbol = available_symbols[0]
-            test_timeframe = 'daily'
+            test_timeframe = "daily"
 
             # 使用数据文件中的实际日期范围
             start_date = datetime(2025, 3, 1)
@@ -58,7 +64,7 @@ def test_parquet_provider():
                 symbols=[test_symbol],
                 timeframe=test_timeframe,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
             )
 
             if not data.empty:
@@ -67,7 +73,10 @@ def test_parquet_provider():
                 print(f"🏷️  索引: {data.index.names}")
 
                 # 验证MultiIndex结构
-                if hasattr(data.index, 'names') and data.index.names == ['timestamp', 'symbol']:
+                if hasattr(data.index, "names") and data.index.names == [
+                    "timestamp",
+                    "symbol",
+                ]:
                     print("✅ MultiIndex结构正确")
                 else:
                     print("❌ MultiIndex结构不正确")
@@ -97,6 +106,7 @@ def test_parquet_provider():
     except Exception as e:
         print(f"❌ 测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -104,7 +114,9 @@ def test_parquet_provider():
 def test_multiple_symbols():
     """测试多股票数据加载"""
     try:
-        from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
+        from factor_system.factor_engine.providers.parquet_provider import (
+            ParquetDataProvider,
+        )
 
         print("\n🔧 测试多股票数据加载...")
 
@@ -112,10 +124,12 @@ def test_multiple_symbols():
         available_symbols = provider.get_symbols()
 
         # 选择几个可用的股票
-        test_symbols = available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
+        test_symbols = (
+            available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
+        )
 
         if len(test_symbols) >= 2:
-            test_timeframe = 'daily'
+            test_timeframe = "daily"
             start_date = datetime(2025, 3, 1)
             end_date = datetime(2025, 3, 31)
 
@@ -126,14 +140,14 @@ def test_multiple_symbols():
                 symbols=test_symbols,
                 timeframe=test_timeframe,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
             )
 
             if not data.empty:
                 print(f"✅ 多股票数据加载成功: {data.shape}")
 
                 # 验证包含多个symbol
-                unique_symbols = data.index.get_level_values('symbol').unique()
+                unique_symbols = data.index.get_level_values("symbol").unique()
                 print(f"📈 实际包含股票: {list(unique_symbols)}")
 
                 if len(unique_symbols) >= 2:
@@ -169,7 +183,7 @@ if __name__ == "__main__":
     for test_name, test_func in tests:
         print(f"\n{'='*60}")
         print(f"📋 {test_name}")
-        print('='*60)
+        print("=" * 60)
 
         if test_func():
             passed += 1
@@ -178,7 +192,7 @@ if __name__ == "__main__":
 
     print(f"\n{'='*60}")
     print(f"📊 测试结果: {passed}个通过, {failed}个失败")
-    print('='*60)
+    print("=" * 60)
 
     if failed == 0:
         print("🎉 所有测试通过！ParquetDataProvider修复成功！")

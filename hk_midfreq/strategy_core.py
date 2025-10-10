@@ -10,6 +10,9 @@ import numpy as np
 import pandas as pd
 import vectorbt as vbt
 
+from factor_system.factor_engine import api
+from factor_system.factor_engine.core.registry import get_global_registry
+from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 from hk_midfreq.config import (
     DEFAULT_EXECUTION_CONFIG,
     DEFAULT_RUNTIME_CONFIG,
@@ -20,9 +23,6 @@ from hk_midfreq.config import (
 )
 from hk_midfreq.factor_interface import FactorLoadError, FactorScoreLoader
 from hk_midfreq.fusion import FactorFusionEngine
-from factor_system.factor_engine import api
-from factor_system.factor_engine.core.registry import get_global_registry
-from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ def hk_reversal_logic(
     ).mean()
 
     cond_rsi = rsi < rsi_threshold
-    cond_bb = close <= bb['lower']
+    cond_bb = close <= bb["lower"]
     cond_vol = aligned_volume >= (rolling_volume * volume_multiplier)
 
     entries = (cond_rsi & cond_bb & cond_vol).fillna(False)
@@ -280,20 +280,20 @@ def generate_multi_factor_signals(
         # 3. 计算多因子复合得分
         # 向量化标准化：一次完成所有列的Z-score归一化
         factor_scores = factor_data_aligned.copy()
-        
+
         # 向量化计算mean和std
         means = factor_scores.mean(axis=0)
         stds = factor_scores.std(axis=0, ddof=1)
-        
+
         # 避免除零：std=0的列设为0
         stds = stds.replace(0, 1e-10)
-        
+
         # 向量化标准化（广播）
         factor_scores = (factor_scores - means) / stds
-        
+
         # 处理NaN（如果std=0导致的）
         factor_scores = factor_scores.fillna(0.0)
-        
+
         # 计算复合得分（等权平均）
         composite_score = factor_scores.mean(axis=1)
 
@@ -368,7 +368,7 @@ def generate_factor_signals(
     factor_id = descriptor.name
 
     # 验证因子ID格式
-    if not factor_id.replace('_', '').isalnum():
+    if not factor_id.replace("_", "").isalnum():
         raise ValueError(f"因子ID格式无效: {factor_id}")
 
     engine = api.get_engine()
@@ -734,16 +734,16 @@ class StrategyCore:
                 f"{symbol} 使用多因子融合算法生成信号 - 因子数量: {len(factor_names)}"
             )
             signals = generate_multi_factor_signals(
-                    symbol=symbol,
-                    timeframe=entry_timeframe,
-                    close=data["close"],
-                    volume=data.get("volume"),
+                symbol=symbol,
+                timeframe=entry_timeframe,
+                close=data["close"],
+                volume=data.get("volume"),
                 factor_names=factor_names,
                 factor_loader=self.factor_loader,
-                    hold_days=self.trading_config.hold_days,
-                    stop_loss=self.execution_config.stop_loss,
-                    take_profit=self.execution_config.primary_take_profit(),
-                )
+                hold_days=self.trading_config.hold_days,
+                stop_loss=self.execution_config.stop_loss,
+                take_profit=self.execution_config.primary_take_profit(),
+            )
             logger.info(
                 f"{symbol} 多因子融合信号生成成功 - 入场信号数: {signals.entries.sum()}"
             )

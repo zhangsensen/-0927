@@ -8,17 +8,20 @@
 import re
 from pathlib import Path
 
+
 def extract_factor_data_assignments():
     """从代码中提取factor_data赋值"""
     print("🔍 提取factor_generation实际生成的因子...")
 
-    calc_file = Path("/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py")
+    calc_file = Path(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py"
+    )
 
     if not calc_file.exists():
         print("❌ enhanced_factor_calculator.py文件不存在")
         return []
 
-    with open(calc_file, 'r', encoding='utf-8') as f:
+    with open(calc_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     # 查找所有factor_data[...]的赋值
@@ -34,13 +37,16 @@ def extract_factor_data_assignments():
 
     return unique_factors
 
+
 def extract_dynamic_factors():
     """提取动态生成的因子（如MA5, EMA12等）"""
     print("\n🔍 提取动态生成的因子...")
 
-    calc_file = Path("/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py")
+    calc_file = Path(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py"
+    )
 
-    with open(calc_file, 'r', encoding='utf-8') as f:
+    with open(calc_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     # 查找动态生成的因子模式
@@ -65,13 +71,16 @@ def extract_dynamic_factors():
 
     return unique_dynamic
 
+
 def extract_all_generated_factors():
     """提取所有生成的因子，包括动态生成的"""
     print("\n🔍 综合分析所有生成的因子...")
 
-    calc_file = Path("/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py")
+    calc_file = Path(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py"
+    )
 
-    with open(calc_file, 'r', encoding='utf-8') as f:
+    with open(calc_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     # 查找所有factor相关的字符串模式
@@ -89,9 +98,9 @@ def extract_all_generated_factors():
     # 模式3: 查找所有可能的因子名称模式
     name_patterns = [
         r'factor_data\[f"([^"]*)\{window\}([^"]*)"\]',  # MA{window}
-        r'factor_data\[f"([^"]*)\{span\}([^"]*)"\]',   # EMA{span}
-        r'return f"([^"]*)\{window\}([^"]*)"',         # 返回的字符串格式
-        r'f"([^"]*)\{window\}"',                         # 其他格式化字符串
+        r'factor_data\[f"([^"]*)\{span\}([^"]*)"\]',  # EMA{span}
+        r'return f"([^"]*)\{window\}([^"]*)"',  # 返回的字符串格式
+        r'f"([^"]*)\{window\}"',  # 其他格式化字符串
     ]
 
     for pattern in name_patterns:
@@ -105,15 +114,29 @@ def extract_all_generated_factors():
 
     # 模式4: 查找常见的指标名称
     indicator_names = [
-        'MA', 'EMA', 'SMA', 'WMA', 'DEMA', 'TEMA', 'RSI', 'MACD', 'STOCH',
-        'ATR', 'BBANDS', 'OBV', 'BOLB', 'ADX', 'MSTD', 'VOLATILITY'
+        "MA",
+        "EMA",
+        "SMA",
+        "WMA",
+        "DEMA",
+        "TEMA",
+        "RSI",
+        "MACD",
+        "STOCH",
+        "ATR",
+        "BBANDS",
+        "OBV",
+        "BOLB",
+        "ADX",
+        "MSTD",
+        "VOLATILITY",
     ]
 
     # 查找这些指标的使用
     for indicator in indicator_names:
         if indicator in content:
             # 查找相关的窗口设置
-            window_pattern = rf'{indicator}[^a-zA-Z]*\s*=\s*(\d+)'
+            window_pattern = rf"{indicator}[^a-zA-Z]*\s*=\s*(\d+)"
             window_matches = re.findall(window_pattern, content)
             for window in window_matches:
                 all_factors.add(f"{indicator}{window}")
@@ -132,12 +155,25 @@ def extract_all_generated_factors():
         manual_factors.extend([f"EMA{span}"])
 
     # 技术指标
-    manual_factors.extend([
-        "RSI_14", "MACD_12_26_9", "MACD_Signal", "MACD_Hist",
-        "STOCH_14_3", "STOCH_K", "STOCH_D",
-        "ATR_14", "BBANDS_20_2", "BBANDS_upper", "BBANDS_middle", "BBANDS_lower",
-        "OBV", "VOLATILITY_20", "MSTD_20"
-    ])
+    manual_factors.extend(
+        [
+            "RSI_14",
+            "MACD_12_26_9",
+            "MACD_Signal",
+            "MACD_Hist",
+            "STOCH_14_3",
+            "STOCH_K",
+            "STOCH_D",
+            "ATR_14",
+            "BBANDS_20_2",
+            "BBANDS_upper",
+            "BBANDS_middle",
+            "BBANDS_lower",
+            "OBV",
+            "VOLATILITY_20",
+            "MSTD_20",
+        ]
+    )
 
     # OBV移动平均
     for window in [5, 10, 20]:
@@ -151,22 +187,26 @@ def extract_all_generated_factors():
 
     return final_factors
 
+
 def compare_with_factor_engine(factor_gen_factors):
     """与FactorEngine对比"""
     print("\n🔍 与FactorEngine对比...")
 
     # 读取FactorEngine因子
-    registry_file = Path("/Users/zhangshenshen/深度量化0927/factor_system/research/metadata/factor_registry.json")
+    registry_file = Path(
+        "/Users/zhangshenshen/深度量化0927/factor_system/research/metadata/factor_registry.json"
+    )
 
     if not registry_file.exists():
         print("❌ FactorEngine注册表文件不存在")
         return
 
     import json
-    with open(registry_file, 'r', encoding='utf-8') as f:
+
+    with open(registry_file, "r", encoding="utf-8") as f:
         registry = json.load(f)
 
-    fe_factors = set(registry.get('factors', {}).keys())
+    fe_factors = set(registry.get("factors", {}).keys())
     fg_factors = set(factor_gen_factors)
 
     print(f"📊 最终对比结果:")
@@ -181,9 +221,9 @@ def compare_with_factor_engine(factor_gen_factors):
             common_factors.append(fg_factor)
         else:
             # 尝试简化的匹配
-            simple_fg = fg_factor.replace('_', '')
+            simple_fg = fg_factor.replace("_", "")
             for fe_factor in fe_factors:
-                simple_fe = fe_factor.replace('_', '')
+                simple_fe = fe_factor.replace("_", "")
                 if simple_fg == simple_fg:
                     common_factors.append(f"{fg_factor} (映射到 {fe_factor})")
                     break
@@ -198,6 +238,7 @@ def compare_with_factor_engine(factor_gen_factors):
 
     if len(common_factors) > 20:
         print(f"    ... 还有{len(common_factors)-20}个")
+
 
 def main():
     """主函数"""
@@ -217,6 +258,7 @@ def main():
     print(f"  - factor_generation实际实现的因子数量: {len(all_factors)}个")
     print(f"  - 这与FactorEngine的102个因子存在显著差异")
     print(f"  - 需要进一步分析原因和解决方案")
+
 
 if __name__ == "__main__":
     main()

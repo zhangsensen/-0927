@@ -44,16 +44,24 @@ isort factor_system/ data-resampling/
 python a股/stock_analysis/sz_technical_analysis.py <STOCK_CODE>
 
 # Download A-share data using yfinance
-python a股/data_download/simple_download.py
+python a股/data_download/download_603920.py
+python a股/data_download/download_300450.py
 
 # Screen top A-share stocks
-python a股/screen_top_stocks.py
+python a股/实施快速启动.py
+
+# Comprehensive stock analysis
+python a股/stock_analysis/ultimate_300450_analysis.py
+python a股/stock_analysis/comprehensive_300450_analysis.py
 ```
 
 ### Factor System Analysis
 ```bash
 # Quick start multi-timeframe analysis
 python factor_system/factor_generation/quick_start.py <STOCK_CODE>
+
+# Complete factor generation pipeline
+python factor_system/factor_generation/run_complete_pipeline.py <STOCK_CODE>
 
 # Professional factor screening (CLI)
 python factor_system/factor_screening/cli.py screen <STOCK_CODE> <TIMEFRAME>
@@ -66,6 +74,7 @@ python factor_system/factor_screening/quick_start.py
 
 # Batch processing multiple stocks
 python factor_system/factor_screening/batch_screener.py
+python factor_system/factor_screening/batch_screen_all_stocks_parallel.py
 ```
 
 ### FactorEngine Usage
@@ -82,8 +91,12 @@ python -c "from factor_system.factor_engine import api; print(api.list_available
 
 ### Data Processing
 ```bash
-# Batch resample Hong Kong 1-minute data to higher timeframes
-python batch_resample_hk.py
+# Batch resample Hong Kong 1-minute data to higher timeframes (archived)
+python archive/20251009/artifacts/batch_resample_hk.py
+
+# Data migration and schema updates
+python scripts/migrate_parquet_schema.py
+python scripts/migrate_factor_ids.py
 ```
 
 ## Architecture Overview
@@ -114,17 +127,23 @@ python batch_resample_hk.py
 **Factor System (`factor_system/`)**
 - `factor_generation/` - Multi-timeframe factor calculation and analysis
   - `enhanced_factor_calculator.py` - 154 technical indicators engine
-  - `multi_tf_vbt_detector.py` - VectorBT-based analysis
   - `quick_start.py` - Quick start entry point
-  - `config.py` - Configuration management
+  - `config_loader.py` - Configuration management
+  - `main.py` - Main execution entry point
 - `factor_screening/` - Professional factor screening system
   - `professional_factor_screener.py` - 5-dimension screening engine
   - `cli.py` - Command-line interface
   - `batch_screener.py` - Batch processing
   - `config_manager.py` - Configuration management
 - `shared/factor_calculators.py` - Shared calculation logic ensuring consistency
-- `config/` - Strategy configuration templates
 - `tests/` - Comprehensive test suite
+
+**Hong Kong Mid-Frequency System (`hk_midfreq/`)**
+- `run_multi_tf_backtest.py` - Multi-timeframe backtesting execution
+- `combination_backtest.py` - Factor combination backtesting
+- `strategy_core.py` - Strategy implementation with FactorEngine integration
+- `session_index_manager.py` - Trading session management
+- `factor_engine_adapter.py` - FactorEngine integration adapter
 
 ### FactorEngine Architecture
 
@@ -533,22 +552,23 @@ settings = get_production_config()
 
 ## External Integrations
 
-### QuantConnect Integration
+### Root Cause Testing
 ```bash
-# QuantConnect MCP server wrapper
-./quantconnect-mcp-wrapper.sh [command]
+# Run comprehensive root cause fix validation
+python scripts/test_root_cause_fixes.py
 
-# MCP server provides:
-# - Project management and compilation
-# - Backtest execution and analysis
-# - Live algorithm deployment
-# - Data research and factor testing
+# Test specific components
+python tests/test_factor_consistency.py
+python tests/test_factor_engine_regression.py
+python tests/test_shared_calculators.py
 ```
 
 ### Pre-commit Hooks
 The project includes Linus-style pre-commit hooks focused on practical quality:
 - **Future Function Detection**: Prevents look-ahead bias in quantitative strategies
 - **Python Syntax Check**: Ensures code can be executed
+- **Factor Registry Validation**: Ensures FactorEngine follows authorized factor list
+- **Factor Consistency Check**: Maintains strict consistency with factor_generation
 - **Code Formatting**: Black and isort for consistent style
 
 ```bash
@@ -560,3 +580,17 @@ pre-commit run --all-files
 ```
 
 This quantitative trading platform is designed for serious algorithmic trading research with professional-grade factor analysis capabilities optimized for multiple markets. The unified FactorEngine ensures complete consistency across research, backtesting, and production environments.
+
+## Recent Updates
+
+### Architecture Improvements
+- **FactorEngine Auto-Sync**: Automatic consistency validation between FactorEngine and factor_generation
+- **Enhanced Pre-commit Hooks**: Added factor registry validation and consistency checks
+- **Root Cause Testing**: Comprehensive validation scripts for system integrity
+- **Data Migration Tools**: Parquet schema and factor ID migration utilities
+
+### New Testing Framework
+- **Root Cause Fix Validation**: `scripts/test_root_cause_fixes.py` for end-to-end testing
+- **Factor Consistency Tests**: Ensure strict alignment between components
+- **Performance Regression Tests**: Validate system performance after changes
+- **Shared Calculator Tests**: Test common factor calculation logic

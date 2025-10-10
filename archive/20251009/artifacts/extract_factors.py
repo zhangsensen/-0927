@@ -10,7 +10,11 @@ def extract_factors_from_enhanced_calculator():
     """从enhanced_factor_calculator.py中提取所有因子"""
 
     # 读取enhanced_factor_calculator.py
-    with open('/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py', 'r', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py",
+        "r",
+        encoding="utf-8",
+    ) as f:
         content = f.read()
 
     factors = set()
@@ -100,7 +104,7 @@ def extract_factors_from_enhanced_calculator():
     ta_matches = re.findall(ta_pattern, content)
     for ta_name in ta_matches:
         # 清理TA名称
-        clean_ta = ta_name.rstrip('_')
+        clean_ta = ta_name.rstrip("_")
         factors.add(f"TA_{clean_ta}")
 
     return sorted(list(factors))
@@ -123,7 +127,7 @@ def categorize_factors(factors):
         "位置指标": [],
         "趋势强度": [],
         "TA-Lib指标": [],
-        "其他": []
+        "其他": [],
     }
 
     for factor in factors:
@@ -141,7 +145,11 @@ def categorize_factors(factors):
             categories["ATR指标"].append(factor)
         elif factor.startswith("MSTD"):
             categories["波动率指标"].append(factor)
-        elif factor.startswith("OBV") or factor.startswith("Volume") or factor.startswith("VWAP"):
+        elif (
+            factor.startswith("OBV")
+            or factor.startswith("Volume")
+            or factor.startswith("VWAP")
+        ):
             categories["成交量指标"].append(factor)
         elif factor.startswith("WILLR"):
             categories["威廉指标"].append(factor)
@@ -178,7 +186,11 @@ def main():
                 print(f"  - {factor}")
 
     # 保存到文件
-    with open('/Users/zhangshenshen/深度量化0927/factor_generation_factors_list.txt', 'w', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_generation_factors_list.txt",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write("factor_generation模块中的154个因子清单\n")
         f.write("=" * 50 + "\n\n")
 

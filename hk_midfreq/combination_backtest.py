@@ -13,17 +13,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
 
+# 配置matplotlib以支持中文并抑制字体警告
+import matplotlib
 import numpy as np
 import pandas as pd
 import vectorbt as vbt
 from joblib import Parallel, delayed
 
-# 配置matplotlib以支持中文并抑制字体警告
-import matplotlib
-matplotlib.use('Agg')  # 使用非交互式后端
-matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'DejaVu Sans', 'sans-serif']
-matplotlib.rcParams['axes.unicode_minus'] = False
-warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib.font_manager')
+matplotlib.use("Agg")  # 使用非交互式后端
+matplotlib.rcParams["font.sans-serif"] = [
+    "Arial Unicode MS",
+    "DejaVu Sans",
+    "sans-serif",
+]
+matplotlib.rcParams["axes.unicode_minus"] = False
+warnings.filterwarnings(
+    "ignore", category=UserWarning, module="matplotlib.font_manager"
+)
 
 from hk_midfreq.config import (
     DEFAULT_RUNTIME_CONFIG,
@@ -33,7 +39,6 @@ from hk_midfreq.config import (
 from hk_midfreq.factor_interface import FactorScoreLoader
 from hk_midfreq.price_loader import PriceDataLoader
 from hk_midfreq.result_manager import BacktestResultManager
-
 
 logger = logging.getLogger(__name__)
 
@@ -187,13 +192,13 @@ class VectorBTBatchBacktester:
         if not isinstance(price_data.index, pd.DatetimeIndex):
             price_data.index = pd.to_datetime(price_data.index)
         self.price_data = price_data.sort_index()
-        
+
         self.factor_frames = {}
         for tf, frame in factor_frames.items():
             if not isinstance(frame.index, pd.DatetimeIndex):
                 frame.index = pd.to_datetime(frame.index)
             self.factor_frames[tf] = frame.sort_index()
-            
+
         self.config = config
         self._normalized_cache: Dict[str, pd.DataFrame] = {}
 
@@ -240,12 +245,8 @@ class VectorBTBatchBacktester:
             )
 
         composite_matrix = np.concatenate(composite_list, axis=1)
-        q_high = np.nanquantile(
-            composite_matrix, self.config.entry_quantile, axis=0
-        )
-        q_low = np.nanquantile(
-            composite_matrix, self.config.exit_quantile, axis=0
-        )
+        q_high = np.nanquantile(composite_matrix, self.config.entry_quantile, axis=0)
+        q_low = np.nanquantile(composite_matrix, self.config.exit_quantile, axis=0)
 
         entries = composite_matrix > q_high[np.newaxis, :]
         exits = composite_matrix < q_low[np.newaxis, :]
@@ -406,9 +407,7 @@ class PerformanceAnalyzer:
                 counter[factor] = counter.get(factor, 0) + 1
         if not counter:
             return pd.Series(dtype=int)
-        importance = (
-            pd.Series(counter).sort_values(ascending=False)
-        )
+        importance = pd.Series(counter).sort_values(ascending=False)
         importance.name = "count"
         return importance
 
@@ -507,9 +506,10 @@ def run_combination_backtest(
     session_id: Optional[str] = None,
 ) -> Dict[str, object]:
     """执行组合回测，生成指定产出并返回结果摘要"""
-    import psutil
     import os
-    
+
+    import psutil
+
     # 性能监控初始化
     process = psutil.Process(os.getpid())
     start_time = datetime.now()
@@ -526,31 +526,37 @@ def run_combination_backtest(
 
     # 创建会话目录（简化版，暂不使用result_manager以避免复杂度）
     session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    session_id = session_id or f"{symbol.replace('.', '_')}_{timeframe}_combo_{session_timestamp}"
+    session_id = (
+        session_id
+        or f"{symbol.replace('.', '_')}_{timeframe}_combo_{session_timestamp}"
+    )
     session_dir = path_config.backtest_output_dir / session_id
     ensure_directory(session_dir)
-    
+
     # 创建logs和charts目录
     logs_dir = session_dir / "logs"
     ensure_directory(logs_dir)
     charts_dir = session_dir / "charts"
     ensure_directory(charts_dir)
-    
+
     # 配置会话级日志
     log_file = logs_dir / "combination_backtest.log"
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    ))
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
     logger.addHandler(file_handler)
-    
+
     logger.info(f"组合回测会话创建: {session_id}")
     logger.info(f"标的: {symbol}, 时间框架: {timeframe}")
-    logger.info(f"配置: max_combinations={combo_config.max_combinations}, correlation_threshold={combo_config.correlation_threshold}")
-    
+    logger.info(
+        f"配置: max_combinations={combo_config.max_combinations}, correlation_threshold={combo_config.correlation_threshold}"
+    )
+
     # 注册会话到索引
     from hk_midfreq.session_index_manager import SessionIndexManager
+
     index_manager = SessionIndexManager(path_config.backtest_output_dir)
     index_manager.register_session(
         session_id=session_id,
@@ -641,7 +647,9 @@ def run_combination_backtest(
         }
         for combo, row in evaluated.head(100).iterrows()
     ]
-    top_100_json.write_text(json.dumps(top_100_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    top_100_json.write_text(
+        json.dumps(top_100_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     importance_path = charts_dir / "factor_importance_analysis.png"
     analyzer.generate_factor_importance_plot(importance, str(importance_path))
@@ -654,10 +662,10 @@ def run_combination_backtest(
     end_memory = process.memory_info().rss / 1024 / 1024  # MB
     end_cpu_times = process.cpu_times()
     elapsed_seconds = (end_time - start_time).total_seconds()
-    
+
     # 组合规模分布统计
     combo_size_dist = evaluated["num_factors"].value_counts().sort_index().to_dict()
-    
+
     performance_metrics = {
         "elapsed_seconds": elapsed_seconds,
         "start_time": start_time.isoformat(),
@@ -668,13 +676,21 @@ def run_combination_backtest(
         "memory_delta_mb": end_memory - start_memory,
         "cpu_user_seconds": end_cpu_times.user - start_cpu_times.user,
         "cpu_system_seconds": end_cpu_times.system - start_cpu_times.system,
-        "combinations_per_second": len(combinations) / elapsed_seconds if elapsed_seconds > 0 else 0,
+        "combinations_per_second": (
+            len(combinations) / elapsed_seconds if elapsed_seconds > 0 else 0
+        ),
         "combination_size_distribution": combo_size_dist,
     }
-    
-    logger.info(f"组合回测完成 - 耗时: {elapsed_seconds:.2f}秒, 速度: {performance_metrics['combinations_per_second']:.2f} 组合/秒")
-    logger.info(f"内存使用: 开始={start_memory:.1f}MB, 结束={end_memory:.1f}MB, 增量={performance_metrics['memory_delta_mb']:.1f}MB")
-    logger.info(f"CPU时间: 用户={performance_metrics['cpu_user_seconds']:.2f}秒, 系统={performance_metrics['cpu_system_seconds']:.2f}秒")
+
+    logger.info(
+        f"组合回测完成 - 耗时: {elapsed_seconds:.2f}秒, 速度: {performance_metrics['combinations_per_second']:.2f} 组合/秒"
+    )
+    logger.info(
+        f"内存使用: 开始={start_memory:.1f}MB, 结束={end_memory:.1f}MB, 增量={performance_metrics['memory_delta_mb']:.1f}MB"
+    )
+    logger.info(
+        f"CPU时间: 用户={performance_metrics['cpu_user_seconds']:.2f}秒, 系统={performance_metrics['cpu_system_seconds']:.2f}秒"
+    )
     logger.info(f"组合规模分布: {combo_size_dist}")
 
     summary = {
@@ -685,7 +701,9 @@ def run_combination_backtest(
         "total_combinations": len(combinations),
         "evaluated_combinations": int(evaluated.shape[0]),
         "best_combination": evaluated.index[0] if not evaluated.empty else None,
-        "best_score": float(evaluated.iloc[0]["composite_score"]) if not evaluated.empty else None,
+        "best_score": (
+            float(evaluated.iloc[0]["composite_score"]) if not evaluated.empty else None
+        ),
         "pareto_count": int(frontier.shape[0]),
         "results_csv": str(results_path),
         "top100_json": str(top_100_json),
@@ -695,16 +713,18 @@ def run_combination_backtest(
     }
 
     summary_path = session_dir / "summary.json"
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    
+    summary_path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
     # 保存独立的性能监控报告
     perf_report_path = session_dir / "performance_metrics.json"
-    perf_report_path.write_text(json.dumps(performance_metrics, ensure_ascii=False, indent=2), encoding="utf-8")
-    
+    perf_report_path.write_text(
+        json.dumps(performance_metrics, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
     # 移除文件handler以避免日志泄漏
     logger.removeHandler(file_handler)
     file_handler.close()
 
     return summary
-
-

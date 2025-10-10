@@ -22,13 +22,13 @@
 
 __version__ = "0.2.0"
 
+# 统一API入口（推荐使用）
+from factor_system.factor_engine import api
+
 # 核心类（供高级用户直接使用）
 from factor_system.factor_engine.core.engine import FactorEngine
 from factor_system.factor_engine.core.registry import FactorRegistry
 from factor_system.factor_engine.providers.base import DataProvider
-
-# 统一API入口（推荐使用）
-from factor_system.factor_engine import api
 
 __all__ = [
     # 核心类
@@ -38,4 +38,3 @@ __all__ = [
     # 统一API模块
     "api",
 ]
-

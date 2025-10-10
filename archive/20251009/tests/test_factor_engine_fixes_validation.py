@@ -12,10 +12,11 @@ import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
-import pandas as pd
-import numpy as np
 
-from factor_system.factor_engine.api import get_engine, calculate_factors
+import numpy as np
+import pandas as pd
+
+from factor_system.factor_engine.api import calculate_factors, get_engine
 from factor_system.factor_engine.core.cache import LRUCache
 from factor_system.factor_engine.settings import get_settings
 
@@ -30,13 +31,16 @@ class TestFactorEngineFixes:
         # 创建测试数据
         with tempfile.TemporaryDirectory() as temp_dir:
             # 准备测试数据
-            test_data = pd.DataFrame({
-                'open': [100, 102, 101, 103, 105],
-                'high': [103, 104, 102, 106, 107],
-                'low': [99, 101, 100, 102, 104],
-                'close': [102, 101, 103, 105, 106],
-                'volume': [1000, 1200, 800, 1500, 2000]
-            }, index=pd.date_range('2025-01-01', periods=5))
+            test_data = pd.DataFrame(
+                {
+                    "open": [100, 102, 101, 103, 105],
+                    "high": [103, 104, 102, 106, 107],
+                    "low": [99, 101, 100, 102, 104],
+                    "close": [102, 101, 103, 105, 106],
+                    "volume": [1000, 1200, 800, 1500, 2000],
+                },
+                index=pd.date_range("2025-01-01", periods=5),
+            )
 
             data_file = Path(temp_dir) / "0700.HK_1min_2025-01-01_2025-01-05.parquet"
             data_file.parent.mkdir(parents=True, exist_ok=True)
@@ -45,12 +49,12 @@ class TestFactorEngineFixes:
             # 测试n_jobs=1
             try:
                 result_single = calculate_factors(
-                    factor_ids=['RSI'],
-                    symbols=['0700.HK'],
-                    timeframe='1min',
+                    factor_ids=["RSI"],
+                    symbols=["0700.HK"],
+                    timeframe="1min",
                     start_date=datetime(2025, 1, 1),
                     end_date=datetime(2025, 1, 5),
-                    n_jobs=1
+                    n_jobs=1,
                 )
                 print("✅ n_jobs=1 测试通过")
             except Exception as e:
@@ -59,12 +63,12 @@ class TestFactorEngineFixes:
             # 测试n_jobs=2
             try:
                 result_parallel = calculate_factors(
-                    factor_ids=['RSI'],
-                    symbols=['0700.HK'],
-                    timeframe='1min',
+                    factor_ids=["RSI"],
+                    symbols=["0700.HK"],
+                    timeframe="1min",
                     start_date=datetime(2025, 1, 1),
                     end_date=datetime(2025, 1, 5),
-                    n_jobs=2
+                    n_jobs=2,
                 )
                 print("✅ n_jobs=2 测试通过")
 
@@ -82,24 +86,24 @@ class TestFactorEngineFixes:
         cache = LRUCache(maxsize_mb=1)  # 1MB缓存
 
         # 创建测试数据
-        data1 = pd.DataFrame({'test': np.random.randn(100)})
-        data2 = pd.DataFrame({'test': np.random.randn(200)})
-        data3 = pd.DataFrame({'test': np.random.randn(50)})
+        data1 = pd.DataFrame({"test": np.random.randn(100)})
+        data2 = pd.DataFrame({"test": np.random.randn(200)})
+        data3 = pd.DataFrame({"test": np.random.randn(50)})
 
         # 添加第一个数据
-        cache.set('key1', data1)
+        cache.set("key1", data1)
         size1 = cache.current_size
         print(f"添加数据1后缓存大小: {size1} bytes")
 
         # 添加第二个数据
-        cache.set('key2', data2)
+        cache.set("key2", data2)
         size2 = cache.current_size
         print(f"添加数据2后缓存大小: {size2} bytes")
         assert size2 > size1, "缓存大小应该增加"
 
         # 替换第一个数据（关键测试：size不应该无限增长）
         old_size = cache.current_size
-        cache.set('key1', data3)  # 用更小的数据替换key1
+        cache.set("key1", data3)  # 用更小的数据替换key1
         new_size = cache.current_size
         print(f"替换key1后缓存大小: {new_size} bytes (替换前: {old_size} bytes)")
 
@@ -108,7 +112,7 @@ class TestFactorEngineFixes:
         print("✅ LRUCache size计算修复验证通过")
 
         # 验证缓存仍然可以正常访问
-        retrieved_data = cache.get('key1')
+        retrieved_data = cache.get("key1")
         assert len(retrieved_data) == 50, "缓存数据应该正确"
         print("✅ 缓存数据访问正常")
 
@@ -121,12 +125,12 @@ class TestFactorEngineFixes:
 
             # 设置不同的配置并测试引擎重建
             configs_to_test = [
-                {'cache_enable_disk': True},
-                {'cache_enable_memory': False},
-                {'cache_copy_mode': 'deep'},
-                {'cache_disk_cache_dir': temp_path / 'cache'},
-                {'cache_max_ram_mb': 512},
-                {'engine_n_jobs': 4}
+                {"cache_enable_disk": True},
+                {"cache_enable_memory": False},
+                {"cache_copy_mode": "deep"},
+                {"cache_disk_cache_dir": temp_path / "cache"},
+                {"cache_max_ram_mb": 512},
+                {"engine_n_jobs": 4},
             ]
 
             previous_engine_id = None
@@ -198,7 +202,7 @@ def main():
         test_instance.test_n_jobs_parameter_passthrough,
         test_instance.test_lru_cache_size_calculation,
         test_instance.test_config_fingerprint_completeness,
-        test_instance.test_real_data_workflow
+        test_instance.test_real_data_workflow,
     ]
 
     passed = 0

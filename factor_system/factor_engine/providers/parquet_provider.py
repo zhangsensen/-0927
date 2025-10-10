@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
-import pyarrow.parquet as pq
 import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 
 from factor_system.factor_engine.providers.base import DataProvider
 
@@ -50,13 +50,15 @@ class ParquetDataProvider(DataProvider):
             raise ValueError(f"HK数据目录不存在: {self.hk_dir}")
 
         # US数据目录可选
-        if hasattr(self, 'us_dir') and not self.us_dir.exists():
+        if hasattr(self, "us_dir") and not self.us_dir.exists():
             logger.warning(f"US数据目录不存在: {self.us_dir}")
 
         # 创建文件名到symbol和timeframe的映射
         self._build_file_mapping()
 
-        logger.info(f"ParquetDataProvider初始化成功: {len(self._file_mapping)}个数据文件")
+        logger.info(
+            f"ParquetDataProvider初始化成功: {len(self._file_mapping)}个数据文件"
+        )
 
     def _build_file_mapping(self) -> None:
         """构建文件名到symbol和timeframe的映射"""
@@ -64,19 +66,19 @@ class ParquetDataProvider(DataProvider):
 
         # 时间框架映射
         timeframe_mapping = {
-            '1min': '1min',
-            '2min': '2min',
-            '3min': '3min',
-            '5min': '5min',
-            '15m': '15min',
-            '30m': '30min',
-            '60m': '60min',
-            '2h': '2h',
-            '4h': '4h',
-            '1day': 'daily',
-            '15min': '15min',
-            '30min': '30min',
-            '60min': '60min',
+            "1min": "1min",
+            "2min": "2min",
+            "3min": "3min",
+            "5min": "5min",
+            "15m": "15min",
+            "30m": "30min",
+            "60m": "60min",
+            "2h": "2h",
+            "4h": "4h",
+            "1day": "daily",
+            "15min": "15min",
+            "30min": "30min",
+            "60min": "60min",
         }
 
         # 扫描所有parquet文件
@@ -84,14 +86,14 @@ class ParquetDataProvider(DataProvider):
             filename = file_path.stem  # 去掉.parquet扩展名
 
             # 解析文件名：格式如 "0700HK_1day_2025-03-05_2025-09-01"
-            parts = filename.split('_')
+            parts = filename.split("_")
             if len(parts) >= 3:
                 symbol_part = parts[0]  # "0700HK"
                 timeframe_part = parts[1]  # "1day"
 
                 # 转换symbol格式：0700HK -> 0700.HK
-                if symbol_part.endswith('HK'):
-                    symbol = symbol_part[:-2] + '.HK'
+                if symbol_part.endswith("HK"):
+                    symbol = symbol_part[:-2] + ".HK"
                 else:
                     symbol = symbol_part  # 保持原样
 
@@ -99,9 +101,9 @@ class ParquetDataProvider(DataProvider):
                 timeframe = timeframe_mapping.get(timeframe_part, timeframe_part)
 
                 self._file_mapping[file_path] = {
-                    'symbol': symbol,
-                    'timeframe': timeframe,
-                    'filename': filename
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                    "filename": filename,
                 }
 
         logger.info(f"文件映射构建完成: {len(self._file_mapping)}个文件")
@@ -134,11 +136,13 @@ class ParquetDataProvider(DataProvider):
         # 查找匹配的文件
         matching_files = []
         for file_path, file_info in self._file_mapping.items():
-            if file_info['symbol'] in symbols and file_info['timeframe'] == timeframe:
+            if file_info["symbol"] in symbols and file_info["timeframe"] == timeframe:
                 matching_files.append((file_path, file_info))
 
         if not matching_files:
-            logger.warning(f"没有找到匹配的数据文件: symbols={symbols}, timeframe={timeframe}")
+            logger.warning(
+                f"没有找到匹配的数据文件: symbols={symbols}, timeframe={timeframe}"
+            )
             return pd.DataFrame()
 
         # 加载并合并数据
@@ -151,15 +155,17 @@ class ParquetDataProvider(DataProvider):
 
                 # 先读取文件获取日期范围
                 dataset = ds.dataset(file_path)
-                table = dataset.to_table(filter=(
-                    (ds.field('timestamp') >= start_timestamp) &
-                    (ds.field('timestamp') <= end_timestamp)
-                ))
+                table = dataset.to_table(
+                    filter=(
+                        (ds.field("timestamp") >= start_timestamp)
+                        & (ds.field("timestamp") <= end_timestamp)
+                    )
+                )
                 df = table.to_pandas()
 
                 # 添加symbol和timeframe列
-                df['symbol'] = file_info['symbol']
-                df['timeframe'] = file_info['timeframe']
+                df["symbol"] = file_info["symbol"]
+                df["timeframe"] = file_info["timeframe"]
 
                 if not df.empty:
                     all_data.append(df)
@@ -176,7 +182,7 @@ class ParquetDataProvider(DataProvider):
         combined_df = pd.concat(all_data, ignore_index=True)
 
         # 创建MultiIndex
-        combined_df = combined_df.set_index(['timestamp', 'symbol']).sort_index()
+        combined_df = combined_df.set_index(["timestamp", "symbol"]).sort_index()
 
         # 验证数据完整性
         self._validate_data_schema(combined_df, symbols, timeframe)
@@ -186,19 +192,36 @@ class ParquetDataProvider(DataProvider):
 
     def _validate_inputs(self, symbols: List[str], timeframe: str) -> None:
         """验证输入参数格式"""
-        valid_timeframes = {'1min', '2min', '3min', '5min', '15min', '30min', '60min', '2h', '4h', 'daily'}
+        valid_timeframes = {
+            "1min",
+            "2min",
+            "3min",
+            "5min",
+            "15min",
+            "30min",
+            "60min",
+            "2h",
+            "4h",
+            "daily",
+        }
 
         if not symbols:
             raise ValueError("symbols列表不能为空")
 
         for symbol in symbols:
-            if not (symbol.endswith('.HK') or symbol.endswith('.US')):
-                raise ValueError(f"symbol格式错误，应为'0700.HK'或'BABA.US'格式: {symbol}")
+            if not (symbol.endswith(".HK") or symbol.endswith(".US")):
+                raise ValueError(
+                    f"symbol格式错误，应为'0700.HK'或'BABA.US'格式: {symbol}"
+                )
 
         if timeframe not in valid_timeframes:
-            raise ValueError(f"不支持的timeframe: {timeframe}，支持的格式: {valid_timeframes}")
+            raise ValueError(
+                f"不支持的timeframe: {timeframe}，支持的格式: {valid_timeframes}"
+            )
 
-    def _validate_data_schema(self, df: pd.DataFrame, symbols: List[str], timeframe: str) -> None:
+    def _validate_data_schema(
+        self, df: pd.DataFrame, symbols: List[str], timeframe: str
+    ) -> None:
         """验证数据schema完整性"""
         required_columns = {"open", "high", "low", "close", "volume"}
         missing_columns = required_columns - set(df.columns)
@@ -207,7 +230,7 @@ class ParquetDataProvider(DataProvider):
             raise ValueError(f"数据缺少必需列: {missing_columns}")
 
         # 验证symbol范围
-        data_symbols = set(df.index.get_level_values('symbol').unique())
+        data_symbols = set(df.index.get_level_values("symbol").unique())
         expected_symbols = set(symbols)
         missing_symbols = expected_symbols - data_symbols
 
@@ -239,7 +262,10 @@ class ParquetDataProvider(DataProvider):
             # 查找匹配的文件
             matching_files = []
             for file_path, file_info in self._file_mapping.items():
-                if file_info['symbol'] == sample_symbol and file_info['timeframe'] == sample_timeframe:
+                if (
+                    file_info["symbol"] == sample_symbol
+                    and file_info["timeframe"] == sample_timeframe
+                ):
                     matching_files.append(file_path)
                     break
 
@@ -251,16 +277,15 @@ class ParquetDataProvider(DataProvider):
             file_path = matching_files[0]
             table = pq.read_table(file_path)
             df = table.to_pandas()
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
 
             # 创建交易日历
-            trading_days = df['timestamp'].dt.date.unique()
+            trading_days = df["timestamp"].dt.date.unique()
             trading_days = pd.to_datetime(sorted(trading_days))
 
-            calendar_df = pd.DataFrame({
-                'trading_day': trading_days,
-                'is_trading_day': True
-            }).set_index('trading_day')
+            calendar_df = pd.DataFrame(
+                {"trading_day": trading_days, "is_trading_day": True}
+            ).set_index("trading_day")
 
             return calendar_df
 
@@ -273,8 +298,8 @@ class ParquetDataProvider(DataProvider):
         symbols = set()
 
         for file_info in self._file_mapping.values():
-            if timeframe is None or file_info['timeframe'] == timeframe:
-                symbols.add(file_info['symbol'])
+            if timeframe is None or file_info["timeframe"] == timeframe:
+                symbols.add(file_info["symbol"])
 
         return sorted(list(symbols))
 
@@ -283,7 +308,7 @@ class ParquetDataProvider(DataProvider):
         timeframes = set()
 
         for file_info in self._file_mapping.values():
-            if symbol is None or file_info['symbol'] == symbol:
-                timeframes.add(file_info['timeframe'])
+            if symbol is None or file_info["symbol"] == symbol:
+                timeframes.add(file_info["timeframe"])
 
         return sorted(list(timeframes))

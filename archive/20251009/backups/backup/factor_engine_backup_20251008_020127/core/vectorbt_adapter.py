@@ -121,11 +121,11 @@ class VectorBTAdapter:
 
     def _check_vectorbt_availability(self):
         """检查VectorBT可用性"""
-        if not hasattr(vbt, 'RSI'):
+        if not hasattr(vbt, "RSI"):
             raise ImportError("VectorBT不完整，缺少技术指标支持")
 
         # 检查TA-Lib支持
-        if hasattr(vbt, 'talib'):
+        if hasattr(vbt, "talib"):
             logger.info("VectorBT TA-Lib支持可用")
         else:
             logger.warning("VectorBT TA-Lib支持不可用，将使用内置指标")
@@ -140,61 +140,94 @@ class VectorBTAdapter:
             logger.error(f"RSI计算失败: {e}")
             return pd.Series(index=price.index, name="RSI", dtype=float)
 
-    def calculate_stoch(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                       fastk_period: int = 14, slowk_period: int = 3, slowd_period: int = 3) -> pd.Series:
+    def calculate_stoch(
+        self,
+        high: pd.Series,
+        low: pd.Series,
+        close: pd.Series,
+        fastk_period: int = 14,
+        slowk_period: int = 3,
+        slowd_period: int = 3,
+    ) -> pd.Series:
         """计算STOCH - 返回%K值"""
         try:
-            result = vbt.STOCH.run(high, low, close,
-                                   k_period=fastk_period,
-                                   d_period=slowd_period,
-                                   smooth_k=slowk_period)
+            result = vbt.STOCH.run(
+                high,
+                low,
+                close,
+                k_period=fastk_period,
+                d_period=slowd_period,
+                smooth_k=slowk_period,
+            )
             # 返回%K值（slowk）
             return ensure_series(result.slowk, close.index, "STOCH")
         except Exception as e:
             logger.error(f"STOCH计算失败: {e}")
             return pd.Series(index=close.index, name="STOCH", dtype=float)
 
-    def calculate_macd(self, close: pd.Series,
-                      fast_period: int = 12, slow_period: int = 26, signal_period: int = 9) -> pd.Series:
+    def calculate_macd(
+        self,
+        close: pd.Series,
+        fast_period: int = 12,
+        slow_period: int = 26,
+        signal_period: int = 9,
+    ) -> pd.Series:
         """计算MACD线"""
         try:
-            result = vbt.MACD.run(close,
-                                fast_period=fast_period,
-                                slow_period=slow_period,
-                                signal_period=signal_period)
+            result = vbt.MACD.run(
+                close,
+                fast_period=fast_period,
+                slow_period=slow_period,
+                signal_period=signal_period,
+            )
             return ensure_series(result.macd, close.index, "MACD")
         except Exception as e:
             logger.error(f"MACD计算失败: {e}")
             return pd.Series(index=close.index, name="MACD", dtype=float)
 
-    def calculate_macd_signal(self, close: pd.Series,
-                            fast_period: int = 12, slow_period: int = 26, signal_period: int = 9) -> pd.Series:
+    def calculate_macd_signal(
+        self,
+        close: pd.Series,
+        fast_period: int = 12,
+        slow_period: int = 26,
+        signal_period: int = 9,
+    ) -> pd.Series:
         """计算MACD信号线"""
         try:
-            result = vbt.MACD.run(close,
-                                fast_period=fast_period,
-                                slow_period=slow_period,
-                                signal_period=signal_period)
+            result = vbt.MACD.run(
+                close,
+                fast_period=fast_period,
+                slow_period=slow_period,
+                signal_period=signal_period,
+            )
             return ensure_series(result.signal, close.index, "MACD_SIGNAL")
         except Exception as e:
             logger.error(f"MACD_SIGNAL计算失败: {e}")
             return pd.Series(index=close.index, name="MACD_SIGNAL", dtype=float)
 
-    def calculate_macd_histogram(self, close: pd.Series,
-                               fast_period: int = 12, slow_period: int = 26, signal_period: int = 9) -> pd.Series:
+    def calculate_macd_histogram(
+        self,
+        close: pd.Series,
+        fast_period: int = 12,
+        slow_period: int = 26,
+        signal_period: int = 9,
+    ) -> pd.Series:
         """计算MACD柱状图"""
         try:
-            result = vbt.MACD.run(close,
-                                fast_period=fast_period,
-                                slow_period=slow_period,
-                                signal_period=signal_period)
+            result = vbt.MACD.run(
+                close,
+                fast_period=fast_period,
+                slow_period=slow_period,
+                signal_period=signal_period,
+            )
             return ensure_series(result.histogram, close.index, "MACD_HIST")
         except Exception as e:
             logger.error(f"MACD_HIST计算失败: {e}")
             return pd.Series(index=close.index, name="MACD_HIST", dtype=float)
 
-    def calculate_willr(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                       timeperiod: int = 14) -> pd.Series:
+    def calculate_willr(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算Williams %R"""
         try:
             result = vbt.WILLR.run(high, low, close, window=timeperiod)
@@ -203,8 +236,9 @@ class VectorBTAdapter:
             logger.error(f"WILLR计算失败: {e}")
             return pd.Series(index=close.index, name="WILLR", dtype=float)
 
-    def calculate_cci(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                     timeperiod: int = 14) -> pd.Series:
+    def calculate_cci(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算CCI"""
         try:
             result = vbt.CCI.run(high, low, close, window=timeperiod)
@@ -213,8 +247,9 @@ class VectorBTAdapter:
             logger.error(f"CCI计算失败: {e}")
             return pd.Series(index=close.index, name="CCI", dtype=float)
 
-    def calculate_atr(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                     timeperiod: int = 14) -> pd.Series:
+    def calculate_atr(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算ATR"""
         try:
             result = vbt.ATR.run(high, low, close, window=timeperiod)
@@ -241,16 +276,26 @@ class VectorBTAdapter:
             logger.error(f"EMA计算失败: {e}")
             return pd.Series(index=price.index, name="EMA", dtype=float)
 
-    def calculate_bbands(self, price: pd.Series, window: int = 20,
-                        nbdevup: float = 2.0, nbdevdn: float = 2.0) -> Dict[str, pd.Series]:
+    def calculate_bbands(
+        self,
+        price: pd.Series,
+        window: int = 20,
+        nbdevup: float = 2.0,
+        nbdevdn: float = 2.0,
+    ) -> Dict[str, pd.Series]:
         """计算布林带"""
         try:
-            result = vbt.BBANDS.run(price, window=window,
-                                   upper=nbdevup, lower=nbdevdn)
+            result = vbt.BBANDS.run(price, window=window, upper=nbdevup, lower=nbdevdn)
             return {
-                "BBANDS_UPPER": ensure_series(result.upperband, price.index, "BBANDS_UPPER"),
-                "BBANDS_MIDDLE": ensure_series(result.middleband, price.index, "BBANDS_MIDDLE"),
-                "BBANDS_LOWER": ensure_series(result.lowerband, price.index, "BBANDS_LOWER")
+                "BBANDS_UPPER": ensure_series(
+                    result.upperband, price.index, "BBANDS_UPPER"
+                ),
+                "BBANDS_MIDDLE": ensure_series(
+                    result.middleband, price.index, "BBANDS_MIDDLE"
+                ),
+                "BBANDS_LOWER": ensure_series(
+                    result.lowerband, price.index, "BBANDS_LOWER"
+                ),
             }
         except Exception as e:
             logger.error(f"BBANDS计算失败: {e}")
@@ -258,7 +303,7 @@ class VectorBTAdapter:
             return {
                 "BBANDS_UPPER": empty_series.rename("BBANDS_UPPER"),
                 "BBANDS_MIDDLE": empty_series.rename("BBANDS_MIDDLE"),
-                "BBANDS_LOWER": empty_series.rename("BBANDS_LOWER")
+                "BBANDS_LOWER": empty_series.rename("BBANDS_LOWER"),
             }
 
     def calculate_obv(self, close: pd.Series, volume: pd.Series) -> pd.Series:
@@ -270,13 +315,19 @@ class VectorBTAdapter:
             logger.error(f"OBV计算失败: {e}")
             return pd.Series(index=close.index, name="OBV", dtype=float)
 
-    def calculate_mfi(self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series,
-                     timeperiod: int = 14) -> pd.Series:
+    def calculate_mfi(
+        self,
+        high: pd.Series,
+        low: pd.Series,
+        close: pd.Series,
+        volume: pd.Series,
+        timeperiod: int = 14,
+    ) -> pd.Series:
         """计算MFI"""
         try:
             # 优先使用TA-Lib
-            if hasattr(vbt, 'talib'):
-                talib_mfi = vbt.talib('MFI')
+            if hasattr(vbt, "talib"):
+                talib_mfi = vbt.talib("MFI")
                 result = talib_mfi.run(high, low, close, volume, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "MFI")
             else:
@@ -291,12 +342,13 @@ class VectorBTAdapter:
             return pd.Series(index=close.index, name="MFI", dtype=float)
 
     # TA-Lib扩展指标支持
-    def calculate_adx(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                      timeperiod: int = 14) -> pd.Series:
+    def calculate_adx(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算ADX"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_adx = vbt.talib('ADX')
+            if hasattr(vbt, "talib"):
+                talib_adx = vbt.talib("ADX")
                 result = talib_adx.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "ADX")
             else:
@@ -306,12 +358,13 @@ class VectorBTAdapter:
             logger.error(f"ADX计算失败: {e}")
             return pd.Series(index=close.index, name="ADX", dtype=float)
 
-    def calculate_atr(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                     timeperiod: int = 14) -> pd.Series:
+    def calculate_atr(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算ATR"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_atr = vbt.talib('ATR')
+            if hasattr(vbt, "talib"):
+                talib_atr = vbt.talib("ATR")
                 result = talib_atr.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "ATR")
             else:
@@ -322,11 +375,13 @@ class VectorBTAdapter:
             logger.error(f"ATR计算失败: {e}")
             return pd.Series(index=close.index, name="ATR", dtype=float)
 
-    def calculate_trange(self, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    def calculate_trange(
+        self, high: pd.Series, low: pd.Series, close: pd.Series
+    ) -> pd.Series:
         """计算True Range"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_trange = vbt.talib('TRANGE')
+            if hasattr(vbt, "talib"):
+                talib_trange = vbt.talib("TRANGE")
                 result = talib_trange.run(high, low, close)
                 return ensure_series(result.real, close.index, "TRANGE")
             else:
@@ -340,11 +395,13 @@ class VectorBTAdapter:
             logger.error(f"TRANGE计算失败: {e}")
             return pd.Series(index=close.index, name="TRANGE", dtype=float)
 
-    def calculate_ad(self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> pd.Series:
+    def calculate_ad(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
+    ) -> pd.Series:
         """计算A/D Line"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_ad = vbt.talib('AD')
+            if hasattr(vbt, "talib"):
+                talib_ad = vbt.talib("AD")
                 result = talib_ad.run(high, low, close, volume)
                 return ensure_series(result.real, close.index, "AD")
             else:
@@ -355,14 +412,27 @@ class VectorBTAdapter:
             logger.error(f"AD计算失败: {e}")
             return pd.Series(index=close.index, name="AD", dtype=float)
 
-    def calculate_adosc(self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series,
-                        fastperiod: int = 3, slowperiod: int = 10) -> pd.Series:
+    def calculate_adosc(
+        self,
+        high: pd.Series,
+        low: pd.Series,
+        close: pd.Series,
+        volume: pd.Series,
+        fastperiod: int = 3,
+        slowperiod: int = 10,
+    ) -> pd.Series:
         """计算A/D Oscillator"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_adosc = vbt.talib('ADOSC')
-                result = talib_adosc.run(high, low, close, volume,
-                                       fastperiod=fastperiod, slowperiod=slowperiod)
+            if hasattr(vbt, "talib"):
+                talib_adosc = vbt.talib("ADOSC")
+                result = talib_adosc.run(
+                    high,
+                    low,
+                    close,
+                    volume,
+                    fastperiod=fastperiod,
+                    slowperiod=slowperiod,
+                )
                 return ensure_series(result.real, close.index, "ADOSC")
             else:
                 logger.warning("ADOSC需要TA-Lib支持")
@@ -372,12 +442,13 @@ class VectorBTAdapter:
             return pd.Series(index=close.index, name="ADOSC", dtype=float)
 
     # 扩展支持所有活跃的v1.0因子
-    def calculate_adx(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                      timeperiod: int = 14) -> pd.Series:
+    def calculate_adx(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算ADX - 与factor_generation一致的vbt.talib实现"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_adx = vbt.talib('ADX')
+            if hasattr(vbt, "talib"):
+                talib_adx = vbt.talib("ADX")
                 result = talib_adx.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "ADX")
             else:
@@ -387,12 +458,13 @@ class VectorBTAdapter:
             logger.error(f"ADX计算失败: {e}")
             return pd.Series(index=close.index, name="ADX", dtype=float)
 
-    def calculate_adxr(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                       timeperiod: int = 14) -> pd.Series:
+    def calculate_adxr(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算ADXR"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_adxr = vbt.talib('ADXR')
+            if hasattr(vbt, "talib"):
+                talib_adxr = vbt.talib("ADXR")
                 result = talib_adxr.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "ADXR")
             else:
@@ -402,12 +474,13 @@ class VectorBTAdapter:
             logger.error(f"ADXR计算失败: {e}")
             return pd.Series(index=close.index, name="ADXR", dtype=float)
 
-    def calculate_aroon(self, high: pd.Series, low: pd.Series,
-                       timeperiod: int = 14) -> pd.Series:
+    def calculate_aroon(
+        self, high: pd.Series, low: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算AROON - 返回Aroon Down值"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_aroon = vbt.talib('AROON')
+            if hasattr(vbt, "talib"):
+                talib_aroon = vbt.talib("AROON")
                 result = talib_aroon.run(high, low, timeperiod=timeperiod)
                 return ensure_series(result.aroondown, low.index, "AROON")
             else:
@@ -417,12 +490,13 @@ class VectorBTAdapter:
             logger.error(f"AROON计算失败: {e}")
             return pd.Series(index=low.index, name="AROON", dtype=float)
 
-    def calculate_aroonosc(self, high: pd.Series, low: pd.Series,
-                           timeperiod: int = 14) -> pd.Series:
+    def calculate_aroonosc(
+        self, high: pd.Series, low: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算AROONOSC"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_aroonosc = vbt.talib('AROONOSC')
+            if hasattr(vbt, "talib"):
+                talib_aroonosc = vbt.talib("AROONOSC")
                 result = talib_aroonosc.run(high, low, timeperiod=timeperiod)
                 return ensure_series(result.real, low.index, "AROONOSC")
             else:
@@ -432,27 +506,46 @@ class VectorBTAdapter:
             logger.error(f"AROONOSC计算失败: {e}")
             return pd.Series(index=low.index, name="AROONOSC", dtype=float)
 
-    def calculate_bbands(self, price: pd.Series, window: int = 20,
-                        nbdevup: float = 2.0, nbdevdn: float = 2.0) -> Dict[str, pd.Series]:
+    def calculate_bbands(
+        self,
+        price: pd.Series,
+        window: int = 20,
+        nbdevup: float = 2.0,
+        nbdevdn: float = 2.0,
+    ) -> Dict[str, pd.Series]:
         """计算布林带 - 使用TA-Lib确保一致性"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_bbands = vbt.talib('BBANDS')
-                result = talib_bbands.run(price, timeperiod=window,
-                                        nbdevup=nbdevup, nbdevdn=nbdevdn)
+            if hasattr(vbt, "talib"):
+                talib_bbands = vbt.talib("BBANDS")
+                result = talib_bbands.run(
+                    price, timeperiod=window, nbdevup=nbdevup, nbdevdn=nbdevdn
+                )
                 return {
-                    "BBANDS_UPPER": ensure_series(result.upperband, price.index, "BBANDS_UPPER"),
-                    "BBANDS_MIDDLE": ensure_series(result.middleband, price.index, "BBANDS_MIDDLE"),
-                    "BBANDS_LOWER": ensure_series(result.lowerband, price.index, "BBANDS_LOWER")
+                    "BBANDS_UPPER": ensure_series(
+                        result.upperband, price.index, "BBANDS_UPPER"
+                    ),
+                    "BBANDS_MIDDLE": ensure_series(
+                        result.middleband, price.index, "BBANDS_MIDDLE"
+                    ),
+                    "BBANDS_LOWER": ensure_series(
+                        result.lowerband, price.index, "BBANDS_LOWER"
+                    ),
                 }
             else:
                 # 回退到VectorBT内置BBANDS
-                result = vbt.BBANDS.run(price, window=window,
-                                       upper=nbdevup, lower=nbdevdn)
+                result = vbt.BBANDS.run(
+                    price, window=window, upper=nbdevup, lower=nbdevdn
+                )
                 return {
-                    "BBANDS_UPPER": ensure_series(result.upperband, price.index, "BBANDS_UPPER"),
-                    "BBANDS_MIDDLE": ensure_series(result.middleband, price.index, "BBANDS_MIDDLE"),
-                    "BBANDS_LOWER": ensure_series(result.lowerband, price.index, "BBANDS_LOWER")
+                    "BBANDS_UPPER": ensure_series(
+                        result.upperband, price.index, "BBANDS_UPPER"
+                    ),
+                    "BBANDS_MIDDLE": ensure_series(
+                        result.middleband, price.index, "BBANDS_MIDDLE"
+                    ),
+                    "BBANDS_LOWER": ensure_series(
+                        result.lowerband, price.index, "BBANDS_LOWER"
+                    ),
                 }
         except Exception as e:
             logger.error(f"BBANDS计算失败: {e}")
@@ -460,15 +553,16 @@ class VectorBTAdapter:
             return {
                 "BBANDS_UPPER": empty_series.rename("BBANDS_UPPER"),
                 "BBANDS_MIDDLE": empty_series.rename("BBANDS_MIDDLE"),
-                "BBANDS_LOWER": empty_series.rename("BBANDS_LOWER")
+                "BBANDS_LOWER": empty_series.rename("BBANDS_LOWER"),
             }
 
-    def calculate_cci(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                     timeperiod: int = 14) -> pd.Series:
+    def calculate_cci(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算CCI - 使用TA-Lib确保一致性"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_cci = vbt.talib('CCI')
+            if hasattr(vbt, "talib"):
+                talib_cci = vbt.talib("CCI")
                 result = talib_cci.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "CCI")
             else:
@@ -482,8 +576,8 @@ class VectorBTAdapter:
     def calculate_cmo(self, close: pd.Series, timeperiod: int = 14) -> pd.Series:
         """计算CMO"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_cmo = vbt.talib('CMO')
+            if hasattr(vbt, "talib"):
+                talib_cmo = vbt.talib("CMO")
                 result = talib_cmo.run(close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "CMO")
             else:
@@ -493,12 +587,13 @@ class VectorBTAdapter:
             logger.error(f"CMO计算失败: {e}")
             return pd.Series(index=close.index, name="CMO", dtype=float)
 
-    def calculate_dx(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                    timeperiod: int = 14) -> pd.Series:
+    def calculate_dx(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算DX"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_dx = vbt.talib('DX')
+            if hasattr(vbt, "talib"):
+                talib_dx = vbt.talib("DX")
                 result = talib_dx.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "DX")
             else:
@@ -508,12 +603,18 @@ class VectorBTAdapter:
             logger.error(f"DX计算失败: {e}")
             return pd.Series(index=close.index, name="DX", dtype=float)
 
-    def calculate_mfi(self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series,
-                     timeperiod: int = 14) -> pd.Series:
+    def calculate_mfi(
+        self,
+        high: pd.Series,
+        low: pd.Series,
+        close: pd.Series,
+        volume: pd.Series,
+        timeperiod: int = 14,
+    ) -> pd.Series:
         """计算MFI - 使用TA-Lib确保一致性"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_mfi = vbt.talib('MFI')
+            if hasattr(vbt, "talib"):
+                talib_mfi = vbt.talib("MFI")
                 result = talib_mfi.run(high, low, close, volume, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "MFI")
             else:
@@ -525,12 +626,13 @@ class VectorBTAdapter:
             logger.error(f"MFI计算失败: {e}")
             return pd.Series(index=close.index, name="MFI", dtype=float)
 
-    def calculate_minus_di(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                           timeperiod: int = 14) -> pd.Series:
+    def calculate_minus_di(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算MINUS_DI"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_minus_di = vbt.talib('MINUS_DI')
+            if hasattr(vbt, "talib"):
+                talib_minus_di = vbt.talib("MINUS_DI")
                 result = talib_minus_di.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "MINUS_DI")
             else:
@@ -540,12 +642,13 @@ class VectorBTAdapter:
             logger.error(f"MINUS_DI计算失败: {e}")
             return pd.Series(index=close.index, name="MINUS_DI", dtype=float)
 
-    def calculate_plus_di(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                          timeperiod: int = 14) -> pd.Series:
+    def calculate_plus_di(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算PLUS_DI"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_plus_di = vbt.talib('PLUS_DI')
+            if hasattr(vbt, "talib"):
+                talib_plus_di = vbt.talib("PLUS_DI")
                 result = talib_plus_di.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "PLUS_DI")
             else:
@@ -558,8 +661,8 @@ class VectorBTAdapter:
     def calculate_mom(self, close: pd.Series, timeperiod: int = 10) -> pd.Series:
         """计算MOM"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_mom = vbt.talib('MOM')
+            if hasattr(vbt, "talib"):
+                talib_mom = vbt.talib("MOM")
                 result = talib_mom.run(close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "MOM")
             else:
@@ -570,12 +673,13 @@ class VectorBTAdapter:
             logger.error(f"MOM计算失败: {e}")
             return pd.Series(index=close.index, name="MOM", dtype=float)
 
-    def calculate_natr(self, high: pd.Series, low: pd.Series, close: pd.Series,
-                      timeperiod: int = 14) -> pd.Series:
+    def calculate_natr(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, timeperiod: int = 14
+    ) -> pd.Series:
         """计算NATR"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_natr = vbt.talib('NATR')
+            if hasattr(vbt, "talib"):
+                talib_natr = vbt.talib("NATR")
                 result = talib_natr.run(high, low, close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "NATR")
             else:
@@ -599,25 +703,34 @@ class VectorBTAdapter:
     def calculate_roc(self, close: pd.Series, timeperiod: int = 10) -> pd.Series:
         """计算ROC"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_roc = vbt.talib('ROC')
+            if hasattr(vbt, "talib"):
+                talib_roc = vbt.talib("ROC")
                 result = talib_roc.run(close, timeperiod=timeperiod)
                 return ensure_series(result.real, close.index, "ROC")
             else:
                 # 手动计算Rate of Change
-                roc = ((close - close.shift(timeperiod)) / close.shift(timeperiod)) * 100
+                roc = (
+                    (close - close.shift(timeperiod)) / close.shift(timeperiod)
+                ) * 100
                 return ensure_series(roc, close.index, "ROC")
         except Exception as e:
             logger.error(f"ROC计算失败: {e}")
             return pd.Series(index=close.index, name="ROC", dtype=float)
 
-    def calculate_sar(self, high: pd.Series, low: pd.Series,
-                      acceleration: float = 0.02, maximum: float = 0.2) -> pd.Series:
+    def calculate_sar(
+        self,
+        high: pd.Series,
+        low: pd.Series,
+        acceleration: float = 0.02,
+        maximum: float = 0.2,
+    ) -> pd.Series:
         """计算SAR"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_sar = vbt.talib('SAR')
-                result = talib_sar.run(high, low, acceleration=acceleration, maximum=maximum)
+            if hasattr(vbt, "talib"):
+                talib_sar = vbt.talib("SAR")
+                result = talib_sar.run(
+                    high, low, acceleration=acceleration, maximum=maximum
+                )
                 return ensure_series(result.real, low.index, "SAR")
             else:
                 # 回退到VectorBT内置SAR（如果可用）
@@ -627,11 +740,13 @@ class VectorBTAdapter:
             logger.error(f"SAR计算失败: {e}")
             return pd.Series(index=low.index, name="SAR", dtype=float)
 
-    def calculate_trange(self, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    def calculate_trange(
+        self, high: pd.Series, low: pd.Series, close: pd.Series
+    ) -> pd.Series:
         """计算True Range - 使用TA-Lib确保一致性"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_trange = vbt.talib('TRANGE')
+            if hasattr(vbt, "talib"):
+                talib_trange = vbt.talib("TRANGE")
                 result = talib_trange.run(high, low, close)
                 return ensure_series(result.real, close.index, "TRANGE")
             else:
@@ -649,8 +764,8 @@ class VectorBTAdapter:
     def calculate_dema(self, price: pd.Series, timeperiod: int = 20) -> pd.Series:
         """计算DEMA"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_dema = vbt.talib('DEMA')
+            if hasattr(vbt, "talib"):
+                talib_dema = vbt.talib("DEMA")
                 result = talib_dema.run(price, timeperiod=timeperiod)
                 return ensure_series(result.real, price.index, "DEMA")
             else:
@@ -666,8 +781,8 @@ class VectorBTAdapter:
     def calculate_tema(self, price: pd.Series, timeperiod: int = 20) -> pd.Series:
         """计算TEMA"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_tema = vbt.talib('TEMA')
+            if hasattr(vbt, "talib"):
+                talib_tema = vbt.talib("TEMA")
                 result = talib_tema.run(price, timeperiod=timeperiod)
                 return ensure_series(result.real, price.index, "TEMA")
             else:
@@ -684,8 +799,8 @@ class VectorBTAdapter:
     def calculate_wma(self, price: pd.Series, timeperiod: int = 20) -> pd.Series:
         """计算WMA"""
         try:
-            if hasattr(vbt, 'talib'):
-                talib_wma = vbt.talib('WMA')
+            if hasattr(vbt, "talib"):
+                talib_wma = vbt.talib("WMA")
                 result = talib_wma.run(price, timeperiod=timeperiod)
                 return ensure_series(result.real, price.index, "WMA")
             else:
@@ -715,13 +830,27 @@ def calculate_rsi(price: pd.Series, window: int = 14) -> pd.Series:
     return get_vectorbt_adapter().calculate_rsi(price, window)
 
 
-def calculate_stoch(high: pd.Series, low: pd.Series, close: pd.Series,
-                   fastk_period: int = 14, slowk_period: int = 3, slowd_period: int = 3) -> pd.Series:
+def calculate_stoch(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    fastk_period: int = 14,
+    slowk_period: int = 3,
+    slowd_period: int = 3,
+) -> pd.Series:
     """便捷函数：计算STOCH"""
-    return get_vectorbt_adapter().calculate_stoch(high, low, close, fastk_period, slowk_period, slowd_period)
+    return get_vectorbt_adapter().calculate_stoch(
+        high, low, close, fastk_period, slowk_period, slowd_period
+    )
 
 
-def calculate_macd(close: pd.Series,
-                  fast_period: int = 12, slow_period: int = 26, signal_period: int = 9) -> pd.Series:
+def calculate_macd(
+    close: pd.Series,
+    fast_period: int = 12,
+    slow_period: int = 26,
+    signal_period: int = 9,
+) -> pd.Series:
     """便捷函数：计算MACD"""
-    return get_vectorbt_adapter().calculate_macd(close, fast_period, slow_period, signal_period)
+    return get_vectorbt_adapter().calculate_macd(
+        close, fast_period, slow_period, signal_period
+    )

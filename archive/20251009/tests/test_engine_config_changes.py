@@ -4,7 +4,8 @@
 """
 
 import os
-from factor_system.factor_engine.api import get_engine, clear_global_engine
+
+from factor_system.factor_engine.api import clear_global_engine, get_engine
 
 
 def test_cache_config_change():
@@ -20,7 +21,7 @@ def test_cache_config_change():
     print(f"初始引擎ID: {engine1_id}")
 
     # 修改环境变量
-    os.environ['FACTOR_ENGINE_CACHE_MEMORY_MB'] = '256'
+    os.environ["FACTOR_ENGINE_CACHE_MEMORY_MB"] = "256"
 
     # 强制重新初始化来测试配置变更
     engine2 = get_engine(force_reinit=True)

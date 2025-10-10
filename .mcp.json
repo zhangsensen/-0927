@@ -1,0 +1,102 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "mcp-server-github"
+      ],
+      "env": {}
+    },
+    "tavily-remote": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "tavily-mcp@0.1.3"
+      ],
+      "env": {
+        "TAVILY_API_KEY": "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"
+      }
+    },
+    "browser": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@agent-infra/mcp-server-browser"
+      ],
+      "env": {}
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp"
+      ],
+      "env": {}
+    },
+    "yahoo-finance": {
+      "type": "stdio",
+      "command": "npm",
+      "args": [
+        "exec",
+        "yahoo-finance-mcp"
+      ],
+      "env": {}
+    },
+    "quantconnect": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "tool",
+        "uvx",
+        "quantconnect-mcp"
+      ],
+      "env": {}
+    },
+    "web-search-prime": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "headers": {
+        "Authorization": "Bearer da3cdb217c954a929dcdebb793a5ffeb.sPMPB00AsqiivfIw"
+      }
+    },
+    "zai-mcp-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@z_ai/mcp-server"
+      ],
+      "env": {
+        "Z_AI_API_KEY": "da3cdb217c954a929dcdebb793a5ffeb.sPMPB00AsqiivfIw"
+      }
+    },
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "mcp-server-sequential-thinking",
+      "args": [],
+      "env": {}
+    },
+    "memory-bank": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "memory-bank-mcp",
+        "serve",
+        "--path",
+        "/Users/zhangshenshen/深度量化0927"
+      ],
+      "env": {}
+    },
+    "pandas-server": {
+      "type": "stdio",
+      "command": "/Users/zhangshenshen/pandas-mcp-server/server.py",
+      "args": [],
+      "env": {}
+    }
+  }
+}

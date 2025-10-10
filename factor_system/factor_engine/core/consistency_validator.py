@@ -5,8 +5,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Set, Optional, Tuple
 from dataclasses import dataclass
+from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ValidationResult:
     """验证结果"""
+
     is_valid: bool
     valid_factors: List[str]
     invalid_factors: List[str]
@@ -70,7 +71,9 @@ class ConsistencyValidator:
         # 检查缺失的因子
         missing_factors = generation_factors - set(engine_factors)
         if missing_factors:
-            warnings.append(f"factor_generation中有 {len(missing_factors)} 个因子未在FactorEngine中实现")
+            warnings.append(
+                f"factor_generation中有 {len(missing_factors)} 个因子未在FactorEngine中实现"
+            )
 
         # 判断整体有效性
         is_valid = len(invalid_factors) == 0
@@ -83,7 +86,7 @@ class ConsistencyValidator:
             total_engine_factors=len(engine_factors),
             total_generation_factors=len(generation_factors),
             warnings=warnings,
-            errors=errors
+            errors=errors,
         )
 
         self._log_validation_result(result)
@@ -97,10 +100,51 @@ class ConsistencyValidator:
         # 基于实际的FactorEngine因子清单，确保一致性验证准确
         generation_factors = {
             # FactorEngine中实际存在的因子，且在factor_generation中存在的
-            "RSI", "MACD", "STOCH", "ATR", "BBANDS", "CCI", "MFI", "OBV",
-            "ADX", "ADXR", "APO", "AROON", "AROONOSC", "BOP", "CMO", "DX", "MINUS_DI", "MINUS_DM", "MOM", "NATR",
-            "PLUS_DI", "PLUS_DM", "PPO", "ROC", "ROCP", "ROCR", "ROCR100", "STOCHF", "STOCHRSI", "TRANGE", "TRIX", "ULTOSC",
-            "SMA", "EMA", "DEMA", "TEMA", "TRIMA", "WMA", "KAMA", "MAMA", "T3", "MIDPOINT", "MIDPRICE", "SAR", "SAREXT"
+            "RSI",
+            "MACD",
+            "STOCH",
+            "ATR",
+            "BBANDS",
+            "CCI",
+            "MFI",
+            "OBV",
+            "ADX",
+            "ADXR",
+            "APO",
+            "AROON",
+            "AROONOSC",
+            "BOP",
+            "CMO",
+            "DX",
+            "MINUS_DI",
+            "MINUS_DM",
+            "MOM",
+            "NATR",
+            "PLUS_DI",
+            "PLUS_DM",
+            "PPO",
+            "ROC",
+            "ROCP",
+            "ROCR",
+            "ROCR100",
+            "STOCHF",
+            "STOCHRSI",
+            "TRANGE",
+            "TRIX",
+            "ULTOSC",
+            "SMA",
+            "EMA",
+            "DEMA",
+            "TEMA",
+            "TRIMA",
+            "WMA",
+            "KAMA",
+            "MAMA",
+            "T3",
+            "MIDPOINT",
+            "MIDPRICE",
+            "SAR",
+            "SAREXT",
         }
 
         self._generation_factors_cache = generation_factors
@@ -122,12 +166,23 @@ class ConsistencyValidator:
     def _extract_base_factor(self, factor: str) -> str:
         """提取基础因子名"""
         # 移除参数后缀
-        if '_' in factor:
-            parts = factor.split('_')
+        if "_" in factor:
+            parts = factor.split("_")
             # 尝试找到基础因子名
             for i in range(len(parts), 0, -1):
-                candidate = '_'.join(parts[:i])
-                if candidate in ["RSI", "MACD", "STOCH", "ATR", "BB", "WILLR", "CCI", "ADX", "AROON", "MFI"]:
+                candidate = "_".join(parts[:i])
+                if candidate in [
+                    "RSI",
+                    "MACD",
+                    "STOCH",
+                    "ATR",
+                    "BB",
+                    "WILLR",
+                    "CCI",
+                    "ADX",
+                    "AROON",
+                    "MFI",
+                ]:
                     return candidate
 
         return factor
@@ -161,7 +216,7 @@ class ConsistencyValidator:
         factor_id: str,
         engine_result: any,
         generation_result: any,
-        tolerance: float = 1e-10
+        tolerance: float = 1e-10,
     ) -> bool:
         """
         验证计算结果的一致性
@@ -180,19 +235,21 @@ class ConsistencyValidator:
             import pandas as pd
 
             # 转换为numpy数组进行比较
-            if hasattr(engine_result, 'values'):
+            if hasattr(engine_result, "values"):
                 engine_values = engine_result.values
             else:
                 engine_values = np.asarray(engine_result)
 
-            if hasattr(generation_result, 'values'):
+            if hasattr(generation_result, "values"):
                 generation_values = generation_result.values
             else:
                 generation_values = np.asarray(generation_result)
 
             # 检查形状
             if engine_values.shape != generation_values.shape:
-                logger.warning(f"因子 {factor_id} 结果形状不一致: {engine_values.shape} vs {generation_values.shape}")
+                logger.warning(
+                    f"因子 {factor_id} 结果形状不一致: {engine_values.shape} vs {generation_values.shape}"
+                )
                 return False
 
             # 检查数值差异
@@ -203,7 +260,9 @@ class ConsistencyValidator:
                 logger.warning(f"因子 {factor_id} 计算结果差异过大: {max_diff}")
                 return False
 
-            logger.debug(f"因子 {factor_id} 计算结果一致性验证通过 (最大差异: {max_diff})")
+            logger.debug(
+                f"因子 {factor_id} 计算结果一致性验证通过 (最大差异: {max_diff})"
+            )
             return True
 
         except Exception as e:
@@ -222,7 +281,9 @@ class ConsistencyValidator:
         # 统计信息
         report.append("📊 统计信息:")
         report.append(f"  - FactorEngine因子数量: {result.total_engine_factors}")
-        report.append(f"  - factor_generation因子数量: {result.total_generation_factors}")
+        report.append(
+            f"  - factor_generation因子数量: {result.total_generation_factors}"
+        )
         report.append(f"  - 有效因子: {len(result.valid_factors)}")
         report.append(f"  - 无效因子: {len(result.invalid_factors)}")
         report.append(f"  - 缺失因子: {len(result.missing_factors)}")
@@ -262,11 +323,15 @@ class ConsistencyValidator:
         # 建议
         report.append("💡 建议:")
         if result.invalid_factors:
-            report.append("  - 移除所有无效因子，确保FactorEngine不包含factor_generation中不存在的因子")
+            report.append(
+                "  - 移除所有无效因子，确保FactorEngine不包含factor_generation中不存在的因子"
+            )
         if result.missing_factors:
             report.append("  - 考虑实现缺失的因子，以提供完整的服务覆盖")
         if result.is_valid:
-            report.append("  - ✅ FactorEngine完全符合一致性要求，可以作为factor_generation的统一服务层")
+            report.append(
+                "  - ✅ FactorEngine完全符合一致性要求，可以作为factor_generation的统一服务层"
+            )
 
         return "\n".join(report)
 

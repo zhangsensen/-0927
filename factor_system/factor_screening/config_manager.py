@@ -86,10 +86,10 @@ class ScreeningConfig:
             "short_term_fitness": 0.10,
         }
     )
-    
+
     # 🚀 时间框架自适应配置（P0修复：不同时间框架分层标准）
     enable_timeframe_adaptive: bool = True  # 启用时间框架自适应
-    
+
     # 时间框架分层alpha阈值（避免长周期显著性断崖）
     timeframe_alpha_map: Dict[str, float] = field(
         default_factory=lambda: {
@@ -108,7 +108,7 @@ class ScreeningConfig:
             "1day": 0.10,
         }
     )
-    
+
     # 样本量权重配置（轻微折扣，保持公平竞争）
     sample_weight_params: Dict[str, Union[int, float]] = field(
         default_factory=lambda: {
@@ -116,10 +116,14 @@ class ScreeningConfig:
             "min_full_weight_samples": 1000,  # 降低阈值，减少折扣
             "weight_power": 0.2,  # 大幅降低衰减系数，温和折扣
             "predictive_weight_power": 0.15,  # 预测维度更温和
-            "affected_dimensions": ["stability", "independence", "practicality"],  # 移除predictive和adaptability
+            "affected_dimensions": [
+                "stability",
+                "independence",
+                "practicality",
+            ],  # 移除predictive和adaptability
         }
     )
-    
+
     # 时间框架分层高分阈值（避免系统性劣势）
     timeframe_high_score_map: Dict[str, float] = field(
         default_factory=lambda: {
@@ -138,53 +142,179 @@ class ScreeningConfig:
             "1day": 0.53,
         }
     )
-    
+
     # 时间框架自适应Tier阈值（5个阈值：tier1/tier2/tier3/upgrade_tier2/upgrade_tier1）
     timeframe_tier_thresholds: Dict[str, Dict[str, float]] = field(
         default_factory=lambda: {
             # 高频：严格阈值（提高筛选标准）
-            "1min": {"tier1": 0.85, "tier2": 0.70, "tier3": 0.50, "upgrade_tier2": 0.65, "upgrade_tier1": 0.80},
-            "2min": {"tier1": 0.85, "tier2": 0.70, "tier3": 0.50, "upgrade_tier2": 0.65, "upgrade_tier1": 0.80},
-            "3min": {"tier1": 0.85, "tier2": 0.70, "tier3": 0.50, "upgrade_tier2": 0.65, "upgrade_tier1": 0.80},
-            "5min": {"tier1": 0.82, "tier2": 0.68, "tier3": 0.48, "upgrade_tier2": 0.62, "upgrade_tier1": 0.78},
-            "15min": {"tier1": 0.80, "tier2": 0.65, "tier3": 0.45, "upgrade_tier2": 0.58, "upgrade_tier1": 0.75},
-            "30min": {"tier1": 0.78, "tier2": 0.62, "tier3": 0.42, "upgrade_tier2": 0.55, "upgrade_tier1": 0.72},
+            "1min": {
+                "tier1": 0.85,
+                "tier2": 0.70,
+                "tier3": 0.50,
+                "upgrade_tier2": 0.65,
+                "upgrade_tier1": 0.80,
+            },
+            "2min": {
+                "tier1": 0.85,
+                "tier2": 0.70,
+                "tier3": 0.50,
+                "upgrade_tier2": 0.65,
+                "upgrade_tier1": 0.80,
+            },
+            "3min": {
+                "tier1": 0.85,
+                "tier2": 0.70,
+                "tier3": 0.50,
+                "upgrade_tier2": 0.65,
+                "upgrade_tier1": 0.80,
+            },
+            "5min": {
+                "tier1": 0.82,
+                "tier2": 0.68,
+                "tier3": 0.48,
+                "upgrade_tier2": 0.62,
+                "upgrade_tier1": 0.78,
+            },
+            "15min": {
+                "tier1": 0.80,
+                "tier2": 0.65,
+                "tier3": 0.45,
+                "upgrade_tier2": 0.58,
+                "upgrade_tier1": 0.75,
+            },
+            "30min": {
+                "tier1": 0.78,
+                "tier2": 0.62,
+                "tier3": 0.42,
+                "upgrade_tier2": 0.55,
+                "upgrade_tier1": 0.72,
+            },
             # 低频：适中阈值（提高标准但保持合理性）
-            "60min": {"tier1": 0.75, "tier2": 0.58, "tier3": 0.40, "upgrade_tier2": 0.52, "upgrade_tier1": 0.70},
-            "2h": {"tier1": 0.72, "tier2": 0.55, "tier3": 0.38, "upgrade_tier2": 0.48, "upgrade_tier1": 0.68},
-            "4h": {"tier1": 0.70, "tier2": 0.52, "tier3": 0.35, "upgrade_tier2": 0.45, "upgrade_tier1": 0.65},
-            "1day": {"tier1": 0.68, "tier2": 0.50, "tier3": 0.32, "upgrade_tier2": 0.42, "upgrade_tier1": 0.62},
+            "60min": {
+                "tier1": 0.75,
+                "tier2": 0.58,
+                "tier3": 0.40,
+                "upgrade_tier2": 0.52,
+                "upgrade_tier1": 0.70,
+            },
+            "2h": {
+                "tier1": 0.72,
+                "tier2": 0.55,
+                "tier3": 0.38,
+                "upgrade_tier2": 0.48,
+                "upgrade_tier1": 0.68,
+            },
+            "4h": {
+                "tier1": 0.70,
+                "tier2": 0.52,
+                "tier3": 0.35,
+                "upgrade_tier2": 0.45,
+                "upgrade_tier1": 0.65,
+            },
+            "1day": {
+                "tier1": 0.68,
+                "tier2": 0.50,
+                "tier3": 0.32,
+                "upgrade_tier2": 0.42,
+                "upgrade_tier1": 0.62,
+            },
         }
     )
-    
+
     # 对齐失败策略
     alignment_failure_strategy: str = "warn"  # "warn" | "fail_fast" | "fallback"
 
     # 🎯 最优解配置：预测能力核心化评分
     use_optimal_fair_scoring: bool = True  # 启用最优解公平评分
-    optimal_scoring_config_path: str = "./configs/optimal_fair_scoring_config.yaml"  # 最优解配置路径
+    optimal_scoring_config_path: str = (
+        "./configs/optimal_fair_scoring_config.yaml"  # 最优解配置路径
+    )
 
     # 🔧 样本量自适应Tier阈值（从最优解配置中加载）
     adaptive_tier_thresholds: Dict[str, Dict[str, float]] = field(
         default_factory=lambda: {
             # 默认值（会被配置文件覆盖）
-            "1min": {"tier1": 0.80, "tier2": 0.70, "tier3": 0.55, "upgrade_tier2": 0.65, "upgrade_tier1": 0.77},
-            "2min": {"tier1": 0.78, "tier2": 0.62, "tier3": 0.48, "upgrade_tier2": 0.58, "upgrade_tier1": 0.75},
-            "3min": {"tier1": 0.77, "tier2": 0.60, "tier3": 0.46, "upgrade_tier2": 0.56, "upgrade_tier1": 0.73},
-            "5min": {"tier1": 0.75, "tier2": 0.58, "tier3": 0.44, "upgrade_tier2": 0.54, "upgrade_tier1": 0.71},
-            "15min": {"tier1": 0.72, "tier2": 0.55, "tier3": 0.42, "upgrade_tier2": 0.51, "upgrade_tier1": 0.68},
-            "30min": {"tier1": 0.70, "tier2": 0.52, "tier3": 0.40, "upgrade_tier2": 0.48, "upgrade_tier1": 0.65},
-            "60min": {"tier1": 0.68, "tier2": 0.50, "tier3": 0.38, "upgrade_tier2": 0.45, "upgrade_tier1": 0.62},
-            "2h": {"tier1": 0.66, "tier2": 0.48, "tier3": 0.36, "upgrade_tier2": 0.43, "upgrade_tier1": 0.60},
-            "4h": {"tier1": 0.65, "tier2": 0.47, "tier3": 0.35, "upgrade_tier2": 0.42, "upgrade_tier1": 0.58},
-            "1day": {"tier1": 0.64, "tier2": 0.46, "tier3": 0.34, "upgrade_tier2": 0.41, "upgrade_tier1": 0.57},
+            "1min": {
+                "tier1": 0.80,
+                "tier2": 0.70,
+                "tier3": 0.55,
+                "upgrade_tier2": 0.65,
+                "upgrade_tier1": 0.77,
+            },
+            "2min": {
+                "tier1": 0.78,
+                "tier2": 0.62,
+                "tier3": 0.48,
+                "upgrade_tier2": 0.58,
+                "upgrade_tier1": 0.75,
+            },
+            "3min": {
+                "tier1": 0.77,
+                "tier2": 0.60,
+                "tier3": 0.46,
+                "upgrade_tier2": 0.56,
+                "upgrade_tier1": 0.73,
+            },
+            "5min": {
+                "tier1": 0.75,
+                "tier2": 0.58,
+                "tier3": 0.44,
+                "upgrade_tier2": 0.54,
+                "upgrade_tier1": 0.71,
+            },
+            "15min": {
+                "tier1": 0.72,
+                "tier2": 0.55,
+                "tier3": 0.42,
+                "upgrade_tier2": 0.51,
+                "upgrade_tier1": 0.68,
+            },
+            "30min": {
+                "tier1": 0.70,
+                "tier2": 0.52,
+                "tier3": 0.40,
+                "upgrade_tier2": 0.48,
+                "upgrade_tier1": 0.65,
+            },
+            "60min": {
+                "tier1": 0.68,
+                "tier2": 0.50,
+                "tier3": 0.38,
+                "upgrade_tier2": 0.45,
+                "upgrade_tier1": 0.62,
+            },
+            "2h": {
+                "tier1": 0.66,
+                "tier2": 0.48,
+                "tier3": 0.36,
+                "upgrade_tier2": 0.43,
+                "upgrade_tier1": 0.60,
+            },
+            "4h": {
+                "tier1": 0.65,
+                "tier2": 0.47,
+                "tier3": 0.35,
+                "upgrade_tier2": 0.42,
+                "upgrade_tier1": 0.58,
+            },
+            "1day": {
+                "tier1": 0.64,
+                "tier2": 0.46,
+                "tier3": 0.34,
+                "upgrade_tier2": 0.41,
+                "upgrade_tier1": 0.57,
+            },
         }
     )
 
     # 🔧 路径配置（修复硬编码路径）
-    factor_data_root: str = "factor_system/factor_output"  # 修复：从仓库根目录运行时的默认路径
+    factor_data_root: str = (
+        "factor_system/factor_output"  # 修复：从仓库根目录运行时的默认路径
+    )
     price_data_root: str = "raw"  # 修复：从仓库根目录运行时的默认路径
-    output_root: str = "factor_system/factor_screening/screening_results"  # 修复：统一放在screening模块下
+    output_root: str = (
+        "factor_system/factor_screening/screening_results"  # 修复：统一放在screening模块下
+    )
     log_root: str = "factor_system/factor_screening/logs"  # 日志根目录
     cache_root: str = "factor_system/factor_screening/cache"  # 缓存根目录
 

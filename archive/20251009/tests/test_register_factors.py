@@ -4,14 +4,22 @@
 """
 
 import sys
-sys.path.insert(0, '/Users/zhangshenshen/深度量化0927')
+
+sys.path.insert(0, "/Users/zhangshenshen/深度量化0927")
+
 
 def test_factor_registration():
     """测试因子注册"""
     print("🧪 测试因子注册...")
 
     from factor_system.factor_engine.core.registry import get_global_registry
-    from factor_system.factor_engine.factors.technical import RSI, MACD, ATR, STOCH, WILLR
+    from factor_system.factor_engine.factors.technical import (
+        ATR,
+        MACD,
+        RSI,
+        STOCH,
+        WILLR,
+    )
 
     registry = get_global_registry()
 
@@ -26,6 +34,7 @@ def test_factor_registration():
     print(f"已注册因子: {sorted(all_factors)}")
 
     return len(all_factors) > 0
+
 
 if __name__ == "__main__":
     success = test_factor_registration()

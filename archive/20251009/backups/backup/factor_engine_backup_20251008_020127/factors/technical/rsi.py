@@ -7,6 +7,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
+
 class RSI(BaseFactor):
     """
     RSI - Relative Strength Index
@@ -43,7 +44,7 @@ class RSI(BaseFactor):
         Returns:
             RSI values
         """
-        close = data['close']
+        close = data["close"]
 
         # 使用共享计算器计算RSI，确保与factor_generation、hk_midfreq完全一致
         rsi = SHARED_CALCULATORS.calculate_rsi(close, period=self.period)

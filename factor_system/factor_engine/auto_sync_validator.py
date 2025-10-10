@@ -4,13 +4,13 @@
 确保FactorEngine与factor_generation保持自动同步
 """
 
+import json
+import logging
 import os
 import sys
-import json
 import time
 from pathlib import Path
-from typing import Dict, List, Set, Optional
-import logging
+from typing import Dict, List, Optional, Set
 
 from .factor_consistency_guard import FactorConsistencyGuard
 
@@ -71,7 +71,9 @@ class AutoSyncValidator:
         return {
             "missing_factors": sorted(list(missing_factors)),
             "extra_factors": sorted(list(extra_factors)),
-            "recommended_actions": self._generate_actions(missing_factors, extra_factors)
+            "recommended_actions": self._generate_actions(
+                missing_factors, extra_factors
+            ),
         }
 
     def _generate_actions(self, missing: Set[str], extra: Set[str]) -> List[str]:
@@ -114,16 +116,12 @@ class AutoSyncValidator:
 
     def _log_sync_result(self, status: str, message: str):
         """记录同步日志"""
-        log_entry = {
-            "timestamp": time.time(),
-            "status": status,
-            "message": message
-        }
+        log_entry = {"timestamp": time.time(), "status": status, "message": message}
 
         logs = []
         if self.sync_log.exists():
             try:
-                with open(self.sync_log, 'r', encoding='utf-8') as f:
+                with open(self.sync_log, "r", encoding="utf-8") as f:
                     logs = json.load(f)
             except Exception:
                 logs = []
@@ -135,7 +133,7 @@ class AutoSyncValidator:
             logs = logs[-100:]
 
         try:
-            with open(self.sync_log, 'w', encoding='utf-8') as f:
+            with open(self.sync_log, "w", encoding="utf-8") as f:
                 json.dump(logs, f, indent=2)
         except Exception as e:
             logger.error(f"❌ 写入同步日志失败: {e}")
@@ -146,7 +144,7 @@ class AutoSyncValidator:
             return []
 
         try:
-            with open(self.sync_log, 'r', encoding='utf-8') as f:
+            with open(self.sync_log, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -166,7 +164,7 @@ class AutoSyncValidator:
             "successful_syncs": successful,
             "success_rate": f"{success_rate:.1f}%",
             "recent_logs": recent_logs,
-            "last_sync": history[-1] if history else None
+            "last_sync": history[-1] if history else None,
         }
 
 
@@ -206,7 +204,7 @@ class FactorSyncMonitor:
         log_entry = f"[{timestamp}] {level}: {message}\n"
 
         try:
-            with open(self.monitor_log, 'a', encoding='utf-8') as f:
+            with open(self.monitor_log, "a", encoding="utf-8") as f:
                 f.write(log_entry)
         except Exception as e:
             logger.error(f"❌ 写入监控日志失败: {e}")
@@ -217,7 +215,9 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="FactorEngine自动同步验证器")
-    parser.add_argument("command", choices=["validate", "monitor", "report"], help="命令")
+    parser.add_argument(
+        "command", choices=["validate", "monitor", "report"], help="命令"
+    )
     parser.add_argument("--interval", type=int, default=300, help="监控间隔（秒）")
 
     args = parser.parse_args()
@@ -225,7 +225,7 @@ def main():
     # 设置日志
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     validator = AutoSyncValidator()

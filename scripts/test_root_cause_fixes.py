@@ -25,8 +25,7 @@ sys.path.insert(0, str(project_root))
 
 # 设置日志
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -35,19 +34,16 @@ class RootCauseFixValidator:
     """根本问题修复验证器"""
 
     def __init__(self):
-        self.test_results = {
-            'passed': 0,
-            'failed': 0,
-            'total': 0,
-            'errors': []
-        }
+        self.test_results = {"passed": 0, "failed": 0, "total": 0, "errors": []}
 
     def test_parquet_data_provider(self) -> bool:
         """测试1: ParquetDataProvider统一接口"""
         logger.info("测试1: ParquetDataProvider统一接口")
 
         try:
-            from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
+            from factor_system.factor_engine.providers.parquet_provider import (
+                ParquetDataProvider,
+            )
 
             # 测试初始化 - 应该成功（假设已运行数据迁移）
             provider = ParquetDataProvider(Path("raw"))
@@ -69,7 +65,9 @@ class RootCauseFixValidator:
                     if expected_columns.issubset(actual_columns):
                         logger.info("✓ 数据schema验证通过")
                     else:
-                        raise ValueError(f"数据schema不匹配: 期望{expected_columns}, 实际{actual_columns}")
+                        raise ValueError(
+                            f"数据schema不匹配: 期望{expected_columns}, 实际{actual_columns}"
+                        )
 
                     # 验证MultiIndex格式
                     if isinstance(data.index, pd.MultiIndex):
@@ -115,7 +113,7 @@ class RootCauseFixValidator:
 
         except Exception as e:
             logger.error(f"✗ ParquetDataProvider测试失败: {e}")
-            self.test_results['errors'].append(f"ParquetDataProvider: {e}")
+            self.test_results["errors"].append(f"ParquetDataProvider: {e}")
             return False
 
     def test_factor_registry(self) -> bool:
@@ -176,7 +174,7 @@ class RootCauseFixValidator:
                     raise e
 
             # 测试新的因子请求创建方法
-            configs = [{'factor_id': 'RSI', 'parameters': {'timeperiod': 14}}]
+            configs = [{"factor_id": "RSI", "parameters": {"timeperiod": 14}}]
             requests = registry.create_factor_requests(configs)
             logger.info("✓ 标准化因子请求创建成功")
 
@@ -184,7 +182,7 @@ class RootCauseFixValidator:
 
         except Exception as e:
             logger.error(f"✗ FactorRegistry测试失败: {e}")
-            self.test_results['errors'].append(f"FactorRegistry: {e}")
+            self.test_results["errors"].append(f"FactorRegistry: {e}")
             return False
 
     def test_cache_manager(self) -> bool:
@@ -198,35 +196,35 @@ class RootCauseFixValidator:
             cache = CacheManager()
 
             # 创建测试数据
-            test_data = pd.DataFrame({
-                'timestamp': pd.date_range('2025-09-01', periods=10),
-                'symbol': ['0700.HK'] * 10,
-                'RSI': [50.0] * 10
-            }).set_index(['timestamp', 'symbol'])
+            test_data = pd.DataFrame(
+                {
+                    "timestamp": pd.date_range("2025-09-01", periods=10),
+                    "symbol": ["0700.HK"] * 10,
+                    "RSI": [50.0] * 10,
+                }
+            ).set_index(["timestamp", "symbol"])
 
             # 创建因子请求
-            requests = [
-                FactorRequest(factor_id='RSI', parameters={'timeperiod': 14})
-            ]
+            requests = [FactorRequest(factor_id="RSI", parameters={"timeperiod": 14})]
 
             # 测试缓存设置
             cache.set(
                 test_data,
                 requests,
-                ['0700.HK'],
-                '15min',
+                ["0700.HK"],
+                "15min",
                 datetime(2025, 9, 1),
-                datetime(2025, 9, 30)
+                datetime(2025, 9, 30),
             )
             logger.info("✓ 缓存设置成功")
 
             # 测试缓存获取
             cached_data, missing_ids = cache.get(
                 requests,
-                ['0700.HK'],
-                '15min',
+                ["0700.HK"],
+                "15min",
                 datetime(2025, 9, 1),
-                datetime(2025, 9, 30)
+                datetime(2025, 9, 30),
             )
 
             if cached_data is not None and not cached_data.empty:
@@ -238,10 +236,10 @@ class RootCauseFixValidator:
             # 通过内部方法验证键的生成
             cache_key = cache._build_key(
                 requests,
-                ['0700.HK'],
-                '15min',
+                ["0700.HK"],
+                "15min",
                 datetime(2025, 9, 1),
-                datetime(2025, 9, 30)
+                datetime(2025, 9, 30),
             )
 
             # 简化的键应该是MD5哈希（32字符）
@@ -254,10 +252,10 @@ class RootCauseFixValidator:
             cached_data.iloc[0, 0] = 999.0
             fresh_data, _ = cache.get(
                 requests,
-                ['0700.HK'],
-                '15min',
+                ["0700.HK"],
+                "15min",
                 datetime(2025, 9, 1),
-                datetime(2025, 9, 30)
+                datetime(2025, 9, 30),
             )
 
             if fresh_data.iloc[0, 0] != 999.0:
@@ -269,7 +267,7 @@ class RootCauseFixValidator:
 
         except Exception as e:
             logger.error(f"✗ CacheManager测试失败: {e}")
-            self.test_results['errors'].append(f"CacheManager: {e}")
+            self.test_results["errors"].append(f"CacheManager: {e}")
             return False
 
     def test_strategy_core(self) -> bool:
@@ -278,11 +276,16 @@ class RootCauseFixValidator:
 
         try:
             # 由于StrategyCore依赖完整的数据流，这里主要测试逻辑验证
-            from hk_midfreq.strategy_core import generate_factor_signals, FactorDescriptor
+            from hk_midfreq.strategy_core import (
+                FactorDescriptor,
+                generate_factor_signals,
+            )
 
             # 测试因子ID格式验证
             try:
-                descriptor = FactorDescriptor(name="RSI_14", timeframe="15min")  # 错误格式
+                descriptor = FactorDescriptor(
+                    name="RSI_14", timeframe="15min"
+                )  # 错误格式
                 generate_factor_signals(
                     symbol="0700.HK",
                     timeframe="15min",
@@ -291,7 +294,7 @@ class RootCauseFixValidator:
                     descriptor=descriptor,
                     hold_days=5,
                     stop_loss=0.05,
-                    take_profit=0.15
+                    take_profit=0.15,
                 )
                 raise AssertionError("应该抛出ValueError")
             except ValueError as e:
@@ -312,7 +315,7 @@ class RootCauseFixValidator:
 
         except Exception as e:
             logger.error(f"✗ StrategyCore测试失败: {e}")
-            self.test_results['errors'].append(f"StrategyCore: {e}")
+            self.test_results["errors"].append(f"StrategyCore: {e}")
             return False
 
     def test_no_glue_code(self) -> bool:
@@ -321,7 +324,10 @@ class RootCauseFixValidator:
 
         try:
             # 检查ParquetDataProvider中是否还有pandas回退
-            provider_file = project_root / "factor_system/factor_engine/providers/parquet_provider.py"
+            provider_file = (
+                project_root
+                / "factor_system/factor_engine/providers/parquet_provider.py"
+            )
             provider_content = provider_file.read_text()
 
             if "_load_with_pandas" in provider_content:
@@ -336,7 +342,9 @@ class RootCauseFixValidator:
             logger.info("✓ ParquetDataProvider胶水代码已删除")
 
             # 检查FactorRegistry中是否还有别名解析
-            registry_file = project_root / "factor_system/factor_engine/core/registry.py"
+            registry_file = (
+                project_root / "factor_system/factor_engine/core/registry.py"
+            )
             registry_content = registry_file.read_text()
 
             if "_resolve_alias" in registry_content:
@@ -363,7 +371,10 @@ class RootCauseFixValidator:
             strategy_file = project_root / "hk_midfreq/strategy_core.py"
             strategy_content = strategy_file.read_text()
 
-            if "column_name = factor_id if factor_id in factor_df.columns else target_id" in strategy_content:
+            if (
+                "column_name = factor_id if factor_id in factor_df.columns else target_id"
+                in strategy_content
+            ):
                 raise ValueError("StrategyCore仍包含列映射逻辑")
 
             if "resolve_factor_requests" in strategy_content:
@@ -375,7 +386,7 @@ class RootCauseFixValidator:
 
         except Exception as e:
             logger.error(f"✗ 胶水代码检查失败: {e}")
-            self.test_results['errors'].append(f"胶水代码检查: {e}")
+            self.test_results["errors"].append(f"胶水代码检查: {e}")
             return False
 
     def run_all_tests(self) -> bool:
@@ -395,18 +406,18 @@ class RootCauseFixValidator:
         all_passed = True
 
         for test_func in tests:
-            self.test_results['total'] += 1
+            self.test_results["total"] += 1
             try:
                 if test_func():
-                    self.test_results['passed'] += 1
+                    self.test_results["passed"] += 1
                 else:
-                    self.test_results['failed'] += 1
+                    self.test_results["failed"] += 1
                     all_passed = False
                 print()  # 空行分隔
             except Exception as e:
                 logger.error(f"测试异常: {e}")
-                self.test_results['failed'] += 1
-                self.test_results['errors'].append(f"{test_func.__name__}: {e}")
+                self.test_results["failed"] += 1
+                self.test_results["errors"].append(f"{test_func.__name__}: {e}")
                 all_passed = False
                 print()
 
@@ -418,9 +429,9 @@ class RootCauseFixValidator:
         logger.info(f"通过: {self.test_results['passed']}")
         logger.info(f"失败: {self.test_results['failed']}")
 
-        if self.test_results['errors']:
+        if self.test_results["errors"]:
             logger.error("错误详情:")
-            for error in self.test_results['errors']:
+            for error in self.test_results["errors"]:
                 logger.error(f"  - {error}")
 
         if all_passed:

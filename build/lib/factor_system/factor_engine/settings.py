@@ -16,17 +16,25 @@ from pydantic import BaseModel, Field
 
 class DataPaths(BaseModel):
     """数据路径配置"""
+
     raw_data_dir: Path = Field(
         default_factory=lambda: Path(os.getenv("FACTOR_ENGINE_RAW_DATA_DIR", "raw")),
-        description="原始OHLCV数据目录"
+        description="原始OHLCV数据目录",
     )
     cache_dir: Path = Field(
-        default_factory=lambda: Path(os.getenv("FACTOR_ENGINE_CACHE_DIR", "cache/factor_engine")),
-        description="因子缓存目录"
+        default_factory=lambda: Path(
+            os.getenv("FACTOR_ENGINE_CACHE_DIR", "cache/factor_engine")
+        ),
+        description="因子缓存目录",
     )
     registry_file: Path = Field(
-        default_factory=lambda: Path(os.getenv("FACTOR_ENGINE_REGISTRY_FILE", "factor_system/research/metadata/factor_registry.json")),
-        description="因子注册表文件路径"
+        default_factory=lambda: Path(
+            os.getenv(
+                "FACTOR_ENGINE_REGISTRY_FILE",
+                "factor_system/research/metadata/factor_registry.json",
+            )
+        ),
+        description="因子注册表文件路径",
     )
 
     def ensure_dirs(self) -> None:
@@ -38,54 +46,58 @@ class DataPaths(BaseModel):
 
 class CacheConfig(BaseModel):
     """缓存配置"""
+
     memory_size_mb: int = Field(
         default=int(os.getenv("FACTOR_ENGINE_MEMORY_MB", "500")),
-        description="内存缓存大小(MB)"
+        description="内存缓存大小(MB)",
     )
     disk_cache_dir: Path = Field(
-        default_factory=lambda: Path(os.getenv("FACTOR_ENGINE_DISK_CACHE_DIR", "cache/factor_engine")),
-        description="磁盘缓存目录"
+        default_factory=lambda: Path(
+            os.getenv("FACTOR_ENGINE_DISK_CACHE_DIR", "cache/factor_engine")
+        ),
+        description="磁盘缓存目录",
     )
     ttl_hours: int = Field(
         default=int(os.getenv("FACTOR_ENGINE_TTL_HOURS", "24")),
-        description="缓存生存时间(小时)"
+        description="缓存生存时间(小时)",
     )
     enable_memory: bool = Field(
         default=os.getenv("FACTOR_ENGINE_ENABLE_MEMORY", "true").lower() == "true",
-        description="是否启用内存缓存"
+        description="是否启用内存缓存",
     )
     enable_disk: bool = Field(
         default=os.getenv("FACTOR_ENGINE_ENABLE_DISK", "true").lower() == "true",
-        description="是否启用磁盘缓存"
+        description="是否启用磁盘缓存",
     )
     copy_mode: str = Field(
         default=os.getenv("FACTOR_ENGINE_COPY_MODE", "view"),
-        description="数据复制模式: view/copy/deepcopy"
+        description="数据复制模式: view/copy/deepcopy",
     )
 
 
 class EngineConfig(BaseModel):
     """引擎配置"""
+
     n_jobs: int = Field(
         default=int(os.getenv("FACTOR_ENGINE_N_JOBS", "1")),
-        description="并行计算任务数"
+        description="并行计算任务数",
     )
     chunk_size: int = Field(
         default=int(os.getenv("FACTOR_ENGINE_CHUNK_SIZE", "1000")),
-        description="数据块大小"
+        description="数据块大小",
     )
     validate_data: bool = Field(
         default=os.getenv("FACTOR_ENGINE_VALIDATE_DATA", "true").lower() == "true",
-        description="是否验证数据完整性"
+        description="是否验证数据完整性",
     )
     log_level: str = Field(
-        default=os.getenv("FACTOR_ENGINE_LOG_LEVEL", "INFO"),
-        description="日志级别"
+        default=os.getenv("FACTOR_ENGINE_LOG_LEVEL", "INFO"), description="日志级别"
     )
 
 
 class FactorEngineSettings(BaseModel):
     """FactorEngine完整配置"""
+
     data_paths: DataPaths = Field(default_factory=DataPaths)
     cache: CacheConfig = Field(default_factory=CacheConfig)
     engine: EngineConfig = Field(default_factory=EngineConfig)
@@ -167,13 +179,13 @@ def get_development_config() -> FactorEngineSettings:
     return FactorEngineSettings(
         cache=CacheConfig(
             memory_size_mb=200,  # 开发环境内存较小
-            ttl_hours=2,         # 缓存时间较短，便于调试
+            ttl_hours=2,  # 缓存时间较短，便于调试
         ),
         engine=EngineConfig(
-            n_jobs=1,            # 开发环境单线程，便于调试
+            n_jobs=1,  # 开发环境单线程，便于调试
             validate_data=True,  # 开发环境开启数据验证
-            log_level="DEBUG",   # 详细日志
-        )
+            log_level="DEBUG",  # 详细日志
+        ),
     )
 
 
@@ -182,13 +194,13 @@ def get_production_config() -> FactorEngineSettings:
     return FactorEngineSettings(
         cache=CacheConfig(
             memory_size_mb=1024,  # 生产环境内存较大
-            ttl_hours=168,        # 7天缓存
+            ttl_hours=168,  # 7天缓存
         ),
         engine=EngineConfig(
-            n_jobs=-1,            # 生产环境使用所有CPU核心
+            n_jobs=-1,  # 生产环境使用所有CPU核心
             validate_data=False,  # 生产环境假设数据已验证
             log_level="WARNING",  # 只输出警告和错误
-        )
+        ),
     )
 
 
@@ -197,13 +209,13 @@ def get_research_config() -> FactorEngineSettings:
     return FactorEngineSettings(
         cache=CacheConfig(
             memory_size_mb=512,
-            ttl_hours=24,          # 1天缓存
+            ttl_hours=24,  # 1天缓存
             enable_memory=True,
             enable_disk=True,
         ),
         engine=EngineConfig(
-            n_jobs=4,              # 研究环境使用部分CPU核心
+            n_jobs=4,  # 研究环境使用部分CPU核心
             validate_data=True,
             log_level="INFO",
-        )
+        ),
     )

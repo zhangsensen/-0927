@@ -59,7 +59,7 @@ class PathConfig:
     def factor_ready_dir(self) -> Path:
         """优秀因子存储路径"""
         return self.factor_system_dir / "factor_ready"
-    
+
     @property
     def factor_registry_path(self) -> Path:
         """因子注册表路径"""

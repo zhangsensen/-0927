@@ -9,11 +9,11 @@ This script validates that FactorEngine strictly follows the official factor reg
 Ensures no unauthorized factor calculations exist in the system.
 """
 
-import sys
+import importlib.util
 import os
+import sys
 from pathlib import Path
 from typing import Dict, List, Set
-import importlib.util
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -25,8 +25,12 @@ class FactorRegistryValidator:
 
     def __init__(self):
         self.registry_file = project_root / "factor_system" / "FACTOR_REGISTRY.md"
-        self.factor_config_file = project_root / "factor_system" / "factor_generation" / "factor_config.py"
-        self.factor_engine_file = project_root / "factor_system" / "factor_engine" / "factor_engine.py"
+        self.factor_config_file = (
+            project_root / "factor_system" / "factor_generation" / "factor_config.py"
+        )
+        self.factor_engine_file = (
+            project_root / "factor_system" / "factor_engine" / "factor_engine.py"
+        )
 
         self.official_factors: Dict = {}
         self.config_factors: Dict = {}
@@ -42,35 +46,35 @@ class FactorRegistryValidator:
                 self.errors.append(f"官方因子清单文件不存在: {self.registry_file}")
                 return False
 
-            content = self.registry_file.read_text(encoding='utf-8')
+            content = self.registry_file.read_text(encoding="utf-8")
 
             # 解析因子清单中的因子
             current_factor = {}
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 line = line.strip()
-                if line.startswith('**因子ID**: `'):
-                    factor_id = line.split('`')[1]
-                    current_factor['id'] = factor_id
-                elif line.startswith('**参数配置 / Parameters**'):
+                if line.startswith("**因子ID**: `"):
+                    factor_id = line.split("`")[1]
+                    current_factor["id"] = factor_id
+                elif line.startswith("**参数配置 / Parameters**"):
                     # 等待参数配置部分
                     continue
-                elif line.startswith('```python') and current_factor:
+                elif line.startswith("```python") and current_factor:
                     # 开始收集参数配置
                     continue
-                elif line.startswith('}') and current_factor:
+                elif line.startswith("}") and current_factor:
                     # 结束参数配置
-                    if 'id' in current_factor:
-                        self.official_factors[current_factor['id']] = {
-                            'id': current_factor['id'],
-                            'status': '🟢 ACTIVE'  # 默认状态
+                    if "id" in current_factor:
+                        self.official_factors[current_factor["id"]] = {
+                            "id": current_factor["id"],
+                            "status": "🟢 ACTIVE",  # 默认状态
                         }
                     current_factor = {}
-                elif line.startswith('**输出字段 / Output Fields**') and current_factor:
+                elif line.startswith("**输出字段 / Output Fields**") and current_factor:
                     # 因子定义完成
-                    if 'id' in current_factor:
-                        self.official_factors[current_factor['id']] = {
-                            'id': current_factor['id'],
-                            'status': '🟢 ACTIVE'
+                    if "id" in current_factor:
+                        self.official_factors[current_factor["id"]] = {
+                            "id": current_factor["id"],
+                            "status": "🟢 ACTIVE",
                         }
 
             print(f"✅ 从官方清单加载了 {len(self.official_factors)} 个因子")
@@ -84,19 +88,22 @@ class FactorRegistryValidator:
         """加载 factor_generation 配置 / Load factor_generation configuration"""
         try:
             if not self.factor_config_file.exists():
-                self.errors.append(f"factor_config.py 文件不存在: {self.factor_config_file}")
+                self.errors.append(
+                    f"factor_config.py 文件不存在: {self.factor_config_file}"
+                )
                 return False
 
             spec = importlib.util.spec_from_file_location(
-                "factor_config",
-                self.factor_config_file
+                "factor_config", self.factor_config_file
             )
             config_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(config_module)
 
-            if hasattr(config_module, 'FACTOR_CONFIG'):
+            if hasattr(config_module, "FACTOR_CONFIG"):
                 self.config_factors = config_module.FACTOR_CONFIG
-                print(f"✅ 从 factor_config.py 加载了 {len(self.config_factors)} 个因子")
+                print(
+                    f"✅ 从 factor_config.py 加载了 {len(self.config_factors)} 个因子"
+                )
                 return True
             else:
                 self.errors.append("factor_config.py 中未找到 FACTOR_CONFIG")
@@ -115,64 +122,66 @@ class FactorRegistryValidator:
                 self.errors.append(f"FactorEngine API 文件不存在: {api_file}")
                 return False
 
-            content = api_file.read_text(encoding='utf-8')
+            content = api_file.read_text(encoding="utf-8")
 
             # 分析因子导入部分
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             for i, line in enumerate(lines):
                 line = line.strip()
 
                 # 查找技术指标因子导入
-                if 'from factor_system.factor_engine.factors.technical import' in line:
+                if "from factor_system.factor_engine.factors.technical import" in line:
                     # 提取同一行的因子
-                    import_part = line.split('import')[1].strip()
+                    import_part = line.split("import")[1].strip()
                     if import_part:
-                        factor_names = [f.strip() for f in import_part.split(',')]
+                        factor_names = [f.strip() for f in import_part.split(",")]
                         for name in factor_names:
-                            if name and name != '':
+                            if name and name != "":
                                 self.engine_factors[name] = {
-                                    'type': 'technical',
-                                    'line': i + 1
+                                    "type": "technical",
+                                    "line": i + 1,
                                 }
 
                 # 查找移动平均因子导入
-                elif 'from factor_system.factor_engine.factors.overlap import' in line:
+                elif "from factor_system.factor_engine.factors.overlap import" in line:
                     # 提取同一行的因子
-                    import_part = line.split('import')[1].strip()
+                    import_part = line.split("import")[1].strip()
                     if import_part:
-                        factor_names = [f.strip() for f in import_part.split(',')]
+                        factor_names = [f.strip() for f in import_part.split(",")]
                         for name in factor_names:
-                            if name and name != '':
+                            if name and name != "":
                                 self.engine_factors[name] = {
-                                    'type': 'overlap',
-                                    'line': i + 1
+                                    "type": "overlap",
+                                    "line": i + 1,
                                 }
 
                 # 查找统计指标因子导入
-                elif 'from factor_system.factor_engine.factors.statistic import' in line:
+                elif (
+                    "from factor_system.factor_engine.factors.statistic import" in line
+                ):
                     # 提取同一行的因子
-                    import_part = line.split('import')[1].strip()
+                    import_part = line.split("import")[1].strip()
                     if import_part:
-                        factor_names = [f.strip() for f in import_part.split(',')]
+                        factor_names = [f.strip() for f in import_part.split(",")]
                         for name in factor_names:
-                            if name and name != '':
+                            if name and name != "":
                                 self.engine_factors[name] = {
-                                    'type': 'statistic',
-                                    'line': i + 1
+                                    "type": "statistic",
+                                    "line": i + 1,
                                 }
 
                 # 查找形态识别因子导入
-                elif 'from factor_system.factor_engine.factors.pattern import' in line:
+                elif "from factor_system.factor_engine.factors.pattern import" in line:
                     # 提取同一行的因子
-                    import_part = line.split('import')[1].strip()
+                    import_part = line.split("import")[1].strip()
                     if import_part:
-                        factor_names = [f.strip() for f in import_part.split(',')]
+                        factor_names = [f.strip() for f in import_part.split(",")]
                         for name in factor_names:
-                            if name and name != '':
+                            if name and name != "":
                                 self.engine_factors[name] = {
-                                    'type': 'pattern',
-                                    'line': i + 1
+                                    "type": "pattern",
+                                    "line": i + 1,
                                 }
 
             print(f"✅ 从 FactorEngine API 中识别了 {len(self.engine_factors)} 个因子")
@@ -197,7 +206,9 @@ class FactorRegistryValidator:
             if missing_in_config:
                 self.errors.append(f"配置中缺失的官方因子: {missing_in_config}")
             if extra_in_config:
-                self.errors.append(f"配置中多余的因子 (未在官方清单中): {extra_in_config}")
+                self.errors.append(
+                    f"配置中多余的因子 (未在官方清单中): {extra_in_config}"
+                )
         else:
             print("✅ 官方清单与 factor_config 完全一致")
 
@@ -210,7 +221,9 @@ class FactorRegistryValidator:
             self.errors.append(f"FactorEngine 中包含未授权因子: {unauthorized_factors}")
             for factor in unauthorized_factors:
                 factor_info = self.engine_factors[factor]
-                self.errors.append(f"  - {factor} (类型: {factor_info['type']}, 行号: {factor_info['line']})")
+                self.errors.append(
+                    f"  - {factor} (类型: {factor_info['type']}, 行号: {factor_info['line']})"
+                )
         else:
             print("✅ FactorEngine 只使用配置中的因子")
 
@@ -237,9 +250,9 @@ class FactorRegistryValidator:
 
     def generate_report(self) -> bool:
         """生成验证报告 / Generate validation report"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("📋 因子清单验证报告 / Factor Registry Validation Report")
-        print("="*60)
+        print("=" * 60)
 
         # 统计信息
         print(f"📊 统计信息:")

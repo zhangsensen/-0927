@@ -6,6 +6,7 @@
 import os
 import shutil
 
+
 def get_valid_factor_files():
     """获取符合一致性要求的因子文件清单"""
 
@@ -13,18 +14,57 @@ def get_valid_factor_files():
     # 这些因子对应的FactorEngine文件应该保留
     valid_factor_files = {
         # technical目录 - 核心技术指标
-        "rsi.py", "macd.py", "stoch.py", "willr.py", "atr.py", "cci.py", "mfi.py",
-        "adx.py", "obv.py", "mom.py", "roc.py", "trix.py", "ultosc.py", "stochf.py",
-        "stochrsi.py", "trange.py", "adxr.py", "apo.py", "aroon.py", "aroonosc.py",
-        "bop.py", "cmo.py", "dx.py", "minus_di.py", "minus_dm.py", "natr.py",
-        "plus_di.py", "plus_dm.py", "ppo.py", "rocp.py", "rocr.py", "rocr100.py",
-
+        "rsi.py",
+        "macd.py",
+        "stoch.py",
+        "willr.py",
+        "atr.py",
+        "cci.py",
+        "mfi.py",
+        "adx.py",
+        "obv.py",
+        "mom.py",
+        "roc.py",
+        "trix.py",
+        "ultosc.py",
+        "stochf.py",
+        "stochrsi.py",
+        "trange.py",
+        "adxr.py",
+        "apo.py",
+        "aroon.py",
+        "aroonosc.py",
+        "bop.py",
+        "cmo.py",
+        "dx.py",
+        "minus_di.py",
+        "minus_dm.py",
+        "natr.py",
+        "plus_di.py",
+        "plus_dm.py",
+        "ppo.py",
+        "rocp.py",
+        "rocr.py",
+        "rocr100.py",
         # overlap目录 - 移动平均类指标
-        "sma.py", "ema.py", "bbands.py", "dema.py", "tema.py", "trima.py", "wma.py",
-        "kama.py", "mama.py", "t3.py", "midpoint.py", "midprice.py", "sar.py", "sarext.py"
+        "sma.py",
+        "ema.py",
+        "bbands.py",
+        "dema.py",
+        "tema.py",
+        "trima.py",
+        "wma.py",
+        "kama.py",
+        "mama.py",
+        "t3.py",
+        "midpoint.py",
+        "midprice.py",
+        "sar.py",
+        "sarext.py",
     }
 
     return valid_factor_files
+
 
 def cleanup_factor_engine():
     """清理FactorEngine中不符合要求的因子"""
@@ -39,7 +79,7 @@ def cleanup_factor_engine():
     tech_path = os.path.join(base_path, "technical")
     if os.path.exists(tech_path):
         for file in os.listdir(tech_path):
-            if file.endswith('.py') and file != '__init__.py':
+            if file.endswith(".py") and file != "__init__.py":
                 if file not in valid_files:
                     file_path = os.path.join(tech_path, file)
                     removed_files.append(file_path)
@@ -51,7 +91,7 @@ def cleanup_factor_engine():
     overlap_path = os.path.join(base_path, "overlap")
     if os.path.exists(overlap_path):
         for file in os.listdir(overlap_path):
-            if file.endswith('.py') and file != '__init__.py':
+            if file.endswith(".py") and file != "__init__.py":
                 if file not in valid_files:
                     file_path = os.path.join(overlap_path, file)
                     removed_files.append(file_path)
@@ -60,6 +100,7 @@ def cleanup_factor_engine():
                     kept_files.append(f"overlap/{file}")
 
     return removed_files, kept_files
+
 
 def update_init_files():
     """更新__init__.py文件，只包含有效的因子"""
@@ -100,7 +141,7 @@ def update_init_files():
         "from factor_system.factor_engine.factors.technical.trange import TRANGE",
         "from factor_system.factor_engine.factors.technical.trix import TRIX",
         "from factor_system.factor_engine.factors.technical.ultosc import ULTOSC",
-        "from factor_system.factor_engine.factors.technical.willr import WILLR"
+        "from factor_system.factor_engine.factors.technical.willr import WILLR",
     ]
 
     # 更新overlap/__init__.py
@@ -119,10 +160,11 @@ def update_init_files():
         "from factor_system.factor_engine.factors.overlap.t3 import T3",
         "from factor_system.factor_engine.factors.overlap.tema import TEMA",
         "from factor_system.factor_engine.factors.overlap.trima import TRIMA",
-        "from factor_system.factor_engine.factors.overlap.wma import WMA"
+        "from factor_system.factor_engine.factors.overlap.wma import WMA",
     ]
 
     return valid_tech_imports, valid_overlap_imports
+
 
 def write_new_init_files():
     """写入新的__init__.py文件"""
@@ -190,13 +232,22 @@ __all__ = ['BBANDS', 'DEMA', 'EMA', 'KAMA', 'MAMA', 'MIDPOINT', 'MIDPRICE', 'SAR
 '''
 
     # 写入文件
-    with open('/Users/zhangshenshen/深度量化0927/factor_system/factor_engine/factors/technical/__init__.py', 'w', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_engine/factors/technical/__init__.py",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write(tech_init_content)
 
-    with open('/Users/zhangshenshen/深度量化0927/factor_system/factor_engine/factors/overlap/__init__.py', 'w', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_engine/factors/overlap/__init__.py",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write(overlap_init_content)
 
     print("✅ 已更新technical/__init__.py和overlap/__init__.py")
+
 
 def main():
     """主函数"""
@@ -226,7 +277,11 @@ def main():
         print(f"    ✅ {file}")
 
     # 5. 保存报告
-    with open('/Users/zhangshenshen/深度量化0927/factor_engine_cleanup_report.txt', 'w', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_engine_cleanup_report.txt",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write("FactorEngine一致性修复报告\n")
         f.write("=" * 50 + "\n\n")
         f.write(f"删除的文件 ({len(removed_files)}个):\n")

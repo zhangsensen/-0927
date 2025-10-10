@@ -7,6 +7,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
+
 class STOCH(BaseFactor):
     """
     STOCH - Stochastic Oscillator
@@ -56,16 +57,18 @@ class STOCH(BaseFactor):
         Returns:
             STOCH %K values (Slow %K)
         """
-        high = data['high']
-        low = data['low']
-        close = data['close']
+        high = data["high"]
+        low = data["low"]
+        close = data["close"]
 
         # 使用共享计算器计算STOCH，确保与factor_generation、hk_midfreq完全一致
         stoch_result = SHARED_CALCULATORS.calculate_stoch(
-            high, low, close,
+            high,
+            low,
+            close,
             fastk_period=self.fastk_period,
             slowk_period=self.slowk_period,
-            slowd_period=self.slowd_period
+            slowd_period=self.slowd_period,
         )
 
-        return stoch_result['slowk']
+        return stoch_result["slowk"]

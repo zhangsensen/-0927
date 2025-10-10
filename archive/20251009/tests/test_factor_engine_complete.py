@@ -4,9 +4,11 @@
 验证数据提供器修复后，整个FactorEngine系统是否能正常工作
 """
 
-import pandas as pd
 from datetime import datetime
 from pathlib import Path
+
+import pandas as pd
+
 
 def test_factor_engine_api():
     """测试FactorEngine API是否能正常工作"""
@@ -20,9 +22,11 @@ def test_factor_engine_api():
             factor_ids=["RSI"],
             symbols=["0005.HK"],
             timeframe="daily",
-            start_date=datetime(2025, 3, 10),  # Use date range that matches available data
+            start_date=datetime(
+                2025, 3, 10
+            ),  # Use date range that matches available data
             end_date=datetime(2025, 3, 31),
-            use_cache=False
+            use_cache=False,
         )
 
         if not result.empty:
@@ -38,10 +42,12 @@ def test_factor_engine_api():
                 print(f"⚠️ 结果包含额外列: {unexpected_columns}")
 
             # 检查RSI值是否合理
-            if 'RSI' in result.columns:
-                rsi_values = result['RSI'].dropna()
+            if "RSI" in result.columns:
+                rsi_values = result["RSI"].dropna()
                 if not rsi_values.empty:
-                    print(f"📊 RSI值范围: {rsi_values.min():.2f} ~ {rsi_values.max():.2f}")
+                    print(
+                        f"📊 RSI值范围: {rsi_values.min():.2f} ~ {rsi_values.max():.2f}"
+                    )
                     if 0 <= rsi_values.min() <= 100 and 0 <= rsi_values.max() <= 100:
                         print("✅ RSI值在合理范围内")
                     else:
@@ -55,6 +61,7 @@ def test_factor_engine_api():
     except Exception as e:
         print(f"❌ FactorEngine API测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -75,7 +82,7 @@ def test_multiple_factors():
             timeframe="daily",
             start_date=datetime(2025, 3, 10),
             end_date=datetime(2025, 3, 31),
-            use_cache=False
+            use_cache=False,
         )
 
         if not result.empty:
@@ -98,6 +105,7 @@ def test_multiple_factors():
     except Exception as e:
         print(f"❌ 多因子测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -110,12 +118,17 @@ def test_multiple_symbols():
         print("\n🚀 测试多股票因子计算...")
 
         # 获取可用股票
-        from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
+        from factor_system.factor_engine.providers.parquet_provider import (
+            ParquetDataProvider,
+        )
+
         provider = ParquetDataProvider(Path("raw"))
-        available_symbols = provider.get_symbols('daily')
+        available_symbols = provider.get_symbols("daily")
 
         # 选择3个股票进行测试
-        test_symbols = available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
+        test_symbols = (
+            available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
+        )
 
         print(f"📈 测试股票: {test_symbols}")
 
@@ -125,20 +138,20 @@ def test_multiple_symbols():
             timeframe="daily",
             start_date=datetime(2025, 3, 10),
             end_date=datetime(2025, 3, 31),
-            use_cache=False
+            use_cache=False,
         )
 
         if not result.empty:
             print(f"✅ 多股票因子计算成功: {result.shape}")
 
             # 验证包含多个股票
-            unique_symbols = result.index.get_level_values('symbol').unique()
+            unique_symbols = result.index.get_level_values("symbol").unique()
             print(f"📈 实际包含股票: {list(unique_symbols)}")
 
             # 验证每个股票都有RSI值
             for symbol in test_symbols:
-                symbol_data = result.xs(symbol, level='symbol')
-                if not symbol_data.empty and 'RSI' in symbol_data.columns:
+                symbol_data = result.xs(symbol, level="symbol")
+                if not symbol_data.empty and "RSI" in symbol_data.columns:
                     print(f"✅ {symbol} RSI计算成功")
                 else:
                     print(f"❌ {symbol} RSI计算失败")
@@ -152,6 +165,7 @@ def test_multiple_symbols():
     except Exception as e:
         print(f"❌ 多股票测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -172,7 +186,7 @@ def test_cache_functionality():
             timeframe="daily",
             start_date=datetime(2025, 3, 10),
             end_date=datetime(2025, 3, 31),
-            use_cache=True
+            use_cache=True,
         )
         first_time = datetime.now() - start_time
 
@@ -188,7 +202,7 @@ def test_cache_functionality():
                 timeframe="daily",
                 start_date=datetime(2025, 3, 10),
                 end_date=datetime(2025, 3, 31),
-                use_cache=True
+                use_cache=True,
             )
             second_time = datetime.now() - start_time
 
@@ -202,7 +216,9 @@ def test_cache_functionality():
                     print("⚠️ 缓存效果不明显，可能缓存未命中")
 
                 # 验证结果一致性
-                pd.testing.assert_frame_equal(result1.sort_index(), result2.sort_index(), check_dtype=False)
+                pd.testing.assert_frame_equal(
+                    result1.sort_index(), result2.sort_index(), check_dtype=False
+                )
                 print("✅ 缓存结果与原始计算一致")
 
                 return True
@@ -216,6 +232,7 @@ def test_cache_functionality():
     except Exception as e:
         print(f"❌ 缓存测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -234,7 +251,7 @@ def test_factor_filtering():
             timeframe="daily",
             start_date=datetime(2025, 3, 10),
             end_date=datetime(2025, 3, 31),
-            use_cache=False
+            use_cache=False,
         )
 
         if not result.empty:
@@ -250,7 +267,9 @@ def test_factor_filtering():
             # STOCH可能返回多个相关列
             allowed_columns.extend(["STOCH_SLOWK", "STOCH_SLOWD", "STOCH_K", "STOCH_D"])
 
-            unexpected_columns = [col for col in actual_columns if col not in allowed_columns]
+            unexpected_columns = [
+                col for col in actual_columns if col not in allowed_columns
+            ]
 
             if len(unexpected_columns) == 0:
                 print("✅ 因子过滤正常工作")
@@ -271,6 +290,7 @@ def test_factor_filtering():
     except Exception as e:
         print(f"❌ 因子过滤测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -293,7 +313,7 @@ if __name__ == "__main__":
     for test_name, test_func in tests:
         print(f"\n{'='*80}")
         print(f"📋 {test_name}")
-        print('='*80)
+        print("=" * 80)
 
         if test_func():
             passed += 1
@@ -302,7 +322,7 @@ if __name__ == "__main__":
 
     print(f"\n{'='*80}")
     print(f"📊 完整系统测试结果: {passed}个通过, {failed}个失败")
-    print('='*80)
+    print("=" * 80)
 
     if failed == 0:
         print("🎉 FactorEngine系统完全正常！")

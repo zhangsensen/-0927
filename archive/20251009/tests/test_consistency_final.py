@@ -4,29 +4,37 @@
 """
 
 import sys
-sys.path.insert(0, '/Users/zhangshenshen/深度量化0927')
 
-import pandas as pd
+sys.path.insert(0, "/Users/zhangshenshen/深度量化0927")
+
 import numpy as np
-from factor_system.factor_engine.core.consistency_validator import get_consistency_validator
+import pandas as pd
+
+from factor_system.factor_engine.core.consistency_validator import (
+    get_consistency_validator,
+)
 from factor_system.factor_engine.core.registry import get_global_registry
+
 
 def test_final_consistency():
     """最终一致性测试"""
     print("🧪 最终一致性测试...")
 
     # 创建测试数据
-    dates = pd.date_range('2025-01-01', periods=100, freq='D')
-    test_data = pd.DataFrame({
-        'open': np.random.uniform(100, 200, 100),
-        'high': np.random.uniform(100, 200, 100),
-        'low': np.random.uniform(100, 200, 100),
-        'close': np.random.uniform(100, 200, 100),
-        'volume': np.random.uniform(1000, 10000, 100),
-    }, index=dates)
+    dates = pd.date_range("2025-01-01", periods=100, freq="D")
+    test_data = pd.DataFrame(
+        {
+            "open": np.random.uniform(100, 200, 100),
+            "high": np.random.uniform(100, 200, 100),
+            "low": np.random.uniform(100, 200, 100),
+            "close": np.random.uniform(100, 200, 100),
+            "volume": np.random.uniform(1000, 10000, 100),
+        },
+        index=dates,
+    )
 
     # 确保high >= low
-    test_data['high'] = np.maximum(test_data['high'], test_data['low'])
+    test_data["high"] = np.maximum(test_data["high"], test_data["low"])
 
     # 获取所有已注册因子
     registry = get_global_registry()
@@ -62,26 +70,30 @@ def test_final_consistency():
 
     return result.is_valid
 
+
 def test_shared_vs_vectorbt_consistency():
     """测试共享计算器与VectorBT适配器的一致性"""
     print("\n🔍 共享计算器 vs VectorBT适配器一致性测试...")
 
-    from factor_system.shared.factor_calculators import SHARED_CALCULATORS
     from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
+    from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
     # 创建测试数据
-    dates = pd.date_range('2025-01-01', periods=100, freq='D')
-    test_data = pd.DataFrame({
-        'high': np.random.uniform(100, 200, 100),
-        'low': np.random.uniform(100, 200, 100),
-        'close': np.random.uniform(100, 200, 100),
-    }, index=dates)
+    dates = pd.date_range("2025-01-01", periods=100, freq="D")
+    test_data = pd.DataFrame(
+        {
+            "high": np.random.uniform(100, 200, 100),
+            "low": np.random.uniform(100, 200, 100),
+            "close": np.random.uniform(100, 200, 100),
+        },
+        index=dates,
+    )
 
-    test_data['high'] = np.maximum(test_data['high'], test_data['low'])
+    test_data["high"] = np.maximum(test_data["high"], test_data["low"])
 
-    high = test_data['high']
-    low = test_data['low']
-    close = test_data['close']
+    high = test_data["high"]
+    low = test_data["low"]
+    close = test_data["close"]
 
     adapter = get_vectorbt_adapter()
 
@@ -119,6 +131,7 @@ def test_shared_vs_vectorbt_consistency():
 
     return rsi_ok and atr_ok and willr_ok
 
+
 if __name__ == "__main__":
     consistency_ok = test_final_consistency()
     shared_vs_vbt_ok = test_shared_vs_vectorbt_consistency()
@@ -126,4 +139,6 @@ if __name__ == "__main__":
     print(f"\n🎯 最终结果:")
     print(f"  因子一致性验证: {'✅ 通过' if consistency_ok else '❌ 失败'}")
     print(f"  计算器一致性: {'✅ 通过' if shared_vs_vbt_ok else '❌ 失败'}")
-    print(f"  整体状态: {'✅ 全部通过' if consistency_ok and shared_vs_vbt_ok else '❌ 存在问题'}")
+    print(
+        f"  整体状态: {'✅ 全部通过' if consistency_ok and shared_vs_vbt_ok else '❌ 存在问题'}"
+    )

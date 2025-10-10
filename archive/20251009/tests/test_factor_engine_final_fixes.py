@@ -11,10 +11,15 @@ FactorEngine最终修复验证测试
 import tempfile
 from datetime import datetime
 from pathlib import Path
-import pandas as pd
-import numpy as np
 
-from factor_system.factor_engine.settings import CacheConfig, EngineConfig, FactorEngineSettings
+import numpy as np
+import pandas as pd
+
+from factor_system.factor_engine.settings import (
+    CacheConfig,
+    EngineConfig,
+    FactorEngineSettings,
+)
 
 
 class TestFactorEngineFinalFixes:
@@ -27,7 +32,9 @@ class TestFactorEngineFinalFixes:
         # 测试有效配置
         try:
             valid_config = CacheConfig(memory_size_mb=500, ttl_hours=24)
-            print(f"✅ 有效配置通过: memory={valid_config.memory_size_mb}MB, ttl={valid_config.ttl_hours}h")
+            print(
+                f"✅ 有效配置通过: memory={valid_config.memory_size_mb}MB, ttl={valid_config.ttl_hours}h"
+            )
         except Exception as e:
             print(f"❌ 有效配置验证失败: {e}")
 
@@ -49,7 +56,9 @@ class TestFactorEngineFinalFixes:
         # 测试EngineConfig验证
         try:
             valid_engine = EngineConfig(n_jobs=4, chunk_size=1000)
-            print(f"✅ 有效引擎配置: n_jobs={valid_engine.n_jobs}, chunk_size={valid_engine.chunk_size}")
+            print(
+                f"✅ 有效引擎配置: n_jobs={valid_engine.n_jobs}, chunk_size={valid_engine.chunk_size}"
+            )
         except Exception as e:
             print(f"❌ 有效引擎配置失败: {e}")
 
@@ -76,22 +85,26 @@ class TestFactorEngineFinalFixes:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # 创建测试数据
-            dates = pd.date_range('2025-01-01', periods=1000, freq='1min')
-            test_data = pd.DataFrame({
-                'open': np.random.rand(1000) * 10 + 100,
-                'high': np.random.rand(1000) * 10 + 105,
-                'low': np.random.rand(1000) * 10 + 95,
-                'close': np.random.rand(1000) * 10 + 100,
-                'volume': np.random.randint(1000, 10000, 1000),
-                'timestamp': dates
-            })
+            dates = pd.date_range("2025-01-01", periods=1000, freq="1min")
+            test_data = pd.DataFrame(
+                {
+                    "open": np.random.rand(1000) * 10 + 100,
+                    "high": np.random.rand(1000) * 10 + 105,
+                    "low": np.random.rand(1000) * 10 + 95,
+                    "close": np.random.rand(1000) * 10 + 100,
+                    "volume": np.random.randint(1000, 10000, 1000),
+                    "timestamp": dates,
+                }
+            )
 
             # 保存为parquet
             data_file = Path(temp_dir) / "0700.HK_15min_2025-01-01_2025-01-02.parquet"
             test_data.to_parquet(data_file)
 
             try:
-                from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
+                from factor_system.factor_engine.providers.parquet_provider import (
+                    ParquetDataProvider,
+                )
 
                 # 创建数据提供者
                 provider = ParquetDataProvider(Path(temp_dir))
@@ -101,10 +114,10 @@ class TestFactorEngineFinalFixes:
                 end_date = datetime(2025, 1, 1, 10, 0, 0)  # 只要前10小时
 
                 result = provider.get_market_data(
-                    symbols=['0700.HK'],
+                    symbols=["0700.HK"],
                     start_date=start_date,
                     end_date=end_date,
-                    timeframe='15min'
+                    timeframe="15min",
                 )
 
                 if not result.empty:
@@ -112,8 +125,12 @@ class TestFactorEngineFinalFixes:
                     actual_start = result.index.min()
                     actual_end = result.index.max()
 
-                    assert actual_start >= pd.Timestamp(start_date), "开始时间不符合过滤要求"
-                    assert actual_end <= pd.Timestamp(end_date), "结束时间不符合过滤要求"
+                    assert actual_start >= pd.Timestamp(
+                        start_date
+                    ), "开始时间不符合过滤要求"
+                    assert actual_end <= pd.Timestamp(
+                        end_date
+                    ), "结束时间不符合过滤要求"
 
                     print(f"✅ 日期范围过滤正确: {len(result)} 行数据")
                     print(f"✅ 时间范围: {actual_start} 到 {actual_end}")
@@ -132,56 +149,66 @@ class TestFactorEngineFinalFixes:
         print("🧪 测试边界条件和异常情况...")
 
         # 测试空数据情况
-        empty_data = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+        empty_data = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
         if not empty_data.empty:
             print("❌ 空数据检测失败")
         else:
             print("✅ 空数据检测正常")
 
         # 测试极小数据
-        tiny_data = pd.DataFrame({
-            'open': [100],
-            'high': [101],
-            'low': [99],
-            'close': [100.5],
-            'volume': [1000]
-        }, index=[pd.Timestamp('2025-01-01')])
+        tiny_data = pd.DataFrame(
+            {
+                "open": [100],
+                "high": [101],
+                "low": [99],
+                "close": [100.5],
+                "volume": [1000],
+            },
+            index=[pd.Timestamp("2025-01-01")],
+        )
 
         print(f"✅ 极小数据处理正常: {len(tiny_data)} 行")
 
         # 测试重复时间戳
-        duplicate_time_data = pd.DataFrame({
-            'open': [100, 101],
-            'high': [101, 102],
-            'low': [99, 100],
-            'close': [100.5, 101.5],
-            'volume': [1000, 1100]
-        }, index=[pd.Timestamp('2025-01-01'), pd.Timestamp('2025-01-01')])
+        duplicate_time_data = pd.DataFrame(
+            {
+                "open": [100, 101],
+                "high": [101, 102],
+                "low": [99, 100],
+                "close": [100.5, 101.5],
+                "volume": [1000, 1100],
+            },
+            index=[pd.Timestamp("2025-01-01"), pd.Timestamp("2025-01-01")],
+        )
 
         if duplicate_time_data.index.duplicated().any():
             print("✅ 重复时间戳检测正常")
             # 去重处理
-            deduplicated_data = duplicate_time_data[~duplicate_time_data.index.duplicated(keep='first')]
+            deduplicated_data = duplicate_time_data[
+                ~duplicate_time_data.index.duplicated(keep="first")
+            ]
             print(f"✅ 去重处理正常: {len(deduplicated_data)} 行")
         else:
             print("⚠️ 重复时间戳检测异常")
 
         # 测试数值边界
-        boundary_data = pd.DataFrame({
-            'open': [0.01, 10000],  # 极小和极大价格
-            'high': [0.02, 10001],
-            'low': [0.005, 9999],
-            'close': [0.015, 10000.5],
-            'volume': [1, 1000000]  # 极小和极大成交量
-        })
+        boundary_data = pd.DataFrame(
+            {
+                "open": [0.01, 10000],  # 极小和极大价格
+                "high": [0.02, 10001],
+                "low": [0.005, 9999],
+                "close": [0.015, 10000.5],
+                "volume": [1, 1000000],  # 极小和极大成交量
+            }
+        )
 
         # 检查数值合理性
         valid_prices = (
-            (boundary_data['high'] >= boundary_data['low']) &
-            (boundary_data['high'] >= boundary_data['open']) &
-            (boundary_data['high'] >= boundary_data['close']) &
-            (boundary_data['low'] <= boundary_data['open']) &
-            (boundary_data['low'] <= boundary_data['close'])
+            (boundary_data["high"] >= boundary_data["low"])
+            & (boundary_data["high"] >= boundary_data["open"])
+            & (boundary_data["high"] >= boundary_data["close"])
+            & (boundary_data["low"] <= boundary_data["open"])
+            & (boundary_data["low"] <= boundary_data["close"])
         )
 
         if valid_prices.all():
@@ -199,15 +226,17 @@ class TestFactorEngineFinalFixes:
         import os
 
         # 设置环境变量
-        os.environ['FACTOR_ENGINE_MEMORY_MB'] = '256'
-        os.environ['FACTOR_ENGINE_TTL_HOURS'] = '12'
-        os.environ['FACTOR_ENGINE_N_JOBS'] = '-1'
+        os.environ["FACTOR_ENGINE_MEMORY_MB"] = "256"
+        os.environ["FACTOR_ENGINE_TTL_HOURS"] = "12"
+        os.environ["FACTOR_ENGINE_N_JOBS"] = "-1"
 
         try:
             config = CacheConfig()
             engine_config = EngineConfig()
 
-            print(f"✅ 环境变量生效: memory={config.memory_size_mb}MB, ttl={config.ttl_hours}h")
+            print(
+                f"✅ 环境变量生效: memory={config.memory_size_mb}MB, ttl={config.ttl_hours}h"
+            )
             print(f"✅ 引擎环境变量生效: n_jobs={engine_config.n_jobs}")
 
             # 验证配置值合理性
@@ -217,12 +246,12 @@ class TestFactorEngineFinalFixes:
 
         finally:
             # 清理环境变量
-            os.environ.pop('FACTOR_ENGINE_MEMORY_MB', None)
-            os.environ.pop('FACTOR_ENGINE_TTL_HOURS', None)
-            os.environ.pop('FACTOR_ENGINE_N_JOBS', None)
+            os.environ.pop("FACTOR_ENGINE_MEMORY_MB", None)
+            os.environ.pop("FACTOR_ENGINE_TTL_HOURS", None)
+            os.environ.pop("FACTOR_ENGINE_N_JOBS", None)
 
         # 测试无效环境变量
-        os.environ['FACTOR_ENGINE_MEMORY_MB'] = 'invalid'
+        os.environ["FACTOR_ENGINE_MEMORY_MB"] = "invalid"
 
         try:
             config = CacheConfig()
@@ -230,7 +259,7 @@ class TestFactorEngineFinalFixes:
         except Exception as e:
             print(f"❌ 无效环境变量处理失败: {e}")
         finally:
-            os.environ.pop('FACTOR_ENGINE_MEMORY_MB', None)
+            os.environ.pop("FACTOR_ENGINE_MEMORY_MB", None)
 
         print("✅ 配置边界情况测试通过")
 

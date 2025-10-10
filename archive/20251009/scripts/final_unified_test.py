@@ -4,10 +4,12 @@
 """
 
 import sys
-sys.path.insert(0, '/Users/zhangshenshen/深度量化0927')
 
-import pandas as pd
+sys.path.insert(0, "/Users/zhangshenshen/深度量化0927")
+
 import numpy as np
+import pandas as pd
+
 
 def final_unified_test():
     """最终统一测试"""
@@ -16,7 +18,7 @@ def final_unified_test():
 
     # 1. 因子注册测试
     from factor_system.factor_engine.core.registry import get_global_registry
-    from factor_system.factor_engine.factors.technical import RSI, MACD, STOCH
+    from factor_system.factor_engine.factors.technical import MACD, RSI, STOCH
 
     registry = get_global_registry()
     registry.register(RSI)
@@ -28,7 +30,7 @@ def final_unified_test():
     print(f"   数量: {len(all_factors)}")
 
     # 2. factor_generation因子检查
-    factor_gen_factors = {'RSI', 'MACD', 'STOCH'}
+    factor_gen_factors = {"RSI", "MACD", "STOCH"}
     print(f"\n2️⃣ factor_generation中的因子: {sorted(factor_gen_factors)}")
     print(f"   数量: {len(factor_gen_factors)}")
 
@@ -48,21 +50,24 @@ def final_unified_test():
 
     # 4. 计算一致性测试
     print(f"\n4️⃣ 计算一致性测试:")
-    from factor_system.shared.factor_calculators import SHARED_CALCULATORS
     from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
+    from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
     # 创建测试数据
-    dates = pd.date_range('2025-01-01', periods=100, freq='D')
-    test_data = pd.DataFrame({
-        'high': np.random.uniform(100, 200, 100),
-        'low': np.random.uniform(100, 200, 100),
-        'close': np.random.uniform(100, 200, 100),
-    }, index=dates)
-    test_data['high'] = np.maximum(test_data['high'], test_data['low'])
+    dates = pd.date_range("2025-01-01", periods=100, freq="D")
+    test_data = pd.DataFrame(
+        {
+            "high": np.random.uniform(100, 200, 100),
+            "low": np.random.uniform(100, 200, 100),
+            "close": np.random.uniform(100, 200, 100),
+        },
+        index=dates,
+    )
+    test_data["high"] = np.maximum(test_data["high"], test_data["low"])
 
-    high = test_data['high']
-    low = test_data['low']
-    close = test_data['close']
+    high = test_data["high"]
+    low = test_data["low"]
+    close = test_data["close"]
 
     adapter = get_vectorbt_adapter()
     tolerance = 1e-6
@@ -71,17 +76,25 @@ def final_unified_test():
     for factor_name in sorted(all_factors):
         print(f"   测试 {factor_name}:")
 
-        if factor_name == 'RSI':
+        if factor_name == "RSI":
             shared_result = SHARED_CALCULATORS.calculate_rsi(close, period=14)
             engine_result = adapter.calculate_rsi(close, timeperiod=14)
 
-        elif factor_name == 'MACD':
-            shared_result = SHARED_CALCULATORS.calculate_macd(close, fastperiod=12, slowperiod=26, signalperiod=9)['macd']
-            engine_result = adapter.calculate_macd(close, fast_period=12, slow_period=26, signal_period=9)
+        elif factor_name == "MACD":
+            shared_result = SHARED_CALCULATORS.calculate_macd(
+                close, fastperiod=12, slowperiod=26, signalperiod=9
+            )["macd"]
+            engine_result = adapter.calculate_macd(
+                close, fast_period=12, slow_period=26, signal_period=9
+            )
 
-        elif factor_name == 'STOCH':
-            shared_result = SHARED_CALCULATORS.calculate_stoch(high, low, close, fastk_period=5, slowk_period=3, slowd_period=3)['slowk']
-            engine_result = adapter.calculate_stoch(high, low, close, fastk_period=5, slowk_period=3, slowd_period=3)
+        elif factor_name == "STOCH":
+            shared_result = SHARED_CALCULATORS.calculate_stoch(
+                high, low, close, fastk_period=5, slowk_period=3, slowd_period=3
+            )["slowk"]
+            engine_result = adapter.calculate_stoch(
+                high, low, close, fastk_period=5, slowk_period=3, slowd_period=3
+            )
 
         # 计算差异
         if shared_result is not None and engine_result is not None:
@@ -103,7 +116,10 @@ def final_unified_test():
 
     # 6. 一致性验证器测试
     print(f"\n6️⃣ 一致性验证器测试:")
-    from factor_system.factor_engine.core.consistency_validator import get_consistency_validator
+    from factor_system.factor_engine.core.consistency_validator import (
+        get_consistency_validator,
+    )
+
     validator = get_consistency_validator()
     validation_result = validator.validate_consistency(list(all_factors))
 
@@ -132,6 +148,7 @@ def final_unified_test():
         if not calculation_consistent:
             print("      - 计算结果不一致")
         return False
+
 
 if __name__ == "__main__":
     success = final_unified_test()

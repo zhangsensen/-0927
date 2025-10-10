@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from factor_system.factor_engine.core.registry import FactorRequest
-
 import pandas as pd
+
+from factor_system.factor_engine.core.registry import FactorRequest
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CacheConfig:
     """缓存配置"""
+
     memory_size_mb: int = 500  # 内存缓存大小(MB)
     disk_cache_dir: Path = Path("cache/factor_engine")
     ttl_hours: int = 24  # 缓存有效期(小时)
@@ -58,10 +59,10 @@ class LRUCache:
                 return None
 
             # 根据copy_mode返回适当的拷贝
-            copy_mode = getattr(self, 'copy_mode', 'view')
-            if copy_mode == 'view':
+            copy_mode = getattr(self, "copy_mode", "view")
+            if copy_mode == "view":
                 return data
-            elif copy_mode == 'copy':
+            elif copy_mode == "copy":
                 return data.copy()
             else:  # deepcopy
                 return data.copy()
@@ -123,11 +124,11 @@ class LRUCache:
     def set_copy_mode(self, mode: str):
         """设置复制模式"""
         with self._lock:
-            if mode in ['view', 'copy', 'deepcopy']:
+            if mode in ["view", "copy", "deepcopy"]:
                 self.copy_mode = mode
             else:
                 logger.warning(f"无效的copy_mode: {mode}，使用默认值 'view'")
-                self.copy_mode = 'view'
+                self.copy_mode = "view"
 
     def __len__(self) -> int:
         return len(self.cache)
@@ -155,15 +156,15 @@ class DiskCache:
             return None
 
         try:
-            with open(cache_file, 'rb') as f:
+            with open(cache_file, "rb") as f:
                 data = pickle.load(f)
             logger.debug(f"磁盘缓存命中: {key}")
 
             # 根据copy_mode返回适当的拷贝
-            copy_mode = getattr(self, 'copy_mode', 'view')
-            if copy_mode == 'view':
+            copy_mode = getattr(self, "copy_mode", "view")
+            if copy_mode == "view":
                 return data
-            elif copy_mode == 'copy':
+            elif copy_mode == "copy":
                 return data.copy()
             else:  # deepcopy
                 return data.copy()
@@ -171,27 +172,27 @@ class DiskCache:
             logger.error(f"加载磁盘缓存失败: {e}")
             cache_file.unlink(missing_ok=True)  # 删除损坏的缓存文件
             return None
-    
+
     def set(self, key: str, data: pd.DataFrame):
         """设置缓存"""
         cache_file = self._get_cache_path(key)
-        
+
         try:
-            with open(cache_file, 'wb') as f:
+            with open(cache_file, "wb") as f:
                 pickle.dump(data, f)
             logger.debug(f"写入磁盘缓存: {key}")
         except Exception as e:
             logger.error(f"写入磁盘缓存失败: {e}")
-    
+
     def _get_cache_path(self, key: str) -> Path:
         """获取缓存文件路径"""
         return self.cache_dir / f"{key}.pkl"
-    
+
     def _is_expired(self, cache_file: Path) -> bool:
         """检查缓存是否过期"""
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
         return datetime.now() - mtime > self.ttl
-    
+
     def clear(self):
         """清空缓存"""
         for cache_file in self.cache_dir.glob("*.pkl"):
@@ -206,12 +207,12 @@ class CacheManager:
 
         # 初始化缓存
         self.memory_cache = (
-            LRUCache(self.config.memory_size_mb)
-            if self.config.enable_memory else None
+            LRUCache(self.config.memory_size_mb) if self.config.enable_memory else None
         )
         self.disk_cache = (
             DiskCache(self.config.disk_cache_dir, self.config.ttl_hours)
-            if self.config.enable_disk else None
+            if self.config.enable_disk
+            else None
         )
 
         # 设置copy_mode
@@ -222,9 +223,9 @@ class CacheManager:
 
         # 统计信息
         self.stats = {
-            'memory_hits': 0,
-            'disk_hits': 0,
-            'misses': 0,
+            "memory_hits": 0,
+            "disk_hits": 0,
+            "misses": 0,
         }
 
     def get(
@@ -241,13 +242,15 @@ class CacheManager:
         Returns:
             (cached_data, missing_factor_ids)
         """
-        cache_key = self._build_key(factor_requests, symbols, timeframe, start_date, end_date)
+        cache_key = self._build_key(
+            factor_requests, symbols, timeframe, start_date, end_date
+        )
 
         # 1. 尝试内存缓存
         if self.memory_cache:
             data = self.memory_cache.get(cache_key)
             if data is not None:
-                self.stats['memory_hits'] += 1
+                self.stats["memory_hits"] += 1
                 logger.debug(f"内存缓存命中: {cache_key}")
                 return data, []
 
@@ -255,7 +258,7 @@ class CacheManager:
         if self.disk_cache:
             data = self.disk_cache.get(cache_key)
             if data is not None:
-                self.stats['disk_hits'] += 1
+                self.stats["disk_hits"] += 1
                 # 加载到内存
                 if self.memory_cache:
                     self.memory_cache.set(cache_key, data)
@@ -263,7 +266,7 @@ class CacheManager:
                 return data, []
 
         # 3. 缓存未命中
-        self.stats['misses'] += 1
+        self.stats["misses"] += 1
         missing_ids = [req.factor_id for req in factor_requests]
         return None, missing_ids
 
@@ -277,7 +280,9 @@ class CacheManager:
         end_date: datetime,
     ):
         """写入缓存"""
-        cache_key = self._build_key(factor_requests, symbols, timeframe, start_date, end_date)
+        cache_key = self._build_key(
+            factor_requests, symbols, timeframe, start_date, end_date
+        )
 
         # 写入内存
         if self.memory_cache:
@@ -297,32 +302,39 @@ class CacheManager:
     ) -> str:
         """构建简化的缓存键"""
         # 简单的字符串格式，避免复杂的JSON序列化
-        factor_parts = [req.cache_key() for req in sorted(factor_requests, key=lambda x: x.factor_id)]
-        symbol_str = ','.join(sorted(symbols))
+        factor_parts = [
+            req.cache_key()
+            for req in sorted(factor_requests, key=lambda x: x.factor_id)
+        ]
+        symbol_str = ",".join(sorted(symbols))
 
         # 创建键的基础部分
         key_parts = [
             f"factors:{','.join(factor_parts)}",
             f"symbols:{symbol_str}",
             f"tf:{timeframe}",
-            f"dates:{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
+            f"dates:{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}",
         ]
 
-        key_str = '|'.join(key_parts)
+        key_str = "|".join(key_parts)
         return hashlib.md5(key_str.encode()).hexdigest()
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """获取缓存统计"""
         total = sum(self.stats.values())
-        hit_rate = (self.stats['memory_hits'] + self.stats['disk_hits']) / total if total > 0 else 0
-        
+        hit_rate = (
+            (self.stats["memory_hits"] + self.stats["disk_hits"]) / total
+            if total > 0
+            else 0
+        )
+
         return {
             **self.stats,
-            'total_requests': total,
-            'hit_rate': hit_rate,
-            'memory_size': len(self.memory_cache) if self.memory_cache else 0,
+            "total_requests": total,
+            "hit_rate": hit_rate,
+            "memory_size": len(self.memory_cache) if self.memory_cache else 0,
         }
-    
+
     def clear(self):
         """清空所有缓存"""
         if self.memory_cache:
@@ -330,4 +342,3 @@ class CacheManager:
         if self.disk_cache:
             self.disk_cache.clear()
         logger.info("缓存已清空")
-

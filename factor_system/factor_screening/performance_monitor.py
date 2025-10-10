@@ -6,19 +6,21 @@
 日期：2025-10-07
 """
 
-import time
 import logging
-import psutil
 import threading
+import time
+from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
-from collections import defaultdict, deque
+from typing import Any, Dict, List, Optional
+
+import psutil
 
 
 @dataclass
 class PerformanceMetrics:
     """性能指标数据类"""
+
     operation_name: str
     start_time: float
     end_time: float
@@ -30,13 +32,13 @@ class PerformanceMetrics:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'operation': self.operation_name,
-            'duration': self.duration,
-            'memory_before': self.memory_before,
-            'memory_after': self.memory_after,
-            'memory_delta': self.memory_after - self.memory_before,
-            'memory_peak': self.memory_peak,
-            'cpu_percent': self.cpu_percent
+            "operation": self.operation_name,
+            "duration": self.duration,
+            "memory_before": self.memory_before,
+            "memory_after": self.memory_after,
+            "memory_delta": self.memory_after - self.memory_before,
+            "memory_peak": self.memory_peak,
+            "cpu_percent": self.cpu_percent,
         }
 
 
@@ -60,6 +62,7 @@ class PerformanceMonitor:
 
     def _start_memory_monitoring(self):
         """启动内存监控线程"""
+
         def monitor_memory():
             process = psutil.Process()
             while not self._stop_monitoring:
@@ -113,7 +116,7 @@ class PerformanceMonitor:
                 memory_before=memory_before,
                 memory_after=memory_after,
                 memory_peak=self._peak_memory,
-                cpu_percent=cpu_after
+                cpu_percent=cpu_after,
             )
 
             self.metrics.append(metrics)
@@ -138,18 +141,18 @@ class PerformanceMonitor:
             return {}
 
         return {
-            'count': len(times),
-            'total_time': sum(times),
-            'avg_time': sum(times) / len(times),
-            'min_time': min(times),
-            'max_time': max(times),
-            'last_time': times[-1] if times else 0.0
+            "count": len(times),
+            "total_time": sum(times),
+            "avg_time": sum(times) / len(times),
+            "min_time": min(times),
+            "max_time": max(times),
+            "last_time": times[-1] if times else 0.0,
         }
 
     def get_performance_summary(self) -> Dict[str, Any]:
         """获取性能摘要"""
         if not self.metrics:
-            return {'total_operations': 0}
+            return {"total_operations": 0}
 
         # 按操作分组统计
         operation_stats = {}
@@ -157,45 +160,43 @@ class PerformanceMonitor:
             op_name = metrics.operation_name
             if op_name not in operation_stats:
                 operation_stats[op_name] = {
-                    'count': 0,
-                    'total_time': 0.0,
-                    'avg_time': 0.0,
-                    'max_memory': 0.0
+                    "count": 0,
+                    "total_time": 0.0,
+                    "avg_time": 0.0,
+                    "max_memory": 0.0,
                 }
 
             stats = operation_stats[op_name]
-            stats['count'] += 1
-            stats['total_time'] += metrics.duration
-            stats['max_memory'] = max(stats['max_memory'], metrics.memory_peak)
-            stats['avg_time'] = stats['total_time'] / stats['count']
+            stats["count"] += 1
+            stats["total_time"] += metrics.duration
+            stats["max_memory"] = max(stats["max_memory"], metrics.memory_peak)
+            stats["avg_time"] = stats["total_time"] / stats["count"]
 
         # 找出最耗时的操作
         slowest_operations = sorted(
-            operation_stats.items(),
-            key=lambda x: x[1]['total_time'],
-            reverse=True
+            operation_stats.items(), key=lambda x: x[1]["total_time"], reverse=True
         )[:10]
 
         return {
-            'total_operations': len(self.metrics),
-            'total_time': sum(m.duration for m in self.metrics),
-            'peak_memory': max(m.memory_peak for m in self.metrics),
-            'operation_stats': operation_stats,
-            'slowest_operations': slowest_operations
+            "total_operations": len(self.metrics),
+            "total_time": sum(m.duration for m in self.metrics),
+            "peak_memory": max(m.memory_peak for m in self.metrics),
+            "operation_stats": operation_stats,
+            "slowest_operations": slowest_operations,
         }
 
     def log_performance_bottlenecks(self):
         """记录性能瓶颈"""
         summary = self.get_performance_summary()
 
-        if summary['total_operations'] == 0:
+        if summary["total_operations"] == 0:
             return
 
         self.logger.info("🔍 === 性能瓶颈分析 ===")
 
         # 记录最耗时的操作
-        for op_name, stats in summary['slowest_operations']:
-            if stats['total_time'] > 0.1:  # 只显示耗时超过0.1秒的操作
+        for op_name, stats in summary["slowest_operations"]:
+            if stats["total_time"] > 0.1:  # 只显示耗时超过0.1秒的操作
                 self.logger.warning(
                     f"⚠️ 性能瓶颈: {op_name} | "
                     f"总耗时: {stats['total_time']:.3f}s | "
@@ -250,6 +251,7 @@ def reset_global_monitor():
 # 便捷装饰器
 def monitor_performance(operation_name: Optional[str] = None):
     """性能监控装饰器"""
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             name = operation_name or f"{func.__module__}.{func.__name__}"
@@ -259,6 +261,7 @@ def monitor_performance(operation_name: Optional[str] = None):
                 return func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 

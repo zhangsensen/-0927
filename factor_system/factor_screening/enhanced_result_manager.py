@@ -679,9 +679,7 @@ class EnhancedResultManager:
             timeframe=timeframe,
             config_hash=str(hash(str(config)))[:8],
             total_factors=len(results),
-            significant_factors=sum(
-                1 for f in results.values() if f.is_significant
-            ),
+            significant_factors=sum(1 for f in results.values() if f.is_significant),
             high_score_factors=sum(
                 1 for f in results.values() if f.comprehensive_score > 0.6
             ),

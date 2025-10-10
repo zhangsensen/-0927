@@ -4,10 +4,12 @@
 """
 
 import sys
-sys.path.insert(0, '/Users/zhangshenshen/深度量化0927')
 
-import pandas as pd
+sys.path.insert(0, "/Users/zhangshenshen/深度量化0927")
+
 import numpy as np
+import pandas as pd
+
 
 def test_complete_workflow():
     """完整工作流测试"""
@@ -15,7 +17,7 @@ def test_complete_workflow():
 
     # 1. 因子注册
     from factor_system.factor_engine.core.registry import get_global_registry
-    from factor_system.factor_engine.factors.technical import RSI, MACD, ATR, STOCH
+    from factor_system.factor_engine.factors.technical import ATR, MACD, RSI, STOCH
 
     registry = get_global_registry()
     registry.register(RSI)
@@ -24,21 +26,24 @@ def test_complete_workflow():
     registry.register(STOCH)
 
     # 2. 创建测试数据
-    dates = pd.date_range('2025-01-01', periods=100, freq='D')
-    test_data = pd.DataFrame({
-        'open': np.random.uniform(100, 200, 100),
-        'high': np.random.uniform(100, 200, 100),
-        'low': np.random.uniform(100, 200, 100),
-        'close': np.random.uniform(100, 200, 100),
-        'volume': np.random.uniform(1000, 10000, 100),
-    }, index=dates)
+    dates = pd.date_range("2025-01-01", periods=100, freq="D")
+    test_data = pd.DataFrame(
+        {
+            "open": np.random.uniform(100, 200, 100),
+            "high": np.random.uniform(100, 200, 100),
+            "low": np.random.uniform(100, 200, 100),
+            "close": np.random.uniform(100, 200, 100),
+            "volume": np.random.uniform(1000, 10000, 100),
+        },
+        index=dates,
+    )
 
-    test_data['high'] = np.maximum(test_data['high'], test_data['low'])
+    test_data["high"] = np.maximum(test_data["high"], test_data["low"])
 
     # 3. 使用FactorEngine计算因子
     print("\n📊 FactorEngine计算...")
     factors = {}
-    for factor_id in ['RSI', 'MACD', 'ATR', 'STOCH']:
+    for factor_id in ["RSI", "MACD", "ATR", "STOCH"]:
         try:
             factor_instance = registry.get_factor(factor_id)
             result = factor_instance.calculate(test_data)
@@ -49,7 +54,10 @@ def test_complete_workflow():
             factors[factor_id] = None
 
     # 4. 一致性验证
-    from factor_system.factor_engine.core.consistency_validator import get_consistency_validator
+    from factor_system.factor_engine.core.consistency_validator import (
+        get_consistency_validator,
+    )
+
     validator = get_consistency_validator()
     engine_factors = list(factors.keys())
     result = validator.validate_consistency(engine_factors)
@@ -61,13 +69,13 @@ def test_complete_workflow():
     print(f"  📈 总体状态: {'✅ 通过' if result.is_valid else '❌ 失败'}")
 
     # 5. 共享计算器一致性检查
-    from factor_system.shared.factor_calculators import SHARED_CALCULATORS
     from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
+    from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
     adapter = get_vectorbt_adapter()
-    high = test_data['high']
-    low = test_data['low']
-    close = test_data['close']
+    high = test_data["high"]
+    low = test_data["low"]
+    close = test_data["close"]
 
     print(f"\n🔍 计算器一致性检查...")
     tolerance = 1e-6
@@ -80,8 +88,12 @@ def test_complete_workflow():
     print(f"  RSI: {'✅' if rsi_ok else '❌'} (差异: {rsi_diff:.6f})")
 
     # MACD
-    shared_macd = SHARED_CALCULATORS.calculate_macd(close, fastperiod=12, slowperiod=26, signalperiod=9)['macd']
-    vbt_macd = adapter.calculate_macd(close, fast_period=12, slow_period=26, signal_period=9)
+    shared_macd = SHARED_CALCULATORS.calculate_macd(
+        close, fastperiod=12, slowperiod=26, signalperiod=9
+    )["macd"]
+    vbt_macd = adapter.calculate_macd(
+        close, fast_period=12, slow_period=26, signal_period=9
+    )
     macd_diff = np.abs(shared_macd - vbt_macd).max()
     macd_ok = macd_diff < tolerance
     print(f"  MACD: {'✅' if macd_ok else '❌'} (差异: {macd_diff:.6f})")
@@ -100,9 +112,12 @@ def test_complete_workflow():
     print(f"\n🎯 综合评估:")
     print(f"  FactorEngine验证: {'✅ 通过' if engine_validation_ok else '❌ 失败'}")
     print(f"  计算器一致性: {'✅ 通过' if all_consistency_ok else '❌ 失败'}")
-    print(f"  整体状态: {'✅ 全部通过' if engine_validation_ok and all_consistency_ok else '❌ 存在问题'}")
+    print(
+        f"  整体状态: {'✅ 全部通过' if engine_validation_ok and all_consistency_ok else '❌ 存在问题'}"
+    )
 
     return engine_validation_ok and all_consistency_ok
+
 
 if __name__ == "__main__":
     success = test_complete_workflow()

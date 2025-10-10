@@ -7,6 +7,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
 
+
 class OBV(BaseFactor):
     """
     OBV - 技术指标
@@ -22,7 +23,7 @@ class OBV(BaseFactor):
     def __init__(self, period: int = 14):
         super().__init__(period=period)
         self.period = period
-        
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """
         计算OBV - 使用VectorBT确保与factor_generation一致
@@ -39,4 +40,4 @@ class OBV(BaseFactor):
 
         # 使用VectorBT适配器计算，确保与factor_generation完全一致
         adapter = get_vectorbt_adapter()
-        return adapter.calculate_obv(close , volume)
+        return adapter.calculate_obv(close, volume)

@@ -50,7 +50,9 @@ class FactorRegistry:
         Args:
             registry_file: factor_registry.json路径
         """
-        self.registry_file = registry_file or Path("factor_system/factor_engine/data/registry.json")
+        self.registry_file = registry_file or Path(
+            "factor_system/factor_engine/data/registry.json"
+        )
         self.factors: Dict[str, Type[BaseFactor]] = {}
         self.metadata: Dict[str, Dict] = {}
         self._factor_sets: Dict[str, Dict] = {}
@@ -61,17 +63,19 @@ class FactorRegistry:
     def _load_registry(self):
         """从文件加载注册表"""
         try:
-            with open(self.registry_file, 'r', encoding='utf-8') as f:
+            with open(self.registry_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             # 加载因子元数据
-            factors_data = data.get('factors', {})
+            factors_data = data.get("factors", {})
             self.metadata = factors_data if isinstance(factors_data, dict) else {}
 
             # 加载因子集
-            self._factor_sets = data.get('factor_sets', {})
+            self._factor_sets = data.get("factor_sets", {})
 
-            logger.info(f"加载因子注册表: {len(self.metadata)}个因子, {len(self._factor_sets)}个因子集")
+            logger.info(
+                f"加载因子注册表: {len(self.metadata)}个因子, {len(self._factor_sets)}个因子集"
+            )
         except FileNotFoundError:
             logger.warning(f"注册表文件不存在: {self.registry_file}")
             self.metadata = {}
@@ -80,7 +84,7 @@ class FactorRegistry:
             logger.error(f"加载注册表失败: {e}")
             self.metadata = {}
             self._factor_sets = {}
-    
+
     def register(
         self,
         factor_class: Type[BaseFactor],
@@ -121,12 +125,12 @@ class FactorRegistry:
         elif factor_id not in self.metadata:
             # 从类属性自动提取元数据
             self.metadata[factor_id] = {
-                'factor_id': factor_id,
-                'version': getattr(factor_class, 'version', 'v1.0'),
-                'category': getattr(factor_class, 'category', 'unknown'),
-                'description': getattr(factor_class, 'description', ''),
-                'status': 'registered',
-                'dependencies': [],
+                "factor_id": factor_id,
+                "version": getattr(factor_class, "version", "v1.0"),
+                "category": getattr(factor_class, "category", "unknown"),
+                "description": getattr(factor_class, "description", ""),
+                "status": "registered",
+                "dependencies": [],
             }
 
         logger.info(f"注册因子: {factor_id}")
@@ -134,15 +138,15 @@ class FactorRegistry:
     def _validate_factor_id(self, factor_id: str) -> None:
         """验证因子ID格式"""
         # 不允许包含参数后缀
-        if '_' in factor_id and any(c.isdigit() for c in factor_id):
+        if "_" in factor_id and any(c.isdigit() for c in factor_id):
             raise ValueError(f"因子ID不能包含参数后缀: {factor_id}")
 
         # 不允许TA_前缀
-        if factor_id.startswith('TA_'):
+        if factor_id.startswith("TA_"):
             raise ValueError(f"因子ID不能使用TA_前缀: {factor_id}")
 
         # 检查格式是否合理
-        if not factor_id.replace('_', '').isalnum():
+        if not factor_id.replace("_", "").isalnum():
             raise ValueError(f"因子ID只能包含字母、数字和下划线: {factor_id}")
 
     def get_factor(self, factor_id: str, **params) -> BaseFactor:
@@ -168,7 +172,9 @@ class FactorRegistry:
         if factor_id in self.metadata:
             return self._load_factor_from_metadata(factor_id, **params)
 
-        available_factors = sorted(list(self.factors.keys()) + list(self.metadata.keys()))
+        available_factors = sorted(
+            list(self.factors.keys()) + list(self.metadata.keys())
+        )
         raise ValueError(
             f"未注册的因子: '{factor_id}'\n"
             f"可用因子: {available_factors[:20]}{'...' if len(available_factors) > 20 else ''}\n"
@@ -194,12 +200,15 @@ class FactorRegistry:
             raise ValueError(f"因子 {factor_id} 的元数据不存在")
 
         # 构建因子类导入路径
-        category = metadata.get('category', 'technical')
-        module_name = f"factor_system.factor_engine.factors.{category}.{factor_id.lower()}"
+        category = metadata.get("category", "technical")
+        module_name = (
+            f"factor_system.factor_engine.factors.{category}.{factor_id.lower()}"
+        )
 
         try:
             # 动态导入模块
             import importlib
+
             module = importlib.import_module(module_name)
 
             # 获取因子类（假设类名与因子ID相同）
@@ -240,71 +249,76 @@ class FactorRegistry:
         for factor_id in sorted(self.factors.keys()):
             meta = self.metadata.get(factor_id, {})
 
-            if category and meta.get('category') != category:
+            if category and meta.get("category") != category:
                 continue
-            if status and meta.get('status') != status:
+            if status and meta.get("status") != status:
                 continue
 
             result.append(factor_id)
 
         return result
-    
+
     def get_metadata(self, factor_id: str) -> Optional[Dict]:
         """获取因子元数据"""
         return self.metadata.get(factor_id)
-    
+
     def get_dependencies(self, factor_id: str) -> List[str]:
         """
         获取因子依赖（递归）
-        
+
         Args:
             factor_id: 因子ID
-        
+
         Returns:
             包含所有递归依赖的因子ID列表
         """
         all_deps = set()
         visited = set()
-        
+
         def _recursive_deps(fid: str):
             if fid in visited:
                 return
             visited.add(fid)
-            
+
             meta = self.get_metadata(fid)
             if meta:
-                deps = meta.get('dependencies', [])
+                deps = meta.get("dependencies", [])
                 for dep in deps:
                     all_deps.add(dep)
                     _recursive_deps(dep)
-        
+
         _recursive_deps(factor_id)
         return list(all_deps)
-    
+
     def get_factor_set(self, set_id: str) -> Optional[Dict]:
         """获取因子集定义"""
         return self._factor_sets.get(set_id)
-    
+
     def list_factor_sets(self) -> List[str]:
         """列出所有因子集ID"""
         return list(self._factor_sets.keys())
-    
+
     def save_registry(self):
         """保存注册表到文件"""
         try:
             # 读取现有数据
             if self.registry_file.exists():
-                with open(self.registry_file, 'r', encoding='utf-8') as f:
+                with open(self.registry_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
             else:
-                data = {'metadata': {}, 'factors': {}, 'factor_sets': {}, 'changelog': []}
+                data = {
+                    "metadata": {},
+                    "factors": {},
+                    "factor_sets": {},
+                    "changelog": [],
+                }
 
             # 更新factors部分
-            data['factors'] = self.metadata
+            data["factors"] = self.metadata
 
             # 写回文件
             self.registry_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.registry_file, 'w', encoding='utf-8') as f:
+            with open(self.registry_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
             logger.info(f"保存因子注册表: {len(self.metadata)}个因子")
@@ -330,26 +344,25 @@ class FactorRegistry:
             if not isinstance(config, dict):
                 raise ValueError(f"因子配置必须是字典: {config}")
 
-            factor_id = config.get('factor_id')
+            factor_id = config.get("factor_id")
             if not factor_id:
                 raise ValueError(f"因子配置缺少factor_id: {config}")
 
-            parameters = config.get('parameters', {})
+            parameters = config.get("parameters", {})
             if not isinstance(parameters, dict):
                 raise ValueError(f"parameters必须是字典: {parameters}")
 
             # 验证因子是否存在（检查metadata和动态注册的factors）
             if factor_id not in self.factors and factor_id not in self.metadata:
-                available_factors = sorted(list(self.factors.keys()) + list(self.metadata.keys()))
+                available_factors = sorted(
+                    list(self.factors.keys()) + list(self.metadata.keys())
+                )
                 raise ValueError(
                     f"未注册的因子: '{factor_id}'\n"
                     f"可用因子: {available_factors[:20]}{'...' if len(available_factors) > 20 else ''}"
                 )
 
-            requests.append(FactorRequest(
-                factor_id=factor_id,
-                parameters=parameters
-            ))
+            requests.append(FactorRequest(factor_id=factor_id, parameters=parameters))
 
         return requests
 

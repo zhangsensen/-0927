@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+
 import numpy as np
 import pandas as pd
 
@@ -18,19 +19,19 @@ logger = logging.getLogger(__name__)
 class Momentum1(BaseFactor):
     """
     动量指标 - Momentum1
-    
+
     类别: statistic
     参数: {'timeperiod': 1}
     """
-    
+
     factor_id = "Momentum1"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 1}
+        default_params = {"timeperiod": 1}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -46,19 +47,19 @@ class Momentum1(BaseFactor):
 class Momentum3(BaseFactor):
     """
     动量指标 - Momentum3
-    
+
     类别: statistic
     参数: {'timeperiod': 3}
     """
-    
+
     factor_id = "Momentum3"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 3}
+        default_params = {"timeperiod": 3}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -74,19 +75,19 @@ class Momentum3(BaseFactor):
 class Momentum5(BaseFactor):
     """
     动量指标 - Momentum5
-    
+
     类别: statistic
     参数: {'timeperiod': 5}
     """
-    
+
     factor_id = "Momentum5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 5}
+        default_params = {"timeperiod": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -102,19 +103,19 @@ class Momentum5(BaseFactor):
 class Momentum8(BaseFactor):
     """
     动量指标 - Momentum8
-    
+
     类别: statistic
     参数: {'timeperiod': 8}
     """
-    
+
     factor_id = "Momentum8"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 8}
+        default_params = {"timeperiod": 8}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -130,19 +131,19 @@ class Momentum8(BaseFactor):
 class Momentum10(BaseFactor):
     """
     动量指标 - Momentum10
-    
+
     类别: statistic
     参数: {'timeperiod': 10}
     """
-    
+
     factor_id = "Momentum10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 10}
+        default_params = {"timeperiod": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -158,19 +159,19 @@ class Momentum10(BaseFactor):
 class Momentum12(BaseFactor):
     """
     动量指标 - Momentum12
-    
+
     类别: statistic
     参数: {'timeperiod': 12}
     """
-    
+
     factor_id = "Momentum12"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 12}
+        default_params = {"timeperiod": 12}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -186,19 +187,19 @@ class Momentum12(BaseFactor):
 class Momentum15(BaseFactor):
     """
     动量指标 - Momentum15
-    
+
     类别: statistic
     参数: {'timeperiod': 15}
     """
-    
+
     factor_id = "Momentum15"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 15}
+        default_params = {"timeperiod": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -214,19 +215,19 @@ class Momentum15(BaseFactor):
 class Momentum20(BaseFactor):
     """
     动量指标 - Momentum20
-    
+
     类别: statistic
     参数: {'timeperiod': 20}
     """
-    
+
     factor_id = "Momentum20"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 20}
+        default_params = {"timeperiod": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -242,19 +243,19 @@ class Momentum20(BaseFactor):
 class Position5(BaseFactor):
     """
     价格位置 - Position5
-    
+
     类别: statistic
     参数: {'period': 5}
     """
-    
+
     factor_id = "Position5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 5}
+        default_params = {"period": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -272,19 +273,19 @@ class Position5(BaseFactor):
 class Position8(BaseFactor):
     """
     价格位置 - Position8
-    
+
     类别: statistic
     参数: {'period': 8}
     """
-    
+
     factor_id = "Position8"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 8}
+        default_params = {"period": 8}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -302,19 +303,19 @@ class Position8(BaseFactor):
 class Position10(BaseFactor):
     """
     价格位置 - Position10
-    
+
     类别: statistic
     参数: {'period': 10}
     """
-    
+
     factor_id = "Position10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 10}
+        default_params = {"period": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -332,19 +333,19 @@ class Position10(BaseFactor):
 class Position12(BaseFactor):
     """
     价格位置 - Position12
-    
+
     类别: statistic
     参数: {'period': 12}
     """
-    
+
     factor_id = "Position12"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 12}
+        default_params = {"period": 12}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -362,19 +363,19 @@ class Position12(BaseFactor):
 class Position15(BaseFactor):
     """
     价格位置 - Position15
-    
+
     类别: statistic
     参数: {'period': 15}
     """
-    
+
     factor_id = "Position15"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 15}
+        default_params = {"period": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -392,19 +393,19 @@ class Position15(BaseFactor):
 class Position20(BaseFactor):
     """
     价格位置 - Position20
-    
+
     类别: statistic
     参数: {'period': 20}
     """
-    
+
     factor_id = "Position20"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 20}
+        default_params = {"period": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -422,19 +423,19 @@ class Position20(BaseFactor):
 class Position25(BaseFactor):
     """
     价格位置 - Position25
-    
+
     类别: statistic
     参数: {'period': 25}
     """
-    
+
     factor_id = "Position25"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 25}
+        default_params = {"period": 25}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -452,19 +453,19 @@ class Position25(BaseFactor):
 class Position30(BaseFactor):
     """
     价格位置 - Position30
-    
+
     类别: statistic
     参数: {'period': 30}
     """
-    
+
     factor_id = "Position30"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 30}
+        default_params = {"period": 30}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -482,19 +483,19 @@ class Position30(BaseFactor):
 class Trend5(BaseFactor):
     """
     趋势强度 - Trend5
-    
+
     类别: statistic
     参数: {'period': 5}
     """
-    
+
     factor_id = "Trend5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 5}
+        default_params = {"period": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -512,19 +513,19 @@ class Trend5(BaseFactor):
 class Trend8(BaseFactor):
     """
     趋势强度 - Trend8
-    
+
     类别: statistic
     参数: {'period': 8}
     """
-    
+
     factor_id = "Trend8"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 8}
+        default_params = {"period": 8}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -542,19 +543,19 @@ class Trend8(BaseFactor):
 class Trend10(BaseFactor):
     """
     趋势强度 - Trend10
-    
+
     类别: statistic
     参数: {'period': 10}
     """
-    
+
     factor_id = "Trend10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 10}
+        default_params = {"period": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -572,19 +573,19 @@ class Trend10(BaseFactor):
 class Trend12(BaseFactor):
     """
     趋势强度 - Trend12
-    
+
     类别: statistic
     参数: {'period': 12}
     """
-    
+
     factor_id = "Trend12"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 12}
+        default_params = {"period": 12}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -602,19 +603,19 @@ class Trend12(BaseFactor):
 class Trend15(BaseFactor):
     """
     趋势强度 - Trend15
-    
+
     类别: statistic
     参数: {'period': 15}
     """
-    
+
     factor_id = "Trend15"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 15}
+        default_params = {"period": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -632,19 +633,19 @@ class Trend15(BaseFactor):
 class Trend20(BaseFactor):
     """
     趋势强度 - Trend20
-    
+
     类别: statistic
     参数: {'period': 20}
     """
-    
+
     factor_id = "Trend20"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 20}
+        default_params = {"period": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -662,19 +663,19 @@ class Trend20(BaseFactor):
 class Trend25(BaseFactor):
     """
     趋势强度 - Trend25
-    
+
     类别: statistic
     参数: {'period': 25}
     """
-    
+
     factor_id = "Trend25"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 25}
+        default_params = {"period": 25}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -692,28 +693,33 @@ class Trend25(BaseFactor):
 class STOCH_7_10(BaseFactor):
     """
     随机指标 - STOCH_7_10
-    
+
     类别: statistic
     参数: {'fastk_period': 7, 'slowk_period': 10, 'slowd_period': 10}
     """
-    
+
     factor_id = "STOCH_7_10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'fastk_period': 7, 'slowk_period': 10, 'slowd_period': 10}
+        default_params = {"fastk_period": 7, "slowk_period": 10, "slowd_period": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             result = SHARED_CALCULATORS.calculate_stoch(
-                data["high"], data["low"], data["close"],
-                fastk_period=7, slowk_period=10, slowd_period=10
+                data["high"],
+                data["low"],
+                data["close"],
+                fastk_period=7,
+                slowk_period=10,
+                slowd_period=10,
             )
-            return result['slowk'].rename("STOCH_7_10")
+            return result["slowk"].rename("STOCH_7_10")
 
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
@@ -723,28 +729,33 @@ class STOCH_7_10(BaseFactor):
 class STOCH_10_14(BaseFactor):
     """
     随机指标 - STOCH_10_14
-    
+
     类别: statistic
     参数: {'fastk_period': 10, 'slowk_period': 14, 'slowd_period': 14}
     """
-    
+
     factor_id = "STOCH_10_14"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'fastk_period': 10, 'slowk_period': 14, 'slowd_period': 14}
+        default_params = {"fastk_period": 10, "slowk_period": 14, "slowd_period": 14}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             result = SHARED_CALCULATORS.calculate_stoch(
-                data["high"], data["low"], data["close"],
-                fastk_period=10, slowk_period=14, slowd_period=14
+                data["high"],
+                data["low"],
+                data["close"],
+                fastk_period=10,
+                slowk_period=14,
+                slowd_period=14,
             )
-            return result['slowk'].rename("STOCH_10_14")
+            return result["slowk"].rename("STOCH_10_14")
 
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
@@ -754,28 +765,33 @@ class STOCH_10_14(BaseFactor):
 class STOCH_14_20(BaseFactor):
     """
     随机指标 - STOCH_14_20
-    
+
     类别: statistic
     参数: {'fastk_period': 14, 'slowk_period': 20, 'slowd_period': 20}
     """
-    
+
     factor_id = "STOCH_14_20"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'fastk_period': 14, 'slowk_period': 20, 'slowd_period': 20}
+        default_params = {"fastk_period": 14, "slowk_period": 20, "slowd_period": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             result = SHARED_CALCULATORS.calculate_stoch(
-                data["high"], data["low"], data["close"],
-                fastk_period=14, slowk_period=20, slowd_period=20
+                data["high"],
+                data["low"],
+                data["close"],
+                fastk_period=14,
+                slowk_period=20,
+                slowd_period=20,
             )
-            return result['slowk'].rename("STOCH_14_20")
+            return result["slowk"].rename("STOCH_14_20")
 
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
@@ -785,19 +801,19 @@ class STOCH_14_20(BaseFactor):
 class MSTD5(BaseFactor):
     """
     移动标准差 - MSTD5
-    
+
     类别: statistic
     参数: {'timeperiod': 5}
     """
-    
+
     factor_id = "MSTD5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 5}
+        default_params = {"timeperiod": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -813,19 +829,19 @@ class MSTD5(BaseFactor):
 class MSTD10(BaseFactor):
     """
     移动标准差 - MSTD10
-    
+
     类别: statistic
     参数: {'timeperiod': 10}
     """
-    
+
     factor_id = "MSTD10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 10}
+        default_params = {"timeperiod": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -841,19 +857,19 @@ class MSTD10(BaseFactor):
 class MSTD15(BaseFactor):
     """
     移动标准差 - MSTD15
-    
+
     类别: statistic
     参数: {'timeperiod': 15}
     """
-    
+
     factor_id = "MSTD15"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 15}
+        default_params = {"timeperiod": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -869,19 +885,19 @@ class MSTD15(BaseFactor):
 class FIXLB3(BaseFactor):
     """
     技术指标 - FIXLB3
-    
+
     类别: statistic
     参数: {'lookback': 3}
     """
-    
+
     factor_id = "FIXLB3"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 3}
+        default_params = {"lookback": 3}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -897,19 +913,19 @@ class FIXLB3(BaseFactor):
 class FIXLB5(BaseFactor):
     """
     技术指标 - FIXLB5
-    
+
     类别: statistic
     参数: {'lookback': 5}
     """
-    
+
     factor_id = "FIXLB5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 5}
+        default_params = {"lookback": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -925,19 +941,19 @@ class FIXLB5(BaseFactor):
 class FIXLB8(BaseFactor):
     """
     技术指标 - FIXLB8
-    
+
     类别: statistic
     参数: {'lookback': 8}
     """
-    
+
     factor_id = "FIXLB8"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 8}
+        default_params = {"lookback": 8}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -953,19 +969,19 @@ class FIXLB8(BaseFactor):
 class FIXLB10(BaseFactor):
     """
     技术指标 - FIXLB10
-    
+
     类别: statistic
     参数: {'lookback': 10}
     """
-    
+
     factor_id = "FIXLB10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 10}
+        default_params = {"lookback": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -981,19 +997,19 @@ class FIXLB10(BaseFactor):
 class FMEAN5(BaseFactor):
     """
     技术指标 - FMEAN5
-    
+
     类别: statistic
     参数: {'window': 5}
     """
-    
+
     factor_id = "FMEAN5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 5}
+        default_params = {"window": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1009,19 +1025,19 @@ class FMEAN5(BaseFactor):
 class FMIN5(BaseFactor):
     """
     技术指标 - FMIN5
-    
+
     类别: statistic
     参数: {'window': 5}
     """
-    
+
     factor_id = "FMIN5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 5}
+        default_params = {"window": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1037,19 +1053,19 @@ class FMIN5(BaseFactor):
 class FSTD5(BaseFactor):
     """
     技术指标 - FSTD5
-    
+
     类别: statistic
     参数: {'window': 5}
     """
-    
+
     factor_id = "FSTD5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 5}
+        default_params = {"window": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1065,19 +1081,19 @@ class FSTD5(BaseFactor):
 class FMEAN10(BaseFactor):
     """
     技术指标 - FMEAN10
-    
+
     类别: statistic
     参数: {'window': 10}
     """
-    
+
     factor_id = "FMEAN10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 10}
+        default_params = {"window": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1093,19 +1109,19 @@ class FMEAN10(BaseFactor):
 class FMIN10(BaseFactor):
     """
     技术指标 - FMIN10
-    
+
     类别: statistic
     参数: {'window': 10}
     """
-    
+
     factor_id = "FMIN10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 10}
+        default_params = {"window": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1121,19 +1137,19 @@ class FMIN10(BaseFactor):
 class FSTD10(BaseFactor):
     """
     技术指标 - FSTD10
-    
+
     类别: statistic
     参数: {'window': 10}
     """
-    
+
     factor_id = "FSTD10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 10}
+        default_params = {"window": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1149,19 +1165,19 @@ class FSTD10(BaseFactor):
 class FMEAN15(BaseFactor):
     """
     技术指标 - FMEAN15
-    
+
     类别: statistic
     参数: {'window': 15}
     """
-    
+
     factor_id = "FMEAN15"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 15}
+        default_params = {"window": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1177,19 +1193,19 @@ class FMEAN15(BaseFactor):
 class FMIN15(BaseFactor):
     """
     技术指标 - FMIN15
-    
+
     类别: statistic
     参数: {'window': 15}
     """
-    
+
     factor_id = "FMIN15"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 15}
+        default_params = {"window": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1205,19 +1221,19 @@ class FMIN15(BaseFactor):
 class FSTD15(BaseFactor):
     """
     技术指标 - FSTD15
-    
+
     类别: statistic
     参数: {'window': 15}
     """
-    
+
     factor_id = "FSTD15"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 15}
+        default_params = {"window": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1233,19 +1249,19 @@ class FSTD15(BaseFactor):
 class FMEAN20(BaseFactor):
     """
     技术指标 - FMEAN20
-    
+
     类别: statistic
     参数: {'window': 20}
     """
-    
+
     factor_id = "FMEAN20"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 20}
+        default_params = {"window": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1261,19 +1277,19 @@ class FMEAN20(BaseFactor):
 class FMIN20(BaseFactor):
     """
     技术指标 - FMIN20
-    
+
     类别: statistic
     参数: {'window': 20}
     """
-    
+
     factor_id = "FMIN20"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 20}
+        default_params = {"window": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1289,19 +1305,19 @@ class FMIN20(BaseFactor):
 class FSTD20(BaseFactor):
     """
     技术指标 - FSTD20
-    
+
     类别: statistic
     参数: {'window': 20}
     """
-    
+
     factor_id = "FSTD20"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'window': 20}
+        default_params = {"window": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1317,19 +1333,19 @@ class FSTD20(BaseFactor):
 class LEXLB3(BaseFactor):
     """
     技术指标 - LEXLB3
-    
+
     类别: statistic
     参数: {'lookback': 3}
     """
-    
+
     factor_id = "LEXLB3"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 3}
+        default_params = {"lookback": 3}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1345,19 +1361,19 @@ class LEXLB3(BaseFactor):
 class LEXLB5(BaseFactor):
     """
     技术指标 - LEXLB5
-    
+
     类别: statistic
     参数: {'lookback': 5}
     """
-    
+
     factor_id = "LEXLB5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 5}
+        default_params = {"lookback": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1373,19 +1389,19 @@ class LEXLB5(BaseFactor):
 class LEXLB8(BaseFactor):
     """
     技术指标 - LEXLB8
-    
+
     类别: statistic
     参数: {'lookback': 8}
     """
-    
+
     factor_id = "LEXLB8"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 8}
+        default_params = {"lookback": 8}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1401,19 +1417,19 @@ class LEXLB8(BaseFactor):
 class LEXLB10(BaseFactor):
     """
     技术指标 - LEXLB10
-    
+
     类别: statistic
     参数: {'lookback': 10}
     """
-    
+
     factor_id = "LEXLB10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 10}
+        default_params = {"lookback": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1429,19 +1445,19 @@ class LEXLB10(BaseFactor):
 class MEANLB3(BaseFactor):
     """
     技术指标 - MEANLB3
-    
+
     类别: statistic
     参数: {'lookback': 3}
     """
-    
+
     factor_id = "MEANLB3"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 3}
+        default_params = {"lookback": 3}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1457,19 +1473,19 @@ class MEANLB3(BaseFactor):
 class MEANLB5(BaseFactor):
     """
     技术指标 - MEANLB5
-    
+
     类别: statistic
     参数: {'lookback': 5}
     """
-    
+
     factor_id = "MEANLB5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 5}
+        default_params = {"lookback": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1485,19 +1501,19 @@ class MEANLB5(BaseFactor):
 class MEANLB8(BaseFactor):
     """
     技术指标 - MEANLB8
-    
+
     类别: statistic
     参数: {'lookback': 8}
     """
-    
+
     factor_id = "MEANLB8"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 8}
+        default_params = {"lookback": 8}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1513,19 +1529,19 @@ class MEANLB8(BaseFactor):
 class MEANLB10(BaseFactor):
     """
     技术指标 - MEANLB10
-    
+
     类别: statistic
     参数: {'lookback': 10}
     """
-    
+
     factor_id = "MEANLB10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'lookback': 10}
+        default_params = {"lookback": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1541,19 +1557,19 @@ class MEANLB10(BaseFactor):
 class TRENDLB3(BaseFactor):
     """
     趋势强度 - TRENDLB3
-    
+
     类别: statistic
     参数: {'period': 3}
     """
-    
+
     factor_id = "TRENDLB3"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 3}
+        default_params = {"period": 3}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1571,19 +1587,19 @@ class TRENDLB3(BaseFactor):
 class TRENDLB5(BaseFactor):
     """
     趋势强度 - TRENDLB5
-    
+
     类别: statistic
     参数: {'period': 5}
     """
-    
+
     factor_id = "TRENDLB5"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 5}
+        default_params = {"period": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1601,19 +1617,19 @@ class TRENDLB5(BaseFactor):
 class TRENDLB8(BaseFactor):
     """
     趋势强度 - TRENDLB8
-    
+
     类别: statistic
     参数: {'period': 8}
     """
-    
+
     factor_id = "TRENDLB8"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 8}
+        default_params = {"period": 8}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1631,19 +1647,19 @@ class TRENDLB8(BaseFactor):
 class TRENDLB10(BaseFactor):
     """
     趋势强度 - TRENDLB10
-    
+
     类别: statistic
     参数: {'period': 10}
     """
-    
+
     factor_id = "TRENDLB10"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'period': 10}
+        default_params = {"period": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1661,19 +1677,19 @@ class TRENDLB10(BaseFactor):
 class RAND(BaseFactor):
     """
     技术指标 - RAND
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "RAND"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1689,19 +1705,19 @@ class RAND(BaseFactor):
 class RANDX(BaseFactor):
     """
     技术指标 - RANDX
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "RANDX"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1717,19 +1733,19 @@ class RANDX(BaseFactor):
 class RANDNX(BaseFactor):
     """
     技术指标 - RANDNX
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "RANDNX"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1745,19 +1761,19 @@ class RANDNX(BaseFactor):
 class RPROB(BaseFactor):
     """
     技术指标 - RPROB
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "RPROB"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1773,19 +1789,19 @@ class RPROB(BaseFactor):
 class RPROBX(BaseFactor):
     """
     技术指标 - RPROBX
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "RPROBX"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1801,19 +1817,19 @@ class RPROBX(BaseFactor):
 class RPROBCX(BaseFactor):
     """
     技术指标 - RPROBCX
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "RPROBCX"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1829,19 +1845,19 @@ class RPROBCX(BaseFactor):
 class RPROBNX(BaseFactor):
     """
     技术指标 - RPROBNX
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "RPROBNX"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1857,19 +1873,19 @@ class RPROBNX(BaseFactor):
 class STX(BaseFactor):
     """
     技术指标 - STX
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "STX"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1885,19 +1901,19 @@ class STX(BaseFactor):
 class STCX(BaseFactor):
     """
     技术指标 - STCX
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "STCX"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1913,19 +1929,19 @@ class STCX(BaseFactor):
 class TA_STOCH_K(BaseFactor):
     """
     随机指标 - TA_STOCH_K
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_STOCH_K"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1941,19 +1957,19 @@ class TA_STOCH_K(BaseFactor):
 class TA_STOCH_D(BaseFactor):
     """
     随机指标 - TA_STOCH_D
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_STOCH_D"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1969,19 +1985,19 @@ class TA_STOCH_D(BaseFactor):
 class TA_STOCHF_K(BaseFactor):
     """
     随机指标 - TA_STOCHF_K
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_STOCHF_K"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -1997,19 +2013,19 @@ class TA_STOCHF_K(BaseFactor):
 class TA_STOCHF_D(BaseFactor):
     """
     随机指标 - TA_STOCHF_D
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_STOCHF_D"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -2025,25 +2041,29 @@ class TA_STOCHF_D(BaseFactor):
 class TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K(BaseFactor):
     """
     相对强弱指数 - TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K
-    
+
     类别: statistic
     参数: {'fastk_period': 3, 'slowk_period': 5, 'slowd_period': 5}
     """
-    
+
     factor_id = "TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'fastk_period': 3, 'slowk_period': 5, 'slowd_period': 5}
+        default_params = {"fastk_period": 3, "slowk_period": 5, "slowd_period": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             # 默认实现 - 需要完善
-            logger.warning(f"因子TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K使用默认实现")
-            return data["close"].rename("TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K")
+            logger.warning(
+                f"因子TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K使用默认实现"
+            )
+            return data["close"].rename(
+                "TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K"
+            )
 
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
@@ -2053,25 +2073,29 @@ class TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_K(BaseFactor):
 class TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D(BaseFactor):
     """
     相对强弱指数 - TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D
-    
+
     类别: statistic
     参数: {'fastk_period': 3, 'slowk_period': 5, 'slowd_period': 5}
     """
-    
+
     factor_id = "TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'fastk_period': 3, 'slowk_period': 5, 'slowd_period': 5}
+        default_params = {"fastk_period": 3, "slowk_period": 5, "slowd_period": 5}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             # 默认实现 - 需要完善
-            logger.warning(f"因子TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D使用默认实现")
-            return data["close"].rename("TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D")
+            logger.warning(
+                f"因子TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D使用默认实现"
+            )
+            return data["close"].rename(
+                "TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D"
+            )
 
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
@@ -2081,26 +2105,30 @@ class TA_STOCHRSI_fastd_period3_fastk_period5_timeperiod14_D(BaseFactor):
 class TA_CDL3LINESTRIKE(BaseFactor):
     """
     技术指标 - TA_CDL3LINESTRIKE
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDL3LINESTRIKE"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDL3LINESTRIKE"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDL3LINESTRIKE",
             ).rename("TA_CDL3LINESTRIKE")
 
         except Exception as e:
@@ -2111,26 +2139,27 @@ class TA_CDL3LINESTRIKE(BaseFactor):
 class TA_CDL3STARSINSOUTH(BaseFactor):
     """
     相对强弱指数 - TA_CDL3STARSINSOUTH
-    
+
     类别: statistic
     参数: {'timeperiod': 3}
     """
-    
+
     factor_id = "TA_CDL3STARSINSOUTH"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 3}
+        default_params = {"timeperiod": 3}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
-            return SHARED_CALCULATORS.calculate_rsi(
-                data["close"], period=3
-            ).rename("TA_CDL3STARSINSOUTH")
+
+            return SHARED_CALCULATORS.calculate_rsi(data["close"], period=3).rename(
+                "TA_CDL3STARSINSOUTH"
+            )
 
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
@@ -2140,26 +2169,30 @@ class TA_CDL3STARSINSOUTH(BaseFactor):
 class TA_CDLDOJISTAR(BaseFactor):
     """
     技术指标 - TA_CDLDOJISTAR
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLDOJISTAR"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLDOJISTAR"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLDOJISTAR",
             ).rename("TA_CDLDOJISTAR")
 
         except Exception as e:
@@ -2170,26 +2203,30 @@ class TA_CDLDOJISTAR(BaseFactor):
 class TA_CDLEVENINGDOJISTAR(BaseFactor):
     """
     技术指标 - TA_CDLEVENINGDOJISTAR
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLEVENINGDOJISTAR"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLEVENINGDOJISTAR"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLEVENINGDOJISTAR",
             ).rename("TA_CDLEVENINGDOJISTAR")
 
         except Exception as e:
@@ -2200,26 +2237,30 @@ class TA_CDLEVENINGDOJISTAR(BaseFactor):
 class TA_CDLEVENINGSTAR(BaseFactor):
     """
     技术指标 - TA_CDLEVENINGSTAR
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLEVENINGSTAR"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLEVENINGSTAR"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLEVENINGSTAR",
             ).rename("TA_CDLEVENINGSTAR")
 
         except Exception as e:
@@ -2230,26 +2271,30 @@ class TA_CDLEVENINGSTAR(BaseFactor):
 class TA_CDLGRAVESTONEDOJI(BaseFactor):
     """
     技术指标 - TA_CDLGRAVESTONEDOJI
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLGRAVESTONEDOJI"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLGRAVESTONEDOJI"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLGRAVESTONEDOJI",
             ).rename("TA_CDLGRAVESTONEDOJI")
 
         except Exception as e:
@@ -2260,26 +2305,30 @@ class TA_CDLGRAVESTONEDOJI(BaseFactor):
 class TA_CDLMORNINGDOJISTAR(BaseFactor):
     """
     技术指标 - TA_CDLMORNINGDOJISTAR
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLMORNINGDOJISTAR"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLMORNINGDOJISTAR"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLMORNINGDOJISTAR",
             ).rename("TA_CDLMORNINGDOJISTAR")
 
         except Exception as e:
@@ -2290,26 +2339,30 @@ class TA_CDLMORNINGDOJISTAR(BaseFactor):
 class TA_CDLMORNINGSTAR(BaseFactor):
     """
     技术指标 - TA_CDLMORNINGSTAR
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLMORNINGSTAR"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLMORNINGSTAR"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLMORNINGSTAR",
             ).rename("TA_CDLMORNINGSTAR")
 
         except Exception as e:
@@ -2320,26 +2373,30 @@ class TA_CDLMORNINGSTAR(BaseFactor):
 class TA_CDLSHOOTINGSTAR(BaseFactor):
     """
     技术指标 - TA_CDLSHOOTINGSTAR
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLSHOOTINGSTAR"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLSHOOTINGSTAR"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLSHOOTINGSTAR",
             ).rename("TA_CDLSHOOTINGSTAR")
 
         except Exception as e:
@@ -2350,26 +2407,30 @@ class TA_CDLSHOOTINGSTAR(BaseFactor):
 class TA_CDLSTALLEDPATTERN(BaseFactor):
     """
     技术指标 - TA_CDLSTALLEDPATTERN
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLSTALLEDPATTERN"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLSTALLEDPATTERN"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLSTALLEDPATTERN",
             ).rename("TA_CDLSTALLEDPATTERN")
 
         except Exception as e:
@@ -2380,26 +2441,30 @@ class TA_CDLSTALLEDPATTERN(BaseFactor):
 class TA_CDLSTICKSANDWICH(BaseFactor):
     """
     技术指标 - TA_CDLSTICKSANDWICH
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLSTICKSANDWICH"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLSTICKSANDWICH"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLSTICKSANDWICH",
             ).rename("TA_CDLSTICKSANDWICH")
 
         except Exception as e:
@@ -2410,26 +2475,30 @@ class TA_CDLSTICKSANDWICH(BaseFactor):
 class TA_CDLTHRUSTING(BaseFactor):
     """
     技术指标 - TA_CDLTHRUSTING
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLTHRUSTING"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLTHRUSTING"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLTHRUSTING",
             ).rename("TA_CDLTHRUSTING")
 
         except Exception as e:
@@ -2440,30 +2509,32 @@ class TA_CDLTHRUSTING(BaseFactor):
 class TA_CDLTRISTAR(BaseFactor):
     """
     技术指标 - TA_CDLTRISTAR
-    
+
     类别: statistic
     参数: {}
     """
-    
+
     factor_id = "TA_CDLTRISTAR"
     category = "statistic"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
             return SHARED_CALCULATORS.calculate_candlestick_pattern(
-                data["open"], data["high"], data["low"], data["close"],
-                pattern_name="CDLTRISTAR"
+                data["open"],
+                data["high"],
+                data["low"],
+                data["close"],
+                pattern_name="CDLTRISTAR",
             ).rename("TA_CDLTRISTAR")
 
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
             return pd.Series(np.nan, index=data.index, name=self.factor_id)
-
-

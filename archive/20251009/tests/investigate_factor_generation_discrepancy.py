@@ -9,38 +9,43 @@
 4. VectorBT可用性与实际使用的差距
 """
 
-import yaml
 from pathlib import Path
+
+import yaml
+
 
 def analyze_factor_generation_config():
     """分析factor_generation的配置"""
     print("🔍 分析factor_generation配置...")
 
-    config_file = Path("/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/config.yaml")
+    config_file = Path(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/config.yaml"
+    )
 
     if not config_file.exists():
         print("❌ factor_generation配置文件不存在")
         return {}
 
-    with open(config_file, 'r', encoding='utf-8') as f:
+    with open(config_file, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     print(f"📊 factor_generation配置:")
-    indicators = config.get('indicators', {})
+    indicators = config.get("indicators", {})
     print(f"  - 启用的指标类型:")
     for key, value in indicators.items():
-        if key.startswith('enable_') and value:
-            indicator_name = key.replace('enable_', '')
+        if key.startswith("enable_") and value:
+            indicator_name = key.replace("enable_", "")
             print(f"    ✅ {indicator_name}: 已启用")
-        elif key.startswith('enable_') and not value:
-            indicator_name = key.replace('enable_', '')
+        elif key.startswith("enable_") and not value:
+            indicator_name = key.replace("enable_", "")
             print(f"    ❌ {indicator_name}: 未启用")
 
-    timeframes = config.get('timeframes', {})
-    enabled_timeframes = timeframes.get('enabled', [])
+    timeframes = config.get("timeframes", {})
+    enabled_timeframes = timeframes.get("enabled", [])
     print(f"  - 启用的时间框架: {enabled_timeframes}")
 
     return config
+
 
 def analyze_vectorbt_availability():
     """分析VectorBT指标的实际可用性"""
@@ -54,10 +59,34 @@ def analyze_vectorbt_availability():
 
     # VectorBT核心指标列表（从代码中提取）
     vbt_core_indicators = [
-        "MA", "MACD", "RSI", "BBANDS", "STOCH", "ATR", "OBV", "MSTD",
-        "BOLB", "FIXLB", "FMAX", "FMEAN", "FMIN", "FSTD", "LEXLB",
-        "MEANLB", "OHLCSTCX", "OHLCSTX", "RAND", "RANDNX", "RANDX",
-        "RPROB", "RPROBCX", "RPROBNX", "RPROBX", "STCX", "STX", "TRENDLB"
+        "MA",
+        "MACD",
+        "RSI",
+        "BBANDS",
+        "STOCH",
+        "ATR",
+        "OBV",
+        "MSTD",
+        "BOLB",
+        "FIXLB",
+        "FMAX",
+        "FMEAN",
+        "FMIN",
+        "FSTD",
+        "LEXLB",
+        "MEANLB",
+        "OHLCSTCX",
+        "OHLCSTX",
+        "RAND",
+        "RANDNX",
+        "RANDX",
+        "RPROB",
+        "RPROBCX",
+        "RPROBNX",
+        "RPROBX",
+        "STCX",
+        "STX",
+        "TRENDLB",
     ]
 
     available_indicators = []
@@ -79,18 +108,39 @@ def analyze_vectorbt_availability():
 
     return available_indicators
 
+
 def analyze_talib_availability():
     """分析TA-Lib指标可用性"""
     print("\n🔍 分析TA-Lib指标可用性...")
 
     try:
         import vectorbt as vbt
+
         if hasattr(vbt, "talib"):
             # TA-Lib指标列表
             talib_indicators = [
-                "SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "MAMA", "T3",
-                "RSI", "STOCH", "STOCHF", "STOCHRSI", "MACD", "MACDEXT", "BBANDS",
-                "MIDPOINT", "SAR", "SAREXT", "ADX", "ADXR", "APO"
+                "SMA",
+                "EMA",
+                "WMA",
+                "DEMA",
+                "TEMA",
+                "TRIMA",
+                "KAMA",
+                "MAMA",
+                "T3",
+                "RSI",
+                "STOCH",
+                "STOCHF",
+                "STOCHRSI",
+                "MACD",
+                "MACDEXT",
+                "BBANDS",
+                "MIDPOINT",
+                "SAR",
+                "SAREXT",
+                "ADX",
+                "ADXR",
+                "APO",
             ]
 
             available_talib = []
@@ -116,6 +166,7 @@ def analyze_talib_availability():
         print("❌ VectorBT不可用")
         return []
 
+
 def estimate_actual_factor_count():
     """估算factor_generation实际能生成的因子数量"""
     print("\n🔍 估算factor_generation实际因子数量...")
@@ -125,62 +176,65 @@ def estimate_actual_factor_count():
     talib_indicators = analyze_talib_availability()
 
     # 根据配置估算
-    enabled_configs = config.get('indicators', {})
+    enabled_configs = config.get("indicators", {})
 
     estimated_factors = []
 
     # 1. 移动平均类
-    if enabled_configs.get('enable_ma', False):
+    if enabled_configs.get("enable_ma", False):
         # 假设支持多个窗口期
         ma_windows = [5, 10, 20, 30, 60]  # 常用窗口期
         for window in ma_windows:
             estimated_factors.append(f"MA{window}")
         estimated_factors.append(f"SMA{window}")
 
-    if enabled_configs.get('enable_ema', False):
+    if enabled_configs.get("enable_ema", False):
         ema_spans = [5, 12, 26]  # 常用EMA跨度
         for span in ema_spans:
             estimated_factors.append(f"EMA{span}")
 
     # 2. MACD类
-    if enabled_configs.get('enable_macd', False):
+    if enabled_configs.get("enable_macd", False):
         estimated_factors.extend(["MACD", "MACD_Signal", "MACD_Hist"])
 
     # 3. RSI类
-    if enabled_configs.get('enable_rsi', False):
+    if enabled_configs.get("enable_rsi", False):
         estimated_factors.append("RSI")
 
     # 4. 布林带类
-    if enabled_configs.get('enable_bbands', False):
+    if enabled_configs.get("enable_bbands", False):
         estimated_factors.extend(["BBANDS_upper", "BBANDS_middle", "BBANDS_lower"])
 
     # 5. 随机指标类
-    if enabled_configs.get('enable_stoch', False):
+    if enabled_configs.get("enable_stoch", False):
         estimated_factors.extend(["STOCH_K", "STOCH_D"])
 
     # 6. ATR类
-    if enabled_configs.get('enable_atr', False):
+    if enabled_configs.get("enable_atr", False):
         estimated_factors.append("ATR")
 
     # 7. OBV类
-    if enabled_configs.get('enable_obv', False):
+    if enabled_configs.get("enable_obv", False):
         estimated_factors.append("OBV")
-        if enabled_configs.get('enable_all_periods', False):
+        if enabled_configs.get("enable_all_periods", False):
             # OBV的移动平均
             obv_ma_windows = [5, 10, 20]
             for window in obv_ma_windows:
                 estimated_factors.append(f"OBV_SMA{window}")
 
     # 8. MSTD类
-    if enabled_configs.get('enable_mstd', False):
+    if enabled_configs.get("enable_mstd", False):
         estimated_factors.append("MSTD")
 
     # 9. BOLB类（VectorBT特有）
-    if enabled_configs.get('enable_manual_indicators', False) and "BOLB" in vbt_indicators:
+    if (
+        enabled_configs.get("enable_manual_indicators", False)
+        and "BOLB" in vbt_indicators
+    ):
         estimated_factors.append("BOLB_20")
 
     # 10. 波动率类
-    if enabled_configs.get('enable_manual_indicators', False):
+    if enabled_configs.get("enable_manual_indicators", False):
         estimated_factors.append("VOLATILITY_20")
 
     # 去重
@@ -192,20 +246,23 @@ def estimate_actual_factor_count():
 
     return unique_factors
 
+
 def analyze_154_indicators_discrepancy():
     """分析154指标声明与实际实现的差距"""
     print("\n🔍 分析154指标声明与实现的差距...")
 
-    calc_file = Path("/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py")
+    calc_file = Path(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py"
+    )
 
-    with open(calc_file, 'r', encoding='utf-8') as f:
+    with open(calc_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     # 查找TODO注释，了解哪些指标未实现
     todo_patterns = [
-        r'# TODO:.*?暂未启用',
-        r'# TODO:.*?暂未实现',
-        r'# TODO:.*?暂未完成'
+        r"# TODO:.*?暂未启用",
+        r"# TODO:.*?暂未实现",
+        r"# TODO:.*?暂未完成",
     ]
 
     todos = []
@@ -224,14 +281,15 @@ def analyze_154_indicators_discrepancy():
         print(f"    ... 还有{len(todos)-5}个TODO注释")
 
     # 查找实际的实现
-    implemented_count = content.count('factor_data[') + content.count('factor_data["')
+    implemented_count = content.count("factor_data[") + content.count('factor_data["')
     print(f"  - 实际factor_data赋值: {implemented_count}处")
 
     return {
-        'declared_count': 154,
-        'todo_count': len(todos),
-        'implemented_assignments': implemented_count
+        "declared_count": 154,
+        "todo_count": len(todos),
+        "implemented_assignments": implemented_count,
     }
+
 
 def main():
     """主函数"""
@@ -270,9 +328,13 @@ def main():
     print(f"  - 一致性比率: {fg_count/fe_count*100:.1f}%")
 
     if fg_count < fe_count * 0.5:
-        print(f"\n🚨 重大发现: factor_generation实际实现的因子数量不到FactorEngine的50%!")
+        print(
+            f"\n🚨 重大发现: factor_generation实际实现的因子数量不到FactorEngine的50%!"
+        )
         print(f"  这可能是配置、可用性或实现完成度的问题")
+
 
 if __name__ == "__main__":
     import re
+
     main()

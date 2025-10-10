@@ -2,15 +2,17 @@
 """
 测试成交量比率修复效果
 """
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
+
 
 def test_volume_ratios():
     """测试成交量比率"""
 
     # 创建测试数据
-    dates = pd.date_range(start='2025-01-01', end='2025-01-20', freq='D')
+    dates = pd.date_range(start="2025-01-01", end="2025-01-20", freq="D")
     n = len(dates)
 
     # 创建OHLCV数据
@@ -28,21 +30,23 @@ def test_volume_ratios():
     close_prices = base_price + np.cumsum(price_changes)
     close_prices = np.maximum(close_prices, 10)
 
-    data = pd.DataFrame({
-        'timestamp': dates,
-        'open': close_prices + np.random.normal(0, 0.5, n),
-        'high': close_prices + np.abs(np.random.normal(1, 0.5, n)),
-        'low': close_prices - np.abs(np.random.normal(1, 0.5, n)),
-        'close': close_prices,
-        'volume': volumes.astype(int)
-    })
+    data = pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": close_prices + np.random.normal(0, 0.5, n),
+            "high": close_prices + np.abs(np.random.normal(1, 0.5, n)),
+            "low": close_prices - np.abs(np.random.normal(1, 0.5, n)),
+            "close": close_prices,
+            "volume": volumes.astype(int),
+        }
+    )
 
     # 确保OHLC关系正确
-    data['high'] = np.maximum.reduce([data['open'], data['high'], data['close']])
-    data['low'] = np.minimum.reduce([data['open'], data['low'], data['close']])
+    data["high"] = np.maximum.reduce([data["open"], data["high"], data["close"]])
+    data["low"] = np.minimum.reduce([data["open"], data["low"], data["close"]])
 
     # 设置时间戳为索引
-    data = data.set_index('timestamp')
+    data = data.set_index("timestamp")
 
     print("测试数据创建完成，包含OHLCV数据")
     print(f"成交量范围: {data['volume'].min():,.0f} - {data['volume'].max():,.0f}")
@@ -50,16 +54,20 @@ def test_volume_ratios():
     # 测试FactorEngine的成交量比率
     try:
         from factor_system.factor_engine.factors.volume_generated import (
-            Volume_Ratio10, Volume_Ratio15, Volume_Ratio20, Volume_Ratio25, Volume_Ratio30
+            Volume_Ratio10,
+            Volume_Ratio15,
+            Volume_Ratio20,
+            Volume_Ratio25,
+            Volume_Ratio30,
         )
 
         # 测试不同周期的成交量比率
         ratios_to_test = [
-            ('Volume_Ratio10', Volume_Ratio10, 10),
-            ('Volume_Ratio15', Volume_Ratio15, 15),
-            ('Volume_Ratio20', Volume_Ratio20, 20),
-            ('Volume_Ratio25', Volume_Ratio25, 25),
-            ('Volume_Ratio30', Volume_Ratio30, 30),
+            ("Volume_Ratio10", Volume_Ratio10, 10),
+            ("Volume_Ratio15", Volume_Ratio15, 15),
+            ("Volume_Ratio20", Volume_Ratio20, 20),
+            ("Volume_Ratio25", Volume_Ratio25, 25),
+            ("Volume_Ratio30", Volume_Ratio30, 30),
         ]
 
         print("\n开始测试成交量比率...")
@@ -81,8 +89,10 @@ def test_volume_ratios():
 
                 # 验证周期是否正确
                 # 计算理论上的移动平均值，验证周期
-                volume_sma_manual = data['volume'].rolling(window=expected_period).mean()
-                expected_result = data['volume'] / (volume_sma_manual + 1e-8)
+                volume_sma_manual = (
+                    data["volume"].rolling(window=expected_period).mean()
+                )
+                expected_result = data["volume"] / (volume_sma_manual + 1e-8)
 
                 # 比较结果
                 diff = abs(result - expected_result).max()
@@ -102,6 +112,7 @@ def test_volume_ratios():
 
     print("\n✅ 成交量比率测试完成！")
     return True
+
 
 if __name__ == "__main__":
     test_volume_ratios()

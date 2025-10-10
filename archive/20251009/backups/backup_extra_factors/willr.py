@@ -7,6 +7,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
 
+
 class WILLR(BaseFactor):
     """
     WILLR - Williams %R
@@ -42,9 +43,9 @@ class WILLR(BaseFactor):
         Returns:
             WILLR values
         """
-        high = data['high']
-        low = data['low']
-        close = data['close']
+        high = data["high"]
+        low = data["low"]
+        close = data["close"]
 
         # 使用VectorBT适配器计算WILLR，确保与factor_generation完全一致
         adapter = get_vectorbt_adapter()

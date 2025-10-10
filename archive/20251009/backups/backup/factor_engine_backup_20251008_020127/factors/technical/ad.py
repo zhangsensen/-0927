@@ -23,7 +23,7 @@ class AD(BaseFactor):
     def __init__(self, period: int = 14):
         super().__init__(period=period)
         self.period = period
-        
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """
         计算AD - 使用VectorBT确保与factor_generation一致
@@ -43,5 +43,3 @@ class AD(BaseFactor):
         # 使用VectorBT适配器计算，确保与factor_generation完全一致
         adapter = get_vectorbt_adapter()
         return adapter.calculate_ad(high, low, close, volume)
-
-    

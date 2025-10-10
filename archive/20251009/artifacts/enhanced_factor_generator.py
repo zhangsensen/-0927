@@ -3,29 +3,31 @@
 增强版因子生成器 - 从1min数据重采样到10个时间框架并生成带时间戳的因子文件
 """
 
-import os
-import sys
-import polars as pl
-import pandas as pd
-from datetime import datetime, timedelta
 import glob
 import logging
+import os
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
-import yaml
-import talib
 from typing import Dict, List, Optional
+
 import numpy as np
+import pandas as pd
+import polars as pl
+import talib
+import yaml
 
 # 设置日志
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler('enhanced_factor_generation.log'),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler("enhanced_factor_generation.log"),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
+
 
 class EnhancedFactorGenerator:
     """增强版因子生成器 - 支持1min数据重采样到10个时间框架"""
@@ -33,11 +35,26 @@ class EnhancedFactorGenerator:
     def __init__(self, config_path: str):
         self.config = self.load_config(config_path)
         self.batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.data_dir = self.config.get('data', {}).get('root_dir', '/Users/zhangshenshen/深度量化0927/raw')
-        self.output_dir = self.config.get('output', {}).get('directory', '/Users/zhangshenshen/深度量化0927/factor_system/factor_output')
+        self.data_dir = self.config.get("data", {}).get(
+            "root_dir", "/Users/zhangshenshen/深度量化0927/raw"
+        )
+        self.output_dir = self.config.get("output", {}).get(
+            "directory", "/Users/zhangshenshen/深度量化0927/factor_system/factor_output"
+        )
 
         # 定义10个时间框架
-        self.timeframes = ["1min", "2min", "3min", "5min", "15min", "30min", "60min", "2h", "4h", "daily"]
+        self.timeframes = [
+            "1min",
+            "2min",
+            "3min",
+            "5min",
+            "15min",
+            "30min",
+            "60min",
+            "2h",
+            "4h",
+            "daily",
+        ]
 
         # 时间框架映射
         self.timeframe_mapping = {
@@ -50,7 +67,7 @@ class EnhancedFactorGenerator:
             "60min": "1H",
             "2h": "2H",
             "4h": "4H",
-            "daily": "1D"
+            "daily": "1D",
         }
 
         logger.info(f"Enhanced Factor Generator 初始化完成")
@@ -62,7 +79,7 @@ class EnhancedFactorGenerator:
     def load_config(self, config_path: str) -> dict:
         """加载配置文件"""
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             return config
         except Exception as e:
@@ -78,7 +95,7 @@ class EnhancedFactorGenerator:
         for file in files:
             filename = os.path.basename(file)
             # 提取symbol: 0005HK_1min_2025-03-06_2025-09-02.parquet -> 0005HK
-            parts = filename.split('_')
+            parts = filename.split("_")
             if len(parts) >= 2:
                 symbol = parts[0]
                 symbols.append(symbol)
@@ -101,29 +118,31 @@ class EnhancedFactorGenerator:
         df = pd.read_parquet(file)
 
         # 确保数据格式正确
-        if 'datetime' not in df.columns:
-            if 'timestamp' in df.columns:
-                df['datetime'] = pd.to_datetime(df['timestamp'])
+        if "datetime" not in df.columns:
+            if "timestamp" in df.columns:
+                df["datetime"] = pd.to_datetime(df["timestamp"])
             else:
                 df.index = pd.to_datetime(df.index)
                 df = df.reset_index()
-                df['datetime'] = pd.to_datetime(df['datetime'])
+                df["datetime"] = pd.to_datetime(df["datetime"])
 
         # 确保数据格式正确并转换为float64
-        required_columns = ['open', 'high', 'low', 'close', 'volume']
+        required_columns = ["open", "high", "low", "close", "volume"]
         for col in required_columns:
             if col not in df.columns:
                 raise ValueError(f"缺少必要列: {col}")
             # 转换为float64类型以满足TALIB要求
-            if col == 'volume':
-                df[col] = pd.to_numeric(df[col], errors='coerce').astype('float64')
+            if col == "volume":
+                df[col] = pd.to_numeric(df[col], errors="coerce").astype("float64")
             else:
-                df[col] = pd.to_numeric(df[col], errors='coerce').astype('float64')
+                df[col] = pd.to_numeric(df[col], errors="coerce").astype("float64")
 
         # 按时间排序
-        df = df.sort_values('datetime').reset_index(drop=True)
+        df = df.sort_values("datetime").reset_index(drop=True)
 
-        logger.info(f"加载 {symbol} 1min数据: {len(df)} 行, 时间范围: {df['datetime'].min()} - {df['datetime'].max()}")
+        logger.info(
+            f"加载 {symbol} 1min数据: {len(df)} 行, 时间范围: {df['datetime'].min()} - {df['datetime'].max()}"
+        )
         return df
 
     def resample_data(self, df_1min: pd.DataFrame, timeframe: str) -> pd.DataFrame:
@@ -134,16 +153,22 @@ class EnhancedFactorGenerator:
         rule = self.timeframe_mapping[timeframe]
 
         # 设置datetime为索引
-        df = df_1min.set_index('datetime').copy()
+        df = df_1min.set_index("datetime").copy()
 
         # OHLCV重采样
-        resampled = df.resample(rule).agg({
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last',
-            'volume': 'sum'
-        }).dropna()
+        resampled = (
+            df.resample(rule)
+            .agg(
+                {
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "sum",
+                }
+            )
+            .dropna()
+        )
 
         # 重置索引
         resampled = resampled.reset_index()
@@ -156,63 +181,75 @@ class EnhancedFactorGenerator:
         df = df.copy()
 
         # 基础价格列
-        open_price = df['open'].values
-        high_price = df['high'].values
-        low_price = df['low'].values
-        close_price = df['close'].values
-        volume = df['volume'].values
+        open_price = df["open"].values
+        high_price = df["high"].values
+        low_price = df["low"].values
+        close_price = df["close"].values
+        volume = df["volume"].values
 
         try:
             # 移动平均线
-            df['MA5'] = talib.SMA(close_price, timeperiod=5)
-            df['MA10'] = talib.SMA(close_price, timeperiod=10)
-            df['MA20'] = talib.SMA(close_price, timeperiod=20)
-            df['MA60'] = talib.SMA(close_price, timeperiod=60)
+            df["MA5"] = talib.SMA(close_price, timeperiod=5)
+            df["MA10"] = talib.SMA(close_price, timeperiod=10)
+            df["MA20"] = talib.SMA(close_price, timeperiod=20)
+            df["MA60"] = talib.SMA(close_price, timeperiod=60)
 
             # EMA
-            df['EMA5'] = talib.EMA(close_price, timeperiod=5)
-            df['EMA12'] = talib.EMA(close_price, timeperiod=12)
-            df['EMA26'] = talib.EMA(close_price, timeperiod=26)
+            df["EMA5"] = talib.EMA(close_price, timeperiod=5)
+            df["EMA12"] = talib.EMA(close_price, timeperiod=12)
+            df["EMA26"] = talib.EMA(close_price, timeperiod=26)
 
             # MACD
-            df['MACD'], df['MACD_Signal'], df['MACD_Hist'] = talib.MACD(close_price, fastperiod=12, slowperiod=26, signalperiod=9)
+            df["MACD"], df["MACD_Signal"], df["MACD_Hist"] = talib.MACD(
+                close_price, fastperiod=12, slowperiod=26, signalperiod=9
+            )
 
             # RSI
-            df['RSI'] = talib.RSI(close_price, timeperiod=14)
+            df["RSI"] = talib.RSI(close_price, timeperiod=14)
 
             # Stochastic
-            df['STOCH_K'], df['STOCH_D'] = talib.STOCH(high_price, low_price, close_price,
-                                                     fastk_period=9, slowk_period=3, slowd_period=3)
+            df["STOCH_K"], df["STOCH_D"] = talib.STOCH(
+                high_price,
+                low_price,
+                close_price,
+                fastk_period=9,
+                slowk_period=3,
+                slowd_period=3,
+            )
 
             # Bollinger Bands
-            df['BB_Upper'], df['BB_Middle'], df['BB_Lower'] = talib.BBANDS(close_price, timeperiod=20, nbdevup=2, nbdevdn=2)
+            df["BB_Upper"], df["BB_Middle"], df["BB_Lower"] = talib.BBANDS(
+                close_price, timeperiod=20, nbdevup=2, nbdevdn=2
+            )
 
             # ATR
-            df['ATR'] = talib.ATR(high_price, low_price, close_price, timeperiod=14)
+            df["ATR"] = talib.ATR(high_price, low_price, close_price, timeperiod=14)
 
             # Williams %R
-            df['WILLR'] = talib.WILLR(high_price, low_price, close_price, timeperiod=14)
+            df["WILLR"] = talib.WILLR(high_price, low_price, close_price, timeperiod=14)
 
             # CCI
-            df['CCI'] = talib.CCI(high_price, low_price, close_price, timeperiod=14)
+            df["CCI"] = talib.CCI(high_price, low_price, close_price, timeperiod=14)
 
             # MFI
-            df['MFI'] = talib.MFI(high_price, low_price, close_price, volume, timeperiod=14)
+            df["MFI"] = talib.MFI(
+                high_price, low_price, close_price, volume, timeperiod=14
+            )
 
             # ADX
-            df['ADX'] = talib.ADX(high_price, low_price, close_price, timeperiod=14)
+            df["ADX"] = talib.ADX(high_price, low_price, close_price, timeperiod=14)
 
             # OBV
-            df['OBV'] = talib.OBV(close_price, volume)
+            df["OBV"] = talib.OBV(close_price, volume)
 
             # 价格变化率
-            df['ROC'] = talib.ROC(close_price, timeperiod=10)
+            df["ROC"] = talib.ROC(close_price, timeperiod=10)
 
             # 动量
-            df['MOM'] = talib.MOM(close_price, timeperiod=10)
+            df["MOM"] = talib.MOM(close_price, timeperiod=10)
 
             # 标准差
-            df['STDDEV'] = talib.STDDEV(close_price, timeperiod=20, nbdev=1)
+            df["STDDEV"] = talib.STDDEV(close_price, timeperiod=20, nbdev=1)
 
             logger.info(f"成功计算技术指标: {len(df.columns)} 个字段")
 
@@ -222,7 +259,9 @@ class EnhancedFactorGenerator:
 
         return df
 
-    def save_factors(self, df_factors: pd.DataFrame, symbol: str, timeframe: str, market: str = "HK"):
+    def save_factors(
+        self, df_factors: pd.DataFrame, symbol: str, timeframe: str, market: str = "HK"
+    ):
         """保存因子数据"""
         # 创建输出目录
         market_dir = os.path.join(self.output_dir, market)
@@ -234,7 +273,7 @@ class EnhancedFactorGenerator:
 
         # 转换为polars并保存
         df_pl = pl.from_pandas(df_factors)
-        df_pl.write_parquet(filepath, compression='snappy')
+        df_pl.write_parquet(filepath, compression="snappy")
 
         logger.info(f"保存因子文件: {filename} ({len(df_factors)} 行)")
         return filepath
@@ -256,7 +295,9 @@ class EnhancedFactorGenerator:
                     df_resampled = self.resample_data(df_1min, timeframe)
 
                     if len(df_resampled) < 50:  # 数据太少跳过
-                        logger.warning(f"{symbol} {timeframe} 数据不足: {len(df_resampled)} 行")
+                        logger.warning(
+                            f"{symbol} {timeframe} 数据不足: {len(df_resampled)} 行"
+                        )
                         continue
 
                     # 计算技术指标
@@ -270,7 +311,9 @@ class EnhancedFactorGenerator:
                     logger.error(f"处理 {symbol} {timeframe} 失败: {e}")
                     continue
 
-            logger.info(f"✅ {symbol} 完成: {success_count}/{len(self.timeframes)} 个时间框架")
+            logger.info(
+                f"✅ {symbol} 完成: {success_count}/{len(self.timeframes)} 个时间框架"
+            )
             return True
 
         except Exception as e:
@@ -309,13 +352,17 @@ class EnhancedFactorGenerator:
         logger.info(f"批次时间戳: {self.batch_timestamp}")
         logger.info("=" * 60)
 
+
 def main():
     """主函数"""
     import argparse
 
     parser = argparse.ArgumentParser(description="增强版因子生成器")
-    parser.add_argument("--config", default="factor_system/factor_generation/config.yaml",
-                       help="配置文件路径")
+    parser.add_argument(
+        "--config",
+        default="factor_system/factor_generation/config.yaml",
+        help="配置文件路径",
+    )
     parser.add_argument("--market", default="HK", help="市场代码")
 
     args = parser.parse_args()
@@ -325,6 +372,7 @@ def main():
 
     # 处理指定市场
     generator.process_all(args.market)
+
 
 if __name__ == "__main__":
     main()

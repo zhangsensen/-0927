@@ -7,6 +7,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
 
+
 class ATR(BaseFactor):
     """
     ATR - 技术指标
@@ -22,7 +23,7 @@ class ATR(BaseFactor):
     def __init__(self, period: int = 14):
         super().__init__(timeperiod=period)
         self.period = period
-        
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """
         计算ATR - 使用VectorBT确保与factor_generation一致
@@ -40,4 +41,4 @@ class ATR(BaseFactor):
 
         # 使用VectorBT适配器计算，确保与factor_generation完全一致
         adapter = get_vectorbt_adapter()
-        return adapter.calculate_atr(high , low , close, timeperiod=self.period)
+        return adapter.calculate_atr(high, low, close, timeperiod=self.period)

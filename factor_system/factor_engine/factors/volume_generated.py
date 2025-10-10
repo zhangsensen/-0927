@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+
 import numpy as np
 import pandas as pd
 
@@ -18,19 +19,19 @@ logger = logging.getLogger(__name__)
 class Volume_Ratio10(BaseFactor):
     """
     技术指标 - Volume_Ratio10
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "Volume_Ratio10"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -46,19 +47,19 @@ class Volume_Ratio10(BaseFactor):
 class Volume_Momentum10(BaseFactor):
     """
     动量指标 - Volume_Momentum10
-    
+
     类别: volume
     参数: {'timeperiod': 10}
     """
-    
+
     factor_id = "Volume_Momentum10"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 10}
+        default_params = {"timeperiod": 10}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -74,19 +75,19 @@ class Volume_Momentum10(BaseFactor):
 class Volume_Ratio15(BaseFactor):
     """
     技术指标 - Volume_Ratio15
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "Volume_Ratio15"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -102,19 +103,19 @@ class Volume_Ratio15(BaseFactor):
 class Volume_Momentum15(BaseFactor):
     """
     动量指标 - Volume_Momentum15
-    
+
     类别: volume
     参数: {'timeperiod': 15}
     """
-    
+
     factor_id = "Volume_Momentum15"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 15}
+        default_params = {"timeperiod": 15}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -130,19 +131,19 @@ class Volume_Momentum15(BaseFactor):
 class Volume_Ratio20(BaseFactor):
     """
     技术指标 - Volume_Ratio20
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "Volume_Ratio20"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -158,19 +159,19 @@ class Volume_Ratio20(BaseFactor):
 class Volume_Momentum20(BaseFactor):
     """
     动量指标 - Volume_Momentum20
-    
+
     类别: volume
     参数: {'timeperiod': 20}
     """
-    
+
     factor_id = "Volume_Momentum20"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 20}
+        default_params = {"timeperiod": 20}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -186,19 +187,19 @@ class Volume_Momentum20(BaseFactor):
 class Volume_Ratio25(BaseFactor):
     """
     技术指标 - Volume_Ratio25
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "Volume_Ratio25"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -214,19 +215,19 @@ class Volume_Ratio25(BaseFactor):
 class Volume_Momentum25(BaseFactor):
     """
     动量指标 - Volume_Momentum25
-    
+
     类别: volume
     参数: {'timeperiod': 25}
     """
-    
+
     factor_id = "Volume_Momentum25"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 25}
+        default_params = {"timeperiod": 25}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -242,19 +243,19 @@ class Volume_Momentum25(BaseFactor):
 class Volume_Ratio30(BaseFactor):
     """
     技术指标 - Volume_Ratio30
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "Volume_Ratio30"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -270,19 +271,19 @@ class Volume_Ratio30(BaseFactor):
 class Volume_Momentum30(BaseFactor):
     """
     动量指标 - Volume_Momentum30
-    
+
     类别: volume
     参数: {'timeperiod': 30}
     """
-    
+
     factor_id = "Volume_Momentum30"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
-        default_params = {'timeperiod': 30}
+        default_params = {"timeperiod": 30}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -298,25 +299,27 @@ class Volume_Momentum30(BaseFactor):
 class VWAP10(BaseFactor):
     """
     成交量加权平均价 - VWAP10
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "VWAP10"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             # VWAP - 成交量加权平均价
             typical_price = (data["high"] + data["low"] + data["close"]) / 3
-            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (data["volume"].rolling(window=20).sum() + 1e-8)
+            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (
+                data["volume"].rolling(window=20).sum() + 1e-8
+            )
             return vwap.rename("VWAP10")
 
         except Exception as e:
@@ -327,25 +330,27 @@ class VWAP10(BaseFactor):
 class VWAP15(BaseFactor):
     """
     成交量加权平均价 - VWAP15
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "VWAP15"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             # VWAP - 成交量加权平均价
             typical_price = (data["high"] + data["low"] + data["close"]) / 3
-            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (data["volume"].rolling(window=20).sum() + 1e-8)
+            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (
+                data["volume"].rolling(window=20).sum() + 1e-8
+            )
             return vwap.rename("VWAP15")
 
         except Exception as e:
@@ -356,25 +361,27 @@ class VWAP15(BaseFactor):
 class VWAP20(BaseFactor):
     """
     成交量加权平均价 - VWAP20
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "VWAP20"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             # VWAP - 成交量加权平均价
             typical_price = (data["high"] + data["low"] + data["close"]) / 3
-            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (data["volume"].rolling(window=20).sum() + 1e-8)
+            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (
+                data["volume"].rolling(window=20).sum() + 1e-8
+            )
             return vwap.rename("VWAP20")
 
         except Exception as e:
@@ -385,25 +392,27 @@ class VWAP20(BaseFactor):
 class VWAP25(BaseFactor):
     """
     成交量加权平均价 - VWAP25
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "VWAP25"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             # VWAP - 成交量加权平均价
             typical_price = (data["high"] + data["low"] + data["close"]) / 3
-            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (data["volume"].rolling(window=20).sum() + 1e-8)
+            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (
+                data["volume"].rolling(window=20).sum() + 1e-8
+            )
             return vwap.rename("VWAP25")
 
         except Exception as e:
@@ -414,25 +423,27 @@ class VWAP25(BaseFactor):
 class VWAP30(BaseFactor):
     """
     成交量加权平均价 - VWAP30
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "VWAP30"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
             # VWAP - 成交量加权平均价
             typical_price = (data["high"] + data["low"] + data["close"]) / 3
-            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (data["volume"].rolling(window=20).sum() + 1e-8)
+            vwap = (typical_price * data["volume"]).rolling(window=20).sum() / (
+                data["volume"].rolling(window=20).sum() + 1e-8
+            )
             return vwap.rename("VWAP30")
 
         except Exception as e:
@@ -443,19 +454,19 @@ class VWAP30(BaseFactor):
 class OBV(BaseFactor):
     """
     能量潮 - OBV
-    
+
     类别: volume
     参数: {}
     """
-    
+
     factor_id = "OBV"
     category = "volume"
-    
+
     def __init__(self, **kwargs):
         default_params = {}
         default_params.update(kwargs)
         super().__init__(**default_params)
-    
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
@@ -466,5 +477,3 @@ class OBV(BaseFactor):
         except Exception as e:
             logger.error(f"计算{self.factor_id}失败: {e}")
             return pd.Series(np.nan, index=data.index, name=self.factor_id)
-
-

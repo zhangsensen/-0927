@@ -25,8 +25,7 @@ import pandas as pd
 
 # 设置日志
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -41,35 +40,35 @@ class ParquetSchemaMigrator:
 
         # 标准化映射
         self.timeframe_mapping = {
-            '1m': '1min',
-            '2m': '2min',
-            '3m': '3min',
-            '5m': '5min',
-            '15m': '15min',
-            '30m': '30min',
-            '60m': '60min',
-            '1h': '60min',
-            '1day': 'daily',
-            '1d': 'daily',
-            'D': 'daily',
+            "1m": "1min",
+            "2m": "2min",
+            "3m": "3min",
+            "5m": "5min",
+            "15m": "15min",
+            "30m": "30min",
+            "60m": "60min",
+            "1h": "60min",
+            "1day": "daily",
+            "1d": "daily",
+            "D": "daily",
         }
 
         # 列名映射
         self.column_mapping = {
-            'Open': 'open',
-            'High': 'high',
-            'Low': 'low',
-            'Close': 'close',
-            'Volume': 'volume',
-            'Datetime': 'timestamp',
-            'Date': 'timestamp',
-            'Date_Time': 'timestamp',
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+            "Datetime": "timestamp",
+            "Date": "timestamp",
+            "Date_Time": "timestamp",
         }
 
     def parse_filename(self, filename: str) -> Dict[str, str]:
         """解析文件名提取symbol和时间框架信息"""
         # 示例: 0005HK_1day_2025-03-06_2025-09-02.parquet
-        parts = filename.replace('.parquet', '').split('_')
+        parts = filename.replace(".parquet", "").split("_")
 
         if len(parts) < 3:
             raise ValueError(f"无法解析文件名: {filename}")
@@ -78,17 +77,19 @@ class ParquetSchemaMigrator:
         timeframe = parts[1]
 
         # 标准化symbol: 0005HK -> 0005.HK
-        if not symbol.endswith('.HK'):
-            symbol = f"{symbol[:4]}.{symbol[4:]}" if len(symbol) == 8 else f"{symbol}.HK"
+        if not symbol.endswith(".HK"):
+            symbol = (
+                f"{symbol[:4]}.{symbol[4:]}" if len(symbol) == 8 else f"{symbol}.HK"
+            )
 
         # 标准化时间框架
         timeframe = self.timeframe_mapping.get(timeframe, timeframe)
 
         return {
-            'symbol': symbol,
-            'timeframe': timeframe,
-            'original_symbol': parts[0],
-            'original_timeframe': parts[1]
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "original_symbol": parts[0],
+            "original_timeframe": parts[1],
         }
 
     def migrate_single_file(self, file_path: Path) -> bool:
@@ -107,24 +108,33 @@ class ParquetSchemaMigrator:
             df = df.rename(columns=self.column_mapping)
 
             # 确保必需列存在
-            required_columns = ['timestamp', 'symbol', 'timeframe', 'open', 'high', 'low', 'close', 'volume']
+            required_columns = [
+                "timestamp",
+                "symbol",
+                "timeframe",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+            ]
             missing_columns = [col for col in required_columns if col not in df.columns]
 
             if missing_columns:
                 raise ValueError(f"缺少必需列: {missing_columns}")
 
             # 添加symbol和timeframe列
-            df['symbol'] = file_info['symbol']
-            df['timeframe'] = file_info['timeframe']
+            df["symbol"] = file_info["symbol"]
+            df["timeframe"] = file_info["timeframe"]
 
             # 确保timestamp是datetime类型
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
 
             # 选择并排序列
             df = df[required_columns]
 
             # 按timestamp排序
-            df = df.sort_values('timestamp').reset_index(drop=True)
+            df = df.sort_values("timestamp").reset_index(drop=True)
 
             # 创建新文件名（使用标准化的symbol和时间框架）
             new_filename = f"{file_info['symbol'].replace('.', '')}_{file_info['timeframe']}.parquet"
@@ -167,23 +177,43 @@ class ParquetSchemaMigrator:
                     df = pd.read_parquet(file_path)
 
                     # 检查必需列
-                    required_columns = ['timestamp', 'symbol', 'timeframe', 'open', 'high', 'low', 'close', 'volume']
-                    missing_columns = [col for col in required_columns if col not in df.columns]
+                    required_columns = [
+                        "timestamp",
+                        "symbol",
+                        "timeframe",
+                        "open",
+                        "high",
+                        "low",
+                        "close",
+                        "volume",
+                    ]
+                    missing_columns = [
+                        col for col in required_columns if col not in df.columns
+                    ]
 
                     if missing_columns:
                         errors.append(f"{file_path.name}: 缺少列 {missing_columns}")
 
                     # 检查数据格式
-                    if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+                    if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
                         errors.append(f"{file_path.name}: timestamp不是datetime类型")
 
                     # 检查symbol格式
-                    if not df['symbol'].iloc[0].endswith('.HK'):
+                    if not df["symbol"].iloc[0].endswith(".HK"):
                         errors.append(f"{file_path.name}: symbol格式不正确")
 
                     # 检查时间框架格式
-                    valid_timeframes = {'1min', '2min', '3min', '5min', '15min', '30min', '60min', 'daily'}
-                    if df['timeframe'].iloc[0] not in valid_timeframes:
+                    valid_timeframes = {
+                        "1min",
+                        "2min",
+                        "3min",
+                        "5min",
+                        "15min",
+                        "30min",
+                        "60min",
+                        "daily",
+                    }
+                    if df["timeframe"].iloc[0] not in valid_timeframes:
                         errors.append(f"{file_path.name}: timeframe格式不正确")
 
                 except Exception as e:
@@ -280,13 +310,18 @@ class ParquetSchemaMigrator:
 
 def main():
     parser = argparse.ArgumentParser(description="统一Parquet文件Schema")
-    parser.add_argument('--raw-dir', type=Path, default=Path('raw'),
-                       help='原始数据目录路径')
-    parser.add_argument('--backup-dir', type=Path,
-                       default=Path(f'backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}'),
-                       help='备份目录路径')
-    parser.add_argument('--execute', action='store_true',
-                       help='执行迁移（默认为预览模式）')
+    parser.add_argument(
+        "--raw-dir", type=Path, default=Path("raw"), help="原始数据目录路径"
+    )
+    parser.add_argument(
+        "--backup-dir",
+        type=Path,
+        default=Path(f'backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}'),
+        help="备份目录路径",
+    )
+    parser.add_argument(
+        "--execute", action="store_true", help="执行迁移（默认为预览模式）"
+    )
 
     args = parser.parse_args()
 

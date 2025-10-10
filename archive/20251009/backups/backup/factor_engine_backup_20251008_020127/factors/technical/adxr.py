@@ -7,6 +7,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
 
+
 class ADXR(BaseFactor):
     """
     ADXR - 技术指标
@@ -22,7 +23,7 @@ class ADXR(BaseFactor):
     def __init__(self, period: int = 14):
         super().__init__(timeperiod=period)
         self.period = period
-        
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """
         计算ADXR - 使用VectorBT确保与factor_generation一致

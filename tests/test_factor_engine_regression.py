@@ -7,21 +7,24 @@ FactorEngine API 回归测试
 3. 缓存一致性
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
+import pytest
+
 
 # 测试导入是否正常
 def test_import_consistency():
     """测试所有关键模块可以正常导入"""
     try:
         from factor_system.factor_engine import api
+        from factor_system.factor_engine.core.cache import CacheManager
         from factor_system.factor_engine.core.engine import FactorEngine
         from factor_system.factor_engine.core.registry import get_global_registry
-        from factor_system.factor_engine.core.cache import CacheManager
         from factor_system.factor_engine.providers.csv_provider import CSVDataProvider
         from factor_system.shared.factor_calculators import SHARED_CALCULATORS
+
         print("✅ 所有关键模块导入成功")
         return True
     except ImportError as e:
@@ -34,7 +37,7 @@ def test_calculate_factors_api_filtering():
         from factor_system.factor_engine import api
 
         # 创建测试数据
-        dates = pd.date_range('2023-01-01', periods=50, freq='D')
+        dates = pd.date_range("2023-01-01", periods=50, freq="D")
         base_price = 100.0
         returns = np.random.normal(0, 0.02, 50)
         close_series = pd.Series(base_price * (1 + returns).cumprod())
@@ -43,13 +46,16 @@ def test_calculate_factors_api_filtering():
         low = close_series * (1 - np.abs(np.random.normal(0, 0.01, 50)))
         open_price = close_series.shift(1).fillna(base_price)
 
-        test_data = pd.DataFrame({
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close_series,
-            'volume': np.random.randint(100000, 1000000, 50)
-        }, index=dates)
+        test_data = pd.DataFrame(
+            {
+                "open": open_price,
+                "high": high,
+                "low": low,
+                "close": close_series,
+                "volume": np.random.randint(100000, 1000000, 50),
+            },
+            index=dates,
+        )
 
         # 只请求 RSI 因子
         result = api.calculate_factors(
@@ -58,7 +64,7 @@ def test_calculate_factors_api_filtering():
             timeframe="daily",
             start_date=datetime(2023, 1, 1),
             end_date=datetime(2023, 2, 20),
-            use_cache=False
+            use_cache=False,
         )
 
         # 验证结果只包含请求的因子
@@ -90,7 +96,7 @@ def test_multiple_factors_api_filtering():
             timeframe="daily",
             start_date=datetime(2023, 1, 1),
             end_date=datetime(2023, 1, 31),
-            use_cache=False
+            use_cache=False,
         )
 
         # 验证结果包含所有请求的因子
@@ -101,8 +107,13 @@ def test_multiple_factors_api_filtering():
 
         # 验证结果不包含意外的因子
         # 注意：MACD 可能返回多个相关列，如 MACD, MACD_SIGNAL, MACD_HIST
-        allowed_columns = set(requested_factors + ["MACD_SIGNAL", "MACD_HIST", "STOCH_SLOWK", "STOCH_SLOWD"])
-        unexpected_columns = [col for col in result.columns if col not in allowed_columns]
+        allowed_columns = set(
+            requested_factors
+            + ["MACD_SIGNAL", "MACD_HIST", "STOCH_SLOWK", "STOCH_SLOWD"]
+        )
+        unexpected_columns = [
+            col for col in result.columns if col not in allowed_columns
+        ]
         assert len(unexpected_columns) == 0, f"结果包含意外的列: {unexpected_columns}"
 
         print("✅ 多因子 API 过滤测试通过")
@@ -124,7 +135,7 @@ def test_cache_consistency():
             timeframe="daily",
             start_date=datetime(2023, 1, 1),
             end_date=datetime(2023, 1, 31),
-            use_cache=True
+            use_cache=True,
         )
 
         # 第二次计算（使用缓存）
@@ -134,7 +145,7 @@ def test_cache_consistency():
             timeframe="daily",
             start_date=datetime(2023, 1, 1),
             end_date=datetime(2023, 1, 31),
-            use_cache=True
+            use_cache=True,
         )
 
         # 验证两次结果一致
@@ -143,7 +154,9 @@ def test_cache_consistency():
         # 验证结果只包含请求的因子
         assert "RSI" in result2.columns, "缓存结果应包含RSI因子"
         unexpected_columns = [col for col in result2.columns if col != "RSI"]
-        assert len(unexpected_columns) == 0, f"缓存结果包含意外的列: {unexpected_columns}"
+        assert (
+            len(unexpected_columns) == 0
+        ), f"缓存结果包含意外的列: {unexpected_columns}"
 
         print("✅ 缓存一致性测试通过")
         return True
@@ -158,7 +171,7 @@ def test_shared_calculators_integration():
         from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
         # 创建测试数据
-        dates = pd.date_range('2023-01-01', periods=100, freq='D')
+        dates = pd.date_range("2023-01-01", periods=100, freq="D")
         close = pd.Series(100 + np.random.normal(0, 1, 100).cumsum(), index=dates)
         high = close * (1 + np.abs(np.random.normal(0, 0.01, 100)))
         low = close * (1 - np.abs(np.random.normal(0, 0.01, 100)))
@@ -188,9 +201,9 @@ def test_package_structure():
     """测试包结构完整性"""
     try:
         # 测试关键模块是否可以正常导入
-        from factor_system.factor_engine.core import engine, registry, cache
-        from factor_system.factor_engine.providers import csv_provider
+        from factor_system.factor_engine.core import cache, engine, registry
         from factor_system.factor_engine.factors import technical
+        from factor_system.factor_engine.providers import csv_provider
         from factor_system.shared import factor_calculators
 
         print("✅ 包结构完整性测试通过")

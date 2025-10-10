@@ -18,7 +18,7 @@ from factor_system.factor_engine.core.cache import CacheConfig
 from factor_system.factor_engine.core.engine import FactorEngine
 from factor_system.factor_engine.core.registry import FactorRegistry
 from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
-from factor_system.factor_engine.settings import get_settings, FactorEngineSettings
+from factor_system.factor_engine.settings import FactorEngineSettings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -88,15 +88,19 @@ def get_engine(
 
     # 检查配置是否变更（规范化路径）
     current_config = {
-        'raw_data_dir': str(raw_data_dir.resolve()),
-        'registry_file': str(registry_file.resolve()) if registry_file.exists() else str(registry_file),
-        'cache_memory_mb': cache_config.memory_size_mb,
-        'cache_ttl_hours': cache_config.ttl_hours,
-        'cache_enable_disk': cache_config.enable_disk,
-        'cache_enable_memory': cache_config.enable_memory,
-        'cache_copy_mode': cache_config.copy_mode,
-        'cache_disk_cache_dir': str(cache_config.disk_cache_dir),
-        'engine_n_jobs': settings.engine.n_jobs,
+        "raw_data_dir": str(raw_data_dir.resolve()),
+        "registry_file": (
+            str(registry_file.resolve())
+            if registry_file.exists()
+            else str(registry_file)
+        ),
+        "cache_memory_mb": cache_config.memory_size_mb,
+        "cache_ttl_hours": cache_config.ttl_hours,
+        "cache_enable_disk": cache_config.enable_disk,
+        "cache_enable_memory": cache_config.enable_memory,
+        "cache_copy_mode": cache_config.copy_mode,
+        "cache_disk_cache_dir": str(cache_config.disk_cache_dir),
+        "engine_n_jobs": settings.engine.n_jobs,
     }
 
     # 只在真正需要时重新初始化
@@ -107,15 +111,21 @@ def get_engine(
     else:
         # 比较配置
         should_reinit = (
-            current_config['raw_data_dir'] != _global_config.get('raw_data_dir') or
-            current_config['registry_file'] != _global_config.get('registry_file') or
-            current_config['cache_memory_mb'] != _global_config.get('cache_memory_mb') or
-            current_config['cache_ttl_hours'] != _global_config.get('cache_ttl_hours') or
-            current_config['cache_enable_disk'] != _global_config.get('cache_enable_disk') or
-            current_config['cache_enable_memory'] != _global_config.get('cache_enable_memory') or
-            current_config['cache_copy_mode'] != _global_config.get('cache_copy_mode') or
-            current_config['cache_disk_cache_dir'] != _global_config.get('cache_disk_cache_dir') or
-            current_config['engine_n_jobs'] != _global_config.get('engine_n_jobs')
+            current_config["raw_data_dir"] != _global_config.get("raw_data_dir")
+            or current_config["registry_file"] != _global_config.get("registry_file")
+            or current_config["cache_memory_mb"]
+            != _global_config.get("cache_memory_mb")
+            or current_config["cache_ttl_hours"]
+            != _global_config.get("cache_ttl_hours")
+            or current_config["cache_enable_disk"]
+            != _global_config.get("cache_enable_disk")
+            or current_config["cache_enable_memory"]
+            != _global_config.get("cache_enable_memory")
+            or current_config["cache_copy_mode"]
+            != _global_config.get("cache_copy_mode")
+            or current_config["cache_disk_cache_dir"]
+            != _global_config.get("cache_disk_cache_dir")
+            or current_config["engine_n_jobs"] != _global_config.get("engine_n_jobs")
         )
 
     if should_reinit:
@@ -151,7 +161,10 @@ def _register_core_factors(registry: FactorRegistry):
         # 不搞官方清单，不搞限制，直接干活
 
         # 导入自动生成的所有因子
-        from factor_system.factor_engine.factors import GENERATED_FACTORS, FACTOR_CLASS_MAP
+        from factor_system.factor_engine.factors import (
+            FACTOR_CLASS_MAP,
+            GENERATED_FACTORS,
+        )
 
         registered_count = 0
         failed_count = 0
@@ -171,7 +184,9 @@ def _register_core_factors(registry: FactorRegistry):
         if failed_count > 0:
             logger.warning(f"⚠️  {failed_count} 个因子注册失败")
 
-        logger.info(f"🎯 FactorEngine现在拥有 {len(registry.factors)} 个因子，与factor_generation完全一致")
+        logger.info(
+            f"🎯 FactorEngine现在拥有 {len(registry.factors)} 个因子，与factor_generation完全一致"
+        )
 
     except Exception as e:
         logger.error(f"注册enhanced_factor_calculator因子失败: {e}")
@@ -240,7 +255,7 @@ def calculate_factor_set(
 ) -> pd.DataFrame:
     """
     计算预定义的因子集
-    
+
     Args:
         set_id: 因子集ID（如 "hk_midfreq_core"）
         symbols: 股票代码列表
@@ -248,24 +263,23 @@ def calculate_factor_set(
         start_date: 开始日期
         end_date: 结束日期
         use_cache: 是否使用缓存
-    
+
     Returns:
         因子DataFrame
     """
     engine = get_engine()
-    
+
     # 从注册表获取因子集
     factor_set = engine.registry.get_factor_set(set_id)
     if not factor_set:
         available_sets = engine.registry.list_factor_sets()
         raise ValueError(
-            f"因子集 '{set_id}' 不存在。\n"
-            f"可用的因子集: {available_sets}"
+            f"因子集 '{set_id}' 不存在。\n" f"可用的因子集: {available_sets}"
         )
-    
-    factor_ids = factor_set.get('factors', [])
+
+    factor_ids = factor_set.get("factors", [])
     logger.info(f"加载因子集 '{set_id}': {len(factor_ids)}个因子")
-    
+
     return engine.calculate_factors(
         factor_ids=factor_ids,
         symbols=symbols,
@@ -279,7 +293,7 @@ def calculate_factor_set(
 def list_available_factors() -> List[str]:
     """
     列出所有可用因子
-    
+
     Returns:
         因子ID列表
     """
@@ -290,10 +304,10 @@ def list_available_factors() -> List[str]:
 def get_factor_metadata(factor_id: str) -> Optional[Dict]:
     """
     获取因子元数据
-    
+
     Args:
         factor_id: 因子ID
-    
+
     Returns:
         元数据字典，不存在时返回None
     """
@@ -310,7 +324,7 @@ def prewarm_cache(
 ):
     """
     预热缓存
-    
+
     Args:
         factor_ids: 因子ID列表
         symbols: 股票代码列表
@@ -334,7 +348,7 @@ def clear_cache():
 def get_cache_stats() -> Dict:
     """
     获取缓存统计
-    
+
     Returns:
         缓存统计字典
     """
@@ -388,7 +402,7 @@ def calculate_single_factor(
 
     # 如果是MultiIndex，提取单symbol
     if isinstance(result.index, pd.MultiIndex):
-        result = result.xs(symbol, level='symbol')
+        result = result.xs(symbol, level="symbol")
 
     return result[factor_id] if factor_id in result.columns else pd.Series(dtype=float)
 
@@ -426,15 +440,35 @@ def calculate_core_factors(
     """
     core_factor_ids = [
         # 动量指标
-        "RSI", "STOCH", "WILLR", "CCI", "CMO", "MOM", "ROC",
+        "RSI",
+        "STOCH",
+        "WILLR",
+        "CCI",
+        "CMO",
+        "MOM",
+        "ROC",
         # 趋势指标
-        "ADX", "AROON", "DX", "PLUS_DI", "MINUS_DI",
+        "ADX",
+        "AROON",
+        "DX",
+        "PLUS_DI",
+        "MINUS_DI",
         # 波动率指标
-        "ATR", "NATR", "TRANGE",
+        "ATR",
+        "NATR",
+        "TRANGE",
         # 成交量指标
-        "OBV", "AD", "ADOSC", "MFI",
+        "OBV",
+        "AD",
+        "ADOSC",
+        "MFI",
         # 移动平均
-        "SMA", "EMA", "WMA", "DEMA", "TEMA", "BBANDS",
+        "SMA",
+        "EMA",
+        "WMA",
+        "DEMA",
+        "TEMA",
+        "BBANDS",
     ]
 
     return calculate_factors(
@@ -468,8 +502,20 @@ def calculate_momentum_factors(
         因子DataFrame，包含所有动量相关因子
     """
     momentum_factor_ids = [
-        "RSI", "STOCH", "WILLR", "CCI", "CMO", "MOM", "ROC", "MACD",
-        "ADX", "ADXR", "AROON", "DX", "PLUS_DI", "MINUS_DI",
+        "RSI",
+        "STOCH",
+        "WILLR",
+        "CCI",
+        "CMO",
+        "MOM",
+        "ROC",
+        "MACD",
+        "ADX",
+        "ADXR",
+        "AROON",
+        "DX",
+        "PLUS_DI",
+        "MINUS_DI",
     ]
 
     return calculate_factors(
@@ -499,7 +545,7 @@ def list_factor_categories() -> Dict[str, List[str]]:
 
     # 按类别分组
     for factor_id, factor_class in engine.registry.factors.items():
-        category = getattr(factor_class, 'category', 'unknown')
+        category = getattr(factor_class, "category", "unknown")
         if category not in categories:
             categories[category] = []
         categories[category].append(factor_id)
@@ -530,7 +576,7 @@ def list_factors_by_category(category: str) -> List[str]:
     factors = []
 
     for factor_id, factor_class in engine.registry.factors.items():
-        if getattr(factor_class, 'category', None) == category:
+        if getattr(factor_class, "category", None) == category:
             factors.append(factor_id)
 
     return sorted(factors)
@@ -539,22 +585,21 @@ def list_factors_by_category(category: str) -> List[str]:
 # 异常类
 class UnknownFactorError(ValueError):
     """未知因子错误"""
-    
+
     def __init__(self, factor_id: str, available_factors: List[str]):
         self.factor_id = factor_id
         self.available_factors = available_factors
-        
+
         similar = [f for f in available_factors if factor_id.upper() in f.upper()]
-        
+
         message = (
             f"❌ 未知因子: '{factor_id}'\n\n"
             f"可用因子列表 ({len(available_factors)}个):\n"
         )
-        
+
         if similar:
             message += f"  相似因子: {', '.join(similar[:5])}\n\n"
-        
-        message += f"  全部因子: {', '.join(sorted(available_factors))}"
-        
-        super().__init__(message)
 
+        message += f"  全部因子: {', '.join(sorted(available_factors))}"
+
+        super().__init__(message)

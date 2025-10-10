@@ -142,18 +142,22 @@ def calculate_technical_indicators(df, stock_code=None):
 
         # 重置索引以适配适配器
         df_with_timestamp = df.reset_index()
-        df_with_timestamp = df_with_timestamp.rename(columns={'Date': 'timestamp'})
+        df_with_timestamp = df_with_timestamp.rename(columns={"Date": "timestamp"})
 
         # 使用适配器添加技术指标
-        df_with_indicators = adapter.add_indicators_to_dataframe(df_with_timestamp, stock_code)
+        df_with_indicators = adapter.add_indicators_to_dataframe(
+            df_with_timestamp, stock_code
+        )
 
         # 恢复原始索引格式
-        df_with_indicators = df_with_indicators.set_index('timestamp')
-        df_with_indicators.index.name = 'Date'
+        df_with_indicators = df_with_indicators.set_index("timestamp")
+        df_with_indicators.index.name = "Date"
 
         # 获取缓存统计
         cache_stats = adapter.get_cache_stats()
-        print(f"✅ 技术指标计算完成，缓存命中率: {cache_stats.get('memory_hit_rate', 0):.1%}")
+        print(
+            f"✅ 技术指标计算完成，缓存命中率: {cache_stats.get('memory_hit_rate', 0):.1%}"
+        )
 
         return df_with_indicators
 
@@ -164,26 +168,26 @@ def calculate_technical_indicators(df, stock_code=None):
         print("正在计算基础技术指标...")
 
         # 基础移动平均线
-        df['MA5'] = df['Close'].rolling(window=5).mean()
-        df['MA10'] = df['Close'].rolling(window=10).mean()
-        df['MA20'] = df['Close'].rolling(window=20).mean()
-        df['MA60'] = df['Close'].rolling(window=60).mean()
+        df["MA5"] = df["Close"].rolling(window=5).mean()
+        df["MA10"] = df["Close"].rolling(window=10).mean()
+        df["MA20"] = df["Close"].rolling(window=20).mean()
+        df["MA60"] = df["Close"].rolling(window=60).mean()
 
         # 基础RSI
-        delta = df['Close'].diff()
+        delta = df["Close"].diff()
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
         avg_gain = gain.rolling(window=14).mean()
         avg_loss = loss.rolling(window=14).mean()
         rs = avg_gain / avg_loss.replace(0, 1e-10)
-        df['RSI'] = 100 - (100 / (1 + rs))
+        df["RSI"] = 100 - (100 / (1 + rs))
 
         # 基础MACD
-        ema12 = df['Close'].ewm(span=12).mean()
-        ema26 = df['Close'].ewm(span=26).mean()
-        df['MACD'] = ema12 - ema26
-        df['Signal'] = df['MACD'].ewm(span=9).mean()
-        df['MACD_Hist'] = df['MACD'] - df['Signal']
+        ema12 = df["Close"].ewm(span=12).mean()
+        ema26 = df["Close"].ewm(span=26).mean()
+        df["MACD"] = ema12 - ema26
+        df["Signal"] = df["MACD"].ewm(span=9).mean()
+        df["MACD_Hist"] = df["MACD"] - df["Signal"]
 
         print("✅ 基础指标计算完成")
 
@@ -493,7 +497,7 @@ def generate_trading_recommendation(df, metrics, current_state, indicators):
     k_val = df["KDJ_K"].iloc[-1]
     d_val = df["KDJ_D"].iloc[-1]
     j_val = df["KDJ_J"].iloc[-1]
-    
+
     if k_val > 80 and d_val > 80:
         momentum_score -= 1
         momentum_signals["kdj"] = "超买区"
@@ -539,7 +543,7 @@ def generate_trading_recommendation(df, metrics, current_state, indicators):
     adx_val = df["ADX"].iloc[-1]
     di_plus = df["DI_plus"].iloc[-1]
     di_minus = df["DI_minus"].iloc[-1]
-    
+
     if adx_val > 35:
         trend_score += 2
         trend_signals["adx_strength"] = "强趋势"
@@ -548,7 +552,7 @@ def generate_trading_recommendation(df, metrics, current_state, indicators):
         trend_signals["adx_strength"] = "中等趋势"
     else:
         trend_signals["adx_strength"] = "弱趋势/震荡"
-    
+
     # ADX方向
     if di_plus > di_minus:
         if adx_val > 25:
@@ -833,13 +837,14 @@ def main():
 
     # 构建数据文件路径（使用最新可用文件）
     import glob
+
     stock_dir = f"{args.data_dir}/{stock_code}"
     daily_files = glob.glob(f"{stock_dir}/{stock_code}_1d_*.csv")
     if not daily_files:
         print(f"❌ 未找到日线数据: {stock_dir}/{stock_code}_1d_*.csv")
         return
     daily_file = sorted(daily_files)[-1]  # 使用最新文件
-    hourly_file = daily_file.replace('_1d_', '_1h_')
+    hourly_file = daily_file.replace("_1d_", "_1h_")
 
     # 检查数据文件是否存在
     if not os.path.exists(daily_file):

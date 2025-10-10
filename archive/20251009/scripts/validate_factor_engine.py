@@ -7,25 +7,29 @@ FactorEngine验证脚本 - 直接使用247个因子进行回测验证
 """
 
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # 设置项目根目录
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-import pandas as pd
-import numpy as np
-import vectorbt as vbt
 import logging
+
+import numpy as np
+import pandas as pd
+import vectorbt as vbt
 
 # 导入FactorEngine
 from factor_system.factor_engine import api
 from hk_midfreq.config import PathConfig
 
 # 设置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 def load_0700_data():
     """加载0700股票的原始数据"""
@@ -53,15 +57,18 @@ def load_0700_data():
         if filepath.exists():
             df = pd.read_parquet(filepath)
             # 将timestamp列设为索引并转换为datetime
-            if 'timestamp' in df.columns:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df = df.set_index('timestamp')
+            if "timestamp" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+                df = df.set_index("timestamp")
             data[tf] = df
-            logger.info(f"✅ 加载 {tf}: {len(df)} 条记录 ({df.index[0]} 到 {df.index[-1]})")
+            logger.info(
+                f"✅ 加载 {tf}: {len(df)} 条记录 ({df.index[0]} 到 {df.index[-1]})"
+            )
         else:
             logger.warning(f"❌ 文件不存在: {filepath}")
 
     return data
+
 
 def test_factor_engine_factors():
     """测试FactorEngine的247个因子"""
@@ -77,7 +84,18 @@ def test_factor_engine_factors():
     timeframe = "15min"
 
     # 选择一些常用因子进行测试（使用实际的参数化名称）
-    test_factors = ["RSI14", "MACD_12_26_9", "STOCH_14_3_3", "WILLR14", "CCI14", "ATR14", "EMA12", "EMA26", "SMA12", "SMA26"]
+    test_factors = [
+        "RSI14",
+        "MACD_12_26_9",
+        "STOCH_14_3_3",
+        "WILLR14",
+        "CCI14",
+        "ATR14",
+        "EMA12",
+        "EMA26",
+        "SMA12",
+        "SMA26",
+    ]
 
     # 加载数据
     data_0700 = load_0700_data()
@@ -101,11 +119,11 @@ def test_factor_engine_factors():
                 timeframe=timeframe,
                 start_date=start_date,
                 end_date=end_date,
-                use_cache=True
+                use_cache=True,
             )
 
             if isinstance(result.index, pd.MultiIndex):
-                result = result.xs(symbol, level='symbol')
+                result = result.xs(symbol, level="symbol")
 
             if factor_id in result.columns:
                 factor_values = result[factor_id]
@@ -120,6 +138,7 @@ def test_factor_engine_factors():
 
     logger.info(f"🎯 因子测试完成: {success_count}/{len(test_factors)} 成功")
     return success_count > 0
+
 
 def generate_signals_with_factors():
     """使用FactorEngine的因子生成交易信号"""
@@ -150,11 +169,11 @@ def generate_signals_with_factors():
             timeframe=timeframe,
             start_date=start_date,
             end_date=end_date,
-            use_cache=True
+            use_cache=True,
         )
 
         if isinstance(factors_df.index, pd.MultiIndex):
-            factors_df = factors_df.xs(symbol, level='symbol')
+            factors_df = factors_df.xs(symbol, level="symbol")
 
         logger.info(f"✅ 因子计算完成: {factors_df.shape}")
 
@@ -193,24 +212,24 @@ def generate_signals_with_factors():
         logger.info("🔄 开始向量化回测...")
 
         # 构建价格数据
-        price = price_data['close']
+        price = price_data["close"]
         portfolio = vbt.Portfolio.from_signals(
             price=price,
             entries=entries,
             exits=exits,
             init_cash=100000,
             fees=0.002,
-            slippage=0.001
+            slippage=0.001,
         )
 
         # 获取回测结果
         stats = portfolio.stats()
 
         # 提取关键指标
-        total_return = stats.get('Total Return [%]', 0)
-        sharpe_ratio = stats.get('Sharpe Ratio', 0)
-        max_drawdown = stats.get('Max Drawdown [%]', 0)
-        total_trades = stats.get('Total Trades', 0)
+        total_return = stats.get("Total Return [%]", 0)
+        sharpe_ratio = stats.get("Sharpe Ratio", 0)
+        max_drawdown = stats.get("Max Drawdown [%]", 0)
+        total_trades = stats.get("Total Trades", 0)
 
         logger.info("🎯 回测结果:")
         logger.info(f"  总收益率: {total_return:.2f}%")
@@ -220,15 +239,19 @@ def generate_signals_with_factors():
 
         # 生成简单的图表数据
         equity_curve = portfolio.value()
-        logger.info(f"📊 权益曲线: {equity_curve.iloc[0]:.0f} -> {equity_curve.iloc[-1]:.0f}")
+        logger.info(
+            f"📊 权益曲线: {equity_curve.iloc[0]:.0f} -> {equity_curve.iloc[-1]:.0f}"
+        )
 
         return True
 
     except Exception as e:
         logger.error(f"❌ 信号生成或回测失败: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         return False
+
 
 def main():
     """主函数"""
@@ -255,6 +278,7 @@ def main():
 
     return True
 
+
 if __name__ == "__main__":
     try:
         success = main()
@@ -267,5 +291,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ 验证过程中发生异常: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         sys.exit(1)

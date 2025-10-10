@@ -3,16 +3,17 @@
 测试FactorEngine修复后的一致性
 """
 
-import sys
 import logging
+import sys
 from pathlib import Path
 
 # 添加项目路径
-sys.path.insert(0, '/Users/zhangshenshen/深度量化0927')
+sys.path.insert(0, "/Users/zhangshenshen/深度量化0927")
 
 # 设置日志
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
 
 def test_factor_imports():
     """测试因子导入"""
@@ -21,17 +22,31 @@ def test_factor_imports():
     try:
         # 测试技术指标导入
         from factor_system.factor_engine.factors import technical
+
         logger.info("✅ technical模块导入成功")
 
         # 测试移动平均指标导入
         from factor_system.factor_engine.factors import overlap
+
         logger.info("✅ overlap模块导入成功")
 
         # 检查关键因子类
         key_factors = [
-            'RSI', 'MACD', 'MACDSignal', 'MACDHistogram', 'STOCH',
-            'WILLR', 'ATR', 'BBANDS', 'CCI', 'OBV',
-            'SMA', 'EMA', 'DEMA', 'TEMA', 'KAMA'
+            "RSI",
+            "MACD",
+            "MACDSignal",
+            "MACDHistogram",
+            "STOCH",
+            "WILLR",
+            "ATR",
+            "BBANDS",
+            "CCI",
+            "OBV",
+            "SMA",
+            "EMA",
+            "DEMA",
+            "TEMA",
+            "KAMA",
         ]
 
         for factor_name in key_factors:
@@ -47,6 +62,7 @@ def test_factor_imports():
     except Exception as e:
         logger.error(f"❌ 因子导入失败: {e}")
         return False
+
 
 def test_factor_registry():
     """测试因子注册表"""
@@ -65,7 +81,7 @@ def test_factor_registry():
         categories = {}
         for factor_id in all_factors:
             meta = registry.get_metadata(factor_id)
-            category = meta.get('category', 'unknown') if meta else 'unknown'
+            category = meta.get("category", "unknown") if meta else "unknown"
             if category not in categories:
                 categories[category] = []
             categories[category].append(factor_id)
@@ -79,14 +95,20 @@ def test_factor_registry():
         logger.error(f"❌ 因子注册表测试失败: {e}")
         return []
 
+
 def test_consistency_validation():
     """测试一致性验证"""
     logger.info("\n🔍 测试一致性验证...")
 
     try:
         # 模拟导入一致性验证器
-        sys.path.insert(0, '/Users/zhangshenshen/深度量化0927/factor_system/factor_engine/core')
-        from consistency_validator import get_consistency_validator, validate_factor_consistency
+        sys.path.insert(
+            0, "/Users/zhangshenshen/深度量化0927/factor_system/factor_engine/core"
+        )
+        from consistency_validator import (
+            get_consistency_validator,
+            validate_factor_consistency,
+        )
 
         validator = get_consistency_validator()
 
@@ -123,37 +145,43 @@ def test_consistency_validation():
     except Exception as e:
         logger.error(f"❌ 一致性验证测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_factor_calculation():
     """测试因子计算"""
     logger.info("\n🔍 测试因子计算...")
 
     try:
-        import pandas as pd
         import numpy as np
+        import pandas as pd
 
         # 创建测试数据
-        dates = pd.date_range('2025-01-01', periods=100, freq='D')
-        test_data = pd.DataFrame({
-            'open': np.random.uniform(100, 200, 100),
-            'high': np.random.uniform(100, 200, 100),
-            'low': np.random.uniform(100, 200, 100),
-            'close': np.random.uniform(100, 200, 100),
-            'volume': np.random.uniform(1000, 10000, 100),
-        }, index=dates)
+        dates = pd.date_range("2025-01-01", periods=100, freq="D")
+        test_data = pd.DataFrame(
+            {
+                "open": np.random.uniform(100, 200, 100),
+                "high": np.random.uniform(100, 200, 100),
+                "low": np.random.uniform(100, 200, 100),
+                "close": np.random.uniform(100, 200, 100),
+                "volume": np.random.uniform(1000, 10000, 100),
+            },
+            index=dates,
+        )
 
         # 测试几个关键因子的计算
         test_cases = [
-            ('RSI', {'period': 14}),
-            ('MACD', {'fast_period': 12, 'slow_period': 26, 'signal_period': 9}),
-            ('SMA', {'period': 20}),
-            ('EMA', {'period': 12}),
-            ('ATR', {'period': 14}),
+            ("RSI", {"period": 14}),
+            ("MACD", {"fast_period": 12, "slow_period": 26, "signal_period": 9}),
+            ("SMA", {"period": 20}),
+            ("EMA", {"period": 12}),
+            ("ATR", {"period": 14}),
         ]
 
         from factor_system.factor_engine.core.registry import get_global_registry
+
         registry = get_global_registry()
 
         successful_calculations = 0
@@ -170,12 +198,15 @@ def test_factor_calculation():
             except Exception as e:
                 logger.error(f"  ❌ {factor_id}: 计算失败 - {e}")
 
-        logger.info(f"📊 因子计算测试: {successful_calculations}/{len(test_cases)} 成功")
+        logger.info(
+            f"📊 因子计算测试: {successful_calculations}/{len(test_cases)} 成功"
+        )
         return successful_calculations == len(test_cases)
 
     except Exception as e:
         logger.error(f"❌ 因子计算测试失败: {e}")
         return False
+
 
 def main():
     """主函数"""
@@ -187,7 +218,7 @@ def main():
         ("因子导入测试", test_factor_imports),
         ("因子注册表测试", lambda: test_factor_registry() or True),
         ("一致性验证测试", test_consistency_validation),
-        ("因子计算测试", test_factor_calculation)
+        ("因子计算测试", test_factor_calculation),
     ]
 
     results = []
@@ -223,6 +254,7 @@ def main():
 
     # 保存测试报告
     import pandas as pd
+
     report_content = f"""
 FactorEngine一致性修复验证报告
 生成时间: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -242,12 +274,17 @@ FactorEngine一致性修复验证报告
     else:
         report_content += "\n⚠️ 部分测试失败，需要进一步修复。\n"
 
-    with open('/Users/zhangshenshen/深度量化0927/factor_engine_consistency_test_report.txt', 'w', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_engine_consistency_test_report.txt",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write(report_content)
 
     logger.info("📄 测试报告已保存至: factor_engine_consistency_test_report.txt")
 
     return passed_tests == total_tests
+
 
 if __name__ == "__main__":
     success = main()

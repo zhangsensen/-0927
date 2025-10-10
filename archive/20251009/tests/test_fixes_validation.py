@@ -6,22 +6,21 @@
 3. 基本包结构
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def test_package_imports():
     """测试关键包导入"""
     try:
         # 测试共享计算器
-        from factor_system.shared.factor_calculators import SHARED_CALCULATORS
-
         # 测试FactorEngine API
         from factor_system.factor_engine import api
 
         # 测试核心模块
         from factor_system.factor_engine.core.engine import FactorEngine
         from factor_system.factor_engine.core.registry import get_global_registry
+        from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
         print("✅ 所有关键包导入成功")
         return True
@@ -37,7 +36,7 @@ def test_shared_calculators():
 
         # 创建测试数据
         np.random.seed(42)
-        dates = pd.date_range('2023-01-01', periods=100, freq='D')
+        dates = pd.date_range("2023-01-01", periods=100, freq="D")
         close = pd.Series(100 + np.random.normal(0, 1, 100).cumsum(), index=dates)
         high = close * (1 + np.abs(np.random.normal(0, 0.01, 100)))
         low = close * (1 - np.abs(np.random.normal(0, 0.01, 100)))
@@ -97,7 +96,7 @@ def test_no_console_scripts():
                 [sys.executable, "-c", "import quant.cli"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
             # 如果能导入，说明quant.cli存在（这不应该）
             if result.returncode == 0:
@@ -122,7 +121,7 @@ def test_factor_consistency_basic():
 
         # 创建测试数据
         np.random.seed(123)
-        dates = pd.date_range('2023-01-01', periods=50, freq='D')
+        dates = pd.date_range("2023-01-01", periods=50, freq="D")
         close = pd.Series(100 + np.random.normal(0, 0.5, 50).cumsum(), index=dates)
         high = close * (1 + np.abs(np.random.normal(0, 0.005, 50)))
         low = close * (1 - np.abs(np.random.normal(0, 0.005, 50)))

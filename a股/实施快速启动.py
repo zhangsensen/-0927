@@ -14,41 +14,42 @@ P0阶段：修复Registry实例化问题，建立基本连接
 """
 
 import os
-import sys
 import subprocess
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 # 添加项目根目录到Python路径
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+
 class AShareArchitectureFixer:
     """A股架构修复器"""
-    
+
     def __init__(self):
         self.project_root = PROJECT_ROOT
         self.a_share_dir = self.project_root / "a股"
         self.factor_engine_dir = self.project_root / "factor_system" / "factor_engine"
-        
+
         print("=" * 60)
         print("🚀 A股统一架构实施 - 快速启动")
         print("=" * 60)
         print(f"项目根目录: {self.project_root}")
         print(f"当前时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print()
-    
+
     def step1_fix_registry_issue(self):
         """步骤1: 修复Registry实例化问题"""
         print("🔧 步骤1: 修复Registry实例化问题")
         print("-" * 40)
-        
+
         # 检查当前问题
         adapter_file = self.a_share_dir / "factor_adapter.py"
         if not adapter_file.exists():
             print("❌ factor_adapter.py 不存在")
             return False
-        
+
         # 创建修复后的适配器
         fixed_adapter_content = '''"""
 A股因子适配器 - 修复Registry实例化问题
@@ -379,112 +380,118 @@ if __name__ == "__main__":
     else:
         print(f"❌ 未能获取到{stock_code}的技术指标")
 '''
-        
+
         # 备份原文件
-        backup_file = adapter_file.with_suffix('.py.backup')
+        backup_file = adapter_file.with_suffix(".py.backup")
         if adapter_file.exists():
             import shutil
+
             shutil.copy2(adapter_file, backup_file)
             print(f"✅ 已备份原文件到: {backup_file}")
-        
+
         # 写入修复后的内容
-        with open(adapter_file, 'w', encoding='utf-8') as f:
+        with open(adapter_file, "w", encoding="utf-8") as f:
             f.write(fixed_adapter_content)
-        
+
         print("✅ 步骤1完成: Registry实例化问题已修复")
         print()
         return True
-    
+
     def step2_test_factor_consistency(self):
         """步骤2: 验证因子计算一致性"""
         print("🧪 步骤2: 验证因子计算一致性")
         print("-" * 40)
-        
+
         try:
             # 导入修复后的适配器
             sys.path.insert(0, str(self.a_share_dir))
             from factor_adapter import AShareFactorAdapter
-            
+
             # 创建适配器
             adapter = AShareFactorAdapter(str(self.project_root))
-            
+
             # 测试股票代码
             stock_code = "300450.SZ"
-            
+
             # 检查数据文件是否存在
             stock_dir = self.a_share_dir / stock_code
             if not stock_dir.exists():
                 print(f"⚠️  股票数据目录不存在: {stock_dir}")
                 return False
-            
+
             # 查找日线数据文件
             daily_files = list(stock_dir.glob(f"{stock_code}_1d_*.csv"))
             if not daily_files:
                 print(f"⚠️  未找到日线数据文件")
                 return False
-            
+
             daily_file = sorted(daily_files)[-1]
             print(f"📁 使用数据文件: {daily_file}")
-            
+
             # 测试获取技术指标
             print(f"🔄 正在计算 {stock_code} 的技术指标...")
             indicators = adapter.get_technical_indicators(stock_code)
-            
+
             if indicators.empty:
                 print("❌ 技术指标计算失败")
                 return False
-            
-            print(f"✅ 技术指标计算成功: {len(indicators)}行 x {len(indicators.columns)}列")
+
+            print(
+                f"✅ 技术指标计算成功: {len(indicators)}行 x {len(indicators.columns)}列"
+            )
             print(f"📊 可用指标: {adapter.list_available_indicators()}")
-            
+
             # 显示前几行数据
             print(f"\\n📈 指标数据预览:")
             print(indicators.tail(3))
-            
+
             # 测试缓存
             cache_stats = adapter.get_cache_stats()
             print(f"\\n💾 缓存统计: {cache_stats}")
-            
+
             print("✅ 步骤2完成: 因子计算一致性验证通过")
             print()
             return True
-            
+
         except Exception as e:
             print(f"❌ 步骤2失败: {e}")
             import traceback
+
             traceback.print_exc()
             return False
-    
+
     def step3_check_missing_factors(self):
         """步骤3: 检查缺失的技术因子"""
         print("🔍 步骤3: 检查缺失的技术因子")
         print("-" * 40)
-        
+
         try:
             # 导入适配器
             sys.path.insert(0, str(self.a_share_dir))
             from factor_adapter import AShareFactorAdapter
-            
+
             adapter = AShareFactorAdapter(str(self.project_root))
-            
+
             # 检查映射的因子是否都可用
             missing_factors = []
             available_indicators = adapter.list_available_indicators()
-            
+
             for a_share_name in adapter.FACTOR_MAPPING.keys():
                 if a_share_name not in available_indicators:
                     factor_id = adapter.FACTOR_MAPPING[a_share_name]
                     missing_factors.append((a_share_name, factor_id))
-            
+
             if missing_factors:
                 print(f"⚠️  发现 {len(missing_factors)} 个缺失因子:")
                 for a_share_name, factor_id in missing_factors:
                     print(f"   - {a_share_name} -> {factor_id}")
-                
+
                 # 检查关键因子
-                critical_factors = ['RSI', 'MACD', 'ATR', 'ADX']
-                missing_critical = [name for name, _ in missing_factors if name in critical_factors]
-                
+                critical_factors = ["RSI", "MACD", "ATR", "ADX"]
+                missing_critical = [
+                    name for name, _ in missing_factors if name in critical_factors
+                ]
+
                 if missing_critical:
                     print(f"\\n🔴 关键因子缺失: {missing_critical}")
                     print("   需要在factor_engine中补充这些因子")
@@ -496,95 +503,101 @@ if __name__ == "__main__":
                 print("✅ 所有映射因子都可用")
                 print()
                 return True
-                
+
         except Exception as e:
             print(f"❌ 步骤3失败: {e}")
             return False
-    
+
     def step4_integration_test(self):
         """步骤4: 集成测试"""
         print("🔗 步骤4: 集成测试")
         print("-" * 40)
-        
+
         try:
             # 测试完整的技术分析流程
             sys.path.insert(0, str(self.a_share_dir))
             from factor_adapter import AShareFactorAdapter
-            
+
             # 创建适配器
             adapter = AShareFactorAdapter(str(self.project_root))
-            
+
             # 测试股票
             stock_code = "300450.SZ"
-            
+
             # 加载原始数据
-            import pandas as pd
             import glob
-            
+
+            import pandas as pd
+
             stock_dir = self.a_share_dir / stock_code
             daily_files = list(stock_dir.glob(f"{stock_code}_1d_*.csv"))
-            
+
             if not daily_files:
                 print("❌ 未找到测试数据")
                 return False
-            
+
             daily_file = sorted(daily_files)[-1]
-            
+
             # 读取数据（A股格式）
             df = pd.read_csv(daily_file, header=0, skiprows=[1])
-            df.columns = ['Date', 'Close', 'High', 'Low', 'Open', 'Volume']
-            df['Date'] = pd.to_datetime(df['Date'])
-            df = df.rename(columns={'Date': 'timestamp'})
-            
+            df.columns = ["Date", "Close", "High", "Low", "Open", "Volume"]
+            df["Date"] = pd.to_datetime(df["Date"])
+            df = df.rename(columns={"Date": "timestamp"})
+
             print(f"📊 原始数据: {len(df)}行")
-            
+
             # 使用适配器添加技术指标
             df_with_indicators = adapter.add_indicators_to_dataframe(df, stock_code)
-            
-            print(f"✅ 添加技术指标后: {len(df_with_indicators)}行 x {len(df_with_indicators.columns)}列")
-            
+
+            print(
+                f"✅ 添加技术指标后: {len(df_with_indicators)}行 x {len(df_with_indicators.columns)}列"
+            )
+
             # 验证关键指标是否存在
-            key_indicators = ['RSI', 'MACD', 'ATR', 'Volume_SMA']
-            missing_key = [ind for ind in key_indicators if ind not in df_with_indicators.columns]
-            
+            key_indicators = ["RSI", "MACD", "ATR", "Volume_SMA"]
+            missing_key = [
+                ind for ind in key_indicators if ind not in df_with_indicators.columns
+            ]
+
             if missing_key:
                 print(f"⚠️  关键指标缺失: {missing_key}")
             else:
                 print("✅ 所有关键指标都存在")
-            
+
             # 显示最新数据
             latest_data = df_with_indicators.iloc[-1]
             print(f"\\n📈 最新数据 ({latest_data['timestamp'].strftime('%Y-%m-%d')}):")
             print(f"   收盘价: {latest_data['Close']:.2f}")
-            if 'RSI' in df_with_indicators.columns:
+            if "RSI" in df_with_indicators.columns:
                 print(f"   RSI: {latest_data['RSI']:.2f}")
-            if 'MACD' in df_with_indicators.columns:
+            if "MACD" in df_with_indicators.columns:
                 print(f"   MACD: {latest_data['MACD']:.4f}")
-            
+
             print("✅ 步骤4完成: 集成测试通过")
             print()
             return True
-            
+
         except Exception as e:
             print(f"❌ 步骤4失败: {e}")
             import traceback
+
             traceback.print_exc()
             return False
-    
+
     def run_all_steps(self):
         """运行所有步骤"""
         print("🚀 开始执行P0阶段修复...")
         print()
-        
+
         steps = [
             ("步骤1: 修复Registry实例化问题", self.step1_fix_registry_issue),
             ("步骤2: 验证因子计算一致性", self.step2_test_factor_consistency),
             ("步骤3: 检查缺失的技术因子", self.step3_check_missing_factors),
             ("步骤4: 集成测试", self.step4_integration_test),
         ]
-        
+
         results = []
-        
+
         for step_name, step_func in steps:
             try:
                 result = step_func()
@@ -592,21 +605,23 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"❌ {step_name} 执行异常: {e}")
                 results.append((step_name, False))
-        
+
         # 汇总结果
         print("=" * 60)
         print("📊 P0阶段执行结果汇总")
         print("=" * 60)
-        
+
         success_count = 0
         for step_name, result in results:
             status = "✅ 成功" if result else "❌ 失败"
             print(f"{status} - {step_name}")
             if result:
                 success_count += 1
-        
-        print(f"\\n📈 总体成功率: {success_count}/{len(results)} ({success_count/len(results)*100:.1f}%)")
-        
+
+        print(
+            f"\\n📈 总体成功率: {success_count}/{len(results)} ({success_count/len(results)*100:.1f}%)"
+        )
+
         if success_count == len(results):
             print("\\n🎉 P0阶段全部完成！可以进入P1阶段（代码重构）")
             print("\\n📋 下一步任务:")
@@ -619,9 +634,9 @@ if __name__ == "__main__":
             print(f"\\n⚠️  还有 {len(failed_steps)} 个步骤需要修复:")
             for step in failed_steps:
                 print(f"   - {step}")
-        
+
         print("=" * 60)
-        
+
         return success_count == len(results)
 
 
@@ -629,7 +644,7 @@ def main():
     """主函数"""
     fixer = AShareArchitectureFixer()
     success = fixer.run_all_steps()
-    
+
     if success:
         print("\\n🚀 P0阶段修复完成，A股统一架构基础已建立！")
         sys.exit(0)

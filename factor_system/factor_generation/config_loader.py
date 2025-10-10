@@ -6,7 +6,7 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 import yaml
 
@@ -48,23 +48,23 @@ class ConfigLoader:
 
         # 验证必需的配置项
         required_fields = [
-            'indicators.enable_ma',
-            'indicators.enable_ema',
-            'indicators.enable_macd',
-            'indicators.enable_rsi',
-            'indicators.enable_bbands',
-            'indicators.enable_stoch',
-            'indicators.enable_atr',
-            'indicators.enable_obv',
-            'indicators.enable_mstd',
-            'indicators.enable_manual_indicators',
-            'indicators.enable_all_periods',
-            'indicators.memory_efficient'
+            "indicators.enable_ma",
+            "indicators.enable_ema",
+            "indicators.enable_macd",
+            "indicators.enable_rsi",
+            "indicators.enable_bbands",
+            "indicators.enable_stoch",
+            "indicators.enable_atr",
+            "indicators.enable_obv",
+            "indicators.enable_mstd",
+            "indicators.enable_manual_indicators",
+            "indicators.enable_all_periods",
+            "indicators.memory_efficient",
         ]
 
         missing_fields = []
         for field in required_fields:
-            keys = field.split('.')
+            keys = field.split(".")
             value = config_data
             try:
                 for key in keys:
@@ -78,26 +78,28 @@ class ConfigLoader:
             raise ValueError(f"配置文件中缺少必需字段: {missing_fields}")
 
         # 创建配置对象
-        indicators_config = config_data.get('indicators', {})
+        indicators_config = config_data.get("indicators", {})
 
         try:
             config = IndicatorConfig(
-                enable_ma=indicators_config['enable_ma'],
-                enable_ema=indicators_config['enable_ema'],
-                enable_macd=indicators_config['enable_macd'],
-                enable_rsi=indicators_config['enable_rsi'],
-                enable_bbands=indicators_config['enable_bbands'],
-                enable_stoch=indicators_config['enable_stoch'],
-                enable_atr=indicators_config['enable_atr'],
-                enable_obv=indicators_config['enable_obv'],
-                enable_mstd=indicators_config['enable_mstd'],
-                enable_manual_indicators=indicators_config['enable_manual_indicators'],
-                enable_all_periods=indicators_config['enable_all_periods'],
-                memory_efficient=indicators_config['memory_efficient']
+                enable_ma=indicators_config["enable_ma"],
+                enable_ema=indicators_config["enable_ema"],
+                enable_macd=indicators_config["enable_macd"],
+                enable_rsi=indicators_config["enable_rsi"],
+                enable_bbands=indicators_config["enable_bbands"],
+                enable_stoch=indicators_config["enable_stoch"],
+                enable_atr=indicators_config["enable_atr"],
+                enable_obv=indicators_config["enable_obv"],
+                enable_mstd=indicators_config["enable_mstd"],
+                enable_manual_indicators=indicators_config["enable_manual_indicators"],
+                enable_all_periods=indicators_config["enable_all_periods"],
+                memory_efficient=indicators_config["memory_efficient"],
             )
 
             logger.info(f"配置加载成功: {config_path}")
-            logger.info(f"配置: enable_all_periods={config.enable_all_periods}, memory_efficient={config.memory_efficient}")
+            logger.info(
+                f"配置: enable_all_periods={config.enable_all_periods}, memory_efficient={config.memory_efficient}"
+            )
 
             return config
 
@@ -124,7 +126,7 @@ class ConfigLoader:
             enable_mstd=True,
             enable_manual_indicators=True,
             enable_all_periods=True,  # 启用所有周期
-            memory_efficient=False    # 使用完整功能模式
+            memory_efficient=False,  # 使用完整功能模式
         )
 
     @staticmethod
@@ -145,9 +147,9 @@ class ConfigLoader:
             enable_atr=True,
             enable_obv=True,
             enable_mstd=True,
-            enable_manual_indicators=True,   # 使用手动指标
-            enable_all_periods=True,        # 使用所有周期
-            memory_efficient=False          # 完整计算模式
+            enable_manual_indicators=True,  # 使用手动指标
+            enable_all_periods=True,  # 使用所有周期
+            memory_efficient=False,  # 完整计算模式
         )
 
     @staticmethod
@@ -169,10 +171,18 @@ class ConfigLoader:
 
         # 验证布尔类型
         bool_fields = [
-            'enable_ma', 'enable_ema', 'enable_macd', 'enable_rsi',
-            'enable_bbands', 'enable_stoch', 'enable_atr', 'enable_obv',
-            'enable_mstd', 'enable_manual_indicators',
-            'enable_all_periods', 'memory_efficient'
+            "enable_ma",
+            "enable_ema",
+            "enable_macd",
+            "enable_rsi",
+            "enable_bbands",
+            "enable_stoch",
+            "enable_atr",
+            "enable_obv",
+            "enable_mstd",
+            "enable_manual_indicators",
+            "enable_all_periods",
+            "memory_efficient",
         ]
 
         for field in bool_fields:

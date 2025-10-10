@@ -4,12 +4,12 @@
 确保FactorEngine严格继承factor_generation的所有因子，防止不一致修改
 """
 
-import json
 import hashlib
-from pathlib import Path
-from typing import Dict, List, Set, Optional
-from dataclasses import dataclass, asdict
+import json
 import logging
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FactorSnapshot:
     """因子快照数据结构"""
+
     factors: List[str]
     source_hash: str
     timestamp: str
@@ -42,7 +43,11 @@ class FactorConsistencyGuard:
         # 扫描enhanced_factor_calculator.py中的因子
         enhanced_file = gen_dir / "enhanced_factor_calculator.py"
         if enhanced_file.exists():
-            factors.update(self._extract_factors_from_file(enhanced_file, "enhanced_factor_calculator.py"))
+            factors.update(
+                self._extract_factors_from_file(
+                    enhanced_file, "enhanced_factor_calculator.py"
+                )
+            )
 
         # 扫描factor_generation_factors_list.txt中的因子清单
         factors_list_file = gen_dir.parent / "factor_generation_factors_list.txt"
@@ -69,15 +74,21 @@ class FactorConsistencyGuard:
         if factors_dir.exists():
             for factor_file in factors_dir.rglob("*.py"):
                 if factor_file.name != "__init__.py":
-                    factors.update(self._extract_factors_from_file(factor_file, str(factor_file.relative_to(self.root_dir))))
+                    factors.update(
+                        self._extract_factors_from_file(
+                            factor_file, str(factor_file.relative_to(self.root_dir))
+                        )
+                    )
 
         logger.info(f"✅ 从FactorEngine发现 {len(factors)} 个因子实现")
         return factors
 
-    def _extract_factors_from_file(self, file_path: Path, relative_name: str) -> Dict[str, FactorSnapshot]:
+    def _extract_factors_from_file(
+        self, file_path: Path, relative_name: str
+    ) -> Dict[str, FactorSnapshot]:
         """从Python文件中提取因子信息"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # 计算文件哈希
@@ -85,21 +96,59 @@ class FactorConsistencyGuard:
 
             # 提取因子类
             factors = {}
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             # 扩展的关键因子模式，覆盖更多因子类型
             key_patterns = [
-                'MACD', 'RSI', 'STOCH', 'WILLR', 'CCI', 'ATR', 'ADX', 'MFI',
-                'OBV', 'SMA', 'EMA', 'WMA', 'DEMA', 'TEMA', 'BBANDS', 'SAR',
-                'KAMA', 'TRIMA', 'T3', 'ROC', 'MOM', 'TRIX', 'ULTOSC', 'APO',
-                'PPO', 'CMO', 'DX', 'MINUS_DM', 'PLUS_DM', 'MINUS_DI', 'PLUS_DI',
-                'ADXR', 'AROON', 'AROONOSC', 'NATR', 'TRANGE', 'AD', 'ADOSC',
-                'BOP', 'ROCP', 'ROCR', 'ROCR100', 'STOCHRSI', 'STOCHF'
+                "MACD",
+                "RSI",
+                "STOCH",
+                "WILLR",
+                "CCI",
+                "ATR",
+                "ADX",
+                "MFI",
+                "OBV",
+                "SMA",
+                "EMA",
+                "WMA",
+                "DEMA",
+                "TEMA",
+                "BBANDS",
+                "SAR",
+                "KAMA",
+                "TRIMA",
+                "T3",
+                "ROC",
+                "MOM",
+                "TRIX",
+                "ULTOSC",
+                "APO",
+                "PPO",
+                "CMO",
+                "DX",
+                "MINUS_DM",
+                "PLUS_DM",
+                "MINUS_DI",
+                "PLUS_DI",
+                "ADXR",
+                "AROON",
+                "AROONOSC",
+                "NATR",
+                "TRANGE",
+                "AD",
+                "ADOSC",
+                "BOP",
+                "ROCP",
+                "ROCR",
+                "ROCR100",
+                "STOCHRSI",
+                "STOCHF",
             ]
 
             for i, line in enumerate(lines):
                 for pattern in key_patterns:
-                    if pattern in line and ('class' in line or 'def' in line):
+                    if pattern in line and ("class" in line or "def" in line):
                         # 提取因子名称
                         factor_name = self._extract_factor_name(line, pattern)
                         if factor_name:
@@ -108,7 +157,7 @@ class FactorConsistencyGuard:
                                 source_hash=file_hash,
                                 timestamp=str(file_path.stat().st_mtime),
                                 source_file=relative_name,
-                                line_count=len(lines)
+                                line_count=len(lines),
                             )
                         break
 
@@ -118,22 +167,24 @@ class FactorConsistencyGuard:
             logger.error(f"❌ 读取文件失败 {file_path}: {e}")
             return {}
 
-    def _extract_factors_from_list_file(self, file_path: Path) -> Dict[str, FactorSnapshot]:
+    def _extract_factors_from_list_file(
+        self, file_path: Path
+    ) -> Dict[str, FactorSnapshot]:
         """从factor_generation_factors_list.txt中提取因子"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # 计算文件哈希
             file_hash = hashlib.md5(content.encode()).hexdigest()
 
             factors = {}
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             for line in lines:
                 line = line.strip()
                 # 跳过注释和空行
-                if line.startswith('#') or not line or ':' in line:
+                if line.startswith("#") or not line or ":" in line:
                     continue
 
                 # 提取因子名（去掉参数部分，如RSI14 -> RSI）
@@ -144,7 +195,7 @@ class FactorConsistencyGuard:
                         source_hash=file_hash,
                         timestamp=str(file_path.stat().st_mtime),
                         source_file="factor_generation_factors_list.txt",
-                        line_count=len(lines)
+                        line_count=len(lines),
                     )
 
             return factors
@@ -153,24 +204,26 @@ class FactorConsistencyGuard:
             logger.error(f"❌ 读取因子清单失败 {file_path}: {e}")
             return {}
 
-    def _extract_factors_from_registry(self, file_path: Path) -> Dict[str, FactorSnapshot]:
+    def _extract_factors_from_registry(
+        self, file_path: Path
+    ) -> Dict[str, FactorSnapshot]:
         """从FACTOR_REGISTRY.md中提取因子"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # 计算文件哈希
             file_hash = hashlib.md5(content.encode()).hexdigest()
 
             factors = {}
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             for line in lines:
                 line = line.strip()
                 # 查找因子名行（以- 开头的列表项）
-                if line.startswith('- `') and line.endswith('`'):
+                if line.startswith("- `") and line.endswith("`"):
                     # 提取因子名，如- `RSI` -> RSI
-                    factor_name = line[3:-1].split('`')[0]
+                    factor_name = line[3:-1].split("`")[0]
                     factor_name = self._extract_base_factor_name(factor_name)
 
                     if factor_name:
@@ -179,7 +232,7 @@ class FactorConsistencyGuard:
                             source_hash=file_hash,
                             timestamp=str(file_path.stat().st_mtime),
                             source_file="FACTOR_REGISTRY.md",
-                            line_count=len(lines)
+                            line_count=len(lines),
                         )
 
             return factors
@@ -193,12 +246,12 @@ class FactorConsistencyGuard:
         import re
 
         # 处理参数化因子名，如RSI14 -> RSI, MACD_12_26_9 -> MACD
-        if re.match(r'^[A-Z]+[a-z]*\d+$', factor_name):
+        if re.match(r"^[A-Z]+[a-z]*\d+$", factor_name):
             # RSI14 -> RSI
-            return re.sub(r'\d+$', '', factor_name)
-        elif '_' in factor_name:
+            return re.sub(r"\d+$", "", factor_name)
+        elif "_" in factor_name:
             # MACD_12_26_9 -> MACD
-            return factor_name.split('_')[0]
+            return factor_name.split("_")[0]
         else:
             return factor_name
 
@@ -207,16 +260,16 @@ class FactorConsistencyGuard:
         line = line.strip()
 
         # 类定义
-        if line.startswith('class '):
-            parts = line.split('(')[0].split()
+        if line.startswith("class "):
+            parts = line.split("(")[0].split()
             if len(parts) >= 2:
                 class_name = parts[1]
                 if pattern in class_name:
                     return class_name
 
         # 函数定义
-        elif line.startswith('def '):
-            parts = line.split('(')[0].split()
+        elif line.startswith("def "):
+            parts = line.split("(")[0].split()
             if len(parts) >= 2:
                 func_name = parts[1]
                 if pattern in func_name:
@@ -236,18 +289,26 @@ class FactorConsistencyGuard:
 
         # 创建快照
         snapshot = {
-            "baseline": {name: asdict(snapshot) for name, snapshot in gen_factors.items()},
-            "current": {name: asdict(snapshot) for name, snapshot in engine_factors.items()},
+            "baseline": {
+                name: asdict(snapshot) for name, snapshot in gen_factors.items()
+            },
+            "current": {
+                name: asdict(snapshot) for name, snapshot in engine_factors.items()
+            },
             "metadata": {
                 "baseline_count": len(gen_factors),
                 "current_count": len(engine_factors),
-                "consistency_check": "PASS" if self._check_consistency(gen_factors, engine_factors) else "FAIL"
-            }
+                "consistency_check": (
+                    "PASS"
+                    if self._check_consistency(gen_factors, engine_factors)
+                    else "FAIL"
+                ),
+            },
         }
 
         # 保存快照
         try:
-            with open(self.snapshot_file, 'w', encoding='utf-8') as f:
+            with open(self.snapshot_file, "w", encoding="utf-8") as f:
                 json.dump(snapshot, f, indent=2, ensure_ascii=False)
 
             logger.info(f"✅ 基准快照已保存: {self.snapshot_file}")
@@ -260,7 +321,9 @@ class FactorConsistencyGuard:
             logger.error(f"❌ 保存快照失败: {e}")
             return False
 
-    def _check_consistency(self, baseline: Dict[str, FactorSnapshot], current: Dict[str, FactorSnapshot]) -> bool:
+    def _check_consistency(
+        self, baseline: Dict[str, FactorSnapshot], current: Dict[str, FactorSnapshot]
+    ) -> bool:
         """检查一致性"""
         baseline_factors = set(baseline.keys())
         current_factors = set(current.keys())
@@ -286,7 +349,7 @@ class FactorConsistencyGuard:
             return False
 
         try:
-            with open(self.snapshot_file, 'r', encoding='utf-8') as f:
+            with open(self.snapshot_file, "r", encoding="utf-8") as f:
                 snapshot = json.load(f)
 
             baseline_factors = set(snapshot["baseline"].keys())
@@ -326,7 +389,7 @@ class FactorConsistencyGuard:
             return False
 
         # 读取基准快照
-        with open(self.snapshot_file, 'r', encoding='utf-8') as f:
+        with open(self.snapshot_file, "r", encoding="utf-8") as f:
             snapshot = json.load(f)
 
         baseline_factors = set(snapshot["baseline"].keys())
@@ -365,19 +428,21 @@ class FactorConsistencyGuard:
             "factor_generation": {
                 "source": "factor_system/factor_generation",
                 "factor_count": len(gen_factor_names),
-                "factors": sorted(list(gen_factor_names))
+                "factors": sorted(list(gen_factor_names)),
             },
             "factor_engine": {
                 "source": "factor_system/factor_engine",
                 "factor_count": len(engine_factor_names),
-                "factors": sorted(list(engine_factor_names))
+                "factors": sorted(list(engine_factor_names)),
             },
             "consistency_analysis": {
-                "missing_in_engine": sorted(list(gen_factor_names - engine_factor_names)),
+                "missing_in_engine": sorted(
+                    list(gen_factor_names - engine_factor_names)
+                ),
                 "extra_in_engine": sorted(list(engine_factor_names - gen_factor_names)),
                 "common_factors": sorted(list(gen_factor_names & engine_factor_names)),
-                "is_consistent": len(gen_factor_names - engine_factor_names) == 0
-            }
+                "is_consistent": len(gen_factor_names - engine_factor_names) == 0,
+            },
         }
 
         return report
@@ -399,13 +464,17 @@ def main():
     print(f"📊 FactorEngine因子数: {report['factor_engine']['factor_count']}")
     print(f"📊 共同因子数: {len(report['consistency_analysis']['common_factors'])}")
 
-    if report['consistency_analysis']['missing_in_engine']:
-        print(f"❌ FactorEngine缺失: {report['consistency_analysis']['missing_in_engine']}")
+    if report["consistency_analysis"]["missing_in_engine"]:
+        print(
+            f"❌ FactorEngine缺失: {report['consistency_analysis']['missing_in_engine']}"
+        )
 
-    if report['consistency_analysis']['extra_in_engine']:
-        print(f"⚠️  FactorEngine多余: {report['consistency_analysis']['extra_in_engine']}")
+    if report["consistency_analysis"]["extra_in_engine"]:
+        print(
+            f"⚠️  FactorEngine多余: {report['consistency_analysis']['extra_in_engine']}"
+        )
 
-    if report['consistency_analysis']['is_consistent']:
+    if report["consistency_analysis"]["is_consistent"]:
         print("✅ 因子一致性验证通过")
     else:
         print("❌ 因子一致性验证失败")

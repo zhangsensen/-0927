@@ -2,8 +2,10 @@
 """
 批量修复K线模式识别的占位符实现
 """
-import pandas as pd
 import re
+
+import pandas as pd
+
 
 def fix_candlestick_patterns():
     """修复technical_generated.py中的K线模式占位符"""
@@ -11,7 +13,7 @@ def fix_candlestick_patterns():
     file_path = "/Users/zhangshenshen/深度量化0927/factor_system/factor_engine/factors/technical_generated.py"
 
     # 读取文件
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     # 定义替换模式 - 将占位符实现替换为真实的K线模式识别
@@ -58,15 +60,15 @@ def fix_candlestick_patterns():
             return pd.Series([np.nan] * len(close), index=close.index, name="TA_CDL2CROWS")"""
 
     # 由于正则表达式比较复杂，我们采用更简单的方法：找到所有TA_CDL类并替换它们的calculate方法
-    cdl_classes = re.findall(r'class (TA_CDL[A-Z0-9_]+)\(BaseFactor\):', content)
+    cdl_classes = re.findall(r"class (TA_CDL[A-Z0-9_]+)\(BaseFactor\):", content)
 
     print(f"找到 {len(cdl_classes)} 个K线模式类需要修复")
 
     for class_name in cdl_classes:
-        pattern_name = class_name.replace('TA_', '')
+        pattern_name = class_name.replace("TA_", "")
 
         # 构建新的实现
-        new_method = f'''    def calculate(self, data: pd.DataFrame) -> pd.Series:
+        new_method = f"""    def calculate(self, data: pd.DataFrame) -> pd.Series:
         \"\"\"
         计算因子值
         Args:
@@ -87,7 +89,7 @@ def fix_candlestick_patterns():
             return result.rename("{class_name}")
         except Exception as e:
             logger.error(f"计算{class_name}失败: {{e}}")
-            return pd.Series([np.nan] * len(close), index=close.index, name="{class_name}")'''
+            return pd.Series([np.nan] * len(close), index=close.index, name="{class_name}")"""
 
         # 查找并替换原有的calculate方法
         class_pattern = rf'(class {class_name}\(BaseFactor\):.*?)(    def calculate\(self, data: pd\.DataFrame\) -> pd\.Series:.*?return pd\.Series\(\[np\.nan\] \* len\(price\), index=price\.index, name="\{{factor_name\}}"\))'
@@ -131,19 +133,24 @@ def fix_candlestick_patterns():
             print(f"❌ 未找到 {class_name} 的完整实现，尝试部分替换")
 
             # 尝试部分替换
-            placeholder_pattern = f'暂时返回0作为占位符'
+            placeholder_pattern = f"暂时返回0作为占位符"
             if placeholder_pattern in content:
                 content = content.replace(
-                    '                # 暂时返回0作为占位符\n                result = pd.Series([0] * len(price), index=price.index, name="' + class_name + '")',
-                    '                from factor_system.shared.factor_calculators import calculate_candlestick_pattern\n                result = calculate_candlestick_pattern(\n                    open_price, high, low, close, "' + pattern_name + '"\n                )'
+                    '                # 暂时返回0作为占位符\n                result = pd.Series([0] * len(price), index=price.index, name="'
+                    + class_name
+                    + '")',
+                    '                from factor_system.shared.factor_calculators import calculate_candlestick_pattern\n                result = calculate_candlestick_pattern(\n                    open_price, high, low, close, "'
+                    + pattern_name
+                    + '"\n                )',
                 )
                 print(f"✅ 部分修复了 {class_name}")
 
     # 写回文件
-    with open(file_path, 'w', encoding='utf-8') as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
 
     print("K线模式识别修复完成！")
+
 
 if __name__ == "__main__":
     fix_candlestick_patterns()

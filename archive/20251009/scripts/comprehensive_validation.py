@@ -3,13 +3,15 @@
 FactorEngine修复后的端到端验证测试
 验证所有修复的有效性
 """
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
+
 
 def create_test_data():
     """创建全面的测试数据"""
-    dates = pd.date_range(start='2025-01-01', end='2025-01-31', freq='D')
+    dates = pd.date_range(start="2025-01-01", end="2025-01-31", freq="D")
     n = len(dates)
 
     np.random.seed(42)  # 确保可重现
@@ -21,28 +23,31 @@ def create_test_data():
     close_prices = np.maximum(close_prices, 10)
 
     # 创建典型K线模式
-    for i in range(5, n-5):
+    for i in range(5, n - 5):
         if i % 10 == 0:
             # 创建Doji模式
-            close_prices[i] = close_prices[i-1] + np.random.normal(0, 0.1)
+            close_prices[i] = close_prices[i - 1] + np.random.normal(0, 0.1)
         elif i % 15 == 0:
             # 创建锤子线模式
-            close_prices[i] = max(close_prices[i-1], close_prices[i])
+            close_prices[i] = max(close_prices[i - 1], close_prices[i])
 
-    data = pd.DataFrame({
-        'timestamp': dates,
-        'open': close_prices + np.random.normal(0, 0.5, n),
-        'high': close_prices + np.abs(np.random.normal(1, 0.5, n)),
-        'low': close_prices - np.abs(np.random.normal(1, 0.5, n)),
-        'close': close_prices,
-        'volume': np.random.randint(1000000, 5000000, n)
-    })
+    data = pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": close_prices + np.random.normal(0, 0.5, n),
+            "high": close_prices + np.abs(np.random.normal(1, 0.5, n)),
+            "low": close_prices - np.abs(np.random.normal(1, 0.5, n)),
+            "close": close_prices,
+            "volume": np.random.randint(1000000, 5000000, n),
+        }
+    )
 
     # 确保OHLC关系正确
-    data['high'] = np.maximum.reduce([data['open'], data['high'], data['close']])
-    data['low'] = np.minimum.reduce([data['open'], data['low'], data['close']])
+    data["high"] = np.maximum.reduce([data["open"], data["high"], data["close"]])
+    data["low"] = np.minimum.reduce([data["open"], data["low"], data["close"]])
 
-    return data.set_index('timestamp')
+    return data.set_index("timestamp")
+
 
 def test_macd_fix():
     """测试MACD修复"""
@@ -74,12 +79,15 @@ def test_macd_fix():
         print(f"  ❌ MACD测试失败: {e}")
         return False
 
+
 def test_bollinger_bands_fix():
     """测试布林带修复"""
     print("\n🔍 测试布林带修复...")
 
     try:
-        from factor_system.factor_engine.factors.overlap_generated import BB_10_2_0_Upper
+        from factor_system.factor_engine.factors.overlap_generated import (
+            BB_10_2_0_Upper,
+        )
 
         data = create_test_data()
         bb_instance = BB_10_2_0_Upper()
@@ -91,7 +99,7 @@ def test_bollinger_bands_fix():
         print(f"  🔍 有效值数量: {result.notna().sum()}")
 
         # 验证是上轨而不是中轨
-        close_price = data['close']
+        close_price = data["close"]
         upper_ratio = (close_price / result).mean()
         if upper_ratio < 1.0:  # 价格通常低于上轨
             print(f"  ✅ 确认为上轨（价格/上轨均值: {upper_ratio:.3f} < 1）")
@@ -104,13 +112,16 @@ def test_bollinger_bands_fix():
         print(f"  ❌ 布林带测试失败: {e}")
         return False
 
+
 def test_candlestick_patterns():
     """测试K线模式识别修复"""
     print("\n🔍 测试K线模式识别修复...")
 
     try:
         from factor_system.factor_engine.factors.technical_generated import (
-            TA_CDLDOJI, TA_CDLHAMMER, TA_CDL2CROWS
+            TA_CDL2CROWS,
+            TA_CDLDOJI,
+            TA_CDLHAMMER,
         )
 
         data = create_test_data()
@@ -118,9 +129,9 @@ def test_candlestick_patterns():
         patterns_successful = 0
 
         for pattern_name, pattern_class in [
-            ('TA_CDLDOJI', TA_CDLDOJI),
-            ('TA_CDLHAMMER', TA_CDLHAMMER),
-            ('TA_CDL2CROWS', TA_CDL2CROWS),
+            ("TA_CDLDOJI", TA_CDLDOJI),
+            ("TA_CDLHAMMER", TA_CDLHAMMER),
+            ("TA_CDL2CROWS", TA_CDL2CROWS),
         ]:
             try:
                 pattern_instance = pattern_class()
@@ -131,15 +142,21 @@ def test_candlestick_patterns():
                 print(f"  ✅ {pattern_name}: {len(signals)} 个信号")
 
                 if len(signals) > 0:
-                    print(f"    🎯 信号示例: {signals.head(1).index[0].strftime('%Y-%m-%d')} = {signals.iloc[0]:.0f}")
+                    print(
+                        f"    🎯 信号示例: {signals.head(1).index[0].strftime('%Y-%m-%d')} = {signals.iloc[0]:.0f}"
+                    )
 
                 patterns_successful += 1
 
             except Exception as e:
                 print(f"  ❌ {pattern_name}: 失败 - {e}")
 
-        success_rate = patterns_successful / patterns_tested if patterns_tested > 0 else 0
-        print(f"  📊 K线模式成功率: {success_rate:.1%} ({patterns_successful}/{patterns_tested})")
+        success_rate = (
+            patterns_successful / patterns_tested if patterns_tested > 0 else 0
+        )
+        print(
+            f"  📊 K线模式成功率: {success_rate:.1%} ({patterns_successful}/{patterns_tested})"
+        )
 
         return success_rate >= 0.8
 
@@ -147,13 +164,16 @@ def test_candlestick_patterns():
         print(f"  ❌ K线模式测试失败: {e}")
         return False
 
+
 def test_volume_ratios():
     """测试成交量比率修复"""
     print("\n🔍 测试成交量比率修复...")
 
     try:
         from factor_system.factor_engine.factors.volume_generated import (
-            Volume_Ratio10, Volume_Ratio20, Volume_Ratio30
+            Volume_Ratio10,
+            Volume_Ratio20,
+            Volume_Ratio30,
         )
 
         data = create_test_data()
@@ -161,9 +181,9 @@ def test_volume_ratios():
         ratios_correct = 0
 
         for ratio_name, ratio_class, expected_period in [
-            ('Volume_Ratio10', Volume_Ratio10, 10),
-            ('Volume_Ratio20', Volume_Ratio20, 20),
-            ('Volume_Ratio30', Volume_Ratio30, 30),
+            ("Volume_Ratio10", Volume_Ratio10, 10),
+            ("Volume_Ratio20", Volume_Ratio20, 20),
+            ("Volume_Ratio30", Volume_Ratio30, 30),
         ]:
             try:
                 ratio_instance = ratio_class()
@@ -171,8 +191,10 @@ def test_volume_ratios():
                 ratios_tested += 1
 
                 # 验证周期是否正确
-                volume_sma_manual = data['volume'].rolling(window=expected_period).mean()
-                expected_result = data['volume'] / (volume_sma_manual + 1e-8)
+                volume_sma_manual = (
+                    data["volume"].rolling(window=expected_period).mean()
+                )
+                expected_result = data["volume"] / (volume_sma_manual + 1e-8)
 
                 # 只比较有值的部分
                 valid_mask = result.notna() & expected_result.notna()
@@ -182,7 +204,9 @@ def test_volume_ratios():
                         print(f"  ✅ {ratio_name}: 周期 {expected_period} 正确")
                         ratios_correct += 1
                     else:
-                        print(f"  ❌ {ratio_name}: 周期 {expected_period} 错误 (误差: {diff})")
+                        print(
+                            f"  ❌ {ratio_name}: 周期 {expected_period} 错误 (误差: {diff})"
+                        )
                 else:
                     print(f"  ⚠️ {ratio_name}: 数据不足，无法验证")
 
@@ -190,13 +214,16 @@ def test_volume_ratios():
                 print(f"  ❌ {ratio_name}: 失败 - {e}")
 
         success_rate = ratios_correct / ratios_tested if ratios_tested > 0 else 0
-        print(f"  📊 成交量比率成功率: {success_rate:.1%} ({ratios_correct}/{ratios_tested})")
+        print(
+            f"  📊 成交量比率成功率: {success_rate:.1%} ({ratios_correct}/{ratios_tested})"
+        )
 
         return success_rate >= 0.8
 
     except Exception as e:
         print(f"  ❌ 成交量比率测试失败: {e}")
         return False
+
 
 def test_factor_engine_integration():
     """测试FactorEngine集成"""
@@ -209,10 +236,7 @@ def test_factor_engine_integration():
 
         # 测试单个因子计算
         rsi_result = api.calculate_single_factor(
-            factor_id="RSI14",
-            symbol="TEST",
-            timeframe="daily",
-            data=data
+            factor_id="RSI14", symbol="TEST", timeframe="daily", data=data
         )
 
         print(f"  ✅ 单因子计算成功: RSI14")
@@ -223,7 +247,7 @@ def test_factor_engine_integration():
             factor_ids=["RSI14", "MACD_12_26_9", "TA_CDLDOJI"],
             symbol="TEST",
             timeframe="daily",
-            data=data
+            data=data,
         )
 
         print(f"  ✅ 多因子计算成功: {len(factors_result)} 个因子")
@@ -235,6 +259,7 @@ def test_factor_engine_integration():
     except Exception as e:
         print(f"  ❌ FactorEngine集成测试失败: {e}")
         return False
+
 
 def main():
     """主测试函数"""
@@ -288,6 +313,7 @@ def main():
         print("⚠️ 多项测试失败，需要进一步修复！")
 
     return passed == total
+
 
 if __name__ == "__main__":
     main()

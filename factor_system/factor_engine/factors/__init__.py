@@ -2,15 +2,15 @@
 自动生成的因子模块 - 使用SHARED_CALCULATORS确保一致性
 """
 
-# 导入所有生成的因子
-from .technical_generated import *
-from .statistic_generated import *
-from .volume_generated import *
 from .overlap_generated import *
+from .statistic_generated import *
 
 # 导入手动创建的核心因子
-from .technical import RSI, MACD, MACDSignal, MACDHistogram, STOCH
+from .technical import MACD, RSI, STOCH, MACDHistogram, MACDSignal
 
+# 导入所有生成的因子
+from .technical_generated import *
+from .volume_generated import *
 
 # 所有生成的因子类
 GENERATED_FACTORS = [

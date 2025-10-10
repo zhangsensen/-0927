@@ -131,8 +131,8 @@ class SafeTimeSeriesProcessor(Generic[T]):
         return result
 
     # calculate_forward_returns 函数已删除
-# 原函数存在未来函数风险（shift(-horizon)）
-# 生产代码中未使用，直接删除以确保安全性
+    # 原函数存在未来函数风险（shift(-horizon)）
+    # 生产代码中未使用，直接删除以确保安全性
 
     def validate_no_future_leakage(self, data: pd.DataFrame) -> bool:
         """验证数据中无未来信息泄露"""

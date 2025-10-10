@@ -94,9 +94,7 @@ class SessionIndexManager:
 
         return sessions
 
-    def update_session(
-        self, session_id: str, updates: Dict[str, Any]
-    ) -> None:
+    def update_session(self, session_id: str, updates: Dict[str, Any]) -> None:
         """更新会话元数据"""
         if session_id not in self.index:
             logger.warning(f"会话不存在: {session_id}，无法更新")
@@ -137,7 +135,11 @@ class SessionIndexManager:
                     with open(summary_path, "r", encoding="utf-8") as f:
                         summary = json.load(f)
                     metadata = {
-                        "type": "combination" if "total_combinations" in summary else "multi_tf",
+                        "type": (
+                            "combination"
+                            if "total_combinations" in summary
+                            else "multi_tf"
+                        ),
                         "symbol": summary.get("symbol", "unknown"),
                         "timeframe": summary.get("timeframe", "unknown"),
                         "total_combinations": summary.get("total_combinations"),
@@ -204,7 +206,9 @@ class SessionIndexManager:
             symbol = session.get("symbol", "unknown")
             registered_at = session.get("registered_at", "unknown")
             lines.append(f"  {session_id[:50]}")
-            lines.append(f"    类型: {session_type}, 标的: {symbol}, 时间: {registered_at}")
+            lines.append(
+                f"    类型: {session_type}, 标的: {symbol}, 时间: {registered_at}"
+            )
 
         lines.append("")
         lines.append("=" * 80)
@@ -229,5 +233,3 @@ if __name__ == "__main__":
         rebuild_session_index(config.backtest_output_dir)
     else:
         print("使用方法: python -m hk_midfreq.session_index_manager rebuild")
-
-

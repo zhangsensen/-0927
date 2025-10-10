@@ -8,6 +8,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
 
+
 class BBANDS(BaseFactor):
     """
     BBANDS - Bollinger Bands
@@ -39,7 +40,7 @@ class BBANDS(BaseFactor):
         Returns:
             BBANDS中轨值
         """
-        close = data['close']
+        close = data["close"]
 
         # 使用VectorBT适配器计算BBANDS，确保与factor_generation完全一致
         adapter = get_vectorbt_adapter()

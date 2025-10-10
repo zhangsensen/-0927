@@ -8,6 +8,7 @@ import pandas as pd
 from factor_system.factor_engine.core.base_factor import BaseFactor
 from factor_system.factor_engine.core.vectorbt_adapter import get_vectorbt_adapter
 
+
 class EMA(BaseFactor):
     """
     EMA - Exponential Moving Average
@@ -36,7 +37,7 @@ class EMA(BaseFactor):
         Returns:
             EMA values
         """
-        close = data['close']
+        close = data["close"]
 
         # 使用VectorBT适配器计算EMA，确保与factor_generation完全一致
         adapter = get_vectorbt_adapter()

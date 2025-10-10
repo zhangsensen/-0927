@@ -21,49 +21,51 @@ logger = logging.getLogger(__name__)
 class BacktestFactorAdapter:
     """
     回测因子适配器
-    
+
     为回测系统提供统一的因子计算接口，
     确保与因子生成阶段使用相同的FactorEngine
     """
-    
+
     _instance: Optional["BacktestFactorAdapter"] = None
     _calculator: Optional[BatchFactorCalculator] = None
-    
+
     def __new__(cls):
         """单例模式"""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
         """初始化适配器"""
         if self._calculator is None:
             self._initialize_calculator()
-    
+
     def _initialize_calculator(self):
         """初始化批量计算器（使用统一API）"""
         try:
-            from hk_midfreq.config import PathConfig
             from factor_system.factor_engine import api
-            
+            from hk_midfreq.config import PathConfig
+
             # 创建PathConfig实例
             path_config = PathConfig()
-            
+
             # 直接使用统一API获取引擎（单例模式）
             self._engine = api.get_engine(
                 raw_data_dir=path_config.raw_data_dir,
                 registry_file=path_config.factor_registry_path,
             )
-            
+
             # 向后兼容：保留_calculator引用
             # 但实际计算直接用api模块
             self._calculator = None
-            
-            logger.info(f"BacktestFactorAdapter初始化完成（使用统一API），{len(self._engine.registry.factors)}个因子可用")
+
+            logger.info(
+                f"BacktestFactorAdapter初始化完成（使用统一API），{len(self._engine.registry.factors)}个因子可用"
+            )
         except Exception as e:
             logger.error(f"初始化BacktestFactorAdapter失败: {e}")
             raise
-    
+
     def calculate_factor(
         self,
         factor_name: str,
@@ -73,34 +75,34 @@ class BacktestFactorAdapter:
     ) -> pd.Series:
         """
         计算单个因子（使用统一API）
-        
+
         Args:
             factor_name: 因子名称（如 "RSI", "STOCH", "WILLR"）
             symbol: 股票代码
             timeframe: 时间框架
             data: OHLCV数据
-        
+
         Returns:
             因子值Series
         """
         from factor_system.factor_engine import api
-        
+
         if self._engine is None:
             raise RuntimeError("FactorEngine未初始化")
-        
+
         # 提取因子ID（去除后缀数字）
         factor_id = self._extract_factor_id(factor_name)
-        
+
         # 检查因子是否可用
         available_factors = list(self._engine.registry.factors.keys())
         if factor_id not in available_factors:
             raise api.UnknownFactorError(factor_id, available_factors)
-        
+
         # 计算因子
         try:
             start_date = data.index.min()
             end_date = data.index.max()
-            
+
             # 使用统一API计算
             factors_df = api.calculate_factors(
                 factor_ids=[factor_id],
@@ -110,27 +112,27 @@ class BacktestFactorAdapter:
                 end_date=end_date,
                 use_cache=True,
             )
-            
+
             # 提取单symbol结果
             if isinstance(factors_df.index, pd.MultiIndex):
-                factors_df = factors_df.xs(symbol, level='symbol')
-            
+                factors_df = factors_df.xs(symbol, level="symbol")
+
             if factor_id in factors_df.columns:
                 return factors_df[factor_id]
             else:
                 logger.warning(f"因子{factor_id}未在结果中找到")
                 return pd.Series(index=data.index, dtype=float)
-        
+
         except api.UnknownFactorError:
             raise  # 重新抛出，让上层处理
         except Exception as e:
             logger.error(f"计算因子{factor_name}失败: {e}")
             return pd.Series(index=data.index, dtype=float)
-    
+
     def _extract_factor_id(self, factor_name: str) -> str:
         """
         从因子名称提取因子ID
-        
+
         例如: "RSI_14" -> "RSI", "STOCH_14_3" -> "STOCH"
         """
         # 常见模式
@@ -143,20 +145,20 @@ class BacktestFactorAdapter:
             for part in parts:
                 if part.isalpha():
                     return part
-        
+
         # 没有下划线，直接返回
         return factor_name
-    
+
     def get_engine(self):
         """获取底层引擎实例"""
         if self._engine is None:
             self._initialize_calculator()
         return self._engine
-    
+
     def get_calculator(self):
         """
         获取底层计算器实例（已废弃，使用get_engine）
-        
+
         ⚠️ 此方法仅为向后兼容保留，推荐直接使用 factor_engine.api
         """
         logger.warning("get_calculator已废弃，推荐使用 factor_engine.api 模块")
@@ -183,16 +185,15 @@ def calculate_factor_for_backtest(
 ) -> pd.Series:
     """
     便捷函数：为回测计算因子
-    
+
     Args:
         factor_name: 因子名称
         symbol: 股票代码
         timeframe: 时间框架
         data: OHLCV数据
-    
+
     Returns:
         因子值Series
     """
     adapter = get_factor_adapter()
     return adapter.calculate_factor(factor_name, symbol, timeframe, data)
-

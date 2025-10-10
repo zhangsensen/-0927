@@ -40,4 +40,6 @@ class PLUS_DI(BaseFactor):
         close = data["close"]
 
         # 使用共享计算器计算，确保与factor_generation完全一致
-        return SHARED_CALCULATORS.calculate_plus_di(high, low, close, period=self.period)
+        return SHARED_CALCULATORS.calculate_plus_di(
+            high, low, close, period=self.period
+        )

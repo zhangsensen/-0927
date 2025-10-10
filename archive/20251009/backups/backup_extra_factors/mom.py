@@ -23,7 +23,7 @@ class MOM(BaseFactor):
     def __init__(self, period: int = 14):
         super().__init__(period=period)
         self.period = period
-        
+
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """
         计算MOM - 使用VectorBT确保与factor_generation一致
@@ -36,9 +36,7 @@ class MOM(BaseFactor):
         """
         # 提取所需数据列
         close = data["close"]
-        
+
         # 使用VectorBT适配器计算，确保与factor_generation完全一致
         adapter = get_vectorbt_adapter()
         return adapter.calculate_mom(close, timeperiod=self.period)
-
-    

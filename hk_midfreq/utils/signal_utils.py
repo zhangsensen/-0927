@@ -78,9 +78,7 @@ def align_time_indices(
         aligned_price = price_series.loc[common_index]
         aligned_factor = factor_df.loc[common_index]
 
-        logger.debug(
-            f"时间对齐完成 (intersection): {len(common_index)}个数据点"
-        )
+        logger.debug(f"时间对齐完成 (intersection): {len(common_index)}个数据点")
 
     elif method == "reindex_ffill":
         # 重索引到价格时间，前向填充因子
@@ -94,9 +92,7 @@ def align_time_indices(
         if len(aligned_price) == 0:
             raise ValueError("对齐后无有效数据点")
 
-        logger.debug(
-            f"时间对齐完成 (reindex_ffill): {len(aligned_price)}个数据点"
-        )
+        logger.debug(f"时间对齐完成 (reindex_ffill): {len(aligned_price)}个数据点")
 
     else:
         raise ValueError(f"不支持的对齐方法: {method}")
@@ -193,5 +189,3 @@ def calculate_correlation_matrix(
     corr = corr.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
     return corr
-
-

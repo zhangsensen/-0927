@@ -10,16 +10,17 @@ FactorEngine深度修复验证测试
 """
 
 import tempfile
-from datetime import datetime
-from pathlib import Path
-import pandas as pd
-import numpy as np
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
 
-from factor_system.factor_engine.api import get_engine, clear_global_engine
-from factor_system.factor_engine.core.cache import LRUCache, CacheConfig
+import numpy as np
+import pandas as pd
+
+from factor_system.factor_engine.api import clear_global_engine, get_engine
+from factor_system.factor_engine.core.cache import CacheConfig, LRUCache
 
 
 class TestFactorEngineDeepFixes:
@@ -30,7 +31,7 @@ class TestFactorEngineDeepFixes:
         print("🧪 测试缓存线程安全性...")
 
         cache = LRUCache(maxsize_mb=1)
-        cache.set_copy_mode('view')
+        cache.set_copy_mode("view")
 
         # 创建测试数据
         def cache_worker(worker_id):
@@ -38,10 +39,9 @@ class TestFactorEngineDeepFixes:
             results = []
             for i in range(10):
                 key = f"worker_{worker_id}_key_{i}"
-                data = pd.DataFrame({
-                    'values': np.random.randn(100),
-                    'worker_id': [worker_id] * 100
-                })
+                data = pd.DataFrame(
+                    {"values": np.random.randn(100), "worker_id": [worker_id] * 100}
+                )
 
                 # 写入缓存
                 cache.set(key, data)
@@ -81,34 +81,36 @@ class TestFactorEngineDeepFixes:
         print("🧪 测试copy_mode配置生效...")
 
         cache = LRUCache(maxsize_mb=10)
-        test_data = pd.DataFrame({
-            'values': [1, 2, 3, 4, 5]
-        })
+        test_data = pd.DataFrame({"values": [1, 2, 3, 4, 5]})
 
         # 测试view模式
-        cache.set_copy_mode('view')
-        cache.set('test_view', test_data)
-        retrieved_view = cache.get('test_view')
+        cache.set_copy_mode("view")
+        cache.set("test_view", test_data)
+        retrieved_view = cache.get("test_view")
 
         # 修改原始数据
-        test_data.loc[0, 'values'] = 999
+        test_data.loc[0, "values"] = 999
 
         # view模式下，修改应该影响缓存数据
         if retrieved_view is not None:
-            print(f"view模式 - 原始数据修改后缓存数据: {retrieved_view.loc[0, 'values']}")
+            print(
+                f"view模式 - 原始数据修改后缓存数据: {retrieved_view.loc[0, 'values']}"
+            )
 
         # 测试copy模式
-        test_data = pd.DataFrame({'values': [1, 2, 3, 4, 5]})
-        cache.set_copy_mode('copy')
-        cache.set('test_copy', test_data)
-        retrieved_copy = cache.get('test_copy')
+        test_data = pd.DataFrame({"values": [1, 2, 3, 4, 5]})
+        cache.set_copy_mode("copy")
+        cache.set("test_copy", test_data)
+        retrieved_copy = cache.get("test_copy")
 
         # 修改原始数据
-        test_data.loc[0, 'values'] = 888
+        test_data.loc[0, "values"] = 888
 
         # copy模式下，修改不应该影响缓存数据
         if retrieved_copy is not None:
-            print(f"copy模式 - 原始数据修改后缓存数据: {retrieved_copy.loc[0, 'values']}")
+            print(
+                f"copy模式 - 原始数据修改后缓存数据: {retrieved_copy.loc[0, 'values']}"
+            )
 
         print("✅ copy_mode配置测试通过")
 
@@ -118,24 +120,31 @@ class TestFactorEngineDeepFixes:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # 创建多符号测试数据
-            symbols = ['0700.HK', '0005.HK', '0941.HK']
+            symbols = ["0700.HK", "0005.HK", "0941.HK"]
             test_data_dict = {}
 
             for symbol in symbols:
-                data = pd.DataFrame({
-                    'open': np.random.rand(100) * 10 + 100,
-                    'high': np.random.rand(100) * 10 + 105,
-                    'low': np.random.rand(100) * 10 + 95,
-                    'close': np.random.rand(100) * 10 + 100,
-                    'volume': np.random.randint(1000, 10000, 100)
-                }, index=pd.date_range('2025-01-01', periods=100, freq='1min'))
+                data = pd.DataFrame(
+                    {
+                        "open": np.random.rand(100) * 10 + 100,
+                        "high": np.random.rand(100) * 10 + 105,
+                        "low": np.random.rand(100) * 10 + 95,
+                        "close": np.random.rand(100) * 10 + 100,
+                        "volume": np.random.randint(1000, 10000, 100),
+                    },
+                    index=pd.date_range("2025-01-01", periods=100, freq="1min"),
+                )
 
-                data_file = Path(temp_dir) / f"{symbol}_1min_2025-01-01_2025-01-02.parquet"
+                data_file = (
+                    Path(temp_dir) / f"{symbol}_1min_2025-01-01_2025-01-02.parquet"
+                )
                 data.to_parquet(data_file)
                 test_data_dict[symbol] = data
 
             # 创建MultiIndex DataFrame模拟原始数据
-            all_data = pd.concat(test_data_dict, keys=symbols, names=['symbol', 'datetime'])
+            all_data = pd.concat(
+                test_data_dict, keys=symbols, names=["symbol", "datetime"]
+            )
 
             try:
                 from factor_system.factor_engine.core.engine import FactorEngine
@@ -147,8 +156,10 @@ class TestFactorEngineDeepFixes:
 
                 # 测试并行处理（模拟engine._compute_factors中的逻辑）
                 def process_symbol(sym):
-                    symbol_data = all_data.xs(sym, level='symbol').copy()  # 修复后的代码
-                    return len(symbol_data), symbol_data.iloc[0]['close']
+                    symbol_data = all_data.xs(
+                        sym, level="symbol"
+                    ).copy()  # 修复后的代码
+                    return len(symbol_data), symbol_data.iloc[0]["close"]
 
                 with ThreadPoolExecutor(max_workers=3) as executor:
                     futures = [executor.submit(process_symbol, sym) for sym in symbols]
@@ -178,13 +189,16 @@ class TestFactorEngineDeepFixes:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # 创建测试数据
-            test_data = pd.DataFrame({
-                'open': [100, 102, 101, 103, 105],
-                'high': [103, 104, 102, 106, 107],
-                'low': [99, 101, 100, 102, 104],
-                'close': [102, 101, 103, 105, 106],
-                'volume': [1000, 1200, 800, 1500, 2000]
-            }, index=pd.date_range('2025-01-01', periods=5))
+            test_data = pd.DataFrame(
+                {
+                    "open": [100, 102, 101, 103, 105],
+                    "high": [103, 104, 102, 106, 107],
+                    "low": [99, 101, 100, 102, 104],
+                    "close": [102, 101, 103, 105, 106],
+                    "volume": [1000, 1200, 800, 1500, 2000],
+                },
+                index=pd.date_range("2025-01-01", periods=5),
+            )
 
             data_file = Path(temp_dir) / "0700.HK_1min_2025-01-01_2025-01-05.parquet"
             data_file.parent.mkdir(parents=True, exist_ok=True)
@@ -199,11 +213,11 @@ class TestFactorEngineDeepFixes:
                 engine = FactorEngine(registry=registry)
 
                 # 模拟因子计算（包含失败情况）
-                factor_ids = ['RSI', 'MACD', 'NONEXISTENT_FACTOR']  # 包含不存在的因子
+                factor_ids = ["RSI", "MACD", "NONEXISTENT_FACTOR"]  # 包含不存在的因子
                 factor_params = {}
 
                 result = engine._compute_single_symbol_factors(
-                    factor_ids, test_data, '0700.HK', factor_params
+                    factor_ids, test_data, "0700.HK", factor_params
                 )
 
                 # 验证结果
@@ -211,8 +225,10 @@ class TestFactorEngineDeepFixes:
                 assert len(result) == len(test_data), "结果长度应该与输入数据一致"
 
                 # 检查失败因子的处理
-                if 'NONEXISTENT_FACTOR' in result.columns:
-                    assert result['NONEXISTENT_FACTOR'].isna().all(), "失败因子应该填充NaN"
+                if "NONEXISTENT_FACTOR" in result.columns:
+                    assert (
+                        result["NONEXISTENT_FACTOR"].isna().all()
+                    ), "失败因子应该填充NaN"
 
                 print("✅ 因子计算失败处理测试通过")
 

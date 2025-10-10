@@ -10,17 +10,17 @@ def extract_all_factors():
     """从enhanced_factor_calculator.py中提取所有因子"""
 
     # 读取enhanced_factor_calculator.py
-    with open('/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py', 'r', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_system/factor_generation/enhanced_factor_calculator.py",
+        "r",
+        encoding="utf-8",
+    ) as f:
         content = f.read()
 
     factors = set()
 
     # 1. 提取所有MA因子 - 查找MA模式
-    ma_patterns = [
-        r'factor_data\[f"MA(\w+)"\]',
-        r'f"MA(\w+)"',
-        r'"MA(\w+)"'
-    ]
+    ma_patterns = [r'factor_data\[f"MA(\w+)"\]', r'f"MA(\w+)"', r'"MA(\w+)"']
 
     for pattern in ma_patterns:
         ma_matches = re.findall(pattern, content)
@@ -29,11 +29,7 @@ def extract_all_factors():
                 factors.add(f"MA{w}")
 
     # 2. 提取所有EMA因子
-    ema_patterns = [
-        r'factor_data\[f"EMA(\w+)"\]',
-        r'f"EMA(\w+)"',
-        r'"EMA(\w+)"'
-    ]
+    ema_patterns = [r'factor_data\[f"EMA(\w+)"\]', r'f"EMA(\w+)"', r'"EMA(\w+)"']
 
     for pattern in ema_patterns:
         ema_matches = re.findall(pattern, content)
@@ -45,7 +41,7 @@ def extract_all_factors():
     macd_patterns = [
         r'factor_data\[f"MACD_(\d+)_(\d+)_(\d+)_(\w+)"\]',
         r'f"MACD_(\d+)_(\d+)_(\d+)"',
-        r'"MACD_(\d+)_(\d+)_(\d+)"'
+        r'"MACD_(\d+)_(\d+)_(\d+)"',
     ]
 
     for pattern in macd_patterns:
@@ -61,11 +57,7 @@ def extract_all_factors():
                 factors.add(f"MACD_{f}_{s}_{sig}_Hist")
 
     # 4. 提取RSI因子
-    rsi_patterns = [
-        r'factor_data\[f"RSI(\w+)"\]',
-        r'f"RSI(\w+)"',
-        r'"RSI(\w+)"'
-    ]
+    rsi_patterns = [r'factor_data\[f"RSI(\w+)"\]', r'f"RSI(\w+)"', r'"RSI(\w+)"']
 
     for pattern in rsi_patterns:
         rsi_matches = re.findall(pattern, content)
@@ -77,7 +69,7 @@ def extract_all_factors():
     bb_patterns = [
         r'factor_data\[f"BB_(\d+)_([\d.]+)_(\w+)"\]',
         r'f"BB_(\d+)_([\d.]+)"',
-        r'"BB_(\d+)_([\d.]+)"'
+        r'"BB_(\d+)_([\d.]+)"',
     ]
 
     for pattern in bb_patterns:
@@ -97,7 +89,7 @@ def extract_all_factors():
     stoch_patterns = [
         r'factor_data\[f"STOCH_(\d+)_(\d+)_(\w+)"\]',
         r'f"STOCH_(\d+)_(\d+)"',
-        r'"STOCH_(\d+)_(\d+)"'
+        r'"STOCH_(\d+)_(\d+)"',
     ]
 
     for pattern in stoch_patterns:
@@ -112,11 +104,7 @@ def extract_all_factors():
                 factors.add(f"STOCH_{k}_{d}_D")
 
     # 7. 提取ATR因子
-    atr_patterns = [
-        r'factor_data\[f"ATR(\w+)"\]',
-        r'f"ATR(\w+)"',
-        r'"ATR(\w+)"'
-    ]
+    atr_patterns = [r'factor_data\[f"ATR(\w+)"\]', r'f"ATR(\w+)"', r'"ATR(\w+)"']
 
     for pattern in atr_patterns:
         atr_matches = re.findall(pattern, content)
@@ -125,11 +113,7 @@ def extract_all_factors():
                 factors.add(f"ATR{w}")
 
     # 8. 提取MSTD因子
-    mstd_patterns = [
-        r'factor_data\[f"MSTD(\w+)"\]',
-        r'f"MSTD(\w+)"',
-        r'"MSTD(\w+)"'
-    ]
+    mstd_patterns = [r'factor_data\[f"MSTD(\w+)"\]', r'f"MSTD(\w+)"', r'"MSTD(\w+)"']
 
     for pattern in mstd_patterns:
         mstd_matches = re.findall(pattern, content)
@@ -138,11 +122,7 @@ def extract_all_factors():
                 factors.add(f"MSTD{w}")
 
     # 9. 提取OBV因子
-    obv_patterns = [
-        r'factor_data\[f"OBV(\w*)"\]',
-        r'f"OBV(\w*)"',
-        r'"OBV(\w*)"'
-    ]
+    obv_patterns = [r'factor_data\[f"OBV(\w*)"\]', r'f"OBV(\w*)"', r'"OBV(\w*)"']
 
     for pattern in obv_patterns:
         obv_matches = re.findall(pattern, content)
@@ -179,11 +159,7 @@ def extract_all_factors():
                 factors.add(template.format(param))
 
     # 11. 添加特殊因子
-    special_patterns = [
-        r'"OBV"',
-        r'"BOLB_(\d+)"',
-        r'TA_(\w+)'
-    ]
+    special_patterns = [r'"OBV"', r'"BOLB_(\d+)"', r"TA_(\w+)"]
 
     for pattern in special_patterns:
         matches = re.findall(pattern, content)
@@ -192,7 +168,7 @@ def extract_all_factors():
                 factors.add(f"BOLB_{match}")
             elif pattern.startswith('"OBV'):
                 factors.add("OBV")
-            elif pattern.startswith('TA_'):
+            elif pattern.startswith("TA_"):
                 factors.add(f"TA_{match}")
 
     # 12. 提取factor_data赋值的所有因子
@@ -207,12 +183,27 @@ def extract_all_factors():
 
     # 过滤掉明显的非因子字符串
     for item in string_matches:
-        if (len(item) > 2 and
-            not item.startswith('def ') and
-            not item.startswith('class ') and
-            not item.startswith('import ') and
-            not item.startswith('from ') and
-            not any(keyword in item.lower() for keyword in ['logger', 'error', 'warning', 'info', 'debug', 'time', 'data', 'result', 'value'])):
+        if (
+            len(item) > 2
+            and not item.startswith("def ")
+            and not item.startswith("class ")
+            and not item.startswith("import ")
+            and not item.startswith("from ")
+            and not any(
+                keyword in item.lower()
+                for keyword in [
+                    "logger",
+                    "error",
+                    "warning",
+                    "info",
+                    "debug",
+                    "time",
+                    "data",
+                    "result",
+                    "value",
+                ]
+            )
+        ):
             factors.add(item)
 
     return sorted(list(factors))
@@ -235,7 +226,7 @@ def categorize_factors(factors):
         "位置指标": [],
         "趋势强度": [],
         "TA-Lib指标": [],
-        "其他": []
+        "其他": [],
     }
 
     for factor in factors:
@@ -290,7 +281,11 @@ def main():
                 print(f"  - {factor}")
 
     # 保存到文件
-    with open('/Users/zhangshenshen/深度量化0927/factor_generation_factors_list.txt', 'w', encoding='utf-8') as f:
+    with open(
+        "/Users/zhangshenshen/深度量化0927/factor_generation_factors_list.txt",
+        "w",
+        encoding="utf-8",
+    ) as f:
         f.write("factor_generation模块中的因子清单\n")
         f.write("=" * 50 + "\n\n")
 

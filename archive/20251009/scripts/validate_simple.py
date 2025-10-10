@@ -7,24 +7,28 @@
 """
 
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # 设置项目根目录
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-import pandas as pd
-import numpy as np
-import vectorbt as vbt
 import logging
+
+import numpy as np
+import pandas as pd
+import vectorbt as vbt
 
 # 导入共享计算器
 from factor_system.shared.factor_calculators import SHARED_CALCULATORS
 
 # 设置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 def load_0700_data():
     """加载0700股票的原始数据"""
@@ -40,12 +44,13 @@ def load_0700_data():
 
     df = pd.read_parquet(filepath)
     # 将timestamp列设为索引并转换为datetime
-    if 'timestamp' in df.columns:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        df = df.set_index('timestamp')
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df = df.set_index("timestamp")
 
     logger.info(f"✅ 加载数据: {len(df)} 条记录 ({df.index[0]} 到 {df.index[-1]})")
     return df
+
 
 def test_factor_calculations():
     """测试因子计算"""
@@ -57,10 +62,10 @@ def test_factor_calculations():
         return False
 
     # 提取OHLCV数据
-    close = data['close']
-    high = data['high']
-    low = data['low']
-    volume = data['volume']
+    close = data["close"]
+    high = data["high"]
+    low = data["low"]
+    volume = data["volume"]
 
     logger.info(f"📊 测试数据: {len(close)} 条记录")
 
@@ -70,7 +75,7 @@ def test_factor_calculations():
     # 1. RSI
     try:
         rsi14 = SHARED_CALCULATORS.calculate_rsi(close, period=14)
-        test_results['RSI14'] = rsi14
+        test_results["RSI14"] = rsi14
         valid_count = rsi14.notna().sum()
         logger.info(f"✅ RSI14: {valid_count} 个有效值")
     except Exception as e:
@@ -78,21 +83,25 @@ def test_factor_calculations():
 
     # 2. MACD
     try:
-        macd_result = SHARED_CALCULATORS.calculate_macd(close, fastperiod=12, slowperiod=26, signalperiod=9)
-        test_results['MACD'] = macd_result['macd']
-        test_results['MACD_SIGNAL'] = macd_result['signal']
-        test_results['MACD_HIST'] = macd_result['hist']
-        valid_count = macd_result['macd'].notna().sum()
+        macd_result = SHARED_CALCULATORS.calculate_macd(
+            close, fastperiod=12, slowperiod=26, signalperiod=9
+        )
+        test_results["MACD"] = macd_result["macd"]
+        test_results["MACD_SIGNAL"] = macd_result["signal"]
+        test_results["MACD_HIST"] = macd_result["hist"]
+        valid_count = macd_result["macd"].notna().sum()
         logger.info(f"✅ MACD: {valid_count} 个有效值")
     except Exception as e:
         logger.error(f"❌ MACD: 计算失败 - {e}")
 
     # 3. STOCH
     try:
-        stoch_result = SHARED_CALCULATORS.calculate_stoch(high, low, close, fastk_period=14, slowk_period=3, slowd_period=3)
-        test_results['STOCH_K'] = stoch_result['slowk']
-        test_results['STOCH_D'] = stoch_result['slowd']
-        valid_count = stoch_result['slowk'].notna().sum()
+        stoch_result = SHARED_CALCULATORS.calculate_stoch(
+            high, low, close, fastk_period=14, slowk_period=3, slowd_period=3
+        )
+        test_results["STOCH_K"] = stoch_result["slowk"]
+        test_results["STOCH_D"] = stoch_result["slowd"]
+        valid_count = stoch_result["slowk"].notna().sum()
         logger.info(f"✅ STOCH: {valid_count} 个有效值")
     except Exception as e:
         logger.error(f"❌ STOCH: 计算失败 - {e}")
@@ -100,7 +109,7 @@ def test_factor_calculations():
     # 4. WILLR
     try:
         willr = SHARED_CALCULATORS.calculate_willr(high, low, close, timeperiod=14)
-        test_results['WILLR14'] = willr
+        test_results["WILLR14"] = willr
         valid_count = willr.notna().sum()
         logger.info(f"✅ WILLR14: {valid_count} 个有效值")
     except Exception as e:
@@ -109,7 +118,7 @@ def test_factor_calculations():
     # 5. ATR
     try:
         atr = SHARED_CALCULATORS.calculate_atr(high, low, close, timeperiod=14)
-        test_results['ATR14'] = atr
+        test_results["ATR14"] = atr
         valid_count = atr.notna().sum()
         logger.info(f"✅ ATR14: {valid_count} 个有效值")
     except Exception as e:
@@ -118,7 +127,7 @@ def test_factor_calculations():
     # 6. TRANGE (True Range)
     try:
         trange = SHARED_CALCULATORS.calculate_trange(high, low, close)
-        test_results['TRANGE'] = trange
+        test_results["TRANGE"] = trange
         valid_count = trange.notna().sum()
         logger.info(f"✅ TRANGE: {valid_count} 个有效值")
     except Exception as e:
@@ -126,17 +135,20 @@ def test_factor_calculations():
 
     # 7. Bollinger Bands
     try:
-        bb_result = SHARED_CALCULATORS.calculate_bbands(close, period=20, nbdevup=2.0, nbdevdn=2.0)
-        test_results['BB_UPPER'] = bb_result['upper']
-        test_results['BB_MIDDLE'] = bb_result['middle']
-        test_results['BB_LOWER'] = bb_result['lower']
-        valid_count = bb_result['upper'].notna().sum()
+        bb_result = SHARED_CALCULATORS.calculate_bbands(
+            close, period=20, nbdevup=2.0, nbdevdn=2.0
+        )
+        test_results["BB_UPPER"] = bb_result["upper"]
+        test_results["BB_MIDDLE"] = bb_result["middle"]
+        test_results["BB_LOWER"] = bb_result["lower"]
+        valid_count = bb_result["upper"].notna().sum()
         logger.info(f"✅ BBANDS: {valid_count} 个有效值")
     except Exception as e:
         logger.error(f"❌ BBANDS: 计算失败 - {e}")
 
     logger.info(f"🎯 因子计算测试完成: {len(test_results)} 个因子成功")
     return len(test_results) > 5
+
 
 def generate_trading_signals():
     """使用计算出的因子生成交易信号"""
@@ -147,10 +159,10 @@ def generate_trading_signals():
     if data is None:
         return False
 
-    close = data['close']
-    high = data['high']
-    low = data['low']
-    volume = data['volume']
+    close = data["close"]
+    high = data["high"]
+    low = data["low"]
+    volume = data["volume"]
 
     # 计算多个技术指标
     factors = {}
@@ -158,20 +170,26 @@ def generate_trading_signals():
     try:
         # RSI - 超卖信号
         rsi = SHARED_CALCULATORS.calculate_rsi(close, period=14)
-        factors['RSI'] = rsi
+        factors["RSI"] = rsi
 
         # MACD - 趋势信号
-        macd_result = SHARED_CALCULATORS.calculate_macd(close, fastperiod=12, slowperiod=26, signalperiod=9)
-        factors['MACD'] = macd_result['macd']
-        factors['MACD_SIGNAL'] = macd_result['signal']
+        macd_result = SHARED_CALCULATORS.calculate_macd(
+            close, fastperiod=12, slowperiod=26, signalperiod=9
+        )
+        factors["MACD"] = macd_result["macd"]
+        factors["MACD_SIGNAL"] = macd_result["signal"]
 
         # Stochastic - 超卖信号
-        stoch_result = SHARED_CALCULATORS.calculate_stoch(high, low, close, fastk_period=14, slowk_period=3, slowd_period=3)
-        factors['STOCH_K'] = stoch_result['slowk']
+        stoch_result = SHARED_CALCULATORS.calculate_stoch(
+            high, low, close, fastk_period=14, slowk_period=3, slowd_period=3
+        )
+        factors["STOCH_K"] = stoch_result["slowk"]
 
         # Bollinger Bands - 价格位置
-        bb_result = SHARED_CALCULATORS.calculate_bbands(close, period=20, nbdevup=2.0, nbdevdn=2.0)
-        factors['BB_LOWER'] = bb_result['lower']
+        bb_result = SHARED_CALCULATORS.calculate_bbands(
+            close, period=20, nbdevup=2.0, nbdevdn=2.0
+        )
+        factors["BB_LOWER"] = bb_result["lower"]
 
         logger.info(f"✅ 计算了 {len(factors)} 个因子")
 
@@ -180,20 +198,23 @@ def generate_trading_signals():
         signal_rsi = rsi < 30
 
         # 信号2: MACD金叉 (MACD > Signal 且前一个时刻 MACD <= Signal)
-        macd_cross = (macd_result['macd'] > macd_result['signal']) & \
-                     (macd_result['macd'].shift(1) <= macd_result['signal'].shift(1))
+        macd_cross = (macd_result["macd"] > macd_result["signal"]) & (
+            macd_result["macd"].shift(1) <= macd_result["signal"].shift(1)
+        )
 
         # 信号3: Stochastic超卖 (< 20)
-        signal_stoch = stoch_result['slowk'] < 20
+        signal_stoch = stoch_result["slowk"] < 20
 
         # 信号4: 价格触及布林带下轨
-        signal_bb = close <= bb_result['lower']
+        signal_bb = close <= bb_result["lower"]
 
         # 复合信号：至少满足两个条件
-        composite_signal = (signal_rsi.astype(int) +
-                           macd_cross.astype(int) +
-                           signal_stoch.astype(int) +
-                           signal_bb.astype(int)) >= 2
+        composite_signal = (
+            signal_rsi.astype(int)
+            + macd_cross.astype(int)
+            + signal_stoch.astype(int)
+            + signal_bb.astype(int)
+        ) >= 2
 
         # 入场信号
         entries = composite_signal
@@ -231,17 +252,17 @@ def generate_trading_signals():
             exits=exits,
             init_cash=100000,
             fees=0.002,
-            slippage=0.001
+            slippage=0.001,
         )
 
         # 获取回测结果
         stats = portfolio.stats()
 
         # 提取关键指标
-        total_return = stats.get('Total Return [%]', 0)
-        sharpe_ratio = stats.get('Sharpe Ratio', 0)
-        max_drawdown = stats.get('Max Drawdown [%]', 0)
-        total_trades = stats.get('Total Trades', 0)
+        total_return = stats.get("Total Return [%]", 0)
+        sharpe_ratio = stats.get("Sharpe Ratio", 0)
+        max_drawdown = stats.get("Max Drawdown [%]", 0)
+        total_trades = stats.get("Total Trades", 0)
 
         logger.info("🎯 回测结果:")
         logger.info(f"  总收益率: {total_return:.2f}%")
@@ -262,8 +283,10 @@ def generate_trading_signals():
     except Exception as e:
         logger.error(f"❌ 信号生成或回测失败: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         return False
+
 
 def main():
     """主函数"""
@@ -290,6 +313,7 @@ def main():
 
     return True
 
+
 if __name__ == "__main__":
     try:
         success = main()
@@ -303,5 +327,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ 验证过程中发生异常: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         sys.exit(1)

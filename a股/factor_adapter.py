@@ -19,7 +19,7 @@ from factor_system.factor_engine import api
 class AShareFactorAdapter:
     """
     A股因子适配器 - 修复版本
-    
+
     主要修复：
     - 使用统一API，避免Registry实例化问题
     - 简化因子映射逻辑
@@ -29,46 +29,41 @@ class AShareFactorAdapter:
     # 因子名称映射：A股项目 -> factor_engine
     FACTOR_MAPPING = {
         # 移动平均线
-        'MA5': 'SMA_5',
-        'MA10': 'SMA_10', 
-        'MA20': 'SMA_20',
-        'MA30': 'SMA_30',
-        'MA60': 'SMA_60',
-        'EMA5': 'EMA_5',
-        'EMA12': 'EMA_12',
-        'EMA26': 'EMA_26',
-
+        "MA5": "SMA_5",
+        "MA10": "SMA_10",
+        "MA20": "SMA_20",
+        "MA30": "SMA_30",
+        "MA60": "SMA_60",
+        "EMA5": "EMA_5",
+        "EMA12": "EMA_12",
+        "EMA26": "EMA_26",
         # 动量指标
-        'RSI': 'RSI_14_wilders',  # 使用Wilders平滑
-        'MACD': 'MACD_12_26_9',
-        'MACD_Signal': 'MACD_Signal_12_26_9', 
-        'MACD_Hist': 'MACD_Hist_12_26_9',
-        'KDJ_K': 'STOCH_14_K',
-        'KDJ_D': 'STOCH_14_D',
-        'KDJ_J': 'STOCH_14_J',
-        'Williams_R': 'WILLR_14',
-
+        "RSI": "RSI_14_wilders",  # 使用Wilders平滑
+        "MACD": "MACD_12_26_9",
+        "MACD_Signal": "MACD_Signal_12_26_9",
+        "MACD_Hist": "MACD_Hist_12_26_9",
+        "KDJ_K": "STOCH_14_K",
+        "KDJ_D": "STOCH_14_D",
+        "KDJ_J": "STOCH_14_J",
+        "Williams_R": "WILLR_14",
         # 波动性指标
-        'ATR': 'ATR_14',
-        'BB_Upper': 'BBANDS_Upper_20_2',
-        'BB_Middle': 'BBANDS_Middle_20_2',
-        'BB_Lower': 'BBANDS_Lower_20_2',
-
+        "ATR": "ATR_14",
+        "BB_Upper": "BBANDS_Upper_20_2",
+        "BB_Middle": "BBANDS_Middle_20_2",
+        "BB_Lower": "BBANDS_Lower_20_2",
         # 趋势指标
-        'ADX': 'ADX_14',
-        'DI_plus': 'PLUS_DI_14',
-        'DI_minus': 'MINUS_DI_14',
-
+        "ADX": "ADX_14",
+        "DI_plus": "PLUS_DI_14",
+        "DI_minus": "MINUS_DI_14",
         # 成交量指标
-        'OBV': 'OBV',
-        'Volume_SMA': 'SMA_Volume_20',
-        'MFI': 'MFI_14',
-
+        "OBV": "OBV",
+        "Volume_SMA": "SMA_Volume_20",
+        "MFI": "MFI_14",
         # 其他指标
-        'CCI': 'CCI_14',
-        'MOM': 'MOM_10',
-        'ROC': 'ROC_10',
-        'TRIX': 'TRIX_14',
+        "CCI": "CCI_14",
+        "MOM": "MOM_10",
+        "ROC": "ROC_10",
+        "TRIX": "TRIX_14",
     }
 
     def __init__(self, data_dir: str):
@@ -79,10 +74,10 @@ class AShareFactorAdapter:
             data_dir: A股数据目录路径
         """
         self.data_dir = data_dir
-        
+
         print(f"✅ A股因子适配器初始化完成 (修复版本)")
         print(f"   数据目录: {data_dir}")
-        
+
         # 可用因子列表
         self.available_factors = self._check_available_factors()
         print(f"   可用因子: {len(self.available_factors)}个")
@@ -92,13 +87,13 @@ class AShareFactorAdapter:
         try:
             # 使用统一API获取可用因子
             available = api.list_available_factors()
-            
+
             # 过滤出我们映射的因子
             mapped_factors = set(self.FACTOR_MAPPING.values())
             available_mapped = [f for f in available if f in mapped_factors]
-            
+
             return available_mapped
-            
+
         except Exception as e:
             print(f"⚠️  检查可用因子时出错: {e}")
             return []
@@ -106,7 +101,7 @@ class AShareFactorAdapter:
     def get_technical_indicators(
         self,
         stock_code: str,
-        timeframe: str = '1d',
+        timeframe: str = "1d",
         lookback_days: int = 252,
     ) -> pd.DataFrame:
         """
@@ -151,19 +146,24 @@ class AShareFactorAdapter:
             reverse_mapping = {v: k for k, v in self.FACTOR_MAPPING.items()}
 
             # 只保留映射中存在的列
-            available_columns = [col for col in factors_df.columns if col in reverse_mapping]
+            available_columns = [
+                col for col in factors_df.columns if col in reverse_mapping
+            ]
             factors_df = factors_df[available_columns]
 
             # 重命名
             factors_df = factors_df.rename(columns=reverse_mapping)
 
-            print(f"✅ {stock_code} 技术指标计算完成: {len(factors_df)}行 x {len(factors_df.columns)}列")
+            print(
+                f"✅ {stock_code} 技术指标计算完成: {len(factors_df)}行 x {len(factors_df.columns)}列"
+            )
 
             return factors_df
 
         except Exception as e:
             print(f"❌ {stock_code} 技术指标计算失败: {e}")
             import traceback
+
             traceback.print_exc()
             return pd.DataFrame()
 
@@ -183,8 +183,8 @@ class AShareFactorAdapter:
             添加了技术指标的DataFrame
         """
         # 确保df有timestamp列
-        if 'timestamp' not in df.columns:
-            if df.index.name == 'timestamp' or isinstance(df.index, pd.DatetimeIndex):
+        if "timestamp" not in df.columns:
+            if df.index.name == "timestamp" or isinstance(df.index, pd.DatetimeIndex):
                 df = df.reset_index()
             else:
                 raise ValueError("DataFrame必须有timestamp列或索引")
@@ -201,13 +201,12 @@ class AShareFactorAdapter:
 
         # 合并到原DataFrame（按timestamp对齐）
         df_with_indicators = df.merge(
-            indicators,
-            left_on='timestamp',
-            right_index=True,
-            how='left'
+            indicators, left_on="timestamp", right_index=True, how="left"
         )
 
-        print(f"✅ {stock_code} 技术指标合并完成: 总列数 {len(df_with_indicators.columns)}")
+        print(
+            f"✅ {stock_code} 技术指标合并完成: 总列数 {len(df_with_indicators.columns)}"
+        )
 
         return df_with_indicators
 
@@ -215,7 +214,7 @@ class AShareFactorAdapter:
         self,
         stock_code: str,
         indicator_name: str,
-        timeframe: str = '1d',
+        timeframe: str = "1d",
         lookback_days: int = 252,
     ) -> pd.Series:
         """
@@ -303,14 +302,14 @@ def create_a_share_adapter(data_dir: str = None) -> AShareFactorAdapter:
     """
     if data_dir is None:
         data_dir = str(Path(__file__).parent.parent)
-    
+
     return AShareFactorAdapter(data_dir)
 
 
 if __name__ == "__main__":
     # 测试代码
     print("🧪 测试修复后的适配器...")
-    
+
     adapter = create_a_share_adapter()
 
     # 测试获取技术指标

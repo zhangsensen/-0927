@@ -15,4 +15,19 @@ from factor_system.factor_engine.factors.overlap.tema import TEMA
 from factor_system.factor_engine.factors.overlap.trima import TRIMA
 from factor_system.factor_engine.factors.overlap.wma import WMA
 
-__all__ = ['BBANDS', 'DEMA', 'EMA', 'KAMA', 'MAMA', 'MIDPOINT', 'MIDPRICE', 'SAR', 'SAREXT', 'SMA', 'T3', 'TEMA', 'TRIMA', 'WMA']
+__all__ = [
+    "BBANDS",
+    "DEMA",
+    "EMA",
+    "KAMA",
+    "MAMA",
+    "MIDPOINT",
+    "MIDPRICE",
+    "SAR",
+    "SAREXT",
+    "SMA",
+    "T3",
+    "TEMA",
+    "TRIMA",
+    "WMA",
+]
