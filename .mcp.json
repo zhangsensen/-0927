@@ -97,6 +97,14 @@
       "command": "/Users/zhangshenshen/pandas-mcp-server/server.py",
       "args": [],
       "env": {}
+    },
+    "test-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-web-search"
+      ],
+      "env": {}
     }
   }
 }

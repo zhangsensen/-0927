@@ -2401,9 +2401,7 @@ class ProfessionalFactorScreener:
                 continue
 
             factor_values = factor_series.loc[common_idx].to_numpy(dtype=np.float64)
-            returns_aligned = returns_series.reindex(common_idx).to_numpy(
-                dtype=np.float64
-            )
+            returns_series.reindex(common_idx).to_numpy(dtype=np.float64)
 
             n = factor_values.shape[0]
             if n < self.config.min_momentum_samples:
@@ -2741,6 +2739,7 @@ class ProfessionalFactorScreener:
 
             # 2. 稳定性评分 (25%)
             stability_score = 0.0
+            stability_penalty_applied = False
             rolling_data = _get_metric("rolling_ic", factor, {})
             if rolling_data:
                 metrics.rolling_ic_mean = rolling_data.get("rolling_ic_mean", 0.0)
@@ -2750,9 +2749,19 @@ class ProfessionalFactorScreener:
                 )
                 metrics.ic_consistency = rolling_data.get("ic_consistency", 0.0)
 
-                stability_score = (
-                    metrics.rolling_ic_stability + metrics.ic_consistency
-                ) / 2
+                # 🔥 Phase 1.1: 稳定性缺失软惩罚
+                if np.isnan(metrics.rolling_ic_stability) or np.isnan(
+                    metrics.ic_consistency
+                ):
+                    stability_score = 0.3  # 给予基础分而非0，保留潜力因子
+                    stability_penalty_applied = True
+                    self.logger.debug(
+                        f"因子 {factor} 稳定性指标缺失，应用软惩罚: stability_score=0.3"
+                    )
+                else:
+                    stability_score = (
+                        metrics.rolling_ic_stability + metrics.ic_consistency
+                    ) / 2
 
             cs_data = _get_metric("cross_section_stability", factor, {})
             if cs_data:
@@ -2761,11 +2770,13 @@ class ProfessionalFactorScreener:
                 )
 
                 # 综合稳定性
-                stability_score = (
-                    stability_score + metrics.cross_section_stability
-                ) / 2
+                if not stability_penalty_applied:
+                    stability_score = (
+                        stability_score + metrics.cross_section_stability
+                    ) / 2
 
             metrics.stability_score = stability_score
+            metrics.stability_penalty_applied = stability_penalty_applied
 
             # 3. 独立性评分 (20%)
             independence_score = 1.0  # 默认满分
@@ -2940,6 +2951,16 @@ class ProfessionalFactorScreener:
                     self._estimate_sample_size(all_metrics, factor),
                 )
 
+                # 🔥 Phase 1.2: 传递显著性与IR信息到公平评分器
+                # 注意：此时显著性尚未最终判定，先使用临时值
+                temp_is_significant = False
+                corrected_p_vals = _get_metric("corrected_p_values", factor)
+                current_alpha = float(
+                    all_metrics.get("adaptive_alpha", self.config.alpha_level)
+                )
+                if corrected_p_vals is not None and corrected_p_vals <= current_alpha:
+                    temp_is_significant = True
+
                 # 应用公平评分
                 fair_score = self.fair_scorer.apply_fair_scoring(
                     original_score=traditional_score,
@@ -2948,6 +2969,8 @@ class ProfessionalFactorScreener:
                     ic_mean=metrics.ic_mean,
                     stability_score=metrics.stability_score,
                     predictive_score=metrics.predictive_score,
+                    is_significant=temp_is_significant,
+                    ic_ir=metrics.ic_ir,
                 )
 
                 # 记录评分对比
@@ -3087,6 +3110,16 @@ class ProfessionalFactorScreener:
         else:
             base_tier = "不推荐"
 
+        # 🔥 Phase 1.3: 显著性硬约束 - 未过FDR的因子最高只能Tier 3
+        if not is_significant:
+            if base_tier in ["Tier 1", "Tier 2"]:
+                self.logger.debug(
+                    f"因子未过显著性检验，从 {base_tier} 降至 Tier 3 (score={comprehensive_score:.3f})"
+                )
+                return "Tier 3"
+            else:
+                return base_tier  # 保持Tier 3或不推荐
+
         # 显著性和IC调整（使用自适应升级阈值）
         if is_significant and abs(ic_mean) >= 0.05:
             # 显著且IC较强，维持或提升等级
@@ -3100,8 +3133,8 @@ class ProfessionalFactorScreener:
                 and comprehensive_score >= thresholds["upgrade_tier1"]
             ):
                 return "Tier 1"
-        elif not is_significant or abs(ic_mean) < 0.02:
-            # 不显著或IC很弱，降级
+        elif abs(ic_mean) < 0.02:
+            # IC很弱，降级
             if base_tier == "Tier 1":
                 return "Tier 2"
             elif base_tier == "Tier 2":
@@ -4212,7 +4245,7 @@ class ProfessionalFactorScreener:
             if perf_monitor_active:
                 try:
                     perf_context.__exit__(None, None, None)
-                except:
+                except:  # noqa: E722
                     pass  # 忽略性能监控退出错误
 
             return comprehensive_results
@@ -4223,7 +4256,7 @@ class ProfessionalFactorScreener:
             if perf_monitor_active:
                 try:
                     perf_context.__exit__(type(e), e, e.__traceback__)
-                except:
+                except:  # noqa: E722
                     pass
             raise
         finally:
@@ -4597,7 +4630,7 @@ def main():
                             "   📈 总体进度: "
                             f"{progress:.1f}% ({i}/{len(batch_config['screening_configs'])})"
                         )
-                        self.logger.info(total_msg)
+                        self.logger.info(total_msg)  # noqa: F821
 
                     except Exception as e:
                         failed_tasks += 1

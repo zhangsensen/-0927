@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 未来函数静态检查脚本
 作者：量化首席工程师

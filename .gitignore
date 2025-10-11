@@ -122,6 +122,11 @@ config.local.json
 .claude/
 .claude-*
 
+# Memory bank and context files
+memory-bank/
+*.context.md
+activeContext.md
+
 # System files that should never be in git
 .bash_history
 .zsh_history

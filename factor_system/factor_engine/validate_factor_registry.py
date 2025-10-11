@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 因子清单验证器 / Factor Registry Validator
 
@@ -13,7 +14,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Any
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -32,9 +33,9 @@ class FactorRegistryValidator:
             project_root / "factor_system" / "factor_engine" / "factor_engine.py"
         )
 
-        self.official_factors: Dict = {}
-        self.config_factors: Dict = {}
-        self.engine_factors: Dict = {}
+        self.official_factors: Dict[str, Any] = {}
+        self.config_factors: Dict[str, Any] = {}
+        self.engine_factors: Dict[str, Any] = {}
 
         self.errors: List[str] = []
         self.warnings: List[str] = []

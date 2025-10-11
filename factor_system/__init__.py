@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Factor System - 单因子多时间框架筛选系统
 

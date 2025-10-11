@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 公平评分器 - 解决时间框架因子评分不公平问题
 作者：量化首席工程师
@@ -147,6 +148,8 @@ class FairScorer:
         ic_mean: float,
         stability_score: float,
         predictive_score: float,
+        is_significant: bool = False,
+        ic_ir: float = 0.0,
     ) -> float:
         """
         应用公平评分调整
@@ -158,12 +161,26 @@ class FairScorer:
             ic_mean: 平均IC值
             stability_score: 稳定性评分
             predictive_score: 预测能力评分
+            is_significant: 是否通过显著性检验（Phase 1.2新增）
+            ic_ir: IC信息比率（Phase 1.2新增）
 
         Returns:
             调整后的公平评分
         """
         if not self.enabled:
             return original_score
+
+        # 🔥 Phase 1.2: 未过显著性检验的因子，最高只能到0.6
+        if not is_significant:
+            original_score = min(original_score, 0.6)
+            self.logger.debug(
+                f"因子未过显著性检验，限制最高分数为0.6 (原始分={original_score:.3f})"
+            )
+
+        # 🔥 Phase 1.2: 低IR因子额外惩罚
+        if ic_ir < 0.5:
+            original_score *= 0.9
+            self.logger.debug(f"因子IR过低({ic_ir:.3f})，应用0.9惩罚系数")
 
         # 获取时间框架调整参数
         adjustment = self.timeframe_adjustments.get(timeframe)
