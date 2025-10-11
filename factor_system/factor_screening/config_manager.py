@@ -20,6 +20,18 @@ from typing import Dict, List, Optional, Union
 
 import yaml
 
+# 导入路径管理工具
+try:
+    from ..utils import get_factor_output_dir, get_screening_results_dir
+except ImportError:
+    # 回退到相对路径（保持向后兼容）
+    def get_factor_output_dir():
+        return Path("../factor_output")
+
+    def get_screening_results_dir():
+        return Path("./screening_results")
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,9 +43,13 @@ class ScreeningConfig:
     name: str = "default"
     description: str = "默认筛选配置"
 
-    # 数据配置
-    data_root: str = "factor_system/factor_output"  # 修复：从仓库根目录运行时的默认路径
-    raw_data_root: str = "raw"  # 修复：从仓库根目录运行时的默认路径
+    # 🔧 核心路径三元组（Linus式简化）
+    data_root: str = str(get_factor_output_dir())  # 数据输入根目录
+    output_root: str = str(get_screening_results_dir())  # 结果输出根目录
+    log_root: str = ""  # 日志根目录（留空则与output_root一致）
+
+    # 废弃字段（向后兼容，请使用data_root）
+    raw_data_root: str = ""  # @deprecated 使用data_root替代
 
     # 股票配置
     symbols: List[str] = field(default_factory=lambda: ["0700.HK"])
@@ -90,37 +106,47 @@ class ScreeningConfig:
     # 🚀 时间框架自适应配置（P0修复：不同时间框架分层标准）
     enable_timeframe_adaptive: bool = True  # 启用时间框架自适应
 
-    # 时间框架分层alpha阈值（避免长周期显著性断崖）
-    timeframe_alpha_map: Dict[str, float] = field(
+    # 🔧 统一时间框架自适应配置（Linus式消灭冗余）
+    timeframe_adaptive_config: Dict[str, Dict[str, float]] = field(
         default_factory=lambda: {
-            # 高频：严格标准（样本充足）
-            "1min": 0.05,
-            "2min": 0.05,
-            "3min": 0.05,
-            "5min": 0.05,
-            # 中频：适度放宽（样本中等）
-            "15min": 0.07,
-            "30min": 0.07,
-            "60min": 0.08,
-            # 低频：显著放宽（样本不足）
-            "2h": 0.10,
-            "4h": 0.10,
-            "1day": 0.10,
+            "1min": {"alpha": 0.05, "tier1": 0.85, "tier2": 0.70, "tier3": 0.50},
+            "2min": {"alpha": 0.05, "tier1": 0.85, "tier2": 0.70, "tier3": 0.50},
+            "3min": {"alpha": 0.05, "tier1": 0.85, "tier2": 0.70, "tier3": 0.50},
+            "5min": {"alpha": 0.05, "tier1": 0.82, "tier2": 0.68, "tier3": 0.48},
+            "15min": {"alpha": 0.07, "tier1": 0.80, "tier2": 0.65, "tier3": 0.45},
+            "30min": {"alpha": 0.07, "tier1": 0.78, "tier2": 0.62, "tier3": 0.42},
+            "60min": {"alpha": 0.08, "tier1": 0.75, "tier2": 0.58, "tier3": 0.40},
+            "120min": {"alpha": 0.08, "tier1": 0.75, "tier2": 0.58, "tier3": 0.40},
+            "2h": {"alpha": 0.10, "tier1": 0.72, "tier2": 0.55, "tier3": 0.38},
+            "240min": {"alpha": 0.10, "tier1": 0.70, "tier2": 0.52, "tier3": 0.35},
+            "4h": {"alpha": 0.10, "tier1": 0.70, "tier2": 0.52, "tier3": 0.35},
+            "1day": {"alpha": 0.10, "tier1": 0.68, "tier2": 0.50, "tier3": 0.32},
         }
     )
 
-    # 样本量权重配置（轻微折扣，保持公平竞争）
-    sample_weight_params: Dict[str, Union[int, float]] = field(
+    # @deprecated 废弃字段（向后兼容）
+    timeframe_alpha_map: Dict[str, float] = field(
+        default_factory=dict
+    )  # 使用timeframe_adaptive_config替代
+
+    # 样本量权重配置（Phase 2: 分段化折扣，抑制小样本虚高）
+    sample_weight_params: Dict[str, Union[int, float, Dict]] = field(
         default_factory=lambda: {
             "enable": True,  # 启用样本量权重
             "min_full_weight_samples": 1000,  # 降低阈值，减少折扣
-            "weight_power": 0.2,  # 大幅降低衰减系数，温和折扣
-            "predictive_weight_power": 0.15,  # 预测维度更温和
+            "weight_power": 0.35,  # Phase 2: 从 0.2 提升至 0.35
+            "predictive_weight_power": 0.20,  # Phase 2: 从 0.15 提升至 0.20
             "affected_dimensions": [
                 "stability",
                 "independence",
                 "practicality",
             ],  # 移除predictive和adaptability
+            # Phase 2: 新增分段阈值
+            "thresholds": {
+                "high_confidence": 2000,  # 样本>2000，无额外折扣
+                "medium_confidence": 500,  # 500-2000，轻度折扣
+                "low_confidence": 100,  # 100-500，重度折扣
+            },
         }
     )
 
@@ -136,8 +162,9 @@ class ScreeningConfig:
             "15min": 0.58,
             "30min": 0.57,
             "60min": 0.56,
-            # 低频：显著降低（补偿样本量劣势）
+            "120min": 0.55,
             "2h": 0.55,
+            "240min": 0.54,
             "4h": 0.54,
             "1day": 0.53,
         }
@@ -197,12 +224,26 @@ class ScreeningConfig:
                 "upgrade_tier2": 0.52,
                 "upgrade_tier1": 0.70,
             },
+            "120min": {
+                "tier1": 0.72,
+                "tier2": 0.55,
+                "tier3": 0.38,
+                "upgrade_tier2": 0.48,
+                "upgrade_tier1": 0.68,
+            },
             "2h": {
                 "tier1": 0.72,
                 "tier2": 0.55,
                 "tier3": 0.38,
                 "upgrade_tier2": 0.48,
                 "upgrade_tier1": 0.68,
+            },
+            "240min": {
+                "tier1": 0.70,
+                "tier2": 0.52,
+                "tier3": 0.35,
+                "upgrade_tier2": 0.45,
+                "upgrade_tier1": 0.65,
             },
             "4h": {
                 "tier1": 0.70,
@@ -283,12 +324,26 @@ class ScreeningConfig:
                 "upgrade_tier2": 0.45,
                 "upgrade_tier1": 0.62,
             },
+            "120min": {
+                "tier1": 0.66,
+                "tier2": 0.48,
+                "tier3": 0.36,
+                "upgrade_tier2": 0.43,
+                "upgrade_tier1": 0.60,
+            },
             "2h": {
                 "tier1": 0.66,
                 "tier2": 0.48,
                 "tier3": 0.36,
                 "upgrade_tier2": 0.43,
                 "upgrade_tier1": 0.60,
+            },
+            "240min": {
+                "tier1": 0.65,
+                "tier2": 0.47,
+                "tier3": 0.35,
+                "upgrade_tier2": 0.42,
+                "upgrade_tier1": 0.58,
             },
             "4h": {
                 "tier1": 0.65,
@@ -307,23 +362,17 @@ class ScreeningConfig:
         }
     )
 
-    # 🔧 路径配置（修复硬编码路径）
-    factor_data_root: str = (
-        "factor_system/factor_output"  # 修复：从仓库根目录运行时的默认路径
-    )
-    price_data_root: str = "raw"  # 修复：从仓库根目录运行时的默认路径
-    output_root: str = (
-        "factor_system/factor_screening/screening_results"  # 修复：统一放在screening模块下
-    )
-    log_root: str = "factor_system/factor_screening/logs"  # 日志根目录
-    cache_root: str = "factor_system/factor_screening/cache"  # 缓存根目录
+    # @deprecated 废弃路径字段（向后兼容，请使用核心路径三元组）
+    factor_data_root: str = ""  # 使用data_root替代
+    price_data_root: str = ""  # 使用data_root替代
+    cache_root: str = ""  # 默认为output_root/cache
 
     # 并行处理配置
     max_workers: int = 4
     enable_parallel: bool = True
 
-    # 输出配置（向后兼容）
-    output_dir: str = "./output"  # 废弃，使用output_root
+    # @deprecated 输出配置（向后兼容）
+    output_dir: str = ""  # 废弃，使用output_root
     save_reports: bool = True
     save_detailed_metrics: bool = True
     log_level: str = "INFO"
@@ -434,8 +483,8 @@ class ConfigManager:
         presets["multi_timeframe"] = ScreeningConfig(
             name="multi_timeframe",
             description="多时间框架筛选配置 - 预设路径",
-            data_root="../因子输出",
-            raw_data_root="../raw",
+            data_root=str(get_factor_output_dir()),
+            raw_data_root="",  # 废弃字段，使用data_root
             output_dir="./因子筛选",
             timeframes=["5min", "15min", "30min", "60min", "daily"],
             ic_horizons=[1, 3, 5, 10],
@@ -604,10 +653,10 @@ class ConfigManager:
             if not (0 < config.correlation_threshold < 1):
                 errors.append("correlation_threshold必须在0和1之间")
 
-            # 验证权重
+            # 验证权重（Linus式严格验证）
             weight_sum = sum(config.weights.values())
-            if abs(weight_sum - 1.0) > 0.01:
-                errors.append(f"权重总和应该为1.0，当前为{weight_sum:.3f}")
+            if abs(weight_sum - 1.0) > 1e-8:
+                errors.append(f"权重总和必须精确等于1.0，当前为{weight_sum:.10f}")
 
         elif isinstance(config, BatchConfig):
             # 验证批量配置

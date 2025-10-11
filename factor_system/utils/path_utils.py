@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """路径处理标准化工具"""
 
 import logging

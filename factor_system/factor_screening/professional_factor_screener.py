@@ -23,7 +23,7 @@ import time
 import warnings
 from collections import Counter
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
@@ -260,66 +260,44 @@ class ProfessionalFactorScreener:
         """
         self.config = config or ScreeningConfig()
 
-        # 🔧 修复路径硬编码 - 智能路径解析
-        if hasattr(self.config, "data_root") and self.config.data_root:
-            self.data_root = Path(self.config.data_root)
-        elif data_root:
-            self.data_root = Path(data_root)
-        else:
-            # 智能路径解析：尝试自动发现项目根目录
-            try:
-                # 从当前文件位置推导项目根目录
-                current_file = Path(__file__)
-                project_root = current_file.parent.parent.parent
-                potential_factor_output = project_root / "factor_output"
-
-                if potential_factor_output.exists():
-                    self.data_root = potential_factor_output
-                    logging.getLogger(__name__).info(
-                        f"✅ 自动发现因子输出目录: {self.data_root}"
-                    )
-                else:
-                    # 回退到相对路径
-                    self.data_root = Path("../factor_output")
-                    logging.getLogger(__name__).info(
-                        f"使用默认因子输出目录: {self.data_root}"
-                    )
-            except Exception:
-                # 最终回退到相对路径
-                self.data_root = Path("../factor_output")
-                logging.getLogger(__name__).info(
-                    f"使用默认因子输出目录: {self.data_root}"
-                )
-
-        # 设置日志和缓存路径
-        self.log_root = Path(getattr(self.config, "log_root", "./logs/screening"))
-        self.cache_dir = Path(
-            getattr(self.config, "cache_root", self.data_root / "cache")
+        # 🔧 Linus式路径解析（简化逻辑）
+        self.data_root = Path(
+            self.config.data_root
+            if self.config.data_root
+            else "factor_system/factor_output"
+        )
+        self.output_root = Path(
+            self.config.output_root
+            if self.config.output_root
+            else "factor_system/factor_screening/screening_results"
         )
 
-        # 设置筛选报告专用目录
-        if hasattr(self.config, "output_dir") and self.config.output_dir:
-            self.screening_results_dir = Path(self.config.output_dir)
+        # 日志目录：留空则与output_root一致
+        if self.config.log_root:
+            self.log_root = Path(self.config.log_root)
         else:
-            self.screening_results_dir = Path("./因子筛选")
-        self.screening_results_dir.mkdir(parents=True, exist_ok=True)
+            self.log_root = self.output_root
 
-        # 初始化会话相关变量（稍后在screen_factors_comprehensive中创建）
-        self.session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.session_dir = None
+        # 缓存目录：默认为output_root/cache
+        self.cache_dir = self.output_root / "cache"
 
-        # 设置日志和缓存路径（先使用默认路径）
-        self.log_root = Path(getattr(self.config, "log_root", "./logs/screening"))
-        self.cache_dir = Path(
-            getattr(self.config, "cache_root", self.data_root / "cache")
-        )
+        # 向后兼容：output_dir字段
+        self.screening_results_dir = self.output_root
 
         # 创建必要的目录
+        self.output_root.mkdir(parents=True, exist_ok=True)
         self.log_root.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+        # 初始化会话相关变量
+        self.session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_dir = None
+
         # 设置日志
         self.logger = self._setup_logger(self.session_timestamp)
+
+        # 🔧 Linus式运行时配置验证
+        self._validate_config_runtime()
 
         # 初始化时间序列验证器，确保旧代码同样受防护
         self.temporal_validator = None
@@ -392,6 +370,44 @@ class ProfessionalFactorScreener:
         # P0级集成：初始化新增的工具模块
         self._initialize_utility_modules()
 
+        # Phase 2: 因子类型自适应权重配置
+        self.pattern_weights = {
+            "predictive_power": 0.25,  # 形态因子降低预测权重
+            "stability": 0.30,  # 提高稳定性权重
+            "independence": 0.25,
+            "practicality": 0.15,
+            "short_term_fitness": 0.05,
+        }
+        self.momentum_weights = {
+            "predictive_power": 0.40,  # 动量因子提高预测权重
+            "stability": 0.20,  # 降低稳定性权重
+            "independence": 0.15,
+            "practicality": 0.15,
+            "short_term_fitness": 0.10,
+        }
+        self.volatility_weights = {
+            "predictive_power": 0.30,
+            "stability": 0.30,  # 波动率因子平衡稳定性
+            "independence": 0.20,
+            "practicality": 0.10,
+            "short_term_fitness": 0.10,
+        }
+        self.trend_weights = {
+            "predictive_power": 0.35,  # 趋势因子平衡预测能力
+            "stability": 0.30,  # 提高稳定性权重
+            "independence": 0.20,
+            "practicality": 0.10,  # 趋势因子实用性较低
+            "short_term_fitness": 0.05,
+        }
+        self.volume_weights = {
+            "predictive_power": 0.30,  # 成交量因子预测能力中等
+            "stability": 0.25,
+            "independence": 0.25,  # 成交量因子独立性较好
+            "practicality": 0.15,
+            "short_term_fitness": 0.05,
+        }
+        self.logger.info("✅ Phase 2: 因子类型自适应权重已配置（含 trend/volume）")
+
         # P0 性能优化：初始化向量化引擎
         if VECTORIZED_ENGINE_AVAILABLE:
             self.vectorized_analyzer = get_vectorized_analyzer(
@@ -410,13 +426,58 @@ class ProfessionalFactorScreener:
             self.perf_monitor = None
             self.logger.warning("⚠️ 性能监控不可用")
 
-        self.logger.info("专业级因子筛选器初始化完成")
+        self.logger.info("✅ 专业级因子筛选器初始化完成")
         self.logger.info(
-            f"配置: IC周期={self.config.ic_horizons}, 最小样本={self.config.min_sample_size}"
+            f"📁 路径: data_root={self.data_root}, output_root={self.output_root}, log_root={self.log_root}"
         )
         self.logger.info(
-            f"显著性水平={self.config.alpha_level}, FDR方法={self.config.fdr_method}"
+            f"📊 配置: IC周期={self.config.ic_horizons}, 最小样本={self.config.min_sample_size}"
         )
+        self.logger.info(
+            f"🔍 显著性: alpha={self.config.alpha_level}, FDR={self.config.fdr_method}"
+        )
+
+        # Phase 2: 配置生效验证日志
+        self.logger.info("📊 Phase 2 配置验证:")
+        self.logger.info(
+            f"  - 样本量折扣: weight_power={self.config.sample_weight_params.get('weight_power')}"
+        )
+        self.logger.info(
+            f"  - 预测折扣: predictive_weight_power={self.config.sample_weight_params.get('predictive_weight_power')}"
+        )
+        self.logger.info(
+            f"  - 分段阈值: {self.config.sample_weight_params.get('thresholds')}"
+        )
+        self.logger.info(
+            f"  - 因子类型权重: pattern={self.pattern_weights['predictive_power']:.2f}, momentum={self.momentum_weights['predictive_power']:.2f}, volatility={self.volatility_weights['predictive_power']:.2f}"
+        )
+
+    def _validate_config_runtime(self) -> None:
+        """🔧 Linus式运行时配置验证"""
+        errors = []
+
+        # 路径验证
+        if not self.data_root.exists():
+            errors.append(f"数据根目录不存在: {self.data_root}")
+
+        # 参数范围验证
+        if self.config.min_sample_size < 50:
+            errors.append("min_sample_size不能小于50")
+
+        if not (0 < self.config.alpha_level < 1):
+            errors.append("alpha_level必须在(0,1)范围内")
+
+        # 权重严格验证
+        weight_sum = sum(self.config.weights.values())
+        if abs(weight_sum - 1.0) > 1e-8:
+            errors.append(f"权重总和必须精确等于1.0，当前为{weight_sum:.10f}")
+
+        if errors:
+            error_msg = f"配置验证失败: {'; '.join(errors)}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        self.logger.info("✅ 配置运行时验证通过")
 
     def _initialize_utility_modules(self) -> None:
         """P0级集成：初始化工具模块（实际集成）"""
@@ -947,28 +1008,47 @@ class ProfessionalFactorScreener:
 
         # 搜索策略：按优先级搜索不同格式的文件
         search_patterns = [
-            # 新格式：timeframe子目录 (带.HK后缀)
+            # 新格式：HK/timeframe子目录 (带.HK后缀)
             (
-                self.data_root / timeframe,
+                self.data_root / "HK" / timeframe,
+                f"{clean_symbol}.HK_{timeframe}_factors.parquet",
+            ),
+            (
+                self.data_root / "HK" / timeframe,
                 f"{clean_symbol}.HK_{timeframe}_factors_*.parquet",
             ),
             (
-                self.data_root / timeframe,
+                self.data_root / "HK" / timeframe,
+                f"{clean_symbol}HK_{timeframe}_factors.parquet",
+            ),
+            (
+                self.data_root / "HK" / timeframe,
                 f"{clean_symbol}HK_{timeframe}_factors_*.parquet",
             ),
             (
-                self.data_root / timeframe,
+                self.data_root / "HK" / timeframe,
+                f"{clean_symbol}_{timeframe}_factors.parquet",
+            ),
+            (
+                self.data_root / "HK" / timeframe,
                 f"{clean_symbol}_{timeframe}_factors_*.parquet",
             ),
             # multi_tf格式
             (self.data_root, f"aligned_multi_tf_factors_{clean_symbol}*.parquet"),
             # 根目录格式
+            (self.data_root, f"{clean_symbol}*_{timeframe}_factors.parquet"),
             (self.data_root, f"{clean_symbol}*_{timeframe}_factors_*.parquet"),
         ]
 
         for search_dir, pattern in search_patterns:
+            self.logger.info(
+                f"检查搜索目录存在性: {search_dir}, 存在: {search_dir.exists()}"
+            )
             if search_dir.exists():
                 factor_files = list(search_dir.glob(pattern))
+                self.logger.info(
+                    f"搜索目录: {search_dir}, 模式: {pattern}, 找到文件数: {len(factor_files)}"
+                )
                 if factor_files:
                     selected_file = factor_files[-1]  # 选择最新文件
                     self.logger.info(f"找到因子文件: {selected_file}")
@@ -2657,6 +2737,57 @@ class ProfessionalFactorScreener:
 
     # ==================== 综合评分系统 ====================
 
+    def _infer_factor_type(self, factor_name: str) -> str:
+        """Phase 2: 推断因子类型
+
+        Args:
+            factor_name: 因子名称
+
+        Returns:
+            因子类型: "pattern" | "momentum" | "volatility" | "default"
+        """
+        factor_upper = factor_name.upper()
+
+        # K线形态因子
+        if "CDL" in factor_upper or "PATTERN" in factor_upper:
+            return "pattern"
+
+        # 动量因子
+        momentum_keywords = ["RSI", "WILLR", "CCI", "MOM", "ROC", "STOCH", "MACD"]
+        if any(kw in factor_upper for kw in momentum_keywords):
+            return "momentum"
+
+        # 波动率因子
+        volatility_keywords = ["ATR", "BBANDS", "NATR", "TRANGE", "STD", "VAR"]
+        if any(kw in factor_upper for kw in volatility_keywords):
+            return "volatility"
+
+        return "default"
+
+    def _select_factor_weights(self, factor_type: str) -> dict:
+        """统一权重选择接口
+
+        Args:
+            factor_type: 因子类型
+
+        Returns:
+            对应的权重字典
+        """
+        weight_map = {
+            "trend": self.trend_weights,
+            "momentum": self.momentum_weights,
+            "volatility": self.volatility_weights,
+            "volume": self.volume_weights,
+            "pattern": self.pattern_weights,
+        }
+
+        # 防御性编程：未知类型使用默认权重
+        if factor_type not in weight_map:
+            self.logger.debug(f"未知因子类型: {factor_type}, 使用默认权重")
+            return self.config.weights
+
+        return weight_map[factor_type]
+
     def calculate_comprehensive_scores(
         self, all_metrics: Dict[str, Dict], timeframe: str = "1min"
     ) -> Dict[str, FactorMetrics]:
@@ -2684,6 +2815,14 @@ class ProfessionalFactorScreener:
             return default
 
         for factor in sorted(all_factors):
+            # Phase 2: 推断因子类型并选择权重（使用统一接口）
+            factor_type = self._infer_factor_type(factor)
+            weights = self._select_factor_weights(factor_type)
+
+            self.logger.debug(
+                f"因子 {factor} 类型={factor_type} 权重={list(weights.keys())}"
+            )
+
             metrics = FactorMetrics(name=factor)
 
             # 1. 预测能力评分 (35%)
@@ -3015,12 +3154,14 @@ class ProfessionalFactorScreener:
                 and metrics.corrected_p_value <= current_alpha
             )
 
-            # 🔧 关键修复：设置因子等级分类（时间框架自适应）
+            # 🔧 Phase 2: 设置因子等级分类（多条件联合判定）
             metrics.tier = self._classify_factor_tier(
                 metrics.comprehensive_score,
                 metrics.is_significant,
                 metrics.ic_mean,
                 timeframe,
+                stability_score=metrics.stability_score,
+                ic_ir=metrics.ic_ir,
             )
 
             comprehensive_results[factor] = metrics
@@ -3066,13 +3207,15 @@ class ProfessionalFactorScreener:
         is_significant: bool,
         ic_mean: float,
         timeframe: str = "1min",
+        stability_score: float = 0.0,
+        ic_ir: float = 0.0,
     ) -> str:
-        """P1-1修复：因子等级分类逻辑（时间框架自适应）
+        """Phase 2: 因子等级分类逻辑（多条件联合判定）
 
         分级标准（根据时间框架动态调整）：
-        - Tier 1: 核心因子，强烈推荐
-        - Tier 2: 重要因子，推荐使用
-        - Tier 3: 备用因子，特定条件使用
+        - Tier 1: 核心因子，强烈推荐（显著性+高分+高稳定性+高IR）
+        - Tier 2: 重要因子，推荐使用（显著性+中高分+中等稳定性）
+        - Tier 3: 备用因子，特定条件使用（非显著或低质量）
         - 不推荐: 不建议使用
         """
         # 🔧 获取样本量自适应阈值（最优解配置）
@@ -3110,7 +3253,7 @@ class ProfessionalFactorScreener:
         else:
             base_tier = "不推荐"
 
-        # 🔥 Phase 1.3: 显著性硬约束 - 未过FDR的因子最高只能Tier 3
+        # 🔥 Phase 1.3 + Phase 2: 显著性硬约束 - 未过FDR的因子最高只能Tier 3
         if not is_significant:
             if base_tier in ["Tier 1", "Tier 2"]:
                 self.logger.debug(
@@ -3120,21 +3263,32 @@ class ProfessionalFactorScreener:
             else:
                 return base_tier  # 保持Tier 3或不推荐
 
-        # 显著性和IC调整（使用自适应升级阈值）
-        if is_significant and abs(ic_mean) >= 0.05:
-            # 显著且IC较强，维持或提升等级
+        # Phase 2: 多条件联合判定（显著性+综合分+稳定性+IR）
+        if is_significant:
+            # Tier 1 严格条件：高分+高稳定性+高IR
             if (
-                base_tier == "Tier 3"
-                and comprehensive_score >= thresholds["upgrade_tier2"]
-            ):
-                return "Tier 2"
-            elif (
-                base_tier == "Tier 2"
-                and comprehensive_score >= thresholds["upgrade_tier1"]
+                comprehensive_score >= thresholds["tier1"]
+                and stability_score >= 0.7
+                and ic_ir >= 1.0
             ):
                 return "Tier 1"
-        elif abs(ic_mean) < 0.02:
-            # IC很弱，降级
+            # Tier 2 中等条件：中高分+中等稳定性
+            elif comprehensive_score >= thresholds["tier2"] and stability_score >= 0.5:
+                return "Tier 2"
+            # 显著但质量不足，尝试升级
+            elif (
+                base_tier == "Tier 3"
+                and comprehensive_score >= thresholds["upgrade_tier2"]
+                and abs(ic_mean) >= 0.05
+            ):
+                return "Tier 2"
+            elif comprehensive_score >= thresholds["tier3"]:
+                return "Tier 3"
+            else:
+                return "不推荐"
+
+        # IC很弱的额外降级
+        if abs(ic_mean) < 0.02:
             if base_tier == "Tier 1":
                 return "Tier 2"
             elif base_tier == "Tier 2":
@@ -4499,7 +4653,7 @@ def main():
     if args.config:
         # 使用配置文件
         try:
-            from config_manager import ConfigManager
+            from .config_manager import ConfigManager
 
             manager = ConfigManager()
 
@@ -4531,7 +4685,7 @@ def main():
                 # 获取第一个配置的数据根和输出目录
                 first_config = batch_config["screening_configs"][0]
                 data_root = first_config.get("data_root", "../factor_output")
-                output_dir = first_config.get("output_dir", "./screening_results")
+                output_dir = first_config.get("output_dir", "./output")
 
                 print(f"📁 数据目录: {data_root}")
                 print(f"📁 输出目录: {output_dir}")
@@ -4686,22 +4840,38 @@ def main():
                 # 如果是批量配置，加载第一个子配置
                 if "batch_name" in config_data and "screening_configs" in config_data:
                     first_sub_config = config_data["screening_configs"][0]
-                    from config_manager import ScreeningConfig
+                    from .config_manager import ScreeningConfig
 
                     config = ScreeningConfig(**first_sub_config)
                     print(f"✅ 自动加载默认配置: {default_config_path}")
                     print(f"📁 数据目录: {config.data_root}")
                     print(f"📁 输出目录: {config.output_dir}")
                 else:
-                    from config_manager import ScreeningConfig
+                    from .config_manager import ScreeningConfig
 
                     config = ScreeningConfig(**config_data)
             except Exception as e:
                 print(f"⚠️ 默认配置加载失败，使用内置配置: {e}")
-                from config_manager import ScreeningConfig
+                from .config_manager import ScreeningConfig
+
+                config = ScreeningConfig(
+                    data_root="../factor_output",
+                    output_dir="./output",
+                    ic_horizons=[1, 3, 5, 10, 20],
+                    min_sample_size=100,
+                    alpha_level=0.05,
+                    fdr_method="benjamini_hochberg",
+                    min_ic_threshold=0.02,
+                    min_ir_threshold=0.5,
+                )
+
+        # 确保config已定义（如果前面的分支都没有定义config）
+        if "config" not in locals():
+            from .config_manager import ScreeningConfig
+
             config = ScreeningConfig(
                 data_root="../factor_output",
-                output_dir="./screening_results",
+                output_dir="./output",
                 ic_horizons=[1, 3, 5, 10, 20],
                 min_sample_size=100,
                 alpha_level=0.05,
@@ -4709,6 +4879,8 @@ def main():
                 min_ic_threshold=0.02,
                 min_ir_threshold=0.5,
             )
+            print("✅ 使用默认配置")
+
         symbol = args.symbol
         timeframe = args.timeframe
 
