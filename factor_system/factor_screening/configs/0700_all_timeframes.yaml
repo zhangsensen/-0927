@@ -1,0 +1,116 @@
+# 0700.HK 全时间框架因子筛选配置
+# 单股票全时间框架分析：10个时间框架 × 5维度筛选
+
+name: "0700_all_timeframes"
+description: "0700.HK全时间框架因子筛选 - 1min到1day全覆盖"
+
+# 数据配置 - 使用统一路径管理
+data_root: "factor_system/factor_output"
+output_root: "factor_system/factor_screening/screening_results"
+
+# 股票和时间框架配置
+symbols: ["0700.HK"]
+timeframes:
+  - "1min"
+  - "2min"
+  - "3min"
+  - "5min"
+  - "15min"
+  - "30min"
+  - "60min"
+  - "2h"
+  - "4h"
+  - "1day"
+
+# IC分析配置
+ic_horizons: [1, 3, 5, 10, 20]
+min_sample_size: 100
+alpha_level: 0.05
+fdr_method: "benjamini_hochberg"
+
+# 稳定性配置
+rolling_window: 60
+min_ic_threshold: 0.015
+min_ir_threshold: 0.35
+min_robustness_score: 0.6
+
+# 独立性配置
+vif_threshold: 5.0
+correlation_threshold: 0.8
+base_factors: ["MA5", "MA10", "RSI14", "MACD_12_26_9"]
+
+# 交易成本参数（港股）
+commission_rate: 0.002  # 0.2%佣金
+slippage_bps: 5.0       # 5bp滑点
+market_impact_coeff: 0.1
+
+# 筛选阈值
+min_stability_threshold: 0.6
+max_vif_threshold: 10.0
+max_cost_threshold: 0.01
+
+# 数据质量参数
+max_missing_ratio: 0.8
+min_data_points: 50
+min_momentum_samples: 120
+factor_change_threshold: 0.05
+high_rank_threshold: 0.8
+progress_report_interval: 10
+
+# 综合评分权重
+weights:
+  predictive_power: 0.35
+  stability: 0.25
+  independence: 0.20
+  practicality: 0.10
+  short_term_fitness: 0.10
+
+# 时间框架自适应配置
+enable_timeframe_adaptive: true
+timeframe_adaptive_config:
+  "1min": {alpha: 0.05, tier1: 0.85, tier2: 0.70, tier3: 0.50}
+  "2min": {alpha: 0.05, tier1: 0.85, tier2: 0.70, tier3: 0.50}
+  "3min": {alpha: 0.05, tier1: 0.85, tier2: 0.70, tier3: 0.50}
+  "5min": {alpha: 0.05, tier1: 0.80, tier2: 0.65, tier3: 0.45}
+  "15min": {alpha: 0.05, tier1: 0.80, tier2: 0.65, tier3: 0.45}
+  "30min": {alpha: 0.05, tier1: 0.80, tier2: 0.65, tier3: 0.45}
+  "60min": {alpha: 0.05, tier1: 0.75, tier2: 0.60, tier3: 0.40}
+  "2h": {alpha: 0.05, tier1: 0.75, tier2: 0.60, tier3: 0.40}
+  "4h": {alpha: 0.05, tier1: 0.75, tier2: 0.60, tier3: 0.40}
+  "1day": {alpha: 0.05, tier1: 0.70, tier2: 0.55, tier3: 0.35}
+
+# 并行配置
+max_workers: 4
+enable_parallel: true
+
+# 输出配置
+save_reports: true
+save_detailed_metrics: true
+save_factor_rankings: true
+save_performance_attribution: true
+log_level: "INFO"
+
+# 性能配置
+memory_limit_gb: 8.0
+timeout_minutes: 120
+enable_memory_optimization: true
+
+# 统计配置
+enable_bootstrap: true
+bootstrap_samples: 1000
+enable_bayesian_analysis: true
+enable_cross_validation: true
+cv_folds: 5
+
+# 因子筛选配置
+min_trading_days: 20
+min_positive_return_ratio: 0.3
+max_turnover_ratio: 2.0
+enable_sector_neutral: false
+
+# 报告配置
+generate_html_report: true
+generate_excel_report: true
+generate_json_report: true
+include_factor_details: true
+include_performance_charts: true
