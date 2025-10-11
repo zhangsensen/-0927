@@ -27,7 +27,12 @@
 import argparse
 import logging
 import sys
+import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - 避免运行期循环导入
+    from config_manager import ScreeningConfig
 
 # 设置日志
 logging.basicConfig(
@@ -36,13 +41,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def run_single_screening(symbol: str, timeframe: str):
-    """单股单时间框架筛选"""
+def _build_screening_config(*, fast_mode: bool = False) -> "ScreeningConfig":
+    """创建筛选配置，支持性能优化模式"""
     from config_manager import ScreeningConfig
-    from data_loader_patch import patch_data_loader
-    from professional_factor_screener import ProfessionalFactorScreener
-
-    logger.info(f"🎯 单股筛选: {symbol} {timeframe}")
 
     # 🔧 修复硬编码路径 - 使用项目根目录相对路径
     try:
@@ -53,12 +54,39 @@ def run_single_screening(symbol: str, timeframe: str):
         data_root = Path("../factor_output")
         raw_data_root = Path("../raw")
 
-    config = ScreeningConfig(
+    base_kwargs = dict(
         data_root=str(data_root),
         raw_data_root=str(raw_data_root),
         output_root="./screening_results",
         enable_legacy_format=False,
     )
+
+    if not fast_mode:
+        return ScreeningConfig(**base_kwargs)
+
+    performance_kwargs = dict(
+        ic_horizons=[1, 3, 5, 10],
+        rolling_window=40,
+        min_sample_size=80,
+        vif_threshold=10.0,
+        sample_weight_params={
+            "enable": False,
+            "min_full_weight_samples": 1000,
+            "weight_power": 0.35,
+        },
+    )
+    base_kwargs.update(performance_kwargs)
+    return ScreeningConfig(**base_kwargs)
+
+
+def run_single_screening(symbol: str, timeframe: str, *, fast_mode: bool = False):
+    """单股单时间框架筛选"""
+    from data_loader_patch import patch_data_loader
+    from professional_factor_screener import ProfessionalFactorScreener
+
+    logger.info(f"🎯 单股筛选: {symbol} {timeframe} | 模式={'FAST' if fast_mode else 'FULL'}")
+
+    config = _build_screening_config(fast_mode=fast_mode)
 
     screener = ProfessionalFactorScreener(config=config)
     patch_data_loader(screener)
@@ -69,30 +97,35 @@ def run_single_screening(symbol: str, timeframe: str):
     return results
 
 
-def run_multi_timeframe_screening(symbol: str, timeframes: list):
+def _screen_single_timeframe_worker(args):
+    """多进程工作函数"""
+    symbol, timeframe, fast_mode = args
+
+    try:
+        from data_loader_patch import patch_data_loader
+        from professional_factor_screener import ProfessionalFactorScreener
+
+        config = _build_screening_config(fast_mode=fast_mode)
+        screener = ProfessionalFactorScreener(config=config)
+        patch_data_loader(screener)
+
+        result = screener.screen_factors_comprehensive(symbol=symbol, timeframe=timeframe)
+        factor_count = len(result) if isinstance(result, dict) else 0
+        return timeframe, result, factor_count, None
+    except Exception as exc:  # pragma: no cover - 防御性日志
+        return timeframe, None, 0, str(exc)
+
+
+def run_multi_timeframe_screening(symbol: str, timeframes: list, *, fast_mode: bool = False):
     """单股多时间框架筛选"""
-    from config_manager import ScreeningConfig
     from data_loader_patch import patch_data_loader
     from professional_factor_screener import ProfessionalFactorScreener
 
     logger.info(f"🎯 多时间框架筛选: {symbol}")
     logger.info(f"⏰ 时间框架: {timeframes}")
+    logger.info(f"⚡ 模式={'FAST' if fast_mode else 'FULL'}")
 
-    # 🔧 修复硬编码路径 - 使用项目根目录相对路径
-    try:
-        project_root = Path(__file__).parent.parent
-        data_root = project_root / "factor_output"
-        raw_data_root = project_root / ".." / "raw"
-    except Exception:
-        data_root = Path("../factor_output")
-        raw_data_root = Path("../raw")
-
-    config = ScreeningConfig(
-        data_root=str(data_root),
-        raw_data_root=str(raw_data_root),
-        output_root="./screening_results",
-        enable_legacy_format=False,
-    )
+    config = _build_screening_config(fast_mode=fast_mode)
 
     screener = ProfessionalFactorScreener(config=config)
     patch_data_loader(screener)
@@ -101,6 +134,55 @@ def run_multi_timeframe_screening(symbol: str, timeframes: list):
 
     total_factors = sum(len(r) for r in results.values() if isinstance(r, dict))
     logger.info(f"✅ 完成！共 {len(results)} 个时间框架，{total_factors} 个优质因子")
+    return results
+
+
+def run_multi_timeframe_screening_parallel(
+    symbol: str,
+    timeframes: list,
+    *,
+    fast_mode: bool = False,
+    max_workers: int = 4,
+):
+    """单股多时间框架并行筛选"""
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    logger.info(f"🚀 并行多时间框架筛选: {symbol}")
+    logger.info(f"⏰ 时间框架: {timeframes}")
+    logger.info(f"⚡ 模式={'FAST' if fast_mode else 'FULL'} | 并行度={max_workers}")
+
+    start_time = time.time()
+
+    results = {}
+    completed = 0
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_screen_single_timeframe_worker, (symbol, timeframe, fast_mode)): timeframe
+            for timeframe in timeframes
+        }
+
+        for future in as_completed(futures):
+            completed += 1
+
+            tf, result, factor_count, error = future.result()
+            if error is None and result is not None:
+                results[tf] = result
+                logger.info(f"✅ {tf} 完成 - {factor_count} 因子")
+            else:
+                logger.error(f"❌ {tf} 失败: {error}")
+
+            progress = completed / len(timeframes) * 100
+            logger.info(f"📈 进度 {completed}/{len(timeframes)} ({progress:.1f}%)")
+
+    duration = time.time() - start_time
+    total_factors = sum(len(r) for r in results.values() if isinstance(r, dict))
+
+    logger.info("✅ 并行筛选完成！")
+    logger.info(f"📈 完成时间框架: {len(results)}/{len(timeframes)}")
+    logger.info(f"🎯 总因子数: {total_factors}")
+    logger.info(f"⚡ 总耗时: {duration:.1f}秒 ({duration/60:.1f}分钟)")
+
     return results
 
 
@@ -127,24 +209,9 @@ def run_batch_screening(market: str = None, limit: int = None, workers: int = 8)
             stocks = stocks[:limit]
 
         # 临时修改：创建限制版本的任务
-        import logging
         from concurrent.futures import ProcessPoolExecutor, as_completed
         from datetime import datetime
-        from pathlib import Path
 
-        # 🔧 修复硬编码路径 - 使用项目根目录相对路径
-        try:
-            # 尝试获取项目根目录
-            project_root = Path(__file__).parent.parent
-            factor_output_root = project_root / "factor_output"
-            raw_data_root = project_root / ".." / "raw"
-        except Exception:
-            # 回退到相对路径
-            factor_output_root = Path("../factor_output")
-            raw_data_root = Path("../raw")
-
-        FACTOR_OUTPUT_ROOT = factor_output_root
-        RAW_DATA_ROOT = raw_data_root
         ALL_TIMEFRAMES = [
             "1min",
             "2min",
@@ -226,9 +293,9 @@ def run_batch_screening(market: str = None, limit: int = None, workers: int = 8)
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
-        print(f"\n{'#'*100}")
+        print("\n" + "#" * 100)
         print(f"🎉 {market}市场批量筛选完成!")
-        print(f"{'#'*100}")
+        print("#" * 100)
         print(f"📊 总股票数: {len(stocks)}")
         print(f"✅ 成功筛选: {success_count} ({success_count/len(stocks)*100:.1f}%)")
         print(
@@ -237,7 +304,7 @@ def run_batch_screening(market: str = None, limit: int = None, workers: int = 8)
         print(f"⏱️  总耗时: {duration:.1f}秒 ({duration/60:.1f}分钟)")
         print(f"⚡ 平均每股: {duration/len(stocks):.1f}秒")
         print(f"🚀 吞吐量: {len(stocks)/duration*60:.1f} 股票/分钟")
-        print(f"{'#'*100}")
+        print("#" * 100)
 
         if failed_stocks:
             print(f"\n❌ 失败股票列表 (前10个):")
@@ -289,6 +356,22 @@ def main():
     parser.add_argument(
         "--timeframes", nargs="+", help="多个时间框架 (如: 5min 15min 60min)"
     )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="启用快速性能模式（降低计算量，加速筛选）",
+    )
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="启用多进程并行处理多个时间框架",
+    )
+    parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=4,
+        help="并行筛选进程数（仅 --parallel 时生效）",
+    )
 
     # 批量筛选参数
     parser.add_argument(
@@ -306,8 +389,8 @@ def main():
         # 批量模式
         if args.all_markets:
             logger.info("🚀 开始筛选所有市场")
-            results_hk = run_batch_screening("HK", args.limit, args.workers)
-            results_us = run_batch_screening("US", args.limit, args.workers)
+            run_batch_screening("HK", args.limit, args.workers)
+            run_batch_screening("US", args.limit, args.workers)
             logger.info("✅ 所有市场筛选完成！")
         elif args.market:
             run_batch_screening(args.market, args.limit, args.workers)
@@ -318,16 +401,33 @@ def main():
         if not args.symbol:
             parser.error("单股模式需要指定 --symbol")
 
+        fast_mode = args.fast
+
+        if args.parallel and not args.timeframes:
+            parser.error("并行模式需要指定 --timeframes")
+
         if args.timeframes:
             # 多时间框架
-            run_multi_timeframe_screening(args.symbol, args.timeframes)
+            if args.parallel:
+                run_multi_timeframe_screening_parallel(
+                    args.symbol,
+                    args.timeframes,
+                    fast_mode=fast_mode,
+                    max_workers=args.parallel_workers,
+                )
+            else:
+                run_multi_timeframe_screening(
+                    args.symbol,
+                    args.timeframes,
+                    fast_mode=fast_mode,
+                )
         elif args.timeframe:
             # 单时间框架
-            run_single_screening(args.symbol, args.timeframe)
+            run_single_screening(args.symbol, args.timeframe, fast_mode=fast_mode)
         else:
             # 默认使用5min
             logger.warning("未指定时间框架，使用默认值: 5min")
-            run_single_screening(args.symbol, "5min")
+            run_single_screening(args.symbol, "5min", fast_mode=fast_mode)
 
 
 if __name__ == "__main__":
