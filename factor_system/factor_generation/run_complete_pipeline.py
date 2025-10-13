@@ -51,7 +51,9 @@ def main():
 
         # 2. 扫描原始数据
         print("🔍 扫描原始数据...")
-        raw_dir = "/Users/zhangshenshen/深度量化0927/raw"
+        # 🔧 Linus式修复：使用 ProjectPaths 统一路径管理
+        from factor_system.utils import get_raw_data_dir
+        raw_dir = str(get_raw_data_dir())
         stocks = processor.discover_stocks(raw_dir)
 
         # 按市场分组统计

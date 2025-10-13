@@ -29,7 +29,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:  # pragma: no cover - 避免运行期循环导入
     from config_manager import ScreeningConfig
@@ -41,8 +41,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _build_screening_config(*, fast_mode: bool = False) -> "ScreeningConfig":
-    """创建筛选配置，支持性能优化模式"""
+def _build_screening_config(*, session_dir: Optional[str] = None) -> "ScreeningConfig":
+    """创建筛选配置，可选指定输出目录"""
     from config_manager import ScreeningConfig
 
     # 🔧 修复硬编码路径 - 使用项目根目录相对路径
@@ -57,36 +57,21 @@ def _build_screening_config(*, fast_mode: bool = False) -> "ScreeningConfig":
     base_kwargs = dict(
         data_root=str(data_root),
         raw_data_root=str(raw_data_root),
-        output_root="./screening_results",
+        output_root=str(session_dir) if session_dir else "./screening_results",
         enable_legacy_format=False,
     )
 
-    if not fast_mode:
-        return ScreeningConfig(**base_kwargs)
-
-    performance_kwargs = dict(
-        ic_horizons=[1, 3, 5, 10],
-        rolling_window=40,
-        min_sample_size=80,
-        vif_threshold=10.0,
-        sample_weight_params={
-            "enable": False,
-            "min_full_weight_samples": 1000,
-            "weight_power": 0.35,
-        },
-    )
-    base_kwargs.update(performance_kwargs)
     return ScreeningConfig(**base_kwargs)
 
 
-def run_single_screening(symbol: str, timeframe: str, *, fast_mode: bool = False):
+def run_single_screening(symbol: str, timeframe: str):
     """单股单时间框架筛选"""
     from data_loader_patch import patch_data_loader
     from professional_factor_screener import ProfessionalFactorScreener
 
-    logger.info(f"🎯 单股筛选: {symbol} {timeframe} | 模式={'FAST' if fast_mode else 'FULL'}")
+    logger.info(f"🎯 单股筛选: {symbol} {timeframe}")
 
-    config = _build_screening_config(fast_mode=fast_mode)
+    config = _build_screening_config()
 
     screener = ProfessionalFactorScreener(config=config)
     patch_data_loader(screener)
@@ -99,13 +84,13 @@ def run_single_screening(symbol: str, timeframe: str, *, fast_mode: bool = False
 
 def _screen_single_timeframe_worker(args):
     """多进程工作函数"""
-    symbol, timeframe, fast_mode = args
+    symbol, timeframe, session_dir = args
 
     try:
         from data_loader_patch import patch_data_loader
         from professional_factor_screener import ProfessionalFactorScreener
 
-        config = _build_screening_config(fast_mode=fast_mode)
+        config = _build_screening_config(session_dir=session_dir)
         screener = ProfessionalFactorScreener(config=config)
         patch_data_loader(screener)
 
@@ -116,16 +101,15 @@ def _screen_single_timeframe_worker(args):
         return timeframe, None, 0, str(exc)
 
 
-def run_multi_timeframe_screening(symbol: str, timeframes: list, *, fast_mode: bool = False):
+def run_multi_timeframe_screening(symbol: str, timeframes: list):
     """单股多时间框架筛选"""
     from data_loader_patch import patch_data_loader
     from professional_factor_screener import ProfessionalFactorScreener
 
     logger.info(f"🎯 多时间框架筛选: {symbol}")
     logger.info(f"⏰ 时间框架: {timeframes}")
-    logger.info(f"⚡ 模式={'FAST' if fast_mode else 'FULL'}")
 
-    config = _build_screening_config(fast_mode=fast_mode)
+    config = _build_screening_config()
 
     screener = ProfessionalFactorScreener(config=config)
     patch_data_loader(screener)
@@ -141,15 +125,21 @@ def run_multi_timeframe_screening_parallel(
     symbol: str,
     timeframes: list,
     *,
-    fast_mode: bool = False,
     max_workers: int = 4,
 ):
     """单股多时间框架并行筛选"""
     from concurrent.futures import ProcessPoolExecutor, as_completed
+    from datetime import datetime
 
     logger.info(f"🚀 并行多时间框架筛选: {symbol}")
     logger.info(f"⏰ 时间框架: {timeframes}")
-    logger.info(f"⚡ 模式={'FAST' if fast_mode else 'FULL'} | 并行度={max_workers}")
+    logger.info(f"⚡ 并行度={max_workers}")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_dir = Path("screening_results") / f"{symbol}_{timestamp}"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    session_dir_str = str(session_dir.resolve())
+    logger.info(f"📁 会话输出目录: {session_dir_str}")
 
     start_time = time.time()
 
@@ -158,7 +148,10 @@ def run_multi_timeframe_screening_parallel(
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_screen_single_timeframe_worker, (symbol, timeframe, fast_mode)): timeframe
+            executor.submit(
+                _screen_single_timeframe_worker,
+                (symbol, timeframe, session_dir_str),
+            ): timeframe
             for timeframe in timeframes
         }
 
@@ -189,8 +182,6 @@ def run_multi_timeframe_screening_parallel(
 def run_batch_screening(market: str = None, limit: int = None, workers: int = 8):
     """批量高性能筛选"""
     import multiprocessing as mp
-
-    from batch_screen_all_stocks_parallel import batch_screen_market_parallel
 
     # 设置多进程启动方法
     mp.set_start_method("spawn", force=True)
@@ -357,11 +348,6 @@ def main():
         "--timeframes", nargs="+", help="多个时间框架 (如: 5min 15min 60min)"
     )
     parser.add_argument(
-        "--fast",
-        action="store_true",
-        help="启用快速性能模式（降低计算量，加速筛选）",
-    )
-    parser.add_argument(
         "--parallel",
         action="store_true",
         help="启用多进程并行处理多个时间框架",
@@ -401,8 +387,6 @@ def main():
         if not args.symbol:
             parser.error("单股模式需要指定 --symbol")
 
-        fast_mode = args.fast
-
         if args.parallel and not args.timeframes:
             parser.error("并行模式需要指定 --timeframes")
 
@@ -412,22 +396,17 @@ def main():
                 run_multi_timeframe_screening_parallel(
                     args.symbol,
                     args.timeframes,
-                    fast_mode=fast_mode,
                     max_workers=args.parallel_workers,
                 )
             else:
-                run_multi_timeframe_screening(
-                    args.symbol,
-                    args.timeframes,
-                    fast_mode=fast_mode,
-                )
+                run_multi_timeframe_screening(args.symbol, args.timeframes)
         elif args.timeframe:
             # 单时间框架
-            run_single_screening(args.symbol, args.timeframe, fast_mode=fast_mode)
+            run_single_screening(args.symbol, args.timeframe)
         else:
             # 默认使用5min
             logger.warning("未指定时间框架，使用默认值: 5min")
-            run_single_screening(args.symbol, "5min", fast_mode=fast_mode)
+            run_single_screening(args.symbol, "5min")
 
 
 if __name__ == "__main__":

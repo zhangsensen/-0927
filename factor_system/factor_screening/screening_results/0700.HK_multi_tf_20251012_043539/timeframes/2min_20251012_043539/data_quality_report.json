@@ -1,0 +1,24 @@
+{
+  "factor_data_shape": [
+    72614,
+    246
+  ],
+  "aligned_data_shape": [
+    72614,
+    246
+  ],
+  "data_overlap_count": 72614,
+  "factor_count": 246,
+  "sample_size": 72614,
+  "factor_data_range": {
+    "start": "2024-01-02T09:30:00",
+    "end": "2025-10-10T16:00:00"
+  },
+  "alignment_success_rate": 1.0,
+  "quality_assessment": {
+    "overall_score": 0.85,
+    "recommendations": [
+      "数据质量良好，可以进行因子筛选"
+    ]
+  }
+}

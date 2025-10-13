@@ -29,7 +29,9 @@ def main():
     print(f"📝 日志文件: {log_file}")
 
     # 原始数据目录（仍可通过配置覆盖）
-    raw_dir = "/Users/zhangshenshen/深度量化0927/raw"
+    # 🔧 Linus式修复：使用 ProjectPaths 统一路径管理
+    from factor_system.utils import get_raw_data_dir
+    raw_dir = str(get_raw_data_dir())
 
     try:
         # 初始化处理器

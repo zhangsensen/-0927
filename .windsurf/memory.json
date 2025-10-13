@@ -1,0 +1,26 @@
+{"type":"entity","name":"FactorEngine","entityType":"project","observations":["专业的量化交易因子计算引擎项目","基于VectorBT + TA-Lib实现","提供统一的技术指标计算能力","确保研究、回测、组合管理等环境使用完全相同的计算逻辑","支持多时间框架（1min到monthly）","双层缓存（内存+磁盘）系统","向量化计算优化","项目根目录：/Users/zhangshenshen/深度量化0927","核心版本：0.2.0","作者：量化首席工程师","专注：港股中频（10m-1d）策略研发、因子工程、性能优化"]}
+{"type":"entity","name":"模块化架构","entityType":"architecture","observations":["factor_system/factor_engine/: 核心引擎，提供统一API和缓存系统","factor_system/factor_generation/: 批量因子生成，154个技术指标计算","factor_system/factor_screening/: 专业因子筛选，5维度评估框架","factor_system/shared/: 共享计算器，确保所有模块计算逻辑一致","tests/: 全面测试覆盖，包括一致性验证和回归测试"]}
+{"type":"entity","name":"技术栈","entityType":"technology","observations":["Python 3.11+","VectorBT 0.28+","TA-Lib 0.6.7+","Pandas 2.3+","NumPy 2.3+","SciPy 1.16+","scikit-learn 1.7+","支持多时间框架（1min到monthly）","双层缓存（内存+磁盘）","向量化计算优化"]}
+{"type":"entity","name":"因子覆盖","entityType":"factors","observations":["246+个技术指标","涵盖20个类别","趋势指标：SMA, EMA, MACD, ADX等","动量指标：RSI, STOCH, WILLR, CCI等","波动率指标：ATR, BBANDS, 标准差等","成交量指标：OBV, VWAP, MFI等","K线形态：60+个TA-Lib蜡烛图形态","统计因子：50+个自定义统计指标"]}
+{"type":"entity","name":"质量保证机制","entityType":"quality","observations":["factor_consistency_guard.py：确保factor_engine和factor_generation计算一致性","全面测试覆盖：test_factor_engine_*.py系列测试文件","数据验证：OHLCV逻辑验证、缺失值检查、异常值检测","性能监控：内存使用、计算速度、缓存命中率跟踪","严格的统计显著性检验：Benjamini-Hochberg FDR校正"]}
+{"type":"entity","name":"开发规范","entityType":"standards","observations":["遵循Linus哲学（无冗余代码）","Black格式化（88字符）","isort导入排序","mypy类型检查","构建命令：make install（uv sync）、make test（pytest）、make lint（flake8+mypy）、make format（black+isort）"]}
+{"type":"entity","name":"因子筛选框架","entityType":"screening","observations":["5维度筛选框架：预测能力、稳定性、独立性、实用性、短周期适应性","多周期IC分析：1日、3日、5日、10日、20日预测能力评估","严格的统计显著性检验：Benjamini-Hochberg FDR校正","VIF检测和信息增量分析","交易成本和流动性评估","生产级性能优化和错误处理"]}
+{"type":"entity","name":"性能特性","entityType":"performance","observations":["向量化计算 > 并行化 > apply","双层缓存系统（内存+磁盘）","多时间框架支持（1min到monthly）","154个技术指标并行计算","内存管理和错误处理机制完善","因子生成速度可达数百因子/秒"]}
+{"type":"entity","name":"数据验证机制","entityType":"validation","observations":["OHLCV逻辑验证","缺失值检查","异常值检测","时间序列完整性验证","因子计算一致性验证","跨模块计算结果对比","OHLCV逻辑验证：确保开高低收成交量数据完整性","缺失值检查：识别并处理数据缺失情况","异常值检测：识别并标记异常数据点","时间序列完整性验证：确保时间序列连续性","因子计算一致性验证：确保不同模块计算结果一致","跨模块计算结果对比：验证因子生成和引擎计算一致性"]}
+{"type":"entity","name":"部署配置","entityType":"deployment","observations":["配置化部署：支持环境变量和配置文件","路径管理系统：统一的ProjectPaths类","异常处理框架：防御性编程装饰器","模块边界清晰：消除循环依赖","向后兼容：保留旧API但标记为deprecated","路径管理系统：统一的ProjectPaths类，基于Path(__file__).resolve()动态计算","异常处理框架：防御性编程装饰器，包括@safe_operation、@safe_io_operation、@safe_compute_operation","模块边界清晰：消除循环依赖，建立清晰的导入关系","向后兼容：保留旧API但标记为deprecated，确保平滑迁移","配置化部署：支持环境变量和YAML配置文件","日志系统：结构化日志，支持按模块分目录存储"]}
+{"type":"relation","from":"FactorEngine","to":"模块化架构","relationType":"uses"}
+{"type":"relation","from":"FactorEngine","to":"技术栈","relationType":"built_with"}
+{"type":"relation","from":"FactorEngine","to":"因子覆盖","relationType":"provides"}
+{"type":"relation","from":"FactorEngine","to":"质量保证机制","relationType":"ensures"}
+{"type":"relation","from":"FactorEngine","to":"开发规范","relationType":"follows"}
+{"type":"relation","from":"模块化架构","to":"因子筛选框架","relationType":"includes"}
+{"type":"relation","from":"因子覆盖","to":"因子筛选框架","relationType":"supports"}
+{"type":"relation","from":"质量保证机制","to":"因子筛选框架","relationType":"validates"}
+{"type":"relation","from":"技术栈","to":"性能特性","relationType":"enables"}
+{"type":"relation","from":"技术栈","to":"数据验证机制","relationType":"supports"}
+{"type":"relation","from":"因子筛选框架","to":"因子覆盖","relationType":"assesses"}
+{"type":"relation","from":"因子筛选框架","to":"质量保证机制","relationType":"applies"}
+{"type":"relation","from":"性能特性","to":"技术栈","relationType":"achieved_by"}
+{"type":"relation","from":"数据验证机制","to":"因子筛选框架","relationType":"implemented_in"}
+{"type":"relation","from":"部署配置","to":"FactorEngine","relationType":"facilitates"}
+{"type":"relation","from":"开发规范","to":"FactorEngine","relationType":"governs"}

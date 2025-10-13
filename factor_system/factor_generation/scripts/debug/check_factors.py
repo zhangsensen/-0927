@@ -2,8 +2,11 @@
 """检查因子系统统计"""
 
 import sys
+from pathlib import Path
 
-sys.path.append("/Users/zhangshenshen/深度量化0927")
+# 🔧 Linus式修复：使用相对路径
+project_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from factor_system.factor_engine import api
 
@@ -24,7 +27,7 @@ def main():
         print(f"{cat}: {count}个")
 
     # 显示具体因子列表
-    print(f"\n所有因子列表:")
+    print("\n所有因子列表:")
     for i, factor in enumerate(factors, 1):
         print(f"{i:3d}. {factor}")
 

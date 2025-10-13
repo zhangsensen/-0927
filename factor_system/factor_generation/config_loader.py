@@ -192,3 +192,37 @@ class ConfigLoader:
 
         logger.info("配置验证通过")
         return True
+
+
+# 便捷函数，保持向后兼容性
+def load_config(config_path: str = None) -> IndicatorConfig:
+    """
+    便捷函数：加载配置文件
+
+    Args:
+        config_path: 配置文件路径，如果为None则使用默认路径
+
+    Returns:
+        IndicatorConfig: 配置对象
+    """
+    return ConfigLoader.load_config(config_path)
+
+
+def create_full_config() -> IndicatorConfig:
+    """
+    便捷函数：创建完整功能配置
+
+    Returns:
+        IndicatorConfig: 完整配置
+    """
+    return ConfigLoader.create_full_config()
+
+
+def create_basic_config() -> IndicatorConfig:
+    """
+    便捷函数：创建基础配置
+
+    Returns:
+        IndicatorConfig: 基础配置
+    """
+    return ConfigLoader.create_basic_config()

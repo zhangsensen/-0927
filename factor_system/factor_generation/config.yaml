@@ -2,7 +2,8 @@
 
 # 数据路径配置
 data:
-  root_dir: "/Users/zhangshenshen/深度量化0927/raw/HK"
+  # 🔧 Linus式修复：使用相对路径，由 ProjectPaths 动态解析
+  root_dir: "raw/HK"  # 相对于项目根目录
 
 # 154指标配置 - 启用所有因子
 indicators:
@@ -30,7 +31,8 @@ timeframes:
 
 # 输出配置
 output:
-  directory: "/Users/zhangshenshen/深度量化0927/factor_system/factor_output"
+  # 🔧 Linus式修复：使用相对路径
+  directory: "factor_system/factor_output"  # 相对于项目根目录
   format: "parquet"
   compression: "snappy"
   include_readable_time: true

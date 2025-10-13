@@ -264,11 +264,9 @@ class BatchFactorProcessor:
                 BatchFactorCalculator,
             )
 
-            project_root = Path(
-                self.config.get(
-                    "data.root_dir", "/Users/zhangshenshen/深度量化0927/raw"
-                )
-            ).parent.parent
+            # 🔧 Linus式修复：使用 ProjectPaths 统一路径管理
+            from factor_system.utils import get_project_root
+            project_root = get_project_root()
             calculator = BatchFactorCalculator(
                 raw_data_dir=project_root,
                 enable_cache=True,
@@ -517,11 +515,12 @@ class BatchFactorProcessor:
 def main():
     """主函数"""
     import argparse
+    from factor_system.utils import get_raw_data_dir
 
     parser = argparse.ArgumentParser(description="批量因子处理器")
     parser.add_argument(
         "--raw-dir",
-        default="/Users/zhangshenshen/深度量化0927/raw",
+        default=str(get_raw_data_dir()),
         help="原始数据目录",
     )
     parser.add_argument("--config", help="配置文件路径")

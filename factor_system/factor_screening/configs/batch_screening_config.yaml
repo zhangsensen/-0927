@@ -45,11 +45,11 @@ timeframes:
 
 # ================== 数据路径配置 ==================
 
-# 因子数据根目录
-data_root: "/Users/zhangshenshen/深度量化0927/factor_system/factor_output"
+# 因子数据根目录（使用相对路径，提升可移植性）
+data_root: "factor_system/factor_output"
 
-# 价格数据根目录（注意：需要使用绝对路径）
-raw_data_root: "/Users/zhangshenshen/深度量化0927/raw"
+# 价格数据根目录（废弃，使用data_root）
+raw_data_root: ""  # @deprecated 使用data_root替代
 
 # 批量筛选结果输出目录
 output_root: "./batch_screening_results"

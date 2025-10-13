@@ -1,0 +1,30 @@
+{
+  "factor_data_shape": [
+    870,
+    236
+  ],
+  "price_data_shape": [
+    870,
+    5
+  ],
+  "aligned_data_shape": [
+    870,
+    236
+  ],
+  "data_overlap_count": 870,
+  "factor_data_range": {
+    "start": "2024-01-02T12:00:00",
+    "end": "2025-10-10T16:00:00"
+  },
+  "price_data_range": {
+    "start": "2024-01-02T12:00:00",
+    "end": "2025-10-10T16:00:00"
+  },
+  "alignment_success_rate": 1.0,
+  "quality_assessment": {
+    "overall_score": 0.85,
+    "recommendations": [
+      "数据质量良好，可以进行因子筛选"
+    ]
+  }
+}

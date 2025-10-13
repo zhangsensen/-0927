@@ -80,18 +80,6 @@
       "args": [],
       "env": {}
     },
-    "memory-bank": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "memory-bank-mcp",
-        "serve",
-        "--path",
-        "/Users/zhangshenshen/深度量化0927"
-      ],
-      "env": {}
-    },
     "pandas-server": {
       "type": "stdio",
       "command": "/Users/zhangshenshen/pandas-mcp-server/server.py",

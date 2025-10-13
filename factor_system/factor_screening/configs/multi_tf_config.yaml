@@ -4,10 +4,10 @@
 name: "multi_tf_preset"
 description: "多时间框架因子筛选预设配置 - 包含所有路径设置"
 
-# 数据配置 - 预设路径
-data_root: "/Users/zhangshenshen/深度量化0927/factor_system/factor_output"
-raw_data_root: "/Users/zhangshenshen/深度量化0927/raw"
-output_dir: "./screening_results"
+# 数据配置 - 预设路径（使用相对路径，提升可移植性）
+data_root: "factor_system/factor_output"
+raw_data_root: ""  # @deprecated 使用data_root替代
+output_root: "factor_system/factor_screening/screening_results"
 
 # 股票和时间框架配置
 symbols: ["0700.HK"]

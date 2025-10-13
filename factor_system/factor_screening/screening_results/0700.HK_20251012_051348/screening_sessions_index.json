@@ -1,0 +1,18 @@
+[
+  {
+    "session_id": "0700.HK_1min_20251012_051352",
+    "timestamp": "2025-10-12T05:15:01.253423",
+    "symbol": "0700.HK",
+    "timeframe": "1min",
+    "config_hash": "-8677742",
+    "total_factors": 243,
+    "significant_factors": 75,
+    "high_score_factors": 3,
+    "total_time_seconds": 67.86592388153076,
+    "memory_used_mb": 654.046875,
+    "sample_size": 143916,
+    "data_quality_score": 0.85,
+    "top_factor_name": "Position5",
+    "top_factor_score": 0.6190263774274917
+  }
+]

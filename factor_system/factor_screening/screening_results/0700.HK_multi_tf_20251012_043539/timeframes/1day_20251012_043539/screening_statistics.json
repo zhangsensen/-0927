@@ -1,0 +1,25 @@
+{
+  "total_factors": 234,
+  "significant_factors": 0,
+  "high_score_factors": 0,
+  "total_time": 0.361936092376709,
+  "sample_size": 437,
+  "symbol": "0700.HK",
+  "timeframe": "1day",
+  "session_metadata": {
+    "symbol": "0700.HK",
+    "timeframe": "1day",
+    "screening_timestamp": "2025-10-12T04:37:11.544029",
+    "total_factors_processed": 234,
+    "factors_by_tier": {
+      "Tier 3": 106,
+      "不推荐": 128
+    },
+    "score_distribution": {
+      "excellent (>0.8)": 0,
+      "good (0.6-0.8)": 12,
+      "average (0.4-0.6)": 78,
+      "poor (<0.4)": 144
+    }
+  }
+}

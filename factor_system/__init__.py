@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Factor System - 单因子多时间框架筛选系统
+Factor System - 专业级因子计算与筛选系统
 
-A comprehensive factor screening system for multi-timeframe analysis.
+🔧 Linus式重构：消灭非法导入，建立清晰模块边界
+
+核心模块：
+- factor_engine: 统一因子计算引擎
+- factor_generation: 批量因子生成
+- factor_screening: 专业因子筛选
+- utils: 工具函数（路径管理、异常处理等）
 """
 
-__version__ = "0.1.0"
-__author__ = "Quant Team"
+__version__ = "0.2.0"
+__author__ = "Quant Chief Engineer"
 
-try:
-    from .data.data_loader import MultiTimeframeDataLoader  # type: ignore
-except ImportError:  # pragma: no cover - 在最小依赖环境中容忍缺失
-    MultiTimeframeDataLoader = None
+# 🔧 清理非法导入 - 移除不存在的 data.data_loader
+# 保持 __init__.py 简洁，避免循环依赖
 
-__all__ = ["MultiTimeframeDataLoader"]
+__all__ = []
