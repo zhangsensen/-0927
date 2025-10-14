@@ -53,6 +53,7 @@ dependencies = [
     "pandas-vet>=2023.8.2",
     "httpx[socks]>=0.28.1",
     "pydantic>=2.0.0",
+    "pyscn>=1.1.1",
 ]
 
 # 可选依赖（按需安装）
@@ -129,7 +130,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["factor_system", "factor_system.shared", "factor_system.factor_engine", "factor_system.factor_engine.core", "factor_system.factor_engine.providers", "factor_system.factor_engine.factors", "factor_system.factor_engine.factors.technical", "factor_system.factor_engine.factors.overlap", "factor_system.factor_engine.factors.statistic", "factor_system.factor_engine.factors.pattern", "factor_system.factor_generation", "factor_system.factor_screening", "factor_system.research", "factor_system.utils"]
+packages = ["factor_system", "factor_system.shared", "factor_system.factor_engine", "factor_system.factor_engine.core", "factor_system.factor_engine.providers", "factor_system.factor_engine.factors", "factor_system.factor_engine.factors.technical", "factor_system.factor_engine.factors.overlap", "factor_system.factor_engine.factors.money_flow", "factor_system.factor_generation", "factor_system.factor_screening", "factor_system.research", "factor_system.utils"]
 package-dir = {"" = "."}
 
 [tool.setuptools.package-data]
@@ -248,3 +249,10 @@ dev = [
     "types-seaborn>=0.13.2.20250914",
     "vulture>=2.14",
 ]
+
+[tool.vulture]
+paths = ["factor_system", "examples", "scripts"]
+exclude = ["**/__pycache__", "**/test_*.py", "**/*_test.py", "venv", ".venv", "build", "dist", ".pytest_cache", "migrations"]
+ignore_names = ["test_*", "_*", "setUp", "tearDown", "visit_*", "do_*"]
+min_confidence = 80
+sort_by_size = true

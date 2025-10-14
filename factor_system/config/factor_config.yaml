@@ -1,0 +1,110 @@
+# 资金流因子配置文件
+
+# 【时序安全】重要说明
+# 资金流数据在T日收盘后才发布，因此T日数据只能在T+1日使用
+# MoneyFlowProvider默认启用enforce_t_plus_1=True，自动对所有资金流字段执行shift(1)
+# 所有因子已升级为v2.0版本，确保时序安全
+
+money_flow:
+  # 核心横截面因子配置
+  core_factors:
+    MainNetInflow_Rate:
+      window: 5
+      enabled: true
+      description: "主力净流入率（5日均）"
+      
+    LargeOrder_Ratio:
+      window: 10
+      enabled: true
+      description: "大单占比（10日均）"
+      
+    SuperLargeOrder_Ratio:
+      window: 20
+      enabled: true
+      description: "超大单占比（20日均）"
+      
+    OrderConcentration:
+      enabled: true
+      description: "资金集中度"
+      
+    MoneyFlow_Hierarchy:
+      enabled: true
+      description: "资金层级指数"
+      
+    MoneyFlow_Consensus:
+      window: 5
+      enabled: true
+      description: "资金共识度（5日均）"
+      
+    MainFlow_Momentum:
+      short_window: 5
+      long_window: 10
+      enabled: true
+      description: "主力资金动量"
+      
+    Flow_Price_Divergence:
+      window: 5
+      enabled: true
+      description: "资金价格背离度"
+  
+  # 增强择时/风控因子配置
+  enhanced_factors:
+    Institutional_Absorption:
+      enabled: true
+      description: "机构吸筹信号（择时用）"
+      
+    Flow_Tier_Ratio_Delta:
+      window: 5
+      enabled: true
+      description: "资金层级变化率"
+      
+    Flow_Reversal_Ratio:
+      enabled: true
+      description: "资金反转信号（风控用）"
+  
+  # 硬约束因子配置
+  constraints:
+    gap_signal:
+      threshold_sigma: 1.8
+      window: 20
+      description: "跳空信号阈值配置"
+      
+    tail30_ratio:
+      include_auction: false
+      zscore_window: 60
+      description: "尾盘抢筹比率配置"
+      
+    hourly_4seg:
+      enabled: true
+      description: "四段小时K配置"
+
+# 数据处理配置
+data_processing:
+  standardization:
+    winsorize_lower: 0.01
+    winsorize_upper: 0.99
+    zscore_enabled: true
+    
+  tradability:
+    min_turnover_quantile: 0.01
+    mask_limit_up: true
+    mask_limit_down: true
+    
+  signal_freeze:
+    freeze_time: "14:30"
+    execution_delay: 1  # T+1执行
+
+# 验收标准配置
+validation:
+  single_factor:
+    min_ic_t5: 0.03
+    max_ic_std: 0.035
+    min_q5_q1_excess: 0.06
+    min_dsr: 0.35
+    
+  portfolio:
+    min_annual_excess: 0.10
+    max_mdd: 0.18
+    max_annual_turnover: 10
+    max_factor_weight: 0.30
+    max_moneyflow_weight: 0.50

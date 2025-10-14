@@ -47,6 +47,7 @@ def main():
         print("🔍 扫描原始数据...")
         # 🔧 Linus式修复：使用 ProjectPaths 统一路径管理
         from factor_system.utils import get_raw_data_dir
+
         raw_dir = str(get_raw_data_dir())
         stocks = processor.discover_stocks(raw_dir)
 

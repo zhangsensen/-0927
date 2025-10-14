@@ -27,7 +27,10 @@ pip install -e .
 
 ### Code Quality & Testing
 ```bash
-# Run tests
+# 统一代码质量检查 (推荐)
+bash scripts/unified_quality_check.sh
+
+# 运行测试
 pytest
 
 # Run tests with coverage
@@ -109,6 +112,42 @@ python a股/实施快速启动.py
 python a股/stock_analysis/ultimate_300450_analysis.py
 ```
 
+### Money Flow Analysis (A-Share Focus)
+```bash
+# Quick start with money flow factors
+python examples/moneyflow_quickstart.py
+
+# Generate money flow factors
+python scripts/produce_money_flow_factors.py
+
+# Run comprehensive money flow integration test
+python scripts/test_moneyflow_integration_comprehensive.py
+
+# Verify T+1 execution constraints
+python scripts/verify_t_plus_1.py
+
+# Production run for money flow factors
+python scripts/run_money_flow_only.py
+```
+
+### ETF Data Management
+```bash
+# Download ETF daily data (2 years of historical data)
+python download_etf_final.py
+
+# Generate ETF money flow estimates (multi-factor model)
+python etf_moneyflow_final_solution.py
+
+# Test ETF money flow detection (debugging interface limitations)
+python test_single_day_etf.py
+
+# Analyze ETF code formats and data availability
+python analyze_etf_codes.py
+
+# Investigate 301-series codes (创业板 stocks, not ETFs)
+python investigate_301_codes.py
+```
+
 ## Architecture Overview
 
 ### Unified Path Management System
@@ -151,6 +190,7 @@ screening_results_dir = get_screening_results_dir()
 - **Statistical Rigor**: Benjamini-Hochberg FDR correction, VIF analysis, IC decay
 - **Cost Modeling**: Commission, slippage, market impact for Hong Kong market
 - **Performance Optimization**: VectorBT integration, parallel screening
+- **Money Flow Integration**: A-share money flow factors with T+1 execution constraints
 
 ### Exception Handling Framework
 Use the unified exception handling system in `factor_system/utils/error_utils.py`:
@@ -176,6 +216,14 @@ raise FactorSystemError("Factor calculation failed")
 3. **Practical Solutions**: Solve real problems, don't create concepts
 4. **Simplicity as Weapon**: Short functions, clear naming, minimal complexity
 5. **Code as Truth**: All assumptions must be verifiable in backtesting
+
+### Quantitative Engineering Standards (from Cursor Rules)
+- **No Future Function**: Strict temporal alignment, no lookahead bias (CRITICAL)
+- **Statistical Rigor**: Benjamini-Hochberg FDR correction mandatory
+- **154 Indicators**: 36 core + 118 enhanced, vectorized implementation
+- **5-Dimension Screening**: Predictive power, stability, independence, practicality, adaptability
+- **Performance**: VectorBT > loops, memory >70% efficiency
+- **Code Quality**: Functions <50 lines, complexity <10, type hints required
 
 ### Performance Requirements
 - **Vectorization Rate**: >95% of operations must be vectorized
@@ -226,6 +274,8 @@ basic_config = create_basic_config()  # Core indicators only
 - **A-Share Data**: `{SYMBOL_CODE}_1d_YYYY-MM-DD.csv`
 - **Hong Kong Data**: `{SYMBOL}_1min_YYYY-MM-DD_YYYY-MM-DD.parquet`
 - **Factor Output**: `{SYMBOL}_{TIMEFRAME}_factors_YYYY-MM-DD_HH-MM-SS.parquet`
+- **ETF Daily Data**: `{SYMBOL}_daily_YYYYMMDD_YYYYMMDD.parquet`
+- **ETF Money Flow**: `{SYMBOL}_moneyflow_YYYYMMDD_YYYYMMDD.parquet`
 
 ### Directory Structure
 ```
@@ -233,13 +283,22 @@ basic_config = create_basic_config()  # Core indicators only
 ├── raw/                          # Raw OHLCV data by market
 │   ├── HK/                       # Hong Kong stocks (276+ stocks)
 │   ├── US/                       # US stocks (172+ stocks)
-│   └── A股/                      # A-share stocks
+│   ├── A股/                      # A-share stocks
+│   │   └── SH/money_flow/        # A-share money flow data (parquet)
+│   └── ETF/                      # ETF data storage
+│       ├── daily/                # ETF daily price data (parquet)
+│       ├── moneyflow/            # ETF money flow estimates (parquet)
+│       ├── moneyflow_market/     # Market money flow data (parquet)
+│       └── summary/              # Download summaries (json)
 ├── factor_system/
 │   ├── factor_engine/            # Unified factor calculation core
+│   │   └── factors/money_flow/   # Money flow factor implementations
 │   ├── factor_generation/        # Factor generation pipeline
 │   ├── factor_screening/         # Professional factor screening
 │   └── utils/                    # Path management & error handling
 ├── factor_system/factor_output/  # Generated factor files
+├── examples/                     # Usage examples (moneyflow_quickstart.py)
+├── scripts/                      # Utility and testing scripts
 └── factor_system/factor_screening/screening_results/  # Screening results
 ```
 
@@ -262,6 +321,15 @@ factors = api.calculate_factors(
 # List available factors
 available_factors = api.list_available_factors()
 factor_categories = api.list_factor_categories()
+
+# Calculate money flow factors (A-share)
+money_flow_factors = api.calculate_factors(
+    factor_ids=["MainNetInflow_Rate", "LargeOrder_Ratio", "Flow_Price_Divergence"],
+    symbols=["000001.SZ", "600036.SH"],
+    timeframe="daily",
+    start_date=datetime(2025, 9, 1),
+    end_date=datetime(2025, 9, 30)
+)
 ```
 
 ### Performance Optimization
@@ -302,6 +370,16 @@ pytest --cov=factor_system --cov-report=html
 - `tests/test_factor_consistency_v2.py` - Factor calculation consistency validation
 - `scripts/test_root_cause_fixes.py` - End-to-end system validation
 - `scripts/migrate_parquet_schema.py` - Data migration utilities
+- `scripts/test_moneyflow_integration_comprehensive.py` - Money flow integration testing
+- `scripts/verify_t_plus_1.py` - T+1 execution constraint verification
+
+### ETF Data Validation Scripts
+- `download_etf_final.py` - Main ETF data download with 2-year historical coverage (19 ETFs)
+- `etf_moneyflow_final_solution.py` - Advanced ETF money flow estimation system (multi-factor model)
+- `test_single_day_etf.py` - Debug interface limitations and data availability
+- `analyze_etf_codes.py` - Comprehensive ETF code format analysis (discovered 301-series = ChiNext stocks)
+- `investigate_301_codes.py` - Analysis of 301-series codes (创业板 stocks, not ETFs)
+- `etf_download_list.py` - Complete ETF inventory with priority ratings and metadata
 
 ## Market-Specific Considerations
 
@@ -312,28 +390,71 @@ pytest --cov=factor_system --cov-report=html
 - **Trading Hours**: 9:30-12:00, 13:00-16:00 HKT
 - **Settlement**: T+2
 
+### A-Share Market (Money Flow Focus)
+- **Money Flow Factors**: 12 core + enhanced factors with T+1 execution constraints
+- **Signal Freeze**: 14:30 signal generation freeze for next-day execution
+- **Tradability Mask**: Automatic filtering of non-tradable samples
+- **Data Source**: SH money flow data in parquet format
+- **Settlement**: T+1
+
+### ETF Market (Exchange-Traded Funds)
+- **ETF Daily Data**: Downloaded via Tushare Pro `fund_daily` interface with `asset='FD'`
+- **Money Flow Estimation**: Multi-factor model using volume, price, and trading patterns
+- **Available ETFs**: 19 core ETFs across market caps, sectors, and themes
+- **Data Coverage**: 2 years of historical data with signal strength classification
+- **Estimation Method**: Volume anomaly (40%), volume factor (30%), price breakout (20%), momentum (10%)
+- **Important Note**: Direct ETF money flow data not available through standard Tushare moneyflow interfaces
+
 ### Data Requirements
 - **No Look-ahead Bias**: All calculations must use only historical data
 - **Survivorship Bias**: Proper handling of delisted stocks
 - **Time Zone Consistency**: All timestamps in HKT
 - **Corporate Actions**: Proper adjustment for splits, dividends
 
-## Pre-commit Hooks & Quality Gates
+## 代码质量保障体系
 
-The project includes Linus-style pre-commit hooks:
-- **Future Function Detection**: Prevents look-ahead bias (CRITICAL)
-- **Factor Registry Validation**: Ensures FactorEngine compliance
-- **Python Syntax Check**: Ensures code can execute
-- **Factor Consistency Check**: Maintains alignment with factor_generation
-- **Code Formatting**: Black and isort for consistency
+### 统一质量检查工具
+项目集成了基于pyscn和Vulture的专业代码质量检查工具：
 
 ```bash
-# Install hooks
+# 运行统一质量检查 (推荐)
+bash scripts/unified_quality_check.sh
+
+# 查看质量标准文档
+cat CODE_QUALITY_STANDARDS.md
+```
+
+### 质量检查覆盖范围
+- **pyscn深度分析**: 使用CFG和APTED算法分析代码复杂度和架构合规性
+- **Vulture死代码检测**: 自动识别未使用的代码和导入
+- **量化安全检查**: 未来函数检测、时间安全验证、因子清单合规
+- **基础质量检查**: Python语法、代码格式、导入排序
+- **性能分析**: 代码复杂度和性能瓶颈识别
+
+### Git自动化钩子
+项目配置了多层Git钩子确保代码质量：
+
+```bash
+# 安装pre-commit钩子
 pre-commit install
 
-# Run all checks
-pre-commit run --all-files
+# Pre-commit检查 (快速检查)
+git commit  # 自动运行基础安全检查和质量验证
+
+# Pre-push检查 (全面检查)
+git push  # 自动运行完整质量分析套件
 ```
+
+### 质量评分体系
+- **当前健康评分**: 85/100 (A级)
+- **复杂度评分**: 70/100 (平均9.45，目标≤8)
+- **代码重复**: 6.4% (目标<2%)
+- **架构合规**: 73% (目标>90%)
+
+### 核心安全红线
+- **未来函数检测**: 严禁使用未来数据，确保回测有效性
+- **T+1时间安全**: 严格执行交易日延迟，防止时间泄露
+- **因子清单合规**: FactorEngine必须严格遵循官方因子清单
 
 ## Performance Benchmarks
 
@@ -376,3 +497,39 @@ print('✅ System healthy')
 ```
 
 This quantitative trading platform is designed for serious algorithmic trading research with professional-grade factor analysis capabilities. The unified FactorEngine ensures complete consistency across research, backtesting, and production environments while following Linus Torvalds engineering principles of simplicity, practicality, and reliability.
+
+## ETF Data Management
+
+**Important Discovery**: Tushare Pro's standard `moneyflow` interface does not include ETF data - it only covers individual stocks. The 301-series codes found in moneyflow data are 创业板 (ChiNext) stocks, not ETFs.
+
+**Solution Implemented**: Advanced multi-factor ETF money flow estimation system using:
+- Volume anomaly detection (40% weight)
+- Volume factor analysis (30% weight)
+- Price breakout patterns (20% weight)
+- Momentum continuity (10% weight)
+
+**Available ETF Data**: 19 core ETFs with 2 years of historical data, signal strength classification, and large order estimation. Data stored in `raw/ETF/` with separate directories for daily price data and estimated money flow data.
+
+## Money Flow Factor System (A-Share Focus)
+
+The project includes a complete production-grade money flow factor system for A-shares with:
+
+**Core Architecture**:
+- **MoneyFlowProvider**: Unified data loading with standardized processing
+- **12 Core Factors**: Including MainNetInflow_Rate, LargeOrder_Ratio, Flow_Price_Divergence
+- **4 Enhanced Factors**: Institutional absorption, flow tier analysis, reversal ratios
+- **3 Constraint Factors**: Gap signals, end-of-day trading, tradability masks
+
+**Key Features**:
+- **T+1 Execution Compliance**: 14:30 signal generation freeze for next-day execution
+- **Tradability Filtering**: Automatic filtering of non-tradable samples
+- **Multi-Timeframe Support**: 1min to monthly data processing
+- **Vectorized Implementation**: 100% vectorized calculations for performance
+
+**Available Timeframes**: 1min, 5min, 15min, 30min, 60min, 120min, 240min, daily, weekly, monthly
+
+**Usage**:
+```bash
+python examples/moneyflow_quickstart.py  # Quick start demo
+pytest -v  # Run comprehensive tests
+```

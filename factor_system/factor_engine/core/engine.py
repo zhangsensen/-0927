@@ -33,20 +33,25 @@ class FactorEngine:
         data_provider: DataProvider,
         registry: Optional[FactorRegistry] = None,
         cache_config: Optional[CacheConfig] = None,
+        money_flow_provider: Optional[DataProvider] = None,
     ):
         """
         初始化因子引擎
 
         Args:
-            data_provider: 数据提供者
+            data_provider: 价格数据提供者
             registry: 因子注册表
             cache_config: 缓存配置
+            money_flow_provider: 资金流数据提供者（可选，用于日线资金流因子）
         """
         self.provider = data_provider
+        self.money_flow_provider = money_flow_provider
         self.registry = registry or FactorRegistry()
         self.cache = CacheManager(cache_config or CacheConfig())
 
         logger.info(f"初始化FactorEngine: {len(self.registry.metadata)}个已注册因子")
+        if money_flow_provider:
+            logger.info("✅ 资金流数据提供者已启用")
 
     def calculate_factors(
         self,
@@ -111,6 +116,20 @@ class FactorEngine:
         if raw_data.empty:
             logger.warning("原始数据为空")
             return pd.DataFrame()
+
+        # 3.5. 如果是日线且有资金流提供者，加载并合并资金流数据
+        if timeframe in ("1day", "daily") and self.money_flow_provider is not None:
+            logger.info("加载资金流数据...")
+            money_flow_data = self.money_flow_provider.load_money_flow_data(
+                symbols,
+                timeframe,
+                start_date.strftime("%Y-%m-%d"),
+                end_date.strftime("%Y-%m-%d"),
+            )
+            if not money_flow_data.empty:
+                # 合并资金流数据到价格数据
+                raw_data = raw_data.join(money_flow_data, how="left")
+                logger.info(f"✅ 资金流数据已合并: {money_flow_data.shape}")
 
         # 4. 计算因子
         logger.info(f"计算因子: {len(all_factors)}个")

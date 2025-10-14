@@ -94,7 +94,9 @@ def _screen_single_timeframe_worker(args):
         screener = ProfessionalFactorScreener(config=config)
         patch_data_loader(screener)
 
-        result = screener.screen_factors_comprehensive(symbol=symbol, timeframe=timeframe)
+        result = screener.screen_factors_comprehensive(
+            symbol=symbol, timeframe=timeframe
+        )
         factor_count = len(result) if isinstance(result, dict) else 0
         return timeframe, result, factor_count, None
     except Exception as exc:  # pragma: no cover - 防御性日志

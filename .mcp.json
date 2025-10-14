@@ -1,5 +1,39 @@
 {
   "mcpServers": {
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
+      "env": {}
+    },
+    "zai-mcp-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@z_ai/mcp-server"
+      ],
+      "env": {
+        "Z_AI_API_KEY": "da3cdb217c954a929dcdebb793a5ffeb.sPMPB00AsqiivfIw"
+      }
+    },
+    "memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {}
+    },
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "mcp-server-sequential-thinking",
+      "args": [],
+      "env": {}
+    },
     "github": {
       "type": "stdio",
       "command": "npx",
@@ -63,34 +97,11 @@
         "Authorization": "Bearer da3cdb217c954a929dcdebb793a5ffeb.sPMPB00AsqiivfIw"
       }
     },
-    "zai-mcp-server": {
+    "filesystem": {
       "type": "stdio",
       "command": "npx",
       "args": [
-        "-y",
-        "@z_ai/mcp-server"
-      ],
-      "env": {
-        "Z_AI_API_KEY": "da3cdb217c954a929dcdebb793a5ffeb.sPMPB00AsqiivfIw"
-      }
-    },
-    "sequential-thinking": {
-      "type": "stdio",
-      "command": "mcp-server-sequential-thinking",
-      "args": [],
-      "env": {}
-    },
-    "pandas-server": {
-      "type": "stdio",
-      "command": "/Users/zhangshenshen/pandas-mcp-server/server.py",
-      "args": [],
-      "env": {}
-    },
-    "test-server": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "@modelcontextprotocol/server-web-search"
+        "@modelcontextprotocol/server-filesystem"
       ],
       "env": {}
     }

@@ -957,6 +957,7 @@ dependencies = [
     { name = "polars" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "pyscn" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
@@ -1094,6 +1095,7 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.3.0" },
     { name = "pyarrow", specifier = ">=21.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyscn", specifier = ">=1.1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.2" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
@@ -2988,6 +2990,17 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e7/82/28175b2414effca1cdac8dc99f76d660e7a4fb0ceefa4b4ab8f5f6742925/pyproject_hooks-1.2.0.tar.gz", hash = "sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8", size = 19228, upload-time = "2024-09-29T09:24:13.293Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl", hash = "sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913", size = 10216, upload-time = "2024-09-29T09:24:11.978Z" },
+]
+
+[[package]]
+name = "pyscn"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/be/4fa5ac2ef39566737cc6341eee93d68402685a7381c5459e9176dadc89e7/pyscn-1.1.1-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:2bd4c6900927616c20aad19e6f99e95d074d323de3c2be6b7ffd4c637f792d81", size = 4741325, upload-time = "2025-10-12T09:52:20.402Z" },
+    { url = "https://files.pythonhosted.org/packages/79/50/1e2c8b765ff23c8088aa288be06efdb78ebfdce49b05223dc8063637c3b0/pyscn-1.1.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:12f16ba4dd52db6e4b9791f8261405c2cf742f6507a4993ab18e8e163ebff269", size = 4415036, upload-time = "2025-10-12T09:52:22.098Z" },
+    { url = "https://files.pythonhosted.org/packages/59/fe/56aabb5d6cc52f6645bea9d08b1665bc12ebe3461d4507bdcda007ee81df/pyscn-1.1.1-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:11fede8f1d5c509f97a3379e3b81a7159024247e3239d1ab736059830f10887d", size = 4750321, upload-time = "2025-10-12T09:52:23.744Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/83/2fb1cea83a23b6a8ccc66d86ea2fa20f6697a8f34965b10250500fa5cae1/pyscn-1.1.1-py3-none-win_amd64.whl", hash = "sha256:aed6d5859649e41f6efd3e920b7c79abf4a73d071dfa74d7015eef9976c7ad1d", size = 4942100, upload-time = "2025-10-12T09:52:25.259Z" },
 ]
 
 [[package]]

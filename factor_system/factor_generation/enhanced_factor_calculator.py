@@ -21,6 +21,23 @@ try:
 except ImportError:
     from config import setup_logging
 
+# 设置日志
+setup_logging()
+logger = logging.getLogger(__name__)
+
+# 导入批量操作和配置
+try:
+    from factor_system.factor_generation.batch_ops import BatchExecutor
+    from factor_system.factor_generation.vbt_config import (
+        configure_vbt,
+        get_cache_stats,
+    )
+
+    BATCH_OPS_AVAILABLE = True
+except ImportError:
+    BATCH_OPS_AVAILABLE = False
+    logger.warning("批量操作模块未找到，将使用传统计算方式")
+
 # 导入共享计算器
 try:
     from factor_system.shared.factor_calculators import SHARED_CALCULATORS
@@ -203,11 +220,13 @@ def extract_vbt_indicator(vbt_result, name: Optional[str] = None):
 
 
 class TimeFrame(Enum):
+    MIN_1 = "1min"
     MIN_5 = "5min"
     MIN_15 = "15min"
     MIN_30 = "30min"
     MIN_60 = "60min"
-    DAILY = "daily"
+    DAY_1 = "1day"
+    DAILY = "1day"
 
 
 # 策略相关数据结构（从vbt_professional_detector.py迁移）
@@ -266,6 +285,9 @@ class IndicatorConfig:
     enable_all_periods: bool  # 是否启用所有周期（影响性能）
     memory_efficient: bool  # 内存高效模式
 
+    # 市场标识
+    market: str = "HK"  # 默认港股，可选 "A_SHARES"
+
 
 class EnhancedFactorCalculator:
     """
@@ -273,21 +295,38 @@ class EnhancedFactorCalculator:
     移植自vbt_professional_detector.py的成熟计算逻辑
     """
 
-    def __init__(self, indicator_config: IndicatorConfig):
+    def __init__(
+        self,
+        indicator_config: IndicatorConfig,
+        performance_config: Optional[Dict] = None,
+    ):
         """初始化增强因子计算器 - 必须提供配置"""
         if indicator_config is None:
             raise ValueError("indicator_config 参数是必需的，不能为 None")
 
         self.config = indicator_config
-        logger.info("增强版因子计算器初始化完成")
+        self.performance_config = performance_config or {}
+        self.use_batch_ops = (
+            self.performance_config.get("use_batch_ops", False) and BATCH_OPS_AVAILABLE
+        )
 
+        # 配置VectorBT性能参数
+        if self.performance_config:
+            try:
+                configure_vbt(self.performance_config)
+                logger.info(f"VectorBT性能配置已应用: {self.performance_config}")
+            except Exception as e:
+                logger.warning(f"VectorBT配置失败: {e}")
+
+        logger.info("增强版因子计算器初始化完成")
         logger.info(
-            "配置: MA=%s, MACD=%s, RSI=%s, enable_all_periods=%s, memory_efficient=%s",
+            "配置: MA=%s, MACD=%s, RSI=%s, enable_all_periods=%s, memory_efficient=%s, batch_ops=%s",
             self.config.enable_ma,
             self.config.enable_macd,
             self.config.enable_rsi,
             self.config.enable_all_periods,
             self.config.memory_efficient,
+            self.use_batch_ops,
         )
 
     def calculate_comprehensive_factors(
@@ -327,33 +366,65 @@ class EnhancedFactorCalculator:
                 ma_windows = timeframe_params["ma_windows"]
                 logger.info(f"{timeframe.value} 使用MA窗口: {ma_windows}")
 
-                for window in ma_windows:
+                if self.use_batch_ops and len(ma_windows) > 1:
+                    # 批量计算
+                    data_dict = {
+                        "price": price,
+                        "close": price,
+                        "high": high,
+                        "low": low,
+                        "volume": volume,
+                    }
+                    ma_batch = BatchExecutor.execute(
+                        "MA", data_dict, {"window": ma_windows}
+                    )
+                    for col in ma_batch.columns:
+                        factor_data[col] = ma_batch[col]
+                    logger.info(f"批量MA计算完成: {len(ma_windows)} 个窗口")
+                else:
+                    # 传统逐个计算
+                    for window in ma_windows:
 
-                    def create_ma_calc(w):
-                        def calc():
-                            return vbt.MA.run(price, window=w).ma.rename(f"MA{w}")
+                        def create_ma_calc(w):
+                            def calc():
+                                return vbt.MA.run(price, window=w).ma.rename(f"MA{w}")
 
-                        return calc
+                            return calc
 
-                    factor_calculations.append((f"MA{window}", create_ma_calc(window)))
+                        factor_calculations.append(
+                            (f"MA{window}", create_ma_calc(window))
+                        )
 
             # 2. 指数移动平均 - 根据时间框架调整
             if self.config.enable_ema:
                 ema_spans = timeframe_params["ema_spans"]
                 logger.info(f"{timeframe.value} 使用EMA窗口: {ema_spans}")
 
-                def create_ema_calc(span: int) -> Callable[[], pd.Series]:
-                    def calc() -> pd.Series:
-                        return (
-                            price.ewm(span=span, adjust=False)
-                            .mean()
-                            .rename(f"EMA{span}")
+                if self.use_batch_ops and len(ema_spans) > 1:
+                    # 批量计算
+                    data_dict = {"price": price, "close": price}
+                    ema_batch = BatchExecutor.execute(
+                        "EMA", data_dict, {"span": ema_spans}
+                    )
+                    for col in ema_batch.columns:
+                        factor_data[col] = ema_batch[col]
+                    logger.info(f"批量EMA计算完成: {len(ema_spans)} 个跨度")
+                else:
+                    # 传统逐个计算
+                    def create_ema_calc(span: int) -> Callable[[], pd.Series]:
+                        def calc() -> pd.Series:
+                            return (
+                                price.ewm(span=span, adjust=False)
+                                .mean()
+                                .rename(f"EMA{span}")
+                            )
+
+                        return calc
+
+                    for span in ema_spans:
+                        factor_calculations.append(
+                            (f"EMA{span}", create_ema_calc(span))
                         )
-
-                    return calc
-
-                for span in ema_spans:
-                    factor_calculations.append((f"EMA{span}", create_ema_calc(span)))
 
             # 3. MACD指标系列 - 根据时间框架调整参数
             if self.config.enable_macd and "MACD" in available_indicators:
@@ -467,18 +538,29 @@ class EnhancedFactorCalculator:
                 mstd_windows = timeframe_params["mstd_windows"]
                 logger.info(f"{timeframe.value} 使用MSTD窗口: {mstd_windows}")
 
-                def create_mstd_calc(window: int) -> Callable[[], pd.Series]:
-                    def calc() -> pd.Series:
-                        return vbt.MSTD.run(price, window=window).mstd.rename(
-                            f"MSTD{window}"
-                        )
-
-                    return calc
-
-                for window in mstd_windows:
-                    factor_calculations.append(
-                        (f"MSTD{window}", create_mstd_calc(window))
+                if self.use_batch_ops and len(mstd_windows) > 1:
+                    # 批量计算
+                    data_dict = {"price": price, "close": price}
+                    mstd_batch = BatchExecutor.execute(
+                        "MSTD", data_dict, {"window": mstd_windows}
                     )
+                    for col in mstd_batch.columns:
+                        factor_data[col] = mstd_batch[col]
+                    logger.info(f"批量MSTD计算完成: {len(mstd_windows)} 个窗口")
+                else:
+                    # 传统逐个计算
+                    def create_mstd_calc(window: int) -> Callable[[], pd.Series]:
+                        def calc() -> pd.Series:
+                            return vbt.MSTD.run(price, window=window).mstd.rename(
+                                f"MSTD{window}"
+                            )
+
+                        return calc
+
+                    for window in mstd_windows:
+                        factor_calculations.append(
+                            (f"MSTD{window}", create_mstd_calc(window))
+                        )
 
             # 9. OBV指标
             if self.config.enable_obv and "OBV" in available_indicators:
@@ -647,60 +729,9 @@ class EnhancedFactorCalculator:
 
                 # 11. OHLC/RAND/RPROB/ST* 指标 (已启用)
                 if self.config.enable_all_periods:
-                    # OHLC统计指标
-                    ohlc_windows = [5, 10, 15, 20]
-                    for window in ohlc_windows:
-                        # OHLCSTX - OHLC价格统计
-                        def create_ohlcstx_calc(w: int) -> Callable[[], pd.Series]:
-                            def calc() -> pd.Series:
-                                # 从df中获取OHLC数据
-                                open_price = df["open"]
-                                high_price = df["high"]
-                                low_price = df["low"]
-                                close_price = df["close"]
-                                result = vbt.OHLCSTX.run(
-                                    open_price,
-                                    high_price,
-                                    low_price,
-                                    close_price,
-                                    window=w,
-                                )
-                                if hasattr(result, "ohlcstx"):
-                                    return result.ohlcstx.rename(f"OHLCSTX{w}")
-                                else:
-                                    return result.rename(f"OHLCSTX{w}")
-
-                            return calc
-
-                        factor_calculations.append(
-                            ("OHLCSTX", create_ohlcstx_calc(window))
-                        )
-
-                        # OHLCSTCX - OHLC价格累积统计
-                        def create_ohlcstcx_calc(w: int) -> Callable[[], pd.Series]:
-                            def calc() -> pd.Series:
-                                # 从df中获取OHLC数据
-                                open_price = df["open"]
-                                high_price = df["high"]
-                                low_price = df["low"]
-                                close_price = df["close"]
-                                result = vbt.OHLCSTCX.run(
-                                    open_price,
-                                    high_price,
-                                    low_price,
-                                    close_price,
-                                    window=w,
-                                )
-                                if hasattr(result, "ohlcstcx"):
-                                    return result.ohlcstcx.rename(f"OHLCSTCX{w}")
-                                else:
-                                    return result.rename(f"OHLCSTCX{w}")
-
-                            return calc
-
-                        factor_calculations.append(
-                            ("OHLCSTCX", create_ohlcstcx_calc(window))
-                        )
+                    # OHLC统计指标 - 跳过OHLCSTX/OHLCSTCX（需要entries信号，不适合纯因子计算）
+                    # ohlc_windows = [5, 10, 15, 20]
+                    # OHLCSTX/OHLCSTCX需要entries参数（买卖信号），不适合作为独立因子
 
                     # 随机指标系列
                     rand_windows = [5, 10, 15, 20]
@@ -783,7 +814,7 @@ class EnhancedFactorCalculator:
                                         return result.rprob.rename(f"RPROB{w}")
                                     else:
                                         return result.rename(f"RPROB{w}")
-                                except Exception as e:
+                                except Exception:
                                     # 如果还是失败，返回默认值
                                     return pd.Series([0] * len(price), name=f"RPROB{w}")
 
@@ -1164,6 +1195,9 @@ class EnhancedFactorCalculator:
             # 智能数据清理 - 保持Linus风格的不丢失数据原则
             factors_df = self._clean_factor_data_intelligently(factors_df)
 
+            # P0优化：后处理清理空列与覆盖率统计
+            factors_df, cleanup_stats = self._postprocess_factors(factors_df, timeframe)
+
             calc_time = time.time() - start_time
             logger.info("综合因子计算完成:")
             logger.info(f"  - 总计算指标数: {len(factor_calculations)}")
@@ -1172,6 +1206,22 @@ class EnhancedFactorCalculator:
             logger.info(f"  - 最终因子数量: {len(factors_df.columns)} 个")
             logger.info(f"  - 数据点数: {len(factors_df)} 行")
             logger.info(f"  - 计算耗时: {calc_time:.3f}秒")
+            if cleanup_stats:
+                logger.info(
+                    f"  - 清理统计: 删除 {cleanup_stats['dropped']} 列，保留 {cleanup_stats['kept']} 列"
+                )
+                logger.info(f"  - 平均覆盖率: {cleanup_stats['avg_coverage']:.2%}")
+
+            # 缓存统计
+            if self.use_batch_ops and BATCH_OPS_AVAILABLE:
+                try:
+                    cache_stats = get_cache_stats()
+                    if cache_stats.get("enabled"):
+                        logger.info(
+                            f"  - 缓存统计: 命中率={cache_stats.get('hit_rate', 0):.1%}"
+                        )
+                except Exception as e:
+                    logger.debug(f"获取缓存统计失败: {e}")
 
             return factors_df
 
@@ -1678,6 +1728,95 @@ class EnhancedFactorCalculator:
 
         # 最终结果：保留所有原始数据行，某些指标在数据开始阶段可能为NaN
         return factors_cleaned
+
+    def _postprocess_factors(
+        self, factors_df: pd.DataFrame, timeframe: TimeFrame
+    ) -> tuple:
+        """P0优化：后处理因子数据，清理空列与统计覆盖率"""
+
+        # 默认配置（向后兼容）
+        drop_empty = True
+        min_valid_ratio = 0.05
+        log_coverage = True
+
+        original_cols = factors_df.columns.tolist()
+        original_count = len(original_cols)
+
+        # 统计信息
+        dropped_cols = []
+        coverage_stats = {}
+
+        # 保护OHLCV列不被删除
+        protected_cols = ["open", "high", "low", "close", "volume"]
+
+        for col in original_cols:
+            if col in protected_cols:
+                continue
+
+            series = factors_df[col]
+            valid_count = series.notna().sum()
+            total_count = len(series)
+            coverage = valid_count / total_count if total_count > 0 else 0
+
+            coverage_stats[col] = coverage
+
+            # 判断是否删除
+            should_drop = False
+
+            if drop_empty:
+                # 全空列
+                if valid_count == 0:
+                    should_drop = True
+                    logger.debug(f"删除全空列: {col}")
+                # 全常数列
+                elif valid_count > 0 and series.nunique() == 1:
+                    should_drop = True
+                    logger.debug(f"删除全常数列: {col} (值={series.dropna().iloc[0]})")
+                # 有效值比例过低
+                elif coverage < min_valid_ratio:
+                    should_drop = True
+                    logger.debug(f"删除低覆盖率列: {col} (覆盖率={coverage:.2%})")
+
+            if should_drop:
+                dropped_cols.append(col)
+
+        # 执行删除
+        if dropped_cols:
+            factors_df = factors_df.drop(columns=dropped_cols)
+            logger.info(f"后处理清理: 删除 {len(dropped_cols)} 列")
+            if log_coverage:
+                for col in dropped_cols[:10]:  # 只显示前10个
+                    logger.info(f"  - {col}: 覆盖率={coverage_stats[col]:.2%}")
+                if len(dropped_cols) > 10:
+                    logger.info(f"  ... 还有 {len(dropped_cols)-10} 列被删除")
+
+        # 统计最终结果
+        kept_count = len(factors_df.columns)
+        avg_coverage = np.mean(
+            [coverage_stats[c] for c in factors_df.columns if c in coverage_stats]
+        )
+
+        cleanup_stats = {
+            "dropped": len(dropped_cols),
+            "kept": kept_count,
+            "avg_coverage": avg_coverage,
+            "dropped_cols": dropped_cols,
+        }
+
+        if log_coverage:
+            logger.info(f"因子覆盖率统计 ({timeframe.value}):")
+            logger.info(f"  - 原始因子数: {original_count}")
+            logger.info(f"  - 保留因子数: {kept_count}")
+            logger.info(f"  - 平均覆盖率: {avg_coverage:.2%}")
+
+            # 显示覆盖率分布
+            coverage_values = [v for v in coverage_stats.values() if v > 0]
+            if coverage_values:
+                logger.info(
+                    f"  - 覆盖率分布: min={min(coverage_values):.2%}, max={max(coverage_values):.2%}"
+                )
+
+        return factors_df, cleanup_stats
 
     def get_factor_categories(self) -> Dict[str, List[str]]:
         """获取因子类别信息"""

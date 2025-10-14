@@ -266,6 +266,7 @@ class BatchFactorProcessor:
 
             # 🔧 Linus式修复：使用 ProjectPaths 统一路径管理
             from factor_system.utils import get_project_root
+
             project_root = get_project_root()
             calculator = BatchFactorCalculator(
                 raw_data_dir=project_root,
@@ -515,6 +516,7 @@ class BatchFactorProcessor:
 def main():
     """主函数"""
     import argparse
+
     from factor_system.utils import get_raw_data_dir
 
     parser = argparse.ArgumentParser(description="批量因子处理器")

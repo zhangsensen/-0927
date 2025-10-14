@@ -1,0 +1,191 @@
+name: 代码质量检查
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # 每天凌晨2点运行质量检查
+    - cron: '0 2 * * *'
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 安装 uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: 创建虚拟环境并安装依赖
+      run: |
+        uv sync
+        uv sync --group all
+
+    - name: 激活虚拟环境
+      run: |
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+
+    - name: 验证 pyscn 安装
+      run: |
+        source .venv/bin/activate
+        pyscn --version
+
+    - name: 运行代码质量检查
+      id: quality-check
+      run: |
+        source .venv/bin/activate
+
+        # 运行完整质量检查
+        python scripts/quality_check.py --format json --output reports/quality_report.json
+
+        # 保存质量分数用于后续步骤
+        QUALITY_SCORE=$(python -c "
+import json
+try:
+    with open('reports/quality_report.json', 'r') as f:
+        data = json.load(f)
+    print(data.get('metrics', {}).get('quality_score', 0))
+except:
+    print(0)
+")
+        echo "quality_score=$QUALITY_SCORE" >> $GITHUB_OUTPUT
+
+    - name: 生成质量报告
+      if: always()
+      run: |
+        source .venv/bin/activate
+
+        # 生成详细报告
+        python scripts/quality_check.py --output reports/quality_detailed.md
+
+        # 捕获质量快照
+        python scripts/quality_monitor.py --capture
+
+    - name: 质量评分检查
+      if: always()
+      run: |
+        QUALITY_SCORE="${{ steps.quality-check.outputs.quality_score }}"
+        echo "质量分数: $QUALITY_SCORE"
+
+        # 设置质量阈值
+        MIN_QUALITY_SCORE=70
+
+        if (( $(echo "$QUALITY_SCORE < $MIN_QUALITY_SCORE" | bc -l) )); then
+          echo "⚠️ 质量分数低于阈值 ($MIN_QUALITY_SCORE)，请注意代码质量"
+        else
+          echo "✅ 质量分数符合要求"
+        fi
+
+    - name: 上传质量报告
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: quality-reports
+        path: |
+          reports/quality_report.json
+          reports/quality_detailed.md
+          reports/quality_trends.db
+        retention-days: 30
+
+    - name: 评论 PR（如果是 PR）
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          try {
+            const reportPath = 'reports/quality_detailed.md';
+            if (fs.existsSync(reportPath)) {
+              const report = fs.readFileSync(reportPath, 'utf8');
+              const qualityScore = '${{ steps.quality-check.outputs.quality_score }}';
+
+              const comment = `## 📊 代码质量检查报告
+
+              **质量分数**: ${qualityScore}/100
+
+              ${report.substring(0, 1000)}...
+
+              [查看完整报告](${context.payload.pull_request.html_url}/checks)
+              `;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+          } catch (error) {
+            console.log('无法生成评论:', error);
+          }
+
+  critical-files-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 安装依赖
+      run: |
+        pip install uv
+        uv sync
+
+    - name: 检查关键文件质量
+      run: |
+        source .venv/bin/activate
+        python scripts/quality_check.py --critical-only
+
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 安装依赖
+      run: |
+        pip install uv
+        uv sync
+
+    - name: 安全扫描
+      run: |
+        source .venv/bin/activate
+
+        # 运行安全检查
+        bandit -r factor_system/ -f json -o reports/security_report.json || true
+        safety check --json --output reports/safety_report.json || true
+
+    - name: 上传安全报告
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          reports/security_report.json
+          reports/safety_report.json
+        retention-days: 30

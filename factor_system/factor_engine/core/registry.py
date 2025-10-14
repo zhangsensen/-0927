@@ -6,7 +6,9 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Dict, List, Optional, Set, Tuple, Type
+
+import yaml
 
 from factor_system.factor_engine.core.base_factor import BaseFactor, FactorMetadata
 
@@ -56,9 +58,13 @@ class FactorRegistry:
         self.factors: Dict[str, Type[BaseFactor]] = {}
         self.metadata: Dict[str, Dict] = {}
         self._factor_sets: Dict[str, Dict] = {}
+        self._factor_sets_yaml: Dict[str, List] = {}
 
         if self.registry_file.exists():
             self._load_registry()
+
+        # 加载YAML因子集配置
+        self._load_factor_sets_yaml()
 
     def _load_registry(self):
         """从文件加载注册表"""
@@ -84,6 +90,30 @@ class FactorRegistry:
             logger.error(f"加载注册表失败: {e}")
             self.metadata = {}
             self._factor_sets = {}
+
+    def _load_factor_sets_yaml(self):
+        """从YAML文件加载因子集配置"""
+        # 确定配置文件路径
+        config_path = Path(__file__).parents[2] / "config" / "factor_sets.yaml"
+
+        if not config_path.exists():
+            logger.debug(f"YAML因子集配置不存在: {config_path}")
+            return
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+
+            self._factor_sets_yaml = data.get("factor_sets", {})
+            logger.info(f"✅ 加载YAML因子集: {len(self._factor_sets_yaml)} 个")
+
+            # 列出所有定义的集合
+            if self._factor_sets_yaml:
+                logger.debug(f"可用因子集: {list(self._factor_sets_yaml.keys())}")
+
+        except Exception as e:
+            logger.error(f"加载YAML因子集失败: {e}")
+            self._factor_sets_yaml = {}
 
     def register(
         self,
@@ -569,6 +599,19 @@ class FactorRegistry:
         _recursive_deps(factor_id)
         return list(all_deps)
 
+    def register_factor_set(self, set_id: str, factor_set: Dict):
+        """
+        注册因子集
+
+        Args:
+            set_id: 因子集ID
+            factor_set: 因子集定义，包含name, description, factors等字段
+        """
+        self._factor_sets[set_id] = factor_set
+        logger.info(
+            f"注册因子集: {set_id} ({len(factor_set.get('factors', []))}个因子)"
+        )
+
     def get_factor_set(self, set_id: str) -> Optional[Dict]:
         """获取因子集定义"""
         return self._factor_sets.get(set_id)
@@ -645,14 +688,473 @@ class FactorRegistry:
 
         return requests
 
+    def get_factor_ids_by_set(
+        self, set_name: str, filter_registered: bool = True
+    ) -> List[str]:
+        """
+        根据因子集名称获取因子ID列表
+
+        优先从YAML配置解析，回退到JSON注册表
+
+        Args:
+            set_name: 因子集名称
+            filter_registered: 是否只返回已注册的因子（默认True）
+
+        Returns:
+            去重排序的因子ID列表
+
+        Raises:
+            ValueError: 如果因子集不存在
+        """
+        # 优先从YAML解析
+        if set_name in self._factor_sets_yaml:
+            factor_ids = self._resolve_yaml_set(set_name)
+        # 回退到JSON注册表
+        elif set_name in self._factor_sets:
+            factor_set = self._factor_sets[set_name]
+            if isinstance(factor_set, dict):
+                factor_ids = sorted(factor_set.get("factors", []))
+            elif isinstance(factor_set, list):
+                factor_ids = sorted(factor_set)
+            else:
+                factor_ids = []
+        else:
+            # 未找到
+            available_sets = self.list_defined_sets()
+            raise ValueError(
+                f"未定义的因子集: '{set_name}'\n" f"可用因子集: {available_sets}"
+            )
+
+        # 过滤：只保留已注册的因子
+        if filter_registered:
+            registered = set(self.factors.keys()) | set(self.metadata.keys())
+            original_count = len(factor_ids)
+            factor_ids = [f for f in factor_ids if f in registered]
+
+            if len(factor_ids) < original_count:
+                filtered_count = original_count - len(factor_ids)
+                logger.warning(
+                    f"因子集 '{set_name}' 过滤了 {filtered_count} 个未注册因子 "
+                    f"({original_count} -> {len(factor_ids)})"
+                )
+
+        return factor_ids
+
+    def _resolve_yaml_set(
+        self, set_name: str, visited: Optional[Set[str]] = None
+    ) -> List[str]:
+        """
+        递归解析YAML因子集
+
+        Args:
+            set_name: 因子集名称
+            visited: 已访问的集合（防止循环引用）
+
+        Returns:
+            去重排序的因子ID列表
+        """
+        if visited is None:
+            visited = set()
+
+        # 防止循环引用
+        if set_name in visited:
+            logger.warning(f"检测到循环引用: {set_name}")
+            return []
+
+        visited.add(set_name)
+
+        # 获取集合定义
+        set_definition = self._factor_sets_yaml.get(set_name)
+        if not set_definition:
+            logger.warning(f"YAML中未定义因子集: {set_name}")
+            return []
+
+        if not isinstance(set_definition, list):
+            logger.warning(f"因子集定义格式错误: {set_name}, 应为列表")
+            return []
+
+        # 解析集合
+        factor_ids = set()
+
+        for item in set_definition:
+            if isinstance(item, str):
+                # 字符串项
+                if item == "all_factors":
+                    # 扩展到所有已注册因子
+                    all_factors = set(self.factors.keys()) | set(self.metadata.keys())
+                    factor_ids.update(all_factors)
+                else:
+                    # 普通因子ID
+                    factor_ids.add(item)
+
+            elif isinstance(item, dict):
+                # 字典项：检查是否是集合引用
+                if "set" in item:
+                    # 递归解析引用的集合
+                    ref_set_name = item["set"]
+                    ref_factors = self._resolve_yaml_set(ref_set_name, visited)
+                    factor_ids.update(ref_factors)
+                else:
+                    logger.warning(f"未知的字典格式: {item}")
+
+            else:
+                logger.warning(f"未知的项类型: {type(item)}, {item}")
+
+        return sorted(list(factor_ids))
+
+    def list_defined_sets(self) -> List[str]:
+        """
+        列出所有已定义的因子集
+
+        Returns:
+            因子集名称列表（YAML + JSON）
+        """
+        yaml_sets = list(self._factor_sets_yaml.keys())
+        json_sets = list(self._factor_sets.keys())
+
+        # 合并去重
+        all_sets = sorted(set(yaml_sets + json_sets))
+        return all_sets
+
 
 # 全局注册表实例
 _global_registry: Optional[FactorRegistry] = None
 
 
-def get_global_registry() -> FactorRegistry:
-    """获取全局注册表"""
+def get_global_registry(include_money_flow: bool = True) -> FactorRegistry:
+    """
+    获取全局注册表 - 自动注册所有可用因子
+
+    Args:
+        include_money_flow: 是否自动注册资金流因子（默认True）
+    """
     global _global_registry
     if _global_registry is None:
         _global_registry = FactorRegistry()
+
+        # 自动注册所有因子（技术指标、成交量、统计指标等）
+        try:
+            from factor_system.factor_engine.factors import (
+                CORE_FACTOR_CLASSES,
+                FACTOR_CLASS_MAP,
+            )
+
+            logger.info(f"开始自动注册因子: 总共{len(FACTOR_CLASS_MAP)}个因子")
+
+            registered_count = 0
+            for factor_id, factor_class in FACTOR_CLASS_MAP.items():
+                try:
+                    _global_registry.register(factor_class)
+                    registered_count += 1
+                except Exception as e:
+                    logger.warning(f"注册因子 {factor_id} 失败: {e}")
+
+            logger.info(
+                f"✅ 自动注册完成: {registered_count}/{len(FACTOR_CLASS_MAP)}个因子"
+            )
+
+        except Exception as e:
+            logger.error(f"自动注册因子失败: {e}")
+
+        # 手动注册VectorBT指标（新增）
+        try:
+            from factor_system.factor_engine.factors.vbt_indicators.momentum import (
+                CCI,
+                CCI14,
+                MACD,
+                MACD_HIST,
+                MACD_SIGNAL,
+                RSI,
+                RSI3,
+                RSI6,
+                RSI9,
+                RSI12,
+                RSI14,
+                RSI18,
+                RSI21,
+                RSI25,
+                RSI30,
+                STOCH,
+                WILLR,
+                WILLR14,
+                Momentum1,
+                Momentum3,
+                Momentum5,
+                Momentum8,
+                Momentum10,
+                Momentum12,
+                Momentum15,
+                Momentum20,
+                Position5,
+                Position8,
+                Position10,
+                Position12,
+                Position15,
+                Position20,
+                Position25,
+                Position30,
+                Trend5,
+                Trend8,
+                Trend10,
+                Trend12,
+                Trend15,
+                Trend20,
+                Trend25,
+            )
+            from factor_system.factor_engine.factors.vbt_indicators.moving_averages import (
+                DEMA,
+                EMA3,
+                EMA5,
+                EMA8,
+                EMA12,
+                EMA15,
+                EMA20,
+                EMA26,
+                EMA30,
+                EMA40,
+                EMA50,
+                EMA60,
+                KAMA,
+                MA3,
+                MA5,
+                MA8,
+                MA10,
+                MA12,
+                MA15,
+                MA20,
+                MA25,
+                MA30,
+                MA40,
+                MA50,
+                MA60,
+                MA80,
+                MA100,
+                MA120,
+                MA150,
+                MA200,
+                TEMA,
+                TRIMA,
+                WMA5,
+                WMA10,
+                WMA20,
+            )
+            from factor_system.factor_engine.factors.vbt_indicators.overlap import (
+                BBANDS,
+                BOLB_20,
+                BB_10_2_0_Lower,
+                BB_10_2_0_Middle,
+                BB_10_2_0_Upper,
+                BB_10_2_0_Width,
+                BB_15_2_0_Lower,
+                BB_15_2_0_Middle,
+                BB_15_2_0_Upper,
+                BB_15_2_0_Width,
+                BB_20_2_0_Lower,
+                BB_20_2_0_Middle,
+                BB_20_2_0_Upper,
+                BB_20_2_0_Width,
+            )
+            from factor_system.factor_engine.factors.vbt_indicators.volatility import (
+                ATR,
+                ATR7,
+                ATR10,
+                ATR14,
+                ATR20,
+                FSTD5,
+                FSTD10,
+                FSTD15,
+                FSTD20,
+                MSTD5,
+                MSTD10,
+                MSTD15,
+                MSTD20,
+            )
+            from factor_system.factor_engine.factors.vbt_indicators.volume import (
+                OBV,
+                OBV_SMA_5,
+                OBV_SMA_10,
+                OBV_SMA_15,
+                OBV_SMA_20,
+                VWAP5,
+                VWAP10,
+                VWAP15,
+                VWAP20,
+                VWAP25,
+                VWAP30,
+                Volume_Momentum10,
+                Volume_Momentum15,
+                Volume_Momentum20,
+                Volume_Momentum25,
+                Volume_Momentum30,
+                Volume_Ratio10,
+                Volume_Ratio15,
+                Volume_Ratio20,
+                Volume_Ratio25,
+                Volume_Ratio30,
+            )
+
+            vbt_factors = [
+                # 移动平均类
+                MA3,
+                MA5,
+                MA8,
+                MA10,
+                MA12,
+                MA15,
+                MA20,
+                MA25,
+                MA30,
+                MA40,
+                MA50,
+                MA60,
+                MA80,
+                MA100,
+                MA120,
+                MA150,
+                MA200,
+                EMA3,
+                EMA5,
+                EMA8,
+                EMA12,
+                EMA15,
+                EMA20,
+                EMA26,
+                EMA30,
+                EMA40,
+                EMA50,
+                EMA60,
+                DEMA,
+                TEMA,
+                KAMA,
+                WMA5,
+                WMA10,
+                WMA20,
+                TRIMA,
+                # 动量类
+                RSI,
+                RSI3,
+                RSI6,
+                RSI9,
+                RSI12,
+                RSI14,
+                RSI18,
+                RSI21,
+                RSI25,
+                RSI30,
+                MACD,
+                MACD_SIGNAL,
+                MACD_HIST,
+                STOCH,
+                WILLR,
+                WILLR14,
+                CCI,
+                CCI14,
+                Momentum1,
+                Momentum3,
+                Momentum5,
+                Momentum8,
+                Momentum10,
+                Momentum12,
+                Momentum15,
+                Momentum20,
+                Position5,
+                Position8,
+                Position10,
+                Position12,
+                Position15,
+                Position20,
+                Position25,
+                Position30,
+                Trend5,
+                Trend8,
+                Trend10,
+                Trend12,
+                Trend15,
+                Trend20,
+                Trend25,
+                # 波动率类
+                ATR,
+                ATR7,
+                ATR10,
+                ATR14,
+                ATR20,
+                MSTD5,
+                MSTD10,
+                MSTD15,
+                MSTD20,
+                FSTD5,
+                FSTD10,
+                FSTD15,
+                FSTD20,
+                # 成交量类
+                OBV,
+                OBV_SMA_5,
+                OBV_SMA_10,
+                OBV_SMA_15,
+                OBV_SMA_20,
+                VWAP5,
+                VWAP10,
+                VWAP15,
+                VWAP20,
+                VWAP25,
+                VWAP30,
+                Volume_Ratio10,
+                Volume_Ratio15,
+                Volume_Ratio20,
+                Volume_Ratio25,
+                Volume_Ratio30,
+                Volume_Momentum10,
+                Volume_Momentum15,
+                Volume_Momentum20,
+                Volume_Momentum25,
+                Volume_Momentum30,
+                # 重叠指标类
+                BBANDS,
+                BB_10_2_0_Upper,
+                BB_10_2_0_Middle,
+                BB_10_2_0_Lower,
+                BB_10_2_0_Width,
+                BB_15_2_0_Upper,
+                BB_15_2_0_Middle,
+                BB_15_2_0_Lower,
+                BB_15_2_0_Width,
+                BB_20_2_0_Upper,
+                BB_20_2_0_Middle,
+                BB_20_2_0_Lower,
+                BB_20_2_0_Width,
+                BOLB_20,
+            ]
+
+            logger.info(f"开始注册VectorBT指标: {len(vbt_factors)}个")
+            vbt_registered = 0
+            for factor_class in vbt_factors:
+                try:
+                    _global_registry.register(factor_class)
+                    vbt_registered += 1
+                except Exception as e:
+                    logger.warning(
+                        f"注册VectorBT因子 {factor_class.__name__} 失败: {e}"
+                    )
+
+            logger.info(
+                f"✅ VectorBT指标注册完成: {vbt_registered}/{len(vbt_factors)}个"
+            )
+
+        except ImportError as e:
+            logger.error(f"导入VectorBT指标失败: {e}")
+        except Exception as e:
+            logger.error(f"注册VectorBT指标失败: {e}")
+
+        # 最后注册资金流因子
+        if include_money_flow:
+            try:
+                from factor_system.factor_engine.factors.money_flow.registry import (
+                    register_money_flow_factors,
+                )
+
+                register_money_flow_factors(_global_registry)
+                logger.info("✅ 资金流因子注册完成")
+            except Exception as e:
+                logger.warning(f"资金流因子注册失败: {e}")
+
     return _global_registry

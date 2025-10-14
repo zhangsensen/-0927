@@ -14,6 +14,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from batch_factor_processor import BatchFactorProcessor
+
 from config import setup_logging
 
 
@@ -31,6 +32,7 @@ def main():
     # 原始数据目录（仍可通过配置覆盖）
     # 🔧 Linus式修复：使用 ProjectPaths 统一路径管理
     from factor_system.utils import get_raw_data_dir
+
     raw_dir = str(get_raw_data_dir())
 
     try:

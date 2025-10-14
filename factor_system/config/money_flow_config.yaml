@@ -1,0 +1,167 @@
+# 资金流因子生产配置
+# Linus准则：所有路径、日期、参数集中管理，可追溯、可回放
+
+# ============================================================
+# 数据路径配置
+# ============================================================
+data_paths:
+  # 原始数据根目录
+  raw_data_root: "raw"
+  
+  # 资金流数据目录（相对于项目根目录）
+  money_flow_dir: "raw/SH/money_flow"
+  
+  # 价格数据目录
+  price_data_dir: "raw/SH"
+  
+  # 输出目录
+  output_root: "factor_system/factor_output"
+  money_flow_output: "factor_system/factor_output/money_flow"
+  
+  # 日志目录
+  log_dir: "logs/money_flow"
+
+# ============================================================
+# 时间范围配置
+# ============================================================
+time_config:
+  # 数据时间范围（使用完整年度数据）
+  start_date: "2024-08-23"  # 实际数据起始日期
+  end_date: "2025-08-22"    # 实际数据结束日期
+
+  # 时间框架（支持以下值）
+  # 单个时间框架：timeframe: "daily"
+  # 多个时间框架：timeframes: ["daily", "60min", "15min", "1min"]
+  # - "daily" 或 "1day": 日线（包含资金流+技术因子）
+  # - "240min" 或 "4h": 4小时线（仅技术因子）
+  # - "120min" 或 "2h": 2小时线（仅技术因子）
+  # - "60min" 或 "1h": 60分钟线（仅技术因子）
+  # - "30min": 30分钟线（仅技术因子）
+  # - "15min": 15分钟线（仅技术因子）
+  # - "5min": 5分钟线（仅技术因子）
+  # - "1min": 1分钟线（仅技术因子，尾盘策略必需）
+  timeframes: ["daily", "120min", "60min", "30min", "15min", "5min", "1min"]
+
+  # 是否强制T+1时序安全（仅日线有效）
+  enforce_t_plus_1: true
+
+# ============================================================
+# 标的配置
+# ============================================================
+symbols:
+  # A股标的列表（从数据目录自动扫描或手动指定）
+  mode: "auto_scan"  # auto_scan | manual
+  
+  # 手动指定标的（mode=manual时生效）
+  manual_list:
+    - "000600.SZ"
+    - "600036.SH"
+    - "600519.SH"
+  
+  # 市场过滤
+  markets:
+    - "SH"  # 上交所
+    - "SZ"  # 深交所
+
+# ============================================================
+# 因子配置
+# ============================================================
+factors:
+  # 因子计算模式
+  mode: "all"  # all | core | custom
+  
+  # 核心因子集（mode=core时使用）
+  core_factors:
+    - "MainNetInflow_Rate"
+    - "LargeOrder_Ratio"
+    - "SuperLargeOrder_Ratio"
+    - "OrderConcentration"
+    - "MoneyFlow_Hierarchy"
+    - "MoneyFlow_Consensus"
+    - "MainFlow_Momentum"
+    - "Flow_Price_Divergence"
+  
+  # 增强因子集
+  enhanced_factors:
+    - "Institutional_Absorption"
+    - "Flow_Tier_Ratio_Delta"
+    - "Flow_Reversal_Ratio"
+    - "Northbound_NetInflow_Rate"
+  
+  # 自定义因子列表（mode=custom时使用）
+  custom_factors: []
+
+# ============================================================
+# 执行配置
+# ============================================================
+execution:
+  # 并行处理
+  parallel: true
+  n_jobs: 4
+  
+  # 批处理大小
+  batch_size: 10
+  
+  # 缓存策略
+  use_cache: true
+  cache_dir: ".cache/money_flow"
+  
+  # 错误处理
+  continue_on_error: true
+  max_retries: 3
+
+# ============================================================
+# 输出配置
+# ============================================================
+output:
+  # 输出格式
+  format: "parquet"  # parquet | csv | hdf5
+  
+  # 压缩
+  compression: "snappy"
+  
+  # 文件命名模板
+  filename_template: "{symbol}_money_flow_factors_{start_date}_{end_date}.parquet"
+  
+  # 是否保存中间结果
+  save_intermediate: false
+  
+  # 报告生成
+  generate_report: true
+  report_format: "markdown"
+
+# ============================================================
+# 质量控制
+# ============================================================
+quality_control:
+  # 数据验证
+  validate_data: true
+  
+  # 缺失值处理
+  handle_missing: "forward_fill"  # forward_fill | drop | interpolate
+  
+  # 异常值检测
+  detect_outliers: true
+  outlier_threshold: 5.0  # Z-score阈值
+  
+  # 统计显著性检验
+  significance_test: true
+  fdr_correction: true
+  alpha: 0.05
+
+# ============================================================
+# 日志配置
+# ============================================================
+logging:
+  level: "INFO"  # DEBUG | INFO | WARNING | ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # 日志文件
+  file_logging: true
+  log_file: "logs/money_flow/production_{timestamp}.log"
+  
+  # 控制台输出
+  console_logging: true
+  
+  # 性能监控
+  profile_execution: true

@@ -281,15 +281,49 @@
 - 使用相同的TA-Lib/VectorBT底层实现
 - 通过factor_consistency_guard.py验证一致性
 
+### 21. 资金流因子类 (Money Flow Factors) - 12个因子
+
+#### 核心横截面因子 (8个)
+- `MainNetInflow_Rate` - 主力净流入率（5日均）
+- `LargeOrder_Ratio` - 大单占比（10日均）
+- `SuperLargeOrder_Ratio` - 超大单占比（20日均）
+- `OrderConcentration` - 资金集中度
+- `MoneyFlow_Hierarchy` - 资金层级指数
+- `MoneyFlow_Consensus` - 资金共识度（5日均）
+- `MainFlow_Momentum` - 主力资金动量
+- `Flow_Price_Divergence` - 资金价格背离度
+
+#### 增强择时/风控因子 (4个)
+- `Institutional_Absorption` - 机构吸筹信号（0/1）
+- `Flow_Tier_Ratio_Delta` - 资金层级变化率
+- `Flow_Reversal_Ratio` - 资金反转信号（0/1）
+- `Northbound_NetInflow_Rate` - 北向资金净流入率
+
+#### 硬约束因子
+- `gap_sig` - 跳空信号（三值：-1/0/1）
+- `tail30_ratio` - 尾盘抢筹比率
+- `tradability_mask` - 可交易性掩码（0/1）
+
+#### 数据来源
+- 基于TuShare资金流数据（23字段）
+- 日线级别，包含小单/中单/大单/超大单买卖额
+- 统一口径：分母为turnover_amount，标准化流程winsorize→zscore
+
+#### 验收标准
+- 单因子：IC_t+5 ≥ 0.03，σ(IC) ≤ 0.035
+- 组合：行业中性年化超额 ≥ 10%，MDD < 18%
+- 资金流因子总权重 ≤ 50%，单因子 ≤ 30%
+
 ## 总计
 
-- **总因子数**: 246+ (包括参数化变体)
-- **核心因子**: 约100个 (不含参数化变体)
-- **因子类别**: 20个主要类别
+- **总因子数**: 258+ (包括参数化变体)
+- **核心因子**: 约112个 (不含参数化变体)
+- **因子类别**: 21个主要类别
 - **参数化组合**: 1500+ 种可能的参数组合
 
 ---
 
-*最后更新: 2025-10-08*
-*版本: v1.0*
+*最后更新: 2025-10-13*
+*版本: v1.1*
 *维护者: 量化系统团队*
+*新增: 资金流因子模块（12个生产因子）*

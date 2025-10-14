@@ -1,0 +1,44 @@
+# Vulture configuration file for 深度量化0927 project
+# This config ensures AI-generated code is fully compliant with dead code elimination standards
+
+[paths]
+# Directories and files to analyze for dead code
+factor_system/
+examples/
+scripts/
+tests/
+
+[exclude]
+# Patterns to exclude from analysis
+**/__pycache__/
+**/.pytest_cache/
+**/venv/
+**/.venv/
+**/build/
+**/dist/
+**/migrations/
+**/test_*.py
+**/*_test.py
+
+[ignore_names]
+# Function/variable names to ignore (common patterns)
+setUp
+tearDown
+test_*
+_*  # Private methods starting with underscore
+
+[min_confidence]
+# Minimum confidence score for reporting dead code (60-100)
+80
+
+[make_whitelist]
+# Generate whitelist for false positives
+true
+
+[sort_by_size]
+# Sort results by code size (largest first)
+true
+
+[verbose]
+# Verbose output for detailed analysis
+true

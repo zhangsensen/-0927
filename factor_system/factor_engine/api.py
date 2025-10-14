@@ -19,6 +19,9 @@ import pandas as pd
 from factor_system.factor_engine.core.cache import CacheConfig
 from factor_system.factor_engine.core.engine import FactorEngine
 from factor_system.factor_engine.core.registry import FactorRegistry
+from factor_system.factor_engine.providers.combined_provider import (
+    CombinedMoneyFlowProvider,
+)
 from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
 from factor_system.factor_engine.settings import FactorEngineSettings, get_settings
 
@@ -134,7 +137,15 @@ def get_engine(
         logger.info("初始化全局FactorEngine...")
 
         # 初始化数据提供者
-        data_provider = ParquetDataProvider(raw_data_dir)
+        # 默认优先使用合并提供者（OHLCV + 资金流），若资金流目录缺失则回退为纯价格提供者
+        try:
+            data_provider = CombinedMoneyFlowProvider(raw_data_dir)
+            logger.info("使用 CombinedMoneyFlowProvider (OHLCV + MoneyFlow)")
+        except Exception as e:
+            logger.warning(
+                f"CombinedMoneyFlowProvider 初始化失败，回退到 ParquetDataProvider: {e}"
+            )
+            data_provider = ParquetDataProvider(raw_data_dir)
 
         # 初始化注册表
         registry = FactorRegistry(registry_file)
@@ -157,12 +168,9 @@ def get_engine(
 
 
 def _register_core_factors(registry: FactorRegistry):
-    """注册所有enhanced_factor_calculator的246个因子到FactorEngine"""
+    """注册所有因子到FactorEngine（包括技术因子和资金流因子）"""
     try:
-        # Linus式解决方案：直接使用所有enhanced_factor_calculator的因子
-        # 不搞官方清单，不搞限制，直接干活
-
-        # 导入自动生成的所有因子
+        # 导入所有因子
         from factor_system.factor_engine.factors import (
             FACTOR_CLASS_MAP,
             GENERATED_FACTORS,
@@ -171,7 +179,7 @@ def _register_core_factors(registry: FactorRegistry):
         registered_count = 0
         failed_count = 0
 
-        # 注册所有生成的因子
+        # 注册所有因子
         for factor_class in GENERATED_FACTORS:
             try:
                 registry.register(factor_class)
@@ -180,19 +188,91 @@ def _register_core_factors(registry: FactorRegistry):
             except Exception as e:
                 logger.error(f"❌ 注册因子{factor_class.factor_id}失败: {e}")
                 failed_count += 1
-                # 继续注册其他因子，不中断
 
-        logger.info(f"✅ 已注册 {registered_count} 个enhanced_factor_calculator因子")
+        logger.info(f"✅ 已注册 {registered_count} 个因子（技术+资金流）")
         if failed_count > 0:
             logger.warning(f"⚠️  {failed_count} 个因子注册失败")
 
+        # 注册资金流因子集
+        _register_money_flow_factor_sets(registry)
+
         logger.info(
-            f"🎯 FactorEngine现在拥有 {len(registry.factors)} 个因子，与factor_generation完全一致"
+            f"🎯 FactorEngine: {len(registry.factors)}个因子, {len(registry.list_factor_sets())}个因子集"
         )
 
     except Exception as e:
-        logger.error(f"注册enhanced_factor_calculator因子失败: {e}")
+        logger.error(f"注册因子失败: {e}")
         raise
+
+
+def _register_money_flow_factor_sets(registry: FactorRegistry):
+    """注册资金流因子集"""
+    # A股资金流核心因子集
+    registry.register_factor_set(
+        "a_share_moneyflow_core",
+        {
+            "name": "A股资金流核心因子集",
+            "description": "基于主力资金流动的核心技术因子，适用于A股市场",
+            "market": "A股",
+            "timeframe": "daily",
+            "factors": [
+                "MainNetInflow_Rate",
+                "LargeOrder_Ratio",
+                "SuperLargeOrder_Ratio",
+                "OrderConcentration",
+                "MoneyFlow_Hierarchy",
+                "MoneyFlow_Consensus",
+                "MainFlow_Momentum",
+                "Flow_Price_Divergence",
+            ],
+        },
+    )
+
+    # A股资金流增强因子集
+    registry.register_factor_set(
+        "a_share_moneyflow_enhanced",
+        {
+            "name": "A股资金流增强因子集",
+            "description": "结合资金流和价格行为的增强信号",
+            "market": "A股",
+            "timeframe": "daily",
+            "factors": [
+                "Institutional_Absorption",
+                "Flow_Tier_Ratio_Delta",
+                "Flow_Reversal_Ratio",
+                "Northbound_NetInflow_Rate",
+            ],
+        },
+    )
+
+    # A股资金流完整因子集
+    registry.register_factor_set(
+        "a_share_moneyflow_all",
+        {
+            "name": "A股资金流完整因子集",
+            "description": "全部资金流因子集合",
+            "market": "A股",
+            "timeframe": "daily",
+            "factors": [
+                "MainNetInflow_Rate",
+                "LargeOrder_Ratio",
+                "SuperLargeOrder_Ratio",
+                "OrderConcentration",
+                "MoneyFlow_Hierarchy",
+                "MoneyFlow_Consensus",
+                "MainFlow_Momentum",
+                "Flow_Price_Divergence",
+                "Institutional_Absorption",
+                "Flow_Tier_Ratio_Delta",
+                "Flow_Reversal_Ratio",
+                "Northbound_NetInflow_Rate",
+            ],
+        },
+    )
+
+    logger.info(
+        "✅ 注册资金流因子集: a_share_moneyflow_core, a_share_moneyflow_enhanced, a_share_moneyflow_all"
+    )
 
 
 def calculate_factors(

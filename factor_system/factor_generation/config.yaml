@@ -3,7 +3,7 @@
 # 数据路径配置
 data:
   # 🔧 Linus式修复：使用相对路径，由 ProjectPaths 动态解析
-  root_dir: "raw/HK"  # 相对于项目根目录
+  root_dir: "raw"  # 相对于项目根目录，包含 HK/SH/US 子目录
 
 # 154指标配置 - 启用所有因子
 indicators:

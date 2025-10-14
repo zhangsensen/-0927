@@ -43,8 +43,7 @@ class MAMA(BaseFactor):
 
         close = data["close"]
 
-        result = mama, fama = talib.MAMA(
+        mama, fama = talib.MAMA(
             close, fastlimit=self.fastlimit, slowlimit=self.slowlimit
         )
         return mama  # 返回MAMA线
-        return result
