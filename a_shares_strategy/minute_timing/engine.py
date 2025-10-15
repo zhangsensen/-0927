@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import pandas as pd
 
 
@@ -50,7 +51,9 @@ class MinuteTimingEngine:
 
         df_5m = self._resample(df_1m, "5T")
         # 5m近似VWAP：amount/volume
-        vwap_5m = (df_5m["amount"] / df_5m["volume"]).replace([pd.NA, float("inf")], pd.NA)
+        vwap_5m = (df_5m["amount"] / df_5m["volume"]).replace(
+            [pd.NA, float("inf")], pd.NA
+        )
         signal_5m = (df_5m["close"] > vwap_5m).astype(int)
 
         # 趋势过滤（30/60m）：MA方向一致且price>MA
@@ -66,17 +69,26 @@ class MinuteTimingEngine:
         trend_60_on_5m = trend_60.reindex(df_5m.index, method="ffill").fillna(False)
         trend_filter = (trend_30_on_5m & trend_60_on_5m).astype(int)
 
-        out = pd.DataFrame({
-            "signal_5m": signal_5m,
-            "trend_filter": trend_filter,
-        }, index=df_5m.index)
-        out["final_signal"] = ((out["signal_5m"] == 1) & (out["trend_filter"] == 1)).astype(int)
+        out = pd.DataFrame(
+            {
+                "signal_5m": signal_5m,
+                "trend_filter": trend_filter,
+            },
+            index=df_5m.index,
+        )
+        out["final_signal"] = (
+            (out["signal_5m"] == 1) & (out["trend_filter"] == 1)
+        ).astype(int)
 
         # 交易在下一根bar执行（严格避免信息穿越）
-        out[["signal_5m", "trend_filter", "final_signal"]] = out[["signal_5m", "trend_filter", "final_signal"]].shift(1)
+        out[["signal_5m", "trend_filter", "final_signal"]] = out[
+            ["signal_5m", "trend_filter", "final_signal"]
+        ].shift(1)
         return out
 
-    def simulate_execution(self, df_1m: pd.DataFrame, signals_5m: pd.DataFrame) -> pd.DataFrame:
+    def simulate_execution(
+        self, df_1m: pd.DataFrame, signals_5m: pd.DataFrame
+    ) -> pd.DataFrame:
         """
         使用下一根5m的VWAP（或close）进行近似撮合，支持部分成交。
 
@@ -96,10 +108,11 @@ class MinuteTimingEngine:
 
         out = pd.DataFrame(index=df_5m.index)
         out["exec_price"] = next_price
-        out["filled_ratio"] = filled_ratio.where(self.exec_cfg.allow_partial_fill, other=1.0)
+        out["filled_ratio"] = filled_ratio.where(
+            self.exec_cfg.allow_partial_fill, other=1.0
+        )
 
         # 仅在有信号时视作下单，其余filled_ratio=0
-        active = (signals_5m["final_signal"] == 1)
+        active = signals_5m["final_signal"] == 1
         out.loc[~active, "filled_ratio"] = 0.0
         return out
-

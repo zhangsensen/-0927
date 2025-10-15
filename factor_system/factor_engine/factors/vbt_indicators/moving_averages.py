@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+
 import numpy as np
 import pandas as pd
 import vectorbt as vbt
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class MA3(BaseFactor):
     """3日简单移动平均"""
+
     factor_id = "MA3"
     category = "vbt_technical"
 
@@ -29,6 +31,7 @@ class MA3(BaseFactor):
 
 class MA5(BaseFactor):
     """5日简单移动平均"""
+
     factor_id = "MA5"
     category = "vbt_technical"
 
@@ -42,6 +45,7 @@ class MA5(BaseFactor):
 
 class MA8(BaseFactor):
     """8日简单移动平均"""
+
     factor_id = "MA8"
     category = "vbt_technical"
 
@@ -55,6 +59,7 @@ class MA8(BaseFactor):
 
 class MA10(BaseFactor):
     """10日简单移动平均"""
+
     factor_id = "MA10"
     category = "vbt_technical"
 
@@ -68,6 +73,7 @@ class MA10(BaseFactor):
 
 class MA12(BaseFactor):
     """12日简单移动平均"""
+
     factor_id = "MA12"
     category = "vbt_technical"
 
@@ -81,6 +87,7 @@ class MA12(BaseFactor):
 
 class MA15(BaseFactor):
     """15日简单移动平均"""
+
     factor_id = "MA15"
     category = "vbt_technical"
 
@@ -94,6 +101,7 @@ class MA15(BaseFactor):
 
 class MA20(BaseFactor):
     """20日简单移动平均"""
+
     factor_id = "MA20"
     category = "vbt_technical"
 
@@ -107,6 +115,7 @@ class MA20(BaseFactor):
 
 class MA25(BaseFactor):
     """25日简单移动平均"""
+
     factor_id = "MA25"
     category = "vbt_technical"
 
@@ -120,6 +129,7 @@ class MA25(BaseFactor):
 
 class MA30(BaseFactor):
     """30日简单移动平均"""
+
     factor_id = "MA30"
     category = "vbt_technical"
 
@@ -133,6 +143,7 @@ class MA30(BaseFactor):
 
 class MA40(BaseFactor):
     """40日简单移动平均"""
+
     factor_id = "MA40"
     category = "vbt_technical"
 
@@ -146,6 +157,7 @@ class MA40(BaseFactor):
 
 class MA50(BaseFactor):
     """50日简单移动平均"""
+
     factor_id = "MA50"
     category = "vbt_technical"
 
@@ -159,6 +171,7 @@ class MA50(BaseFactor):
 
 class MA60(BaseFactor):
     """60日简单移动平均"""
+
     factor_id = "MA60"
     category = "vbt_technical"
 
@@ -172,6 +185,7 @@ class MA60(BaseFactor):
 
 class MA80(BaseFactor):
     """80日简单移动平均"""
+
     factor_id = "MA80"
     category = "vbt_technical"
 
@@ -185,6 +199,7 @@ class MA80(BaseFactor):
 
 class MA100(BaseFactor):
     """100日简单移动平均"""
+
     factor_id = "MA100"
     category = "vbt_technical"
 
@@ -198,6 +213,7 @@ class MA100(BaseFactor):
 
 class MA120(BaseFactor):
     """120日简单移动平均"""
+
     factor_id = "MA120"
     category = "vbt_technical"
 
@@ -211,6 +227,7 @@ class MA120(BaseFactor):
 
 class MA150(BaseFactor):
     """150日简单移动平均"""
+
     factor_id = "MA150"
     category = "vbt_technical"
 
@@ -224,6 +241,7 @@ class MA150(BaseFactor):
 
 class MA200(BaseFactor):
     """200日简单移动平均"""
+
     factor_id = "MA200"
     category = "vbt_technical"
 
@@ -237,6 +255,7 @@ class MA200(BaseFactor):
 
 class EMA3(BaseFactor):
     """3日指数移动平均"""
+
     factor_id = "EMA3"
     category = "vbt_technical"
 
@@ -250,6 +269,7 @@ class EMA3(BaseFactor):
 
 class EMA5(BaseFactor):
     """5日指数移动平均"""
+
     factor_id = "EMA5"
     category = "vbt_technical"
 
@@ -263,6 +283,7 @@ class EMA5(BaseFactor):
 
 class EMA8(BaseFactor):
     """8日指数移动平均"""
+
     factor_id = "EMA8"
     category = "vbt_technical"
 
@@ -276,6 +297,7 @@ class EMA8(BaseFactor):
 
 class EMA12(BaseFactor):
     """12日指数移动平均"""
+
     factor_id = "EMA12"
     category = "vbt_technical"
 
@@ -289,6 +311,7 @@ class EMA12(BaseFactor):
 
 class EMA15(BaseFactor):
     """15日指数移动平均"""
+
     factor_id = "EMA15"
     category = "vbt_technical"
 
@@ -302,6 +325,7 @@ class EMA15(BaseFactor):
 
 class EMA20(BaseFactor):
     """20日指数移动平均"""
+
     factor_id = "EMA20"
     category = "vbt_technical"
 
@@ -315,6 +339,7 @@ class EMA20(BaseFactor):
 
 class EMA26(BaseFactor):
     """26日指数移动平均"""
+
     factor_id = "EMA26"
     category = "vbt_technical"
 
@@ -328,6 +353,7 @@ class EMA26(BaseFactor):
 
 class EMA30(BaseFactor):
     """30日指数移动平均"""
+
     factor_id = "EMA30"
     category = "vbt_technical"
 
@@ -341,6 +367,7 @@ class EMA30(BaseFactor):
 
 class EMA40(BaseFactor):
     """40日指数移动平均"""
+
     factor_id = "EMA40"
     category = "vbt_technical"
 
@@ -354,6 +381,7 @@ class EMA40(BaseFactor):
 
 class EMA50(BaseFactor):
     """50日指数移动平均"""
+
     factor_id = "EMA50"
     category = "vbt_technical"
 
@@ -367,6 +395,7 @@ class EMA50(BaseFactor):
 
 class EMA60(BaseFactor):
     """60日指数移动平均"""
+
     factor_id = "EMA60"
     category = "vbt_technical"
 
@@ -381,6 +410,7 @@ class EMA60(BaseFactor):
 # 高级移动平均
 class DEMA(BaseFactor):
     """双指数移动平均"""
+
     factor_id = "DEMA"
     category = "vbt_technical"
 
@@ -397,6 +427,7 @@ class DEMA(BaseFactor):
 
 class TEMA(BaseFactor):
     """三指数移动平均"""
+
     factor_id = "TEMA"
     category = "vbt_technical"
 
@@ -414,6 +445,7 @@ class TEMA(BaseFactor):
 
 class KAMA(BaseFactor):
     """考夫曼自适应移动平均"""
+
     factor_id = "KAMA"
     category = "vbt_technical"
 
@@ -424,7 +456,7 @@ class KAMA(BaseFactor):
             change = close.diff().abs()
             volatility = change.rolling(window=10).sum()
             er = change.rolling(window=10).sum() / volatility
-            sc = (er * (2.0/3.0 - 2.0/31.0) + 2.0/31.0) ** 2
+            sc = (er * (2.0 / 3.0 - 2.0 / 31.0) + 2.0 / 31.0) ** 2
             return close.ewm(alpha=sc, adjust=False).mean().rename("KAMA")
         except Exception as e:
             logger.error(f"计算KAMA失败: {e}")
@@ -433,6 +465,7 @@ class KAMA(BaseFactor):
 
 class WMA10(BaseFactor):
     """10日加权移动平均"""
+
     factor_id = "WMA10"
     category = "vbt_technical"
 
@@ -447,6 +480,7 @@ class WMA10(BaseFactor):
 
 class WMA20(BaseFactor):
     """20日加权移动平均"""
+
     factor_id = "WMA20"
     category = "vbt_technical"
 
@@ -460,6 +494,7 @@ class WMA20(BaseFactor):
 
 class WMA5(BaseFactor):
     """5日加权移动平均"""
+
     factor_id = "WMA5"
     category = "vbt_technical"
 
@@ -473,6 +508,7 @@ class WMA5(BaseFactor):
 
 class TRIMA(BaseFactor):
     """三角移动平均"""
+
     factor_id = "TRIMA"
     category = "vbt_technical"
 

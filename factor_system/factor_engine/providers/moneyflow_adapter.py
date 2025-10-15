@@ -33,7 +33,7 @@ class MoneyFlowAdapter:
         self,
         money_flow_dir: Path,
         price_dir: Optional[Path] = None,
-        enforce_t_plus_1: bool = True
+        enforce_t_plus_1: bool = True,
     ):
         """
         初始化适配器
@@ -49,18 +49,13 @@ class MoneyFlowAdapter:
 
         # 初始化资金流提供者
         self.provider = MoneyFlowProvider(
-            data_dir=self.money_flow_dir,
-            enforce_t_plus_1=self.enforce_t_plus_1
+            data_dir=self.money_flow_dir, enforce_t_plus_1=self.enforce_t_plus_1
         )
 
         logger.info(f"MoneyFlowAdapter初始化完成: {money_flow_dir}")
 
     def load_data(
-        self,
-        symbols: List[str],
-        start_date: str,
-        end_date: str,
-        timeframe: str = "1d"
+        self, symbols: List[str], start_date: str, end_date: str, timeframe: str = "1d"
     ) -> Dict[str, pd.DataFrame]:
         """
         加载多股票资金流数据
@@ -84,7 +79,7 @@ class MoneyFlowAdapter:
                 possible_files = [
                     f"{symbol}_money_flow.parquet",
                     f"{symbol}_moneyflow.parquet",
-                    f"{symbol}_moneyflow.parquet"
+                    f"{symbol}_moneyflow.parquet",
                 ]
 
                 # 尝试不同的文件名格式
@@ -95,7 +90,9 @@ class MoneyFlowAdapter:
                         df = self.provider.load_money_flow(symbol, start_date, end_date)
                         if not df.empty:
                             results[symbol] = df
-                            logger.debug(f"✅ {symbol}: {len(df)}行数据 (文件: {filename})")
+                            logger.debug(
+                                f"✅ {symbol}: {len(df)}行数据 (文件: {filename})"
+                            )
                             loaded = True
                             break
 
@@ -133,10 +130,7 @@ class MoneyFlowAdapter:
         return sorted(symbols)
 
     def validate_data_coverage(
-        self,
-        symbols: List[str],
-        start_date: str,
-        end_date: str
+        self, symbols: List[str], start_date: str, end_date: str
     ) -> Dict[str, Dict]:
         """
         验证数据覆盖情况
@@ -157,39 +151,45 @@ class MoneyFlowAdapter:
 
                 if df.empty:
                     coverage_info[symbol] = {
-                        'start_date': None,
-                        'end_date': None,
-                        'count': 0,
-                        'coverage_ratio': 0.0,
-                        'status': 'no_data'
+                        "start_date": None,
+                        "end_date": None,
+                        "count": 0,
+                        "coverage_ratio": 0.0,
+                        "status": "no_data",
                     }
                 else:
                     actual_start = df.index.min()
                     actual_end = df.index.max()
                     actual_count = len(df)
-                    coverage_ratio = actual_count / target_days if target_days > 0 else 0
+                    coverage_ratio = (
+                        actual_count / target_days if target_days > 0 else 0
+                    )
 
                     coverage_info[symbol] = {
-                        'start_date': actual_start,
-                        'end_date': actual_end,
-                        'count': actual_count,
-                        'coverage_ratio': coverage_ratio,
-                        'status': 'good' if coverage_ratio > 0.8 else 'poor'
+                        "start_date": actual_start,
+                        "end_date": actual_end,
+                        "count": actual_count,
+                        "coverage_ratio": coverage_ratio,
+                        "status": "good" if coverage_ratio > 0.8 else "poor",
                     }
 
             except Exception as e:
                 coverage_info[symbol] = {
-                    'start_date': None,
-                    'end_date': None,
-                    'count': 0,
-                    'coverage_ratio': 0.0,
-                    'status': 'error',
-                    'error': str(e)
+                    "start_date": None,
+                    "end_date": None,
+                    "count": 0,
+                    "coverage_ratio": 0.0,
+                    "status": "error",
+                    "error": str(e),
                 }
 
         # 统计覆盖率
-        good_symbols = sum(1 for info in coverage_info.values() if info.get('status') == 'good')
-        logger.info(f"数据覆盖率: {good_symbols}/{len(symbols)} ({good_symbols/len(symbols)*100:.1f}%) 良好")
+        good_symbols = sum(
+            1 for info in coverage_info.values() if info.get("status") == "good"
+        )
+        logger.info(
+            f"数据覆盖率: {good_symbols}/{len(symbols)} ({good_symbols/len(symbols)*100:.1f}%) 良好"
+        )
 
         return coverage_info
 
@@ -203,20 +203,19 @@ class MoneyFlowAdapter:
         # 这里返回我们实现的12个因子
         factor_columns = [
             # 核心因子（8个）
-            'MainNetInflow_Rate',
-            'LargeOrder_Ratio',
-            'SuperLargeOrder_Ratio',
-            'OrderConcentration',
-            'MoneyFlow_Hierarchy',
-            'MoneyFlow_Consensus',
-            'MainFlow_Momentum',
-            'Flow_Price_Divergence',
-
+            "MainNetInflow_Rate",
+            "LargeOrder_Ratio",
+            "SuperLargeOrder_Ratio",
+            "OrderConcentration",
+            "MoneyFlow_Hierarchy",
+            "MoneyFlow_Consensus",
+            "MainFlow_Momentum",
+            "Flow_Price_Divergence",
             # 增强因子（4个）
-            'Institutional_Absorption',
-            'Flow_Tier_Ratio_Delta',
-            'Flow_Reversal_Ratio',
-            'Northbound_NetInflow_Rate'
+            "Institutional_Absorption",
+            "Flow_Tier_Ratio_Delta",
+            "Flow_Reversal_Ratio",
+            "Northbound_NetInflow_Rate",
         ]
 
         return factor_columns

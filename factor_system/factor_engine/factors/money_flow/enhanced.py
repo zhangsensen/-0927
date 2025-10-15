@@ -46,7 +46,7 @@ class Institutional_Absorption(BaseFactor):
 class Flow_Tier_Ratio_Delta(BaseFactor):
     """
     资金层级变化率 = (大单+超大单)/(中单+小单) 的变化率
-    
+
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     """
 
@@ -136,22 +136,27 @@ class Northbound_NetInflow_Rate(BaseFactor):
         # 检查是否有北向资金相关字段
         northbound_cols = [
             "northbound_net_inflow",  # 北向净流入额
-            "northbound_buy_amount",   # 北向买入额
-            "northbound_sell_amount"   # 北向卖出额
+            "northbound_buy_amount",  # 北向买入额
+            "northbound_sell_amount",  # 北向卖出额
         ]
 
         # 如果没有北向资金数据，尝试用主力资金作为代理指标
         if not any(col in data.columns for col in northbound_cols):
             # 代理方法：使用超大单净流入作为北向资金的代理
             # 这是一个合理的假设，因为北向资金通常以大额交易为主
-            if "buy_super_large_amount" in data.columns and "sell_super_large_amount" in data.columns:
+            if (
+                "buy_super_large_amount" in data.columns
+                and "sell_super_large_amount" in data.columns
+            ):
                 northbound_net = (
                     data["buy_super_large_amount"] - data["sell_super_large_amount"]
                 )
                 turnover_amount = data["turnover_amount"]
 
                 # 计算北向资金净流入率（T+1安全）
-                northflow_rate_ma = northbound_net.rolling(self.window, min_periods=1).mean()
+                northflow_rate_ma = northbound_net.rolling(
+                    self.window, min_periods=1
+                ).mean()
                 turnover_ma = turnover_amount.rolling(self.window, min_periods=1).mean()
 
                 result = northflow_rate_ma / np.maximum(turnover_ma, 1e-6)
@@ -162,17 +167,28 @@ class Northbound_NetInflow_Rate(BaseFactor):
 
         # 如果有真实的北向资金数据
         if "northbound_net_inflow" in data.columns:
-            northflow_ma = data["northbound_net_inflow"].rolling(self.window, min_periods=1).mean()
-            turnover_ma = data["turnover_amount"].rolling(self.window, min_periods=1).mean()
+            northflow_ma = (
+                data["northbound_net_inflow"].rolling(self.window, min_periods=1).mean()
+            )
+            turnover_ma = (
+                data["turnover_amount"].rolling(self.window, min_periods=1).mean()
+            )
 
             result = northflow_ma / np.maximum(turnover_ma, 1e-6)
             return result.rename(self.factor_id)
 
         # 如果有买卖额数据，计算净流入
-        elif "northbound_buy_amount" in data.columns and "northbound_sell_amount" in data.columns:
-            northflow_net = data["northbound_buy_amount"] - data["northbound_sell_amount"]
+        elif (
+            "northbound_buy_amount" in data.columns
+            and "northbound_sell_amount" in data.columns
+        ):
+            northflow_net = (
+                data["northbound_buy_amount"] - data["northbound_sell_amount"]
+            )
             northflow_ma = northflow_net.rolling(self.window, min_periods=1).mean()
-            turnover_ma = data["turnover_amount"].rolling(self.window, min_periods=1).mean()
+            turnover_ma = (
+                data["turnover_amount"].rolling(self.window, min_periods=1).mean()
+            )
 
             result = northflow_ma / np.maximum(turnover_ma, 1e-6)
             return result.rename(self.factor_id)

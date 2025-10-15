@@ -48,7 +48,9 @@ class IntradayVolumeSurge(BaseFactor):
         daily_volume = minute_data.groupby(minute_data.index.date)["volume"].sum()
 
         # 计算移动平均
-        volume_ma = daily_volume.rolling(window=self.lookback_days, min_periods=1).mean()
+        volume_ma = daily_volume.rolling(
+            window=self.lookback_days, min_periods=1
+        ).mean()
 
         # 计算爆发倍数
         surge_ratio = daily_volume / np.maximum(volume_ma, 1e-6)

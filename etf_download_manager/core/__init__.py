@@ -2,10 +2,10 @@
 ETF下载管理器核心模块
 """
 
-from .models import ETFInfo, DownloadResult, DownloadStats
 from .config import ETFConfig, ETFDataSource, ETFDownloadType
-from .downloader import ETFDownloadManager
 from .data_manager import ETFDataManager
+from .downloader import ETFDownloadManager
+from .models import DownloadResult, DownloadStats, ETFInfo
 
 __all__ = [
     "ETFInfo",
@@ -15,5 +15,5 @@ __all__ = [
     "ETFDataSource",
     "ETFDownloadType",
     "ETFDownloadManager",
-    "ETFDataManager"
+    "ETFDataManager",
 ]

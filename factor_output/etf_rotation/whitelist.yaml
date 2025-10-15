@@ -1,0 +1,34 @@
+blacklist: []
+factors:
+- category: momentum
+  coverage: 0.8077065841802916
+  factor_id: Momentum252
+  min_history: 253
+- category: momentum
+  coverage: 0.9034732655766682
+  factor_id: Momentum126
+  min_history: 127
+- category: momentum
+  coverage: 0.9513566062748564
+  factor_id: Momentum63
+  min_history: 64
+- category: volatility
+  coverage: 0.9080335837384004
+  factor_id: VOLATILITY_120D
+  min_history: 121
+- category: momentum
+  coverage: 0.8077065841802916
+  factor_id: MOM_ACCEL
+  min_history: 100
+- category: risk
+  coverage: 0.9521166593018118
+  factor_id: DRAWDOWN_63D
+  min_history: 64
+- category: volatility
+  coverage: 0.9893592576226249
+  factor_id: ATR14
+  min_history: 15
+- category: trend
+  coverage: 0.979478568272205
+  factor_id: TA_ADX_14
+  min_history: 15

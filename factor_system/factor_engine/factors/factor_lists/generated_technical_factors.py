@@ -9,44 +9,35 @@ GENERATED_TECHNICAL_FACTORS = [
     "WILLR14",
     "WILLR18",
     "WILLR21",
-
     # CCI 指标
     "CCI10",
     "CCI14",
     "CCI20",
-
     # RSI 指标变体
     "RSI7",
     "RSI10",
     "RSI14",
-
     # ATR 指标
     "ATR7",
     "ATR10",
     "ATR14",
-
     # T3 指标
     "TA_T3_5",
     "TA_T3_10",
     "TA_T3_20",
-
     # Midprice 指标
     "TA_MIDPRICE_5",
     "TA_MIDPRICE_10",
     "TA_MIDPRICE_20",
-
     # SAR 指标
     "TA_SAR",
-
     # ADX 指标
     "TA_ADX_14",
     "TA_ADXR_14",
-
     # Aroon 指标
     "TA_AROON_14_up",
     "TA_AROON_14_down",
     "TA_AROONOSC_14",
-
     # 其他技术指标
     "TA_CCI_14",
     "TA_DX_14",

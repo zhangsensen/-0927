@@ -157,11 +157,12 @@ class MoneyFlowDataProvider(DataProvider):
         df = pd.read_parquet(file_path)
 
         # 处理日期格式兼容性
-        if df["trade_date"].dtype == 'object':
-            start_date_str = start_date.replace('-', '')
-            end_date_str = end_date.replace('-', '')
+        if df["trade_date"].dtype == "object":
+            start_date_str = start_date.replace("-", "")
+            end_date_str = end_date.replace("-", "")
             df = df[
-                (df["trade_date"] >= start_date_str) & (df["trade_date"] <= end_date_str)
+                (df["trade_date"] >= start_date_str)
+                & (df["trade_date"] <= end_date_str)
             ].copy()
         else:
             start_dt = pd.to_datetime(start_date)
@@ -208,38 +209,50 @@ class MoneyFlowDataProvider(DataProvider):
     def _calculate_derived_fields(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         计算衍生字段并转换单位
-        
+
         注意：TuShare原始数据单位是"万元"，需要转换为"元"（×10000）
         """
         # 单位转换：万元 -> 元
         amount_cols = [
-            "buy_small_amount", "sell_small_amount",
-            "buy_medium_amount", "sell_medium_amount",
-            "buy_large_amount", "sell_large_amount",
-            "buy_super_large_amount", "sell_super_large_amount",
+            "buy_small_amount",
+            "sell_small_amount",
+            "buy_medium_amount",
+            "sell_medium_amount",
+            "buy_large_amount",
+            "sell_large_amount",
+            "buy_super_large_amount",
+            "sell_super_large_amount",
         ]
-        
+
         for col in amount_cols:
             if col in df.columns:
                 df[col] = df[col] * 10000
-        
+
         # 成交额（已转换为元）
         df["turnover_amount"] = (
-            df.get("buy_small_amount", 0) + df.get("sell_small_amount", 0) +
-            df.get("buy_medium_amount", 0) + df.get("sell_medium_amount", 0) +
-            df.get("buy_large_amount", 0) + df.get("sell_large_amount", 0) +
-            df.get("buy_super_large_amount", 0) + df.get("sell_super_large_amount", 0)
+            df.get("buy_small_amount", 0)
+            + df.get("sell_small_amount", 0)
+            + df.get("buy_medium_amount", 0)
+            + df.get("sell_medium_amount", 0)
+            + df.get("buy_large_amount", 0)
+            + df.get("sell_large_amount", 0)
+            + df.get("buy_super_large_amount", 0)
+            + df.get("sell_super_large_amount", 0)
         )
 
         # 主力净额（已转换为元）
         df["main_net"] = (
-            df.get("buy_large_amount", 0) + df.get("buy_super_large_amount", 0) -
-            df.get("sell_large_amount", 0) - df.get("sell_super_large_amount", 0)
+            df.get("buy_large_amount", 0)
+            + df.get("buy_super_large_amount", 0)
+            - df.get("sell_large_amount", 0)
+            - df.get("sell_super_large_amount", 0)
         )
 
         # 散户净额（已转换为元）
-        df["retail_net"] = df.get("buy_small_amount", 0) - df.get("sell_small_amount", 0)
-        
+        df["retail_net"] = df.get("buy_small_amount", 0) - df.get(
+            "sell_small_amount", 0
+        )
+
         # 添加单位标记
         df["value_unit"] = "yuan"
 
@@ -248,11 +261,18 @@ class MoneyFlowDataProvider(DataProvider):
     def _apply_t_plus_1_lag(self, df: pd.DataFrame) -> pd.DataFrame:
         """T+1时序安全处理"""
         money_flow_cols = [
-            "buy_small_amount", "sell_small_amount",
-            "buy_medium_amount", "sell_medium_amount",
-            "buy_large_amount", "sell_large_amount",
-            "buy_super_large_amount", "sell_super_large_amount",
-            "turnover_amount", "main_net", "retail_net", "total_net",
+            "buy_small_amount",
+            "sell_small_amount",
+            "buy_medium_amount",
+            "sell_medium_amount",
+            "buy_large_amount",
+            "sell_large_amount",
+            "buy_super_large_amount",
+            "sell_super_large_amount",
+            "turnover_amount",
+            "main_net",
+            "retail_net",
+            "total_net",
         ]
 
         # 向量化滞后处理

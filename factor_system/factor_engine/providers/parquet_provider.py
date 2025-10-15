@@ -42,6 +42,7 @@ class ParquetDataProvider(DataProvider):
             "US": raw_data_dir / "US",
             "SH": raw_data_dir / "SH",
             "SZ": raw_data_dir / "SZ",
+            "ETF": raw_data_dir / "ETF" / "daily",
         }
 
         # 检查至少一个市场存在
@@ -419,6 +420,13 @@ class ParquetDataProvider(DataProvider):
         """读取并过滤数据"""
         df = pd.read_parquet(file_path)
 
+        # ETF数据列名映射
+        if "trade_date" in df.columns:
+            df["datetime"] = pd.to_datetime(df["trade_date"], format="%Y%m%d")
+            df = df.drop(columns=["trade_date"])
+        if "vol" in df.columns and "volume" not in df.columns:
+            df["volume"] = df["vol"]
+
         # 确保有datetime列
         if "datetime" not in df.columns:
             if df.index.name == "datetime" or isinstance(df.index, pd.DatetimeIndex):
@@ -448,8 +456,20 @@ class ParquetDataProvider(DataProvider):
         elif symbol.endswith(".US"):
             return "US"
         elif symbol.endswith(".SH"):
+            # ETF优先判断（检查ETF目录是否有对应文件）
+            etf_dir = self.market_dirs.get("ETF")
+            if etf_dir and etf_dir.exists():
+                etf_files = list(etf_dir.glob(f"{symbol}_daily_*.parquet"))
+                if etf_files:
+                    return "ETF"
             return "SH"
         elif symbol.endswith(".SZ"):
+            # ETF优先判断
+            etf_dir = self.market_dirs.get("ETF")
+            if etf_dir and etf_dir.exists():
+                etf_files = list(etf_dir.glob(f"{symbol}_daily_*.parquet"))
+                if etf_files:
+                    return "ETF"
             return "SZ"
         else:
             raise ValueError(

@@ -6,6 +6,16 @@
 # 标准库导入
 import logging
 
+# ETF轮动专用长周期因子
+from .etf_momentum import (
+    DRAWDOWN_63D,
+    MOM_ACCEL,
+    VOLATILITY_120D,
+    Momentum63,
+    Momentum126,
+    Momentum252,
+)
+
 # 导入分类的因子列表
 from .factor_lists import (
     ALL_CORE_FACTORS,
@@ -54,10 +64,6 @@ from .volume_generated import *  # noqa: F403,F401
 # 本地导入 - 按模块组织，避免import *
 
 
-
-
-
-
 # 设置日志
 logger = logging.getLogger(__name__)
 
@@ -83,6 +89,13 @@ CORE_FACTOR_CLASSES = [
     Flow_Tier_Ratio_Delta,
     Flow_Reversal_Ratio,
     Northbound_NetInflow_Rate,
+    # ETF轮动长周期因子
+    Momentum63,
+    Momentum126,
+    Momentum252,
+    VOLATILITY_120D,
+    MOM_ACCEL,
+    DRAWDOWN_63D,
 ]
 
 

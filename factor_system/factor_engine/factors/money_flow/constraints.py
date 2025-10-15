@@ -150,7 +150,9 @@ def generate_hourly_4seg(minute_data: pd.DataFrame) -> pd.DataFrame:
             start_dt = pd.Timestamp.combine(date, pd.Timestamp(start_time).time())
             end_dt = pd.Timestamp.combine(date, pd.Timestamp(end_time).time())
 
-            seg_data = day_data[(day_data.index >= start_dt) & (day_data.index <= end_dt)]
+            seg_data = day_data[
+                (day_data.index >= start_dt) & (day_data.index <= end_dt)
+            ]
 
             if not seg_data.empty:
                 segment_info = {

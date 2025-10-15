@@ -13,14 +13,15 @@ logging.basicConfig(level=logging.INFO)
 
 # 添加项目路径
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from factor_system.factor_engine.core.enhanced_engine import EnhancedFactorEngine
-from factor_system.factor_engine.factors.money_flow.registry import (
-    register_money_flow_factors,
-    get_money_flow_factor_sets
-)
 from factor_system.factor_engine.core.registry import get_global_registry
+from factor_system.factor_engine.factors.money_flow.registry import (
+    get_money_flow_factor_sets,
+    register_money_flow_factors,
+)
 
 
 def main():
@@ -35,7 +36,9 @@ def main():
     # 2. 注册资金流因子
     print("\n1. 注册资金流因子...")
     register_money_flow_factors(registry)
-    print(f"   注册完成: {len([f for f in registry.list_factors() if 'money_flow' in str(registry.get_metadata(f).get('data_source', ''))])} 个资金流因子")
+    print(
+        f"   注册完成: {len([f for f in registry.list_factors() if 'money_flow' in str(registry.get_metadata(f).get('data_source', ''))])} 个资金流因子"
+    )
 
     # 3. 创建增强因子引擎
     print("\n2. 创建增强因子引擎...")
@@ -47,7 +50,9 @@ def main():
             # 为了示例，直接返回空DataFrame（实际使用时需要实现）
             return pd.DataFrame()
 
-        def load_fundamental_data(self, symbols, fields, start_date=None, end_date=None):
+        def load_fundamental_data(
+            self, symbols, fields, start_date=None, end_date=None
+        ):
             return pd.DataFrame()
 
         def get_trading_calendar(self, market, start_date, end_date):
@@ -57,8 +62,7 @@ def main():
 
     # 创建增强引擎
     enhanced_engine = EnhancedFactorEngine(
-        data_provider=price_provider,
-        registry=registry
+        data_provider=price_provider, registry=registry
     )
 
     print("   ✅ 增强因子引擎创建完成")
@@ -72,9 +76,7 @@ def main():
     print("\n3. 计算混合因子...")
 
     # 技术因子示例
-    technical_factors = [
-        "RSI", "MACD", "SMA_20", "EMA_12", "ATR_14"
-    ]
+    technical_factors = ["RSI", "MACD", "SMA_20", "EMA_12", "ATR_14"]
 
     # 资金流因子示例
     money_flow_factors = [
@@ -82,7 +84,7 @@ def main():
         "OrderConcentration",
         "MoneyFlow_Hierarchy",
         "Flow_Price_Divergence",
-        "Institutional_Absorption"
+        "Institutional_Absorption",
     ]
 
     print(f"   技术因子: {technical_factors}")
@@ -99,7 +101,7 @@ def main():
             timeframe="1day",
             start_date=start_date,
             end_date=end_date,
-            use_cache=False  # 示例不使用缓存
+            use_cache=False,  # 示例不使用缓存
         )
 
         if not mixed_result.empty:
@@ -117,6 +119,7 @@ def main():
     except Exception as e:
         print(f"   ❌ 混合因子计算失败: {e}")
         import traceback
+
         traceback.print_exc()
 
     # 6. 分别计算因子类型
@@ -127,19 +130,20 @@ def main():
         tech_result = enhanced_engine.calculate_technical_factors(
             ["RSI", "MACD"], symbols, "1day", start_date, end_date
         )
-        print(f"   技术因子结果: {tech_result.shape if not tech_result.empty else '空'}")
+        print(
+            f"   技术因子结果: {tech_result.shape if not tech_result.empty else '空'}"
+        )
     except Exception as e:
         print(f"   技术因子计算失败: {e}")
 
     # 纯资金流因子
     try:
         money_result = enhanced_engine.calculate_money_flow_factors(
-            ["MainNetInflow_Rate", "OrderConcentration"],
-            symbols,
-            start_date,
-            end_date
+            ["MainNetInflow_Rate", "OrderConcentration"], symbols, start_date, end_date
         )
-        print(f"   资金流因子结果: {money_result.shape if not money_result.empty else '空'}")
+        print(
+            f"   资金流因子结果: {money_result.shape if not money_result.empty else '空'}"
+        )
     except Exception as e:
         print(f"   资金流因子计算失败: {e}")
 

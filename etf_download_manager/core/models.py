@@ -6,12 +6,13 @@ ETF下载管理器数据模型
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Any
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class ETFPriority(Enum):
     """ETF优先级枚举"""
+
     CORE = "core"
     MUST_HAVE = "must_have"
     HIGH = "high"
@@ -24,12 +25,14 @@ class ETFPriority(Enum):
 
 class ETFExchange(Enum):
     """ETF交易所枚举"""
+
     SH = "SH"  # 上交所
     SZ = "SZ"  # 深交所
 
 
 class ETFStatus(Enum):
     """ETF状态枚举"""
+
     PENDING = "pending"
     DOWNLOADING = "downloading"
     COMPLETED = "completed"
@@ -38,6 +41,7 @@ class ETFStatus(Enum):
 
 class ETFDownloadType(Enum):
     """ETF下载类型枚举"""
+
     DAILY = "daily"
     MONEYFLOW = "moneyflow"
     MINUTES = "minutes"
@@ -47,6 +51,7 @@ class ETFDownloadType(Enum):
 @dataclass
 class ETFInfo:
     """ETF信息模型"""
+
     code: str
     name: str
     ts_code: str
@@ -63,7 +68,11 @@ class ETFInfo:
     def __post_init__(self):
         # 自动生成ts_code
         if not self.ts_code and self.code:
-            if self.code.startswith('5') or self.code.startswith('58') or self.code.startswith('51'):
+            if (
+                self.code.startswith("5")
+                or self.code.startswith("58")
+                or self.code.startswith("51")
+            ):
                 self.ts_code = f"{self.code}.SH"
             else:
                 self.ts_code = f"{self.code}.SZ"
@@ -71,17 +80,22 @@ class ETFInfo:
     @property
     def symbol(self) -> str:
         """获取交易代码（不带交易所后缀）"""
-        return self.ts_code.split('.')[0]
+        return self.ts_code.split(".")[0]
 
     @property
     def is_high_priority(self) -> bool:
         """是否为高优先级ETF"""
-        return self.priority in [ETFPriority.CORE, ETFPriority.MUST_HAVE, ETFPriority.HIGH]
+        return self.priority in [
+            ETFPriority.CORE,
+            ETFPriority.MUST_HAVE,
+            ETFPriority.HIGH,
+        ]
 
 
 @dataclass
 class DownloadResult:
     """下载结果模型"""
+
     etf_info: ETFInfo
     success: bool = False
     daily_records: int = 0
@@ -109,6 +123,7 @@ class DownloadResult:
 @dataclass
 class DownloadStats:
     """下载统计模型"""
+
     total_etfs: int = 0
     success_count: int = 0
     failed_count: int = 0
@@ -162,5 +177,5 @@ class DownloadStats:
             "duration": self.duration,
             "failed_etfs": self.failed_etfs[:10],  # 只显示前10个失败的ETF
             "start_time": self.start_time.isoformat(),
-            "end_time": self.end_time.isoformat() if self.end_time else None
+            "end_time": self.end_time.isoformat() if self.end_time else None,
         }

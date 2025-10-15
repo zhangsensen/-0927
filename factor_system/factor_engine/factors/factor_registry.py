@@ -4,7 +4,7 @@
 """
 
 import logging
-from typing import Dict, Type, List, Optional
+from typing import Dict, List, Optional, Type
 
 logger = logging.getLogger(__name__)
 
@@ -83,13 +83,16 @@ class FactorRegistry:
         """
         try:
             import sys
+
             module = sys.modules.get(module_name)
             if module:
                 for name in dir(module):
                     obj = getattr(module, name)
-                    if (isinstance(obj, type) and
-                        hasattr(obj, 'calculate') and
-                        not name.startswith('_')):
+                    if (
+                        isinstance(obj, type)
+                        and hasattr(obj, "calculate")
+                        and not name.startswith("_")
+                    ):
                         self.register_factor(name, obj)
                         logger.debug(f"自动注册因子: {name}")
         except Exception as e:
@@ -110,13 +113,16 @@ def initialize_factor_registry():
     try:
         # 从当前模块自动注册所有因子
         import sys
-        current_module = sys.modules[__name__.replace('.factor_registry', '')]
+
+        current_module = sys.modules[__name__.replace(".factor_registry", "")]
 
         for name in dir(current_module):
             obj = getattr(current_module, name)
-            if (isinstance(obj, type) and
-                hasattr(obj, 'calculate') and
-                not name.startswith('_')):
+            if (
+                isinstance(obj, type)
+                and hasattr(obj, "calculate")
+                and not name.startswith("_")
+            ):
                 _registry.register_factor(name, obj)
 
         _registry._initialized = True

@@ -5,14 +5,15 @@
 """
 
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # 添加项目路径
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from factor_system.factor_engine import api
+
 
 def main():
     """主函数 - 演示资金流因子计算"""
@@ -53,7 +54,9 @@ def main():
 
         print(f"✅ 因子计算完成: {df.shape}")
         print(f"📊 数据列: {list(df.columns)}")
-        print(f"📅 时间范围: {df.index.get_level_values('timestamp').min()} 到 {df.index.get_level_values('timestamp').max()}")
+        print(
+            f"📅 时间范围: {df.index.get_level_values('timestamp').min()} 到 {df.index.get_level_values('timestamp').max()}"
+        )
 
         # 显示因子统计
         print(f"\n📈 因子有效性统计:")
@@ -62,14 +65,16 @@ def main():
                 valid_count = df[factor].notna().sum()
                 total_count = len(df)
                 valid_ratio = valid_count / total_count * 100
-                print(f"  ✅ {factor}: {valid_count}/{total_count} ({valid_ratio:.1f}%)")
+                print(
+                    f"  ✅ {factor}: {valid_count}/{total_count} ({valid_ratio:.1f}%)"
+                )
             else:
                 print(f"  ❌ {factor}: 因子未找到")
 
         # 显示样本数据
         print(f"\n📋 样本因子值 (最后5个交易日):")
         if len(df) > 0:
-            sample_cols = ['close', 'volume'] + factors[:5]
+            sample_cols = ["close", "volume"] + factors[:5]
             available_cols = [col for col in sample_cols if col in df.columns]
             print(df[available_cols].tail(10).round(4))
 
@@ -79,7 +84,9 @@ def main():
     except Exception as e:
         print(f"❌ 计算失败: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()

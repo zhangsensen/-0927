@@ -4,13 +4,19 @@
 对比VectorBT可用指标与当前引擎实际执行的指标
 """
 
-import sys
-sys.path.insert(0, '/Users/zhangshenshen/深度量化0927')
+from scripts.path_utils import get_paths
 
-import vectorbt as vbt
-from factor_system.factor_generation.enhanced_factor_calculator import EnhancedFactorCalculator, IndicatorConfig
-import pandas as pd
+paths = get_paths()
+
 from datetime import datetime
+
+import pandas as pd
+import vectorbt as vbt
+
+from factor_system.factor_generation.enhanced_factor_calculator import (
+    EnhancedFactorCalculator,
+    IndicatorConfig,
+)
 
 
 def get_vbt_available_indicators():
@@ -35,15 +41,15 @@ def get_calculator_indicators():
         enable_manual_indicators=True,
         enable_all_periods=True,
         memory_efficient=False,
-        market='A_SHARES'
+        market="A_SHARES",
     )
-    
+
     calculator = EnhancedFactorCalculator(config)
     available = calculator._check_available_indicators()
-    
+
     # 提取VBT指标（排除TA_前缀）
-    vbt_indicators = set([ind for ind in available if not ind.startswith('TA_')])
-    
+    vbt_indicators = set([ind for ind in available if not ind.startswith("TA_")])
+
     return vbt_indicators
 
 
@@ -53,56 +59,58 @@ def audit_coverage():
     print("VectorBT 指标覆盖率审计")
     print("=" * 70)
     print()
-    
+
     # 获取指标集合
     vbt_available = get_vbt_available_indicators()
     calculator_used = get_calculator_indicators()
-    
+
     # 计算差异
     missing = vbt_available - calculator_used
     covered = vbt_available & calculator_used
-    
+
     # 统计
     coverage_rate = len(covered) / len(vbt_available) * 100 if vbt_available else 0
-    
+
     print(f"📊 统计摘要")
     print(f"  - VectorBT可用指标: {len(vbt_available)} 个")
     print(f"  - 当前已使用指标: {len(covered)} 个")
     print(f"  - 未使用指标: {len(missing)} 个")
     print(f"  - 覆盖率: {coverage_rate:.1f}%")
     print()
-    
+
     print(f"✅ 已覆盖指标 ({len(covered)} 个):")
     for ind in sorted(covered):
         print(f"  - {ind}")
     print()
-    
+
     print(f"❌ 未覆盖指标 ({len(missing)} 个):")
     for ind in sorted(missing):
         print(f"  - {ind}")
     print()
-    
+
     # 生成报告
     report = {
-        'timestamp': datetime.now().isoformat(),
-        'vbt_available': len(vbt_available),
-        'calculator_used': len(covered),
-        'missing': len(missing),
-        'coverage_rate': coverage_rate,
-        'covered_indicators': sorted(covered),
-        'missing_indicators': sorted(missing)
+        "timestamp": datetime.now().isoformat(),
+        "vbt_available": len(vbt_available),
+        "calculator_used": len(covered),
+        "missing": len(missing),
+        "coverage_rate": coverage_rate,
+        "covered_indicators": sorted(covered),
+        "missing_indicators": sorted(missing),
     }
-    
+
     # 保存到CSV
-    df = pd.DataFrame({
-        'indicator': sorted(vbt_available),
-        'covered': [ind in covered for ind in sorted(vbt_available)]
-    })
-    
-    output_path = '/Users/zhangshenshen/深度量化0927/factor_output/indicator_coverage_report.csv'
+    df = pd.DataFrame(
+        {
+            "indicator": sorted(vbt_available),
+            "covered": [ind in covered for ind in sorted(vbt_available)],
+        }
+    )
+
+    output_path = str(paths["output_root"] / "indicator_coverage_report.csv")
     df.to_csv(output_path, index=False)
     print(f"📄 报告已保存: {output_path}")
-    
+
     return report
 
 

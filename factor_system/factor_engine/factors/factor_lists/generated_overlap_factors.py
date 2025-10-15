@@ -16,7 +16,6 @@ GENERATED_OVERLAP_FACTORS = [
     "TA_SMA_20",
     "TA_SMA_30",
     "TA_SMA_60",
-
     # 指数移动平均
     "EMA3",
     "EMA5",
@@ -29,37 +28,30 @@ GENERATED_OVERLAP_FACTORS = [
     "TA_EMA_20",
     "TA_EMA_30",
     "TA_EMA_60",
-
     # 加权移动平均
     "TA_WMA_5",
     "TA_WMA_10",
     "TA_WMA_20",
-
     # 双指数移动平均
     "TA_DEMA_5",
     "TA_DEMA_10",
     "TA_DEMA_20",
-
     # 三重指数移动平均
     "TA_TEMA_5",
     "TA_TEMA_10",
     "TA_TEMA_20",
-
     # 三角移动平均
     "TA_TRIMA_5",
     "TA_TRIMA_10",
     "TA_TRIMA_20",
-
     # Kaufman自适应移动平均
     "TA_KAMA_10",
     "TA_KAMA_20",
-
     # MACD 指标变体
     "MACD_6_13_4",
     "MACD_8_17_5",
     "MACD_12_26_9",
     "TA_APO_fastperiod12_matype0_slowperiod26",
-
     # 布林带指标
     "BB_10_2_0_Upper",
     "BB_10_2_0_Middle",

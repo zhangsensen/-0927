@@ -11,7 +11,9 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from factor_system.factor_engine.core.engine import FactorEngine
-from factor_system.factor_engine.providers.money_flow_provider_engine import MoneyFlowDataProvider
+from factor_system.factor_engine.providers.money_flow_provider_engine import (
+    MoneyFlowDataProvider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +50,7 @@ class EnhancedFactorEngine(FactorEngine):
         if self.money_flow_provider is None:
             # 默认创建资金流数据提供者
             self.money_flow_provider = MoneyFlowDataProvider(
-                money_flow_dir="raw/SH/money_flow",
-                enforce_t_plus_1=True
+                money_flow_dir="raw/SH/money_flow", enforce_t_plus_1=True
             )
 
         logger.info("初始化EnhancedFactorEngine，支持资金流因子")
@@ -99,7 +100,9 @@ class EnhancedFactorEngine(FactorEngine):
 
         # 2. 计算因子（分数据源处理）
         price_factors = [f for f in all_factors if factor_data_source_map[f] == "price"]
-        money_flow_factors_list = [f for f in all_factors if factor_data_source_map[f] == "money_flow"]
+        money_flow_factors_list = [
+            f for f in all_factors if factor_data_source_map[f] == "money_flow"
+        ]
 
         results = []
 
@@ -134,13 +137,15 @@ class EnhancedFactorEngine(FactorEngine):
         merged_result = results[0]
         for result in results[1:]:
             # 按(symbol, timestamp)对齐合并
-            merged_result = merged_result.join(result, how='outer')
+            merged_result = merged_result.join(result, how="outer")
 
         logger.info(f"混合因子计算完成: {merged_result.shape}")
 
         # 4. 返回用户请求的因子
         requested_factors = technical_factors + money_flow_factors
-        available_columns = [col for col in requested_factors if col in merged_result.columns]
+        available_columns = [
+            col for col in requested_factors if col in merged_result.columns
+        ]
 
         if available_columns:
             return merged_result[available_columns]
@@ -173,7 +178,10 @@ class EnhancedFactorEngine(FactorEngine):
 
         # 加载资金流数据
         money_flow_data = self.money_flow_provider.load_money_flow_data(
-            symbols, "1day", start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+            symbols,
+            "1day",
+            start_date.strftime("%Y-%m-%d"),
+            end_date.strftime("%Y-%m-%d"),
         )
 
         if money_flow_data.empty:
@@ -182,7 +190,9 @@ class EnhancedFactorEngine(FactorEngine):
 
         # 筛选时间范围（MultiIndex: symbol, date）
         date_index = money_flow_data.index.get_level_values("trade_date")
-        mask = (date_index >= pd.to_datetime(start_date)) & (date_index <= pd.to_datetime(end_date))
+        mask = (date_index >= pd.to_datetime(start_date)) & (
+            date_index <= pd.to_datetime(end_date)
+        )
         money_flow_data = money_flow_data[mask]
 
         if money_flow_data.empty:
@@ -210,7 +220,9 @@ class EnhancedFactorEngine(FactorEngine):
                         if isinstance(factor_values, pd.Series):
                             symbol_results[factor_id] = factor_values
                         else:
-                            logger.warning(f"因子{factor_id}返回类型错误: {type(factor_values)}")
+                            logger.warning(
+                                f"因子{factor_id}返回类型错误: {type(factor_values)}"
+                            )
                             symbol_results[factor_id] = pd.Series(
                                 index=symbol_data.index, dtype=float
                             )

@@ -15,14 +15,12 @@ GENERATED_VOLUME_FACTORS = [
     "Volume_Momentum25",
     "Volume_Ratio30",
     "Volume_Momentum30",
-
     # VWAP 指标
     "VWAP10",
     "VWAP15",
     "VWAP20",
     "VWAP25",
     "VWAP30",
-
     # OBV 指标
     "OBV",
     "OBV_SMA5",

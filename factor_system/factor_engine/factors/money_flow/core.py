@@ -18,7 +18,7 @@ class MainNetInflow_Rate(BaseFactor):
 
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     即：T日使用的main_net和turnover_amount实际是T-1日的数据
-    
+
     向量化实现，禁止循环
     """
 
@@ -55,7 +55,7 @@ class MainNetInflow_Rate(BaseFactor):
 class LargeOrder_Ratio(BaseFactor):
     """
     大单占比 = (大单买入+大单卖出) / 成交额（10日均）
-    
+
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     """
 
@@ -74,9 +74,11 @@ class LargeOrder_Ratio(BaseFactor):
             return pd.Series(np.nan, index=data.index, name=self.factor_id)
 
         # 向量化
-        large_total = (data["buy_large_amount"] + data["sell_large_amount"]).rolling(
-            self.window
-        ).mean()
+        large_total = (
+            (data["buy_large_amount"] + data["sell_large_amount"])
+            .rolling(self.window)
+            .mean()
+        )
         turnover_ma = data["turnover_amount"].rolling(self.window).mean()
 
         result = large_total / np.maximum(turnover_ma, 1e-6)
@@ -86,7 +88,7 @@ class LargeOrder_Ratio(BaseFactor):
 class SuperLargeOrder_Ratio(BaseFactor):
     """
     超大单占比 = (超大单买入+超大单卖出) / 成交额（20日均）
-    
+
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     """
 
@@ -109,8 +111,10 @@ class SuperLargeOrder_Ratio(BaseFactor):
             return pd.Series(np.nan, index=data.index, name=self.factor_id)
 
         super_large_total = (
-            data["buy_super_large_amount"] + data["sell_super_large_amount"]
-        ).rolling(self.window).mean()
+            (data["buy_super_large_amount"] + data["sell_super_large_amount"])
+            .rolling(self.window)
+            .mean()
+        )
         turnover_ma = data["turnover_amount"].rolling(self.window).mean()
 
         result = super_large_total / np.maximum(turnover_ma, 1e-6)
@@ -120,7 +124,7 @@ class SuperLargeOrder_Ratio(BaseFactor):
 class OrderConcentration(BaseFactor):
     """
     资金集中度 = ((大单+超大单)净额) / 总净额
-    
+
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     """
 
@@ -149,7 +153,9 @@ class OrderConcentration(BaseFactor):
             - data["sell_large_amount"]
             - data["sell_super_large_amount"]
         )
-        total_net = data["total_net"] if "total_net" in data.columns else data["net_mf_amount"]
+        total_net = (
+            data["total_net"] if "total_net" in data.columns else data["net_mf_amount"]
+        )
 
         result = large_super_net / np.maximum(np.abs(total_net), 1e-6)
         return result.rename(self.factor_id)
@@ -158,7 +164,7 @@ class OrderConcentration(BaseFactor):
 class MoneyFlow_Hierarchy(BaseFactor):
     """
     资金层级指数 = ((大单+超大单)净额 - 小单净额) / 总净额
-    
+
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     """
 
@@ -177,7 +183,9 @@ class MoneyFlow_Hierarchy(BaseFactor):
 
         institutional_net = data["main_net"]  # 已计算
         retail_net = data["retail_net"]
-        total_net = data["total_net"] if "total_net" in data.columns else data["net_mf_amount"]
+        total_net = (
+            data["total_net"] if "total_net" in data.columns else data["net_mf_amount"]
+        )
 
         result = (institutional_net - retail_net) / np.maximum(np.abs(total_net), 1e-6)
         return result.rename(self.factor_id)
@@ -186,7 +194,7 @@ class MoneyFlow_Hierarchy(BaseFactor):
 class MoneyFlow_Consensus(BaseFactor):
     """
     资金共识度 = sign(main_net) == sign(total_net) 的5日均
-    
+
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     """
 
@@ -208,19 +216,23 @@ class MoneyFlow_Consensus(BaseFactor):
 
         # 向量化：sign比较
         main_sign = np.sign(data["main_net"])
-        total_base = data["total_net"] if "total_net" in data.columns else data["net_mf_amount"]
+        total_base = (
+            data["total_net"] if "total_net" in data.columns else data["net_mf_amount"]
+        )
         total_sign = np.sign(total_base)
         consensus = (main_sign == total_sign).astype(float)
 
         # 增加min_periods，减少早期全NA；对齐窗口
-        result = consensus.rolling(self.window, min_periods=max(1, self.window//2)).mean()
+        result = consensus.rolling(
+            self.window, min_periods=max(1, self.window // 2)
+        ).mean()
         return result.rename(self.factor_id)
 
 
 class MainFlow_Momentum(BaseFactor):
     """
     主力资金动量 = main_net的5-10日变化率
-    
+
     【时序安全】输入数据已由MoneyFlowProvider执行T+1滞后处理
     """
 
@@ -276,7 +288,7 @@ class Flow_Price_Divergence(BaseFactor):
         ret = data["close"].pct_change().shift(1)
 
         # 【修复】设置min_periods确保有足够数据才计算相关性
-        result = -data["main_net"].rolling(
-            self.window, min_periods=self.window
-        ).corr(ret)
+        result = (
+            -data["main_net"].rolling(self.window, min_periods=self.window).corr(ret)
+        )
         return result.rename(self.factor_id)

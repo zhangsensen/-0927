@@ -36,7 +36,7 @@ def add_new_etf(config_manager: ETFConfigManager, args) -> None:
             name=args.name,
             category=args.category,
             priority=args.priority,
-            description=args.description or ""
+            description=args.description or "",
         )
 
         config_manager.add_etf(args.group, etf_info)
@@ -66,7 +66,7 @@ def list_etfs(config_manager: ETFConfigManager, args) -> None:
         title = f"类别 '{args.category}' 的ETF"
     elif args.group:
         etfs = config_manager.get_etfs_by_category_group(args.group)
-        group_info = config_manager.config['etf_list'].get(args.group, {})
+        group_info = config_manager.config["etf_list"].get(args.group, {})
         title = f"分组 '{group_info.get('name', args.group)}' 的ETF"
     else:
         etfs = config_manager.get_all_etfs()
@@ -77,7 +77,9 @@ def list_etfs(config_manager: ETFConfigManager, args) -> None:
     print("-" * 80)
 
     for etf in etfs:
-        print(f"{etf.code:<12} {etf.name:<20} {etf.category:<12} {etf.priority:<6} {etf.description[:30]}")
+        print(
+            f"{etf.code:<12} {etf.name:<20} {etf.category:<12} {etf.priority:<6} {etf.description[:30]}"
+        )
 
 
 def generate_download_list(config_manager: ETFConfigManager, args) -> None:
@@ -87,7 +89,7 @@ def generate_download_list(config_manager: ETFConfigManager, args) -> None:
 
     output_file = args.output or "etf_download_list.txt"
 
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write("# ETF下载列表\n")
         f.write(f"# 生成时间: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"# 总数量: {len(download_list)}\n")
@@ -136,7 +138,7 @@ def export_report(config_manager: ETFConfigManager, args) -> None:
     stats = config_manager.get_statistics()
     all_etfs = config_manager.get_all_etfs()
 
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write("# ETF配置报告\n\n")
         f.write(f"生成时间: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
@@ -151,7 +153,7 @@ def export_report(config_manager: ETFConfigManager, args) -> None:
         f.write("| 优先级 | 数量 | 说明 |\n")
         f.write("|--------|------|------|\n")
         priority_names = {1: "最高优先级", 2: "高优先级", 3: "一般优先级"}
-        for priority, count in stats['priorities'].items():
+        for priority, count in stats["priorities"].items():
             f.write(f"| {priority} | {count} | {priority_names[priority]} |\n")
         f.write("\n")
 
@@ -159,13 +161,13 @@ def export_report(config_manager: ETFConfigManager, args) -> None:
         f.write("## 类别分布\n\n")
         f.write("| 类别 | 数量 |\n")
         f.write("|------|------|\n")
-        for category, count in sorted(stats['categories'].items()):
+        for category, count in sorted(stats["categories"].items()):
             f.write(f"| {category} | {count} |\n")
         f.write("\n")
 
         # 分组详情
         f.write("## 分组详情\n\n")
-        for group_key, group_info in stats['groups'].items():
+        for group_key, group_info in stats["groups"].items():
             f.write(f"### {group_info['name']}\n\n")
             f.write(f"**描述**: {group_info['description']}\n\n")
             f.write(f"**数量**: {group_info['count']}只\n\n")
@@ -176,7 +178,9 @@ def export_report(config_manager: ETFConfigManager, args) -> None:
                 f.write("| 代码 | 名称 | 类别 | 优先级 | 描述 |\n")
                 f.write("|------|------|------|--------|------|\n")
                 for etf in group_etfs:
-                    f.write(f"| {etf.code} | {etf.name} | {etf.category} | {etf.priority} | {etf.description[:50]} |\n")
+                    f.write(
+                        f"| {etf.code} | {etf.name} | {etf.category} | {etf.priority} | {etf.description[:50]} |\n"
+                    )
                 f.write("\n")
 
         # 完整ETF列表
@@ -184,7 +188,9 @@ def export_report(config_manager: ETFConfigManager, args) -> None:
         f.write("| 代码 | 名称 | 类别 | 优先级 | 描述 |\n")
         f.write("|------|------|------|--------|------|\n")
         for etf in all_etfs:
-            f.write(f"| {etf.code} | {etf.name} | {etf.category} | {etf.priority} | {etf.description[:50]} |\n")
+            f.write(
+                f"| {etf.code} | {etf.name} | {etf.category} | {etf.priority} | {etf.description[:50]} |\n"
+            )
 
     print(f"✅ 配置报告已导出: {output_file}")
 
@@ -204,9 +210,13 @@ def main():
     add_parser.add_argument("--code", required=True, help="ETF代码（如：510300.SH）")
     add_parser.add_argument("--name", required=True, help="ETF名称")
     add_parser.add_argument("--category", required=True, help="ETF类别")
-    add_parser.add_argument("--priority", type=int, choices=[1, 2, 3], required=True, help="优先级（1-3）")
+    add_parser.add_argument(
+        "--priority", type=int, choices=[1, 2, 3], required=True, help="优先级（1-3）"
+    )
     add_parser.add_argument("--description", help="ETF描述")
-    add_parser.add_argument("--group", required=True, help="分组名称（如：sector_etfs）")
+    add_parser.add_argument(
+        "--group", required=True, help="分组名称（如：sector_etfs）"
+    )
 
     # 删除ETF
     remove_parser = subparsers.add_parser("remove", help="删除ETF")
@@ -215,13 +225,17 @@ def main():
     # 列出ETF
     list_parser = subparsers.add_parser("list", help="列出ETF")
     list_group = list_parser.add_mutually_exclusive_group()
-    list_group.add_argument("--priority", type=int, choices=[1, 2, 3], help="按优先级筛选")
+    list_group.add_argument(
+        "--priority", type=int, choices=[1, 2, 3], help="按优先级筛选"
+    )
     list_group.add_argument("--category", help="按类别筛选")
     list_group.add_argument("--group", help="按分组筛选")
 
     # 生成下载列表
     download_parser = subparsers.add_parser("download-list", help="生成下载列表")
-    download_parser.add_argument("--priorities", nargs="+", type=int, choices=[1, 2, 3], help="优先级筛选")
+    download_parser.add_argument(
+        "--priorities", nargs="+", type=int, choices=[1, 2, 3], help="优先级筛选"
+    )
     download_parser.add_argument("--output", help="输出文件路径")
 
     # 验证配置
@@ -265,4 +279,5 @@ def main():
 
 if __name__ == "__main__":
     import pandas as pd  # 导入pandas用于时间戳
+
     main()

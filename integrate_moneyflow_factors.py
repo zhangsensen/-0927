@@ -5,25 +5,34 @@
 """
 
 import sys
-import pandas as pd
-import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 
 # 添加项目路径
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from factor_system.factor_engine.providers.money_flow_provider import MoneyFlowProvider
 from factor_system.factor_engine.factors.money_flow.core import (
-    MainNetInflow_Rate, LargeOrder_Ratio, SuperLargeOrder_Ratio,
-    OrderConcentration, MoneyFlow_Hierarchy, MoneyFlow_Consensus,
-    MainFlow_Momentum, Flow_Price_Divergence
+    Flow_Price_Divergence,
+    LargeOrder_Ratio,
+    MainFlow_Momentum,
+    MainNetInflow_Rate,
+    MoneyFlow_Consensus,
+    MoneyFlow_Hierarchy,
+    OrderConcentration,
+    SuperLargeOrder_Ratio,
 )
 from factor_system.factor_engine.factors.money_flow.enhanced import (
-    Institutional_Absorption, Flow_Tier_Ratio_Delta,
-    Flow_Reversal_Ratio, Northbound_NetInflow_Rate
+    Flow_Reversal_Ratio,
+    Flow_Tier_Ratio_Delta,
+    Institutional_Absorption,
+    Northbound_NetInflow_Rate,
 )
+from factor_system.factor_engine.providers.money_flow_provider import MoneyFlowProvider
+
 
 def analyze_integration_feasibility():
     """分析集成可行性"""
@@ -38,7 +47,7 @@ def analyze_integration_feasibility():
         "IndicatorRegistry": "指标注册中心，管理指标配置",
         "IndicatorSpec": "指标规格定义",
         "SimpleConfig": "配置管理，支持YAML配置",
-        "BatchExecutor": "批量计算执行器"
+        "BatchExecutor": "批量计算执行器",
     }
 
     for comp, desc in components.items():
@@ -57,7 +66,7 @@ def analyze_integration_feasibility():
         "数据源差异: factor_generation使用OHLCV，资金流需要额外的资金流数据",
         "计算框架: factor_generation基于VectorBT，资金流基于自定义因子类",
         "频率对齐: 资金流是日线，factor_generation支持多时间框架",
-        "配置系统: 需要将资金流因子适配到IndicatorRegistry"
+        "配置系统: 需要将资金流因子适配到IndicatorRegistry",
     ]
 
     for challenge in challenges:
@@ -69,13 +78,14 @@ def analyze_integration_feasibility():
         "混合数据提供器: 扩展数据输入以支持资金流数据",
         "统一计算接口: 将资金流因子适配到VectorBT框架",
         "频率标准化: 统一使用日线作为基础频率",
-        "配置扩展: 在IndicatorRegistry中注册资金流因子"
+        "配置扩展: 在IndicatorRegistry中注册资金流因子",
     ]
 
     for solution in solutions:
         print(f"  ✅ {solution}")
 
     return True
+
 
 def create_moneyflow_indicator_specs():
     """创建资金流因子指标规格"""
@@ -91,7 +101,7 @@ def create_moneyflow_indicator_specs():
             param_grid={"window": [5, 10, 20]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="LargeOrder_Ratio",
@@ -99,7 +109,7 @@ def create_moneyflow_indicator_specs():
             param_grid={"window": [10, 20, 30]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="SuperLargeOrder_Ratio",
@@ -107,7 +117,7 @@ def create_moneyflow_indicator_specs():
             param_grid={"window": [20, 30, 60]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="OrderConcentration",
@@ -115,7 +125,7 @@ def create_moneyflow_indicator_specs():
             param_grid={},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="MoneyFlow_Hierarchy",
@@ -123,7 +133,7 @@ def create_moneyflow_indicator_specs():
             param_grid={},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="MoneyFlow_Consensus",
@@ -131,7 +141,7 @@ def create_moneyflow_indicator_specs():
             param_grid={"window": [5, 10]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="MainFlow_Momentum",
@@ -139,7 +149,7 @@ def create_moneyflow_indicator_specs():
             param_grid={"short_window": [5, 10], "long_window": [10, 20]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="Flow_Price_Divergence",
@@ -147,7 +157,7 @@ def create_moneyflow_indicator_specs():
             param_grid={"window": [5, 10, 20]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="Institutional_Absorption",
@@ -155,7 +165,7 @@ def create_moneyflow_indicator_specs():
             param_grid={},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="Flow_Tier_Ratio_Delta",
@@ -163,7 +173,7 @@ def create_moneyflow_indicator_specs():
             param_grid={"window": [5, 10]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="Flow_Reversal_Ratio",
@@ -171,7 +181,7 @@ def create_moneyflow_indicator_specs():
             param_grid={},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
+            enabled=True,
         ),
         IndicatorSpec(
             name="Northbound_NetInflow_Rate",
@@ -179,8 +189,8 @@ def create_moneyflow_indicator_specs():
             param_grid={"window": [5, 10]},
             batch_capable=True,
             requires_entries=False,
-            enabled=True
-        )
+            enabled=True,
+        ),
     ]
 
     print(f"✅ 创建了 {len(moneyflow_specs)} 个资金流因子规格")
@@ -188,6 +198,7 @@ def create_moneyflow_indicator_specs():
         print(f"  📊 {spec.name}: 参数={spec.param_grid}, 类型={spec.indicator_type}")
 
     return moneyflow_specs
+
 
 def design_integration_architecture():
     """设计集成架构"""
@@ -221,11 +232,12 @@ def design_integration_architecture():
         "3. 修改EnhancedFactorCalculator支持混合数据源",
         "4. 更新配置系统支持资金流参数",
         "5. 创建统一的数据合并接口",
-        "6. 测试集成效果和性能"
+        "6. 测试集成效果和性能",
     ]
 
     for step in steps:
         print(f"  {step}")
+
 
 def create_moneyflow_calculator():
     """创建资金流计算器适配器"""
@@ -310,6 +322,7 @@ class MoneyFlowCalculator:
 
     return calculator_code
 
+
 def demonstrate_integration():
     """演示集成效果"""
     print("\n=== 🎯 集成效果演示 ===")
@@ -334,11 +347,12 @@ def demonstrate_integration():
         "配置驱动: 通过YAML配置文件控制因子计算",
         "性能优化: 利用VectorBT缓存机制优化计算性能",
         "扩展性: 易于添加新的因子类型和计算逻辑",
-        "一致性: 统一的数据格式和计算标准"
+        "一致性: 统一的数据格式和计算标准",
     ]
 
     for advantage in advantages:
         print(f"  ✅ {advantage}")
+
 
 def main():
     """主函数"""
@@ -371,6 +385,7 @@ def main():
 
     print(f"\n🎯 结论: 资金流因子完全可以集成到factor_generation引擎中！")
     print("   建议实施步骤: 创建适配器 → 扩展注册中心 → 测试集成")
+
 
 if __name__ == "__main__":
     main()

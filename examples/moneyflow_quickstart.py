@@ -78,7 +78,9 @@ def main():
         total_days = len(df)
         print(f"   总交易日: {total_days}")
         print(f"   可交易日: {tradable_days} ({tradable_days/total_days:.2%})")
-        print(f"   被屏蔽日: {total_days-tradable_days} ({(total_days-tradable_days)/total_days:.2%})")
+        print(
+            f"   被屏蔽日: {total_days-tradable_days} ({(total_days-tradable_days)/total_days:.2%})"
+        )
 
         # 6. 保存结果
         print("\n6. 保存结果...")

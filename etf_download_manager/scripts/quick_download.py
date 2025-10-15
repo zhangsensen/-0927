@@ -13,7 +13,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from etf_download_manager import ETFDownloadManager, ETFConfig, ETFDownloadType, ETFListManager
+from etf_download_manager import (
+    ETFConfig,
+    ETFDownloadManager,
+    ETFDownloadType,
+    ETFListManager,
+)
 
 
 def main():
@@ -23,7 +28,7 @@ def main():
     print("=" * 60)
 
     # 检查Token
-    tushare_token = os.getenv('TUSHARE_TOKEN')
+    tushare_token = os.getenv("TUSHARE_TOKEN")
     if not tushare_token:
         print("❌ 错误: 请设置环境变量 TUSHARE_TOKEN")
         print("例如: export TUSHARE_TOKEN='your_actual_token'")
@@ -41,7 +46,7 @@ def main():
         download_types=[ETFDownloadType.DAILY],
         save_format="parquet",
         request_delay=0.2,
-        verbose=True
+        verbose=True,
     )
 
     # 获取核心ETF

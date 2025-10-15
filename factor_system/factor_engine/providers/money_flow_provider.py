@@ -21,10 +21,15 @@ from scipy.stats import zscore
 class MoneyFlowProvider:
     """资金流数据提供者"""
 
-    def __init__(self, data_dir: Path, snapshot_id: Optional[str] = None,
-                 input_unit: str = "wan_yuan", output_unit: str = "yuan",
-                 data_source: str = "tushare_pro",
-                 enforce_t_plus_1: bool = True):
+    def __init__(
+        self,
+        data_dir: Path,
+        snapshot_id: Optional[str] = None,
+        input_unit: str = "wan_yuan",
+        output_unit: str = "yuan",
+        data_source: str = "tushare_pro",
+        enforce_t_plus_1: bool = True,
+    ):
         self.data_dir = Path(data_dir)
         self.snapshot_id = snapshot_id or self._generate_snapshot_id()
         # 原始数据默认来自 TuShare，金额口径为万元；输出统一为元
@@ -58,7 +63,7 @@ class MoneyFlowProvider:
         possible_names = [
             f"{symbol}_money_flow.parquet",  # 标准格式
             f"{symbol}_moneyflow.parquet",  # TuShare实际格式
-            f"{symbol}.parquet",            # 简化格式
+            f"{symbol}.parquet",  # 简化格式
         ]
 
         file_path = None
@@ -69,17 +74,20 @@ class MoneyFlowProvider:
                 break
 
         if not file_path:
-            raise FileNotFoundError(f"Money flow data not found for {symbol}. Tried: {possible_names}")
+            raise FileNotFoundError(
+                f"Money flow data not found for {symbol}. Tried: {possible_names}"
+            )
 
         df = pd.read_parquet(file_path)
 
         # 处理日期格式兼容性：trade_date可能是字符串或datetime格式
-        if df["trade_date"].dtype == 'object':
+        if df["trade_date"].dtype == "object":
             # 字符串格式，需要转换为datetime进行比较
-            start_date_str = start_date.replace('-', '')
-            end_date_str = end_date.replace('-', '')
+            start_date_str = start_date.replace("-", "")
+            end_date_str = end_date.replace("-", "")
             df = df[
-                (df["trade_date"] >= start_date_str) & (df["trade_date"] <= end_date_str)
+                (df["trade_date"] >= start_date_str)
+                & (df["trade_date"] <= end_date_str)
             ].copy()
         else:
             # datetime格式，直接比较
@@ -201,7 +209,9 @@ class MoneyFlowProvider:
             return df
 
         # 未识别的单位转换，直接抛错避免悄然错误
-        raise ValueError(f"Unsupported unit normalization: {self.input_unit} -> {self.output_unit}")
+        raise ValueError(
+            f"Unsupported unit normalization: {self.input_unit} -> {self.output_unit}"
+        )
 
     def _generate_tradability_mask(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -256,35 +266,44 @@ class MoneyFlowProvider:
     def _apply_t_plus_1_lag(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         【时序安全】T+1滞后处理 - 向量化
-        
+
         资金流数据在T日收盘后才发布，因此T日数据只能在T+1日使用
         对所有资金流字段执行shift(1)
         """
         # 需要滞后的资金流字段
         money_flow_cols = [
             # 原始字段
-            "buy_small_amount", "sell_small_amount",
-            "buy_medium_amount", "sell_medium_amount",
-            "buy_large_amount", "sell_large_amount",
-            "buy_super_large_amount", "sell_super_large_amount",
-            "turnover_amount", "net_mf_amount",
+            "buy_small_amount",
+            "sell_small_amount",
+            "buy_medium_amount",
+            "sell_medium_amount",
+            "buy_large_amount",
+            "sell_large_amount",
+            "buy_super_large_amount",
+            "sell_super_large_amount",
+            "turnover_amount",
+            "net_mf_amount",
             # 衍生字段
-            "main_net", "retail_net", "total_net",
+            "main_net",
+            "retail_net",
+            "total_net",
             # 标准化字段
         ]
-        
+
         # 添加所有winsorized和zscore字段
         money_flow_cols.extend([col for col in df.columns if "_winsorized" in col])
         money_flow_cols.extend([col for col in df.columns if "_zscore" in col])
-        
+
         # 向量化滞后处理
         for col in money_flow_cols:
             if col in df.columns:
                 df[col] = df[col].shift(1)
-        
+
         return df
 
-    def _load_and_merge_price_data(self, df: pd.DataFrame, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def _load_and_merge_price_data(
+        self, df: pd.DataFrame, symbol: str, start_date: str, end_date: str
+    ) -> pd.DataFrame:
         """
         加载价格数据并与资金流数据合并
 
@@ -299,7 +318,11 @@ class MoneyFlowProvider:
                 possible_paths = [
                     self.data_dir.parent.parent / "raw" / "SH" / f"{symbol}.parquet",
                     self.data_dir.parent.parent / "raw" / "SZ" / f"{symbol}.parquet",
-                    self.data_dir.parent.parent / "raw" / "A股" / symbol / f"{symbol}_1day_*.parquet",
+                    self.data_dir.parent.parent
+                    / "raw"
+                    / "A股"
+                    / symbol
+                    / f"{symbol}_1day_*.parquet",
                 ]
 
                 for path in possible_paths:
@@ -315,35 +338,48 @@ class MoneyFlowProvider:
             price_data = pd.read_parquet(price_file)
 
             # 3. 标准化价格数据格式
-            if 'datetime' in price_data.columns:
-                price_data['datetime'] = pd.to_datetime(price_data['datetime'])
-                price_data.set_index('datetime', inplace=True)
-            elif 'trade_date' in price_data.columns:
-                price_data['trade_date'] = pd.to_datetime(price_data['trade_date'])
-                price_data.set_index('trade_date', inplace=True)
+            if "datetime" in price_data.columns:
+                price_data["datetime"] = pd.to_datetime(price_data["datetime"])
+                price_data.set_index("datetime", inplace=True)
+            elif "trade_date" in price_data.columns:
+                price_data["trade_date"] = pd.to_datetime(price_data["trade_date"])
+                price_data.set_index("trade_date", inplace=True)
 
             # 4. 重采样为日线（如果是分钟级数据）
             if len(price_data) > 500:  # 可能是分钟级数据
-                price_daily = price_data.resample('D').agg({
-                    'open': 'first',
-                    'high': 'max',
-                    'low': 'min',
-                    'close': 'last',
-                    'volume': 'sum',
-                    'turnover': 'sum'
-                }).dropna()
+                price_daily = (
+                    price_data.resample("D")
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                            "volume": "sum",
+                            "turnover": "sum",
+                        }
+                    )
+                    .dropna()
+                )
             else:
                 price_daily = price_data.copy()
 
             # 5. 过滤时间范围
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
-            price_daily = price_daily[(price_daily.index >= start_dt) & (price_daily.index <= end_dt)]
+            price_daily = price_daily[
+                (price_daily.index >= start_dt) & (price_daily.index <= end_dt)
+            ]
 
             # 6. 合并数据
-            merged_df = df.join(price_daily[['open', 'high', 'low', 'close', 'volume', 'turnover']], how='left')
+            merged_df = df.join(
+                price_daily[["open", "high", "low", "close", "volume", "turnover"]],
+                how="left",
+            )
 
-            print(f"✅ 成功合并{symbol}价格数据: 价格数据{len(price_daily)}天, 合并后{len(merged_df)}天")
+            print(
+                f"✅ 成功合并{symbol}价格数据: 价格数据{len(price_daily)}天, 合并后{len(merged_df)}天"
+            )
 
             return merged_df
 

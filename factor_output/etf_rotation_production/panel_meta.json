@@ -1,0 +1,10 @@
+{
+  "engine_version": "1.0.0",
+  "price_field": null,
+  "run_params": {
+    "start_date": "20200102",
+    "end_date": "20251014",
+    "data_dir": "raw/ETF/daily"
+  },
+  "timestamp": "2025-10-15T14:00:17.095903"
+}

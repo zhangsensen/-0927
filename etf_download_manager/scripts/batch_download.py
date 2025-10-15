@@ -14,11 +14,11 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from etf_download_manager import (
-    ETFDownloadManager,
     ETFConfig,
+    ETFDownloadManager,
     ETFDownloadType,
     ETFListManager,
-    ETFPriority
+    ETFPriority,
 )
 
 
@@ -29,7 +29,7 @@ def download_all_etfs():
     print("=" * 80)
 
     # 检查Token
-    tushare_token = os.getenv('TUSHARE_TOKEN')
+    tushare_token = os.getenv("TUSHARE_TOKEN")
     if not tushare_token:
         print("❌ 错误: 请设置环境变量 TUSHARE_TOKEN")
         print("例如: export TUSHARE_TOKEN='your_actual_token'")
@@ -44,7 +44,7 @@ def download_all_etfs():
         save_format="parquet",
         request_delay=0.3,
         batch_size=20,
-        verbose=True
+        verbose=True,
     )
 
     # 获取所有ETF
@@ -66,11 +66,20 @@ def download_all_etfs():
         priority_groups[priority].append(etf)
 
     print("\n=== 按优先级分组 ===")
-    priority_order = ['core', 'must_have', 'high', 'medium', 'recommended', 'hedge', 'low', 'optional']
+    priority_order = [
+        "core",
+        "must_have",
+        "high",
+        "medium",
+        "recommended",
+        "hedge",
+        "low",
+        "optional",
+    ]
     for priority in priority_order:
         if priority in priority_groups:
             count = len(priority_groups[priority])
-            icon = "⭐" if priority in ['core', 'must_have', 'high'] else ""
+            icon = "⭐" if priority in ["core", "must_have", "high"] else ""
             print(f"{priority}: {count}只 {icon}")
 
     print(f"\n开始下载所有ETF数据...")
@@ -114,7 +123,7 @@ def download_by_categories():
     print("=" * 80)
 
     # 检查Token
-    tushare_token = os.getenv('TUSHARE_TOKEN')
+    tushare_token = os.getenv("TUSHARE_TOKEN")
     if not tushare_token:
         print("❌ 错误: 请设置环境变量 TUSHARE_TOKEN")
         return
@@ -128,7 +137,7 @@ def download_by_categories():
         save_format="parquet",
         request_delay=0.2,
         batch_size=15,
-        verbose=True
+        verbose=True,
     )
 
     # 获取ETF清单
@@ -136,20 +145,20 @@ def download_by_categories():
     summary = list_manager.get_etf_summary()
 
     print("可用分类:")
-    for category, count in sorted(summary['categories'].items()):
+    for category, count in sorted(summary["categories"].items()):
         print(f"  {category}: {count}只")
 
     # 交互选择分类
     print("\n请选择要下载的分类 (用逗号分隔，输入'all'下载所有分类):")
     user_input = input("分类: ").strip()
 
-    if user_input.lower() == 'all':
+    if user_input.lower() == "all":
         # 下载所有分类
         download_all_etfs()
         return
 
     # 解析用户输入
-    selected_categories = [cat.strip() for cat in user_input.split(',') if cat.strip()]
+    selected_categories = [cat.strip() for cat in user_input.split(",") if cat.strip()]
     if not selected_categories:
         print("❌ 未选择有效分类")
         return
@@ -157,7 +166,7 @@ def download_by_categories():
     # 筛选ETF
     filtered_etfs = []
     for category in selected_categories:
-        if category in summary['categories']:
+        if category in summary["categories"]:
             etfs = list_manager.get_etfs_by_category(category)
             filtered_etfs.extend(etfs)
             print(f"✅ 分类 '{category}': {len(etfs)}只ETF")
@@ -206,7 +215,7 @@ def download_high_priority():
     print("=" * 80)
 
     # 检查Token
-    tushare_token = os.getenv('TUSHARE_TOKEN')
+    tushare_token = os.getenv("TUSHARE_TOKEN")
     if not tushare_token:
         print("❌ 错误: 请设置环境变量 TUSHARE_TOKEN")
         return
@@ -219,7 +228,7 @@ def download_high_priority():
         download_types=[ETFDownloadType.DAILY],
         save_format="parquet",
         request_delay=0.2,
-        verbose=True
+        verbose=True,
     )
 
     # 获取高优先级ETF
@@ -277,11 +286,11 @@ def main():
 
     try:
         choice = input("\n请选择下载方式 (1/2/3): ").strip()
-        if choice == '1':
+        if choice == "1":
             download_all_etfs()
-        elif choice == '2':
+        elif choice == "2":
             download_by_categories()
-        elif choice == '3':
+        elif choice == "3":
             download_high_priority()
         else:
             print("❌ 无效选择")

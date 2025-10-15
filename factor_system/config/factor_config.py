@@ -31,7 +31,9 @@ class FactorConfig:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         else:
-            print(f"Warning: Config file not found at {self.config_path}, using defaults")
+            print(
+                f"Warning: Config file not found at {self.config_path}, using defaults"
+            )
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict[str, Any]:
@@ -104,7 +106,9 @@ class FactorConfig:
 
         return enabled_factors
 
-    def is_factor_enabled(self, factor_name: str, category: str = "core_factors") -> bool:
+    def is_factor_enabled(
+        self, factor_name: str, category: str = "core_factors"
+    ) -> bool:
         """
         检查因子是否启用
 

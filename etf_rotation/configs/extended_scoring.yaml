@@ -1,0 +1,24 @@
+# ETF扩展评分配置
+# 支持64个ETF兼容技术因子的动态评分
+
+# 评分方式: equal_weight (等权重) | ic_weight (IC加权)
+factor_selection: "equal_weight"
+
+# 相关性剔除阈值 (>该值则剔除相关因子)
+correlation_threshold: 0.9
+
+# 因子集配置 (与factor_system/factor_engine/factors/factor_sets/etf_price_extended.yaml对应)
+factor_set_file: "factor_system/factor_engine/factors/factor_sets/etf_price_extended.yaml"
+
+# 组合构建参数
+portfolio:
+  n_holdings: 8        # 持仓数量
+  max_single: 0.2      # 单票最大权重 20%
+
+# 流动性筛选
+liquidity:
+  min_amount_20d: 5000000  # 最小20日成交额 500万
+
+# 覆盖率要求
+coverage:
+  min_coverage: 0.8   # 因子横截面覆盖率最低要求 80%

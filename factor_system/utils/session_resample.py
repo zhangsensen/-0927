@@ -12,12 +12,14 @@ def _default_agg_map(columns: Iterable[str]) -> Dict[str, str]:
     cols = set(columns)
     agg: Dict[str, str] = {}
     if {"open", "high", "low", "close"}.issubset(cols):
-        agg.update({
-            "open": "first",
-            "high": "max",
-            "low": "min",
-            "close": "last",
-        })
+        agg.update(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+            }
+        )
     if "volume" in cols:
         agg["volume"] = "sum"
     if "amount" in cols:
@@ -57,7 +59,10 @@ def resample_ashare_intraday(
         for sym, sdf in df.groupby(level=0, sort=False):
             sdf = sdf.droplevel(0)
             pieces.append(
-                _resample_single_symbol(sdf, rule, cal, agg_map).assign(symbol=sym).set_index("symbol", append=True).swaplevel(0,1)
+                _resample_single_symbol(sdf, rule, cal, agg_map)
+                .assign(symbol=sym)
+                .set_index("symbol", append=True)
+                .swaplevel(0, 1)
             )
         out = pd.concat(pieces).sort_index()
         return out
@@ -79,7 +84,11 @@ def _resample_single_symbol(
     agg = agg_map or _default_agg_map(df.columns)
 
     for d in cal.iter_trading_days(start_d, end_d):
-        day_slice = df.loc[str(d)] if str(d) in df.index.normalize().unique().astype(str) else None
+        day_slice = (
+            df.loc[str(d)]
+            if str(d) in df.index.normalize().unique().astype(str)
+            else None
+        )
         if day_slice is None or day_slice.empty:
             continue
         for s, e in cal.trading_sessions(d):
@@ -92,10 +101,7 @@ def _resample_single_symbol(
                 continue
             # anchor bins at session start for this day
             # Use label='left' (start labels), then shift to right-edge (end) labels
-            res = (
-                seg.resample(rule, label="left", closed="left", origin=ss)
-                .agg(agg)
-            )
+            res = seg.resample(rule, label="left", closed="left", origin=ss).agg(agg)
             # Shift index to represent bar end time (right edge)
             freq_td = pd.Timedelta(rule)
             res.index = res.index + freq_td

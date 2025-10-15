@@ -5,14 +5,16 @@
 用于替代复杂的导入依赖
 """
 
-import yaml
-from pathlib import Path
-from typing import Dict, Any, Optional, List
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 
 class ETFSourceType(Enum):
     """ETF数据源类型"""
+
     TUSHARE = "tushare"
     YAHOO = "yahoo"
     EASTMONEY = "eastmoney"
@@ -20,6 +22,7 @@ class ETFSourceType(Enum):
 
 class ETFDownloadType(Enum):
     """ETF下载类型"""
+
     DAILY = "daily"
     MONEYFLOW = "moneyflow"
     MINUTES = "minutes"
@@ -46,7 +49,7 @@ class ETFConfig:
         parallel: bool = False,
         download_types: Optional[List[ETFDownloadType]] = None,
         save_format: str = "parquet",
-        verbose: bool = True
+        verbose: bool = True,
     ):
         self.source = source
         self.tushare_token = tushare_token
@@ -72,60 +75,61 @@ class ETFConfig:
         if not config_path.exists():
             raise FileNotFoundError(f"配置文件不存在: {config_path}")
 
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config_data = yaml.safe_load(f)
 
         # 解析数据源
-        source_str = config_data.get('source', 'tushare')
+        source_str = config_data.get("source", "tushare")
         source = ETFSourceType(source_str)
 
         # 解析下载类型
-        download_types_str = config_data.get('download_types', ['daily'])
+        download_types_str = config_data.get("download_types", ["daily"])
         download_types = [ETFDownloadType(dt) for dt in download_types_str]
 
         return cls(
             source=source,
-            tushare_token=config_data.get('tushare_token', ''),
-            base_dir=config_data.get('base_dir', 'raw/ETF'),
-            create_subdirs=config_data.get('create_subdirs', True),
-            start_date=config_data.get('start_date'),
-            end_date=config_data.get('end_date'),
-            years_back=config_data.get('years_back', 2),
-            max_retries=config_data.get('max_retries', 3),
-            retry_delay=config_data.get('retry_delay', 1.0),
-            request_delay=config_data.get('request_delay', 0.2),
-            timeout=config_data.get('timeout', 30),
-            batch_size=config_data.get('batch_size', 50),
-            parallel=config_data.get('parallel', False),
+            tushare_token=config_data.get("tushare_token", ""),
+            base_dir=config_data.get("base_dir", "raw/ETF"),
+            create_subdirs=config_data.get("create_subdirs", True),
+            start_date=config_data.get("start_date"),
+            end_date=config_data.get("end_date"),
+            years_back=config_data.get("years_back", 2),
+            max_retries=config_data.get("max_retries", 3),
+            retry_delay=config_data.get("retry_delay", 1.0),
+            request_delay=config_data.get("request_delay", 0.2),
+            timeout=config_data.get("timeout", 30),
+            batch_size=config_data.get("batch_size", 50),
+            parallel=config_data.get("parallel", False),
             download_types=download_types,
-            save_format=config_data.get('save_format', 'parquet'),
-            verbose=config_data.get('verbose', True)
+            save_format=config_data.get("save_format", "parquet"),
+            verbose=config_data.get("verbose", True),
         )
 
     def save_yaml(self, config_path: str) -> None:
         """保存配置到YAML文件"""
         config_data = {
-            'source': self.source.value,
-            'tushare_token': self.tushare_token,
-            'base_dir': self.base_dir,
-            'create_subdirs': self.create_subdirs,
-            'start_date': self.start_date,
-            'end_date': self.end_date,
-            'years_back': self.years_back,
-            'max_retries': self.max_retries,
-            'retry_delay': self.retry_delay,
-            'request_delay': self.request_delay,
-            'timeout': self.timeout,
-            'batch_size': self.batch_size,
-            'parallel': self.parallel,
-            'download_types': [dt.value for dt in self.download_types],
-            'save_format': self.save_format,
-            'verbose': self.verbose
+            "source": self.source.value,
+            "tushare_token": self.tushare_token,
+            "base_dir": self.base_dir,
+            "create_subdirs": self.create_subdirs,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "years_back": self.years_back,
+            "max_retries": self.max_retries,
+            "retry_delay": self.retry_delay,
+            "request_delay": self.request_delay,
+            "timeout": self.timeout,
+            "batch_size": self.batch_size,
+            "parallel": self.parallel,
+            "download_types": [dt.value for dt in self.download_types],
+            "save_format": self.save_format,
+            "verbose": self.verbose,
         }
 
-        with open(config_path, 'w', encoding='utf-8') as f:
-            yaml.dump(config_data, f, default_flow_style=False,
-                     allow_unicode=True, indent=2)
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(
+                config_data, f, default_flow_style=False, allow_unicode=True, indent=2
+            )
 
     def get_etf_list(self) -> List[str]:
         """从配置文件获取ETF列表"""

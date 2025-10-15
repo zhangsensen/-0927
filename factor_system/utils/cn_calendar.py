@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Iterable, Optional, Tuple, List, Set
-
+from typing import Iterable, List, Optional, Set, Tuple
 
 CN_MORNING_START = time(9, 30)
 CN_MORNING_END = time(11, 30)  # right-exclusive in slicing
@@ -53,8 +52,14 @@ class CNCalendar:
         if not self.is_trading_day(d):
             return []
         return [
-            (datetime.combine(d, CN_MORNING_START), datetime.combine(d, CN_MORNING_END)),
-            (datetime.combine(d, CN_AFTERNOON_START), datetime.combine(d, CN_AFTERNOON_END)),
+            (
+                datetime.combine(d, CN_MORNING_START),
+                datetime.combine(d, CN_MORNING_END),
+            ),
+            (
+                datetime.combine(d, CN_AFTERNOON_START),
+                datetime.combine(d, CN_AFTERNOON_END),
+            ),
         ]
 
     def iter_trading_days(self, start: date, end: date) -> Iterable[date]:
@@ -63,4 +68,3 @@ class CNCalendar:
             if self.is_trading_day(cur):
                 yield cur
             cur += timedelta(days=1)
-

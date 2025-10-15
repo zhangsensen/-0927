@@ -16,9 +16,9 @@ except ImportError:
 
 import pandas as pd
 
-from .models import ETFInfo, DownloadResult, DownloadStats, ETFStatus, ETFPriority
 from .config import ETFConfig, ETFDataSource, ETFDownloadType
 from .data_manager import ETFDataManager
+from .models import DownloadResult, DownloadStats, ETFInfo, ETFPriority, ETFStatus
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,9 @@ class ETFDownloadManager:
                 raise ImportError("需要安装tushare: pip install tushare")
 
             if not self.config.tushare_token:
-                raise ValueError("Tushare Token未设置，请设置config.tushare_token或环境变量TUSHARE_TOKEN")
+                raise ValueError(
+                    "Tushare Token未设置，请设置config.tushare_token或环境变量TUSHARE_TOKEN"
+                )
 
             self.pro = ts.pro_api(self.config.tushare_token)
             logger.info("Tushare数据源初始化完成")
@@ -87,26 +89,30 @@ class ETFDownloadManager:
 
         if self.config.source == ETFDataSource.TUSHARE:
             # 使用通用行情接口
-            start_date_str = self.config.start_date.replace('-', '')
-            end_date_str = self.config.end_date.replace('-', '')
+            start_date_str = self.config.start_date.replace("-", "")
+            end_date_str = self.config.end_date.replace("-", "")
 
             # 将日期格式转换为YYYY-MM-DD
-            start_date_formatted = f"{start_date_str[:4]}-{start_date_str[4:6]}-{start_date_str[6:8]}"
-            end_date_formatted = f"{end_date_str[:4]}-{end_date_str[4:6]}-{end_date_str[6:8]}"
+            start_date_formatted = (
+                f"{start_date_str[:4]}-{start_date_str[4:6]}-{start_date_str[6:8]}"
+            )
+            end_date_formatted = (
+                f"{end_date_str[:4]}-{end_date_str[4:6]}-{end_date_str[6:8]}"
+            )
 
             df = self._retry_request(
                 ts.pro_bar,
                 ts_code=etf_info.ts_code,
-                adj='qfq',  # 前复权
+                adj="qfq",  # 前复权
                 start_date=start_date_formatted,
                 end_date=end_date_formatted,
-                asset='FD',  # FD表示基金
-                freq='D'     # 日线
+                asset="FD",  # FD表示基金
+                freq="D",  # 日线
             )
 
             if df is not None and not df.empty:
                 # 数据预处理
-                df = df.sort_values('trade_date')
+                df = df.sort_values("trade_date")
                 df.reset_index(drop=True, inplace=True)
                 logger.info(f"成功下载 {len(df)} 条日线数据")
                 return df
@@ -138,24 +144,30 @@ class ETFDownloadManager:
                 self.pro.moneyflow,
                 ts_code=etf_info.ts_code,
                 start_date=start_date_str,
-                end_date=end_date_str
+                end_date=end_date_str,
             )
 
             if df is not None and not df.empty:
                 # 数据预处理
-                df['trade_date'] = pd.to_datetime(df['trade_date'])
-                df = df.sort_values('trade_date')
+                df["trade_date"] = pd.to_datetime(df["trade_date"])
+                df = df.sort_values("trade_date")
 
                 # 计算衍生指标
-                if 'buy_sm_amount' in df.columns and 'buy_md_amount' in df.columns:
-                    total_amount = (df['buy_sm_amount'] + df['buy_md_amount'] +
-                                  df.get('buy_lg_amount', 0) + df.get('buy_elg_amount', 0))
-                    df['net_inflow_rate'] = df['net_mf_amount'] / total_amount * 100
+                if "buy_sm_amount" in df.columns and "buy_md_amount" in df.columns:
+                    total_amount = (
+                        df["buy_sm_amount"]
+                        + df["buy_md_amount"]
+                        + df.get("buy_lg_amount", 0)
+                        + df.get("buy_elg_amount", 0)
+                    )
+                    df["net_inflow_rate"] = df["net_mf_amount"] / total_amount * 100
 
                 logger.info(f"成功下载 {len(df)} 条资金流向数据")
                 return df
             else:
-                logger.warning(f"ETF {etf_info.ts_code} 资金流向数据不可用（Tushare限制）")
+                logger.warning(
+                    f"ETF {etf_info.ts_code} 资金流向数据不可用（Tushare限制）"
+                )
                 return pd.DataFrame()
 
         return pd.DataFrame()
@@ -172,8 +184,8 @@ class ETFDownloadManager:
         if self.config.source == ETFDataSource.TUSHARE:
             df = self._retry_request(
                 self.pro.etf_basic,
-                list_status='L',  # L上市 D退市 P待上市
-                fields='ts_code,csname,extname,cname,index_code,index_name,setup_date,list_date,list_status,exchange,mgr_name,custod_name,mgt_fee,etf_type'
+                list_status="L",  # L上市 D退市 P待上市
+                fields="ts_code,csname,extname,cname,index_code,index_name,setup_date,list_date,list_status,exchange,mgr_name,custod_name,mgt_fee,etf_type",
             )
 
             if df is not None and not df.empty:
@@ -205,14 +217,18 @@ class ETFDownloadManager:
                 daily_df = self.download_etf_daily_data(etf_info)
                 if not daily_df.empty:
                     file_path = self.data_manager.save_daily_data(etf_info, daily_df)
-                    result.file_paths['daily'] = str(file_path)
+                    result.file_paths["daily"] = str(file_path)
                     result.daily_records = len(daily_df)
 
             # ETF没有资金流向数据，跳过
-            logger.info(f"ETF {etf_info.ts_code} 跳过资金流向数据下载（Tushare不提供ETF资金流向数据）")
+            logger.info(
+                f"ETF {etf_info.ts_code} 跳过资金流向数据下载（Tushare不提供ETF资金流向数据）"
+            )
 
             # 判断是否成功
-            result.success = (result.daily_records > 0) or (result.moneyflow_records > 0)
+            result.success = (result.daily_records > 0) or (
+                result.moneyflow_records > 0
+            )
 
             if result.success:
                 etf_info.download_status = ETFStatus.COMPLETED
@@ -255,12 +271,14 @@ class ETFDownloadManager:
             ETFPriority.RECOMMENDED: 4,
             ETFPriority.HEDGE: 5,
             ETFPriority.LOW: 6,
-            ETFPriority.OPTIONAL: 7
+            ETFPriority.OPTIONAL: 7,
         }
         etf_list.sort(key=lambda x: priority_order.get(x.priority, 999))
 
         for i, etf_info in enumerate(etf_list, 1):
-            logger.info(f"处理第 {i}/{len(etf_list)} 只ETF: {etf_info.ts_code} - {etf_info.name}")
+            logger.info(
+                f"处理第 {i}/{len(etf_list)} 只ETF: {etf_info.ts_code} - {etf_info.name}"
+            )
 
             result = self.download_single_etf(etf_info)
             stats.add_result(result)
@@ -274,7 +292,9 @@ class ETFDownloadManager:
                 logger.info(f"已完成 {self.config.batch_size} 只ETF的处理")
 
         stats.finish()
-        logger.info(f"批量下载完成，成功: {stats.success_count}, 失败: {stats.failed_count}")
+        logger.info(
+            f"批量下载完成，成功: {stats.success_count}, 失败: {stats.failed_count}"
+        )
 
         # 保存下载摘要
         if self.config.create_summary:
@@ -300,8 +320,8 @@ class ETFDownloadManager:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days_back)
 
-        self.config.start_date = start_date.strftime('%Y%m%d')
-        self.config.end_date = end_date.strftime('%Y%m%d')
+        self.config.start_date = start_date.strftime("%Y%m%d")
+        self.config.end_date = end_date.strftime("%Y%m%d")
 
         try:
             result = self.download_single_etf(etf_info)
@@ -331,7 +351,9 @@ class ETFDownloadManager:
 
         return validation_results
 
-    def get_download_progress(self, etf_list: List[ETFInfo]) -> Dict[str, Union[int, float, List[str]]]:
+    def get_download_progress(
+        self, etf_list: List[ETFInfo]
+    ) -> Dict[str, Union[int, float, List[str]]]:
         """
         获取下载进度
 
@@ -375,5 +397,5 @@ class ETFDownloadManager:
             "success_rate": round(success_rate, 1),
             "completed_etfs": completed_etfs,
             "failed_etfs": failed_etfs,
-            "pending_etfs": pending_etfs
+            "pending_etfs": pending_etfs,
         }

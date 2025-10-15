@@ -6,7 +6,7 @@ ETF下载管理器配置管理模块
 
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from .etf_config_standalone import ETFConfig
 
@@ -96,7 +96,7 @@ def get_default_configs() -> Dict[str, ETFConfig]:
             max_retries=2,
             retry_delay=0.5,
             request_delay=0.1,
-            batch_size=20
+            batch_size=20,
         )
 
     # 完整配置
@@ -110,7 +110,7 @@ def get_default_configs() -> Dict[str, ETFConfig]:
             retry_delay=2.0,
             request_delay=0.3,
             batch_size=20,
-            timeout=45
+            timeout=45,
         )
 
     return configs
@@ -169,11 +169,7 @@ def validate_config(config: ETFConfig) -> Dict[str, Any]:
     Returns:
         验证结果字典
     """
-    result = {
-        "valid": True,
-        "errors": [],
-        "warnings": []
-    }
+    result = {"valid": True, "errors": [], "warnings": []}
 
     # 检查Token
     if config.source.value == "tushare" and not config.tushare_token:
@@ -251,7 +247,7 @@ def setup_environment():
     issues = []
 
     # 检查Tushare Token
-    if not os.getenv('TUSHARE_TOKEN'):
+    if not os.getenv("TUSHARE_TOKEN"):
         issues.append("环境变量 TUSHARE_TOKEN 未设置")
 
     # 检查Python包

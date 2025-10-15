@@ -1,0 +1,39 @@
+{
+  "timestamp": "2025-10-15T14:59:29.919778",
+  "panel_file": "factor_output/etf_rotation_production/panel_FULL_20200102_20251014.parquet",
+  "metrics": {
+    "coverage": 0.9693651354111387,
+    "valid_factors": 209,
+    "total_factors": 209,
+    "samples": 56575,
+    "etfs": 43
+  },
+  "checks": {
+    "coverage_drop": {
+      "status": "PASS",
+      "message": "覆盖率正常（96.9%）",
+      "severity": "info"
+    },
+    "valid_factors": {
+      "status": "PASS",
+      "message": "有效因子数209充足",
+      "severity": "info"
+    },
+    "index_format": {
+      "status": "PASS",
+      "message": "索引规范: MultiIndex(symbol, date)",
+      "severity": "info"
+    },
+    "zero_variance": {
+      "status": "PASS",
+      "message": "无零方差因子",
+      "severity": "info"
+    }
+  },
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "warned": 0,
+    "failed": 0
+  }
+}

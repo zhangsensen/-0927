@@ -9,16 +9,18 @@ ETF配置管理器
 5. 配置验证和维护
 """
 
-import yaml
 import os
-from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 
 @dataclass
 class ETFInfo:
     """ETF信息数据类"""
+
     code: str
     name: str
     category: str
@@ -53,7 +55,7 @@ class ETFConfigManager:
     def load_config(self) -> None:
         """加载配置文件"""
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 self.config = yaml.safe_load(f)
             print(f"✅ 成功加载配置文件: {self.config_path}")
         except Exception as e:
@@ -62,9 +64,14 @@ class ETFConfigManager:
     def save_config(self) -> None:
         """保存配置文件"""
         try:
-            with open(self.config_path, 'w', encoding='utf-8') as f:
-                yaml.dump(self.config, f, default_flow_style=False,
-                         allow_unicode=True, indent=2)
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    self.config,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    indent=2,
+                )
             print(f"✅ 成功保存配置文件: {self.config_path}")
         except Exception as e:
             raise RuntimeError(f"保存配置文件失败: {e}")
@@ -73,18 +80,18 @@ class ETFConfigManager:
         """获取所有ETF列表"""
         etfs = []
 
-        if 'etf_list' not in self.config:
+        if "etf_list" not in self.config:
             return etfs
 
-        for category_name, category_data in self.config['etf_list'].items():
-            if 'etfs' in category_data:
-                for etf_data in category_data['etfs']:
+        for category_name, category_data in self.config["etf_list"].items():
+            if "etfs" in category_data:
+                for etf_data in category_data["etfs"]:
                     etf = ETFInfo(
-                        code=etf_data['code'],
-                        name=etf_data['name'],
-                        category=etf_data['category'],
-                        priority=etf_data['priority'],
-                        description=etf_data.get('description', '')
+                        code=etf_data["code"],
+                        name=etf_data["name"],
+                        category=etf_data["category"],
+                        priority=etf_data["priority"],
+                        description=etf_data.get("description", ""),
                     )
                     etfs.append(etf)
 
@@ -104,26 +111,29 @@ class ETFConfigManager:
         """按分类组获取ETF列表（如：core_etfs, sector_etfs等）"""
         etfs = []
 
-        if 'etf_list' not in self.config or group_name not in self.config['etf_list']:
+        if "etf_list" not in self.config or group_name not in self.config["etf_list"]:
             return etfs
 
-        group_data = self.config['etf_list'][group_name]
-        if 'etfs' in group_data:
-            for etf_data in group_data['etfs']:
+        group_data = self.config["etf_list"][group_name]
+        if "etfs" in group_data:
+            for etf_data in group_data["etfs"]:
                 etf = ETFInfo(
-                    code=etf_data['code'],
-                    name=etf_data['name'],
-                    category=etf_data['category'],
-                    priority=etf_data['priority'],
-                    description=etf_data.get('description', '')
+                    code=etf_data["code"],
+                    name=etf_data["name"],
+                    category=etf_data["category"],
+                    priority=etf_data["priority"],
+                    description=etf_data.get("description", ""),
                 )
                 etfs.append(etf)
 
         return etfs
 
-    def get_download_list(self, priorities: List[int] = None,
-                         categories: List[str] = None,
-                         exclude_categories: List[str] = None) -> List[str]:
+    def get_download_list(
+        self,
+        priorities: List[int] = None,
+        categories: List[str] = None,
+        exclude_categories: List[str] = None,
+    ) -> List[str]:
         """
         获取下载列表
 
@@ -147,7 +157,9 @@ class ETFConfigManager:
 
         # 排除特定类别
         if exclude_categories:
-            all_etfs = [etf for etf in all_etfs if etf.category not in exclude_categories]
+            all_etfs = [
+                etf for etf in all_etfs if etf.category not in exclude_categories
+            ]
 
         # 按优先级和代码排序
         all_etfs.sort(key=lambda x: (x.priority, x.code))
@@ -162,33 +174,35 @@ class ETFConfigManager:
             group_name: 分类组名称（如：sector_etfs）
             etf_info: ETF信息
         """
-        if 'etf_list' not in self.config:
-            self.config['etf_list'] = {}
+        if "etf_list" not in self.config:
+            self.config["etf_list"] = {}
 
-        if group_name not in self.config['etf_list']:
+        if group_name not in self.config["etf_list"]:
             # 创建新的分类组
-            self.config['etf_list'][group_name] = {
-                'name': group_name.replace('_', ' ').title(),
-                'description': f"{group_name}相关的ETF产品",
-                'etfs': []
+            self.config["etf_list"][group_name] = {
+                "name": group_name.replace("_", " ").title(),
+                "description": f"{group_name}相关的ETF产品",
+                "etfs": [],
             }
 
         # 检查是否已存在
-        existing_codes = [etf['code'] for etf in self.config['etf_list'][group_name]['etfs']]
+        existing_codes = [
+            etf["code"] for etf in self.config["etf_list"][group_name]["etfs"]
+        ]
         if etf_info.code in existing_codes:
             print(f"⚠️  ETF {etf_info.code} 已存在于 {group_name} 中")
             return
 
         # 添加新ETF
         new_etf = {
-            'code': etf_info.code,
-            'name': etf_info.name,
-            'category': etf_info.category,
-            'priority': etf_info.priority,
-            'description': etf_info.description
+            "code": etf_info.code,
+            "name": etf_info.name,
+            "category": etf_info.category,
+            "priority": etf_info.priority,
+            "description": etf_info.description,
         }
 
-        self.config['etf_list'][group_name]['etfs'].append(new_etf)
+        self.config["etf_list"][group_name]["etfs"].append(new_etf)
         print(f"✅ 成功添加ETF {etf_info.code} 到 {group_name}")
 
     def remove_etf(self, etf_code: str) -> bool:
@@ -201,15 +215,17 @@ class ETFConfigManager:
         Returns:
             是否成功删除
         """
-        if 'etf_list' not in self.config:
+        if "etf_list" not in self.config:
             return False
 
-        for group_name, group_data in self.config['etf_list'].items():
-            if 'etfs' in group_data:
-                original_count = len(group_data['etfs'])
-                group_data['etfs'] = [etf for etf in group_data['etfs'] if etf['code'] != etf_code]
+        for group_name, group_data in self.config["etf_list"].items():
+            if "etfs" in group_data:
+                original_count = len(group_data["etfs"])
+                group_data["etfs"] = [
+                    etf for etf in group_data["etfs"] if etf["code"] != etf_code
+                ]
 
-                if len(group_data['etfs']) < original_count:
+                if len(group_data["etfs"]) < original_count:
                     print(f"✅ 成功删除ETF {etf_code} 从 {group_name}")
                     return True
 
@@ -219,33 +235,33 @@ class ETFConfigManager:
     def get_statistics(self) -> Dict[str, Any]:
         """获取配置统计信息"""
         stats = {
-            'total_etfs': 0,
-            'categories': {},
-            'priorities': {1: 0, 2: 0, 3: 0},
-            'groups': {}
+            "total_etfs": 0,
+            "categories": {},
+            "priorities": {1: 0, 2: 0, 3: 0},
+            "groups": {},
         }
 
         all_etfs = self.get_all_etfs()
-        stats['total_etfs'] = len(all_etfs)
+        stats["total_etfs"] = len(all_etfs)
 
         # 统计类别
         for etf in all_etfs:
             # 类别统计
-            if etf.category not in stats['categories']:
-                stats['categories'][etf.category] = 0
-            stats['categories'][etf.category] += 1
+            if etf.category not in stats["categories"]:
+                stats["categories"][etf.category] = 0
+            stats["categories"][etf.category] += 1
 
             # 优先级统计
-            stats['priorities'][etf.priority] += 1
+            stats["priorities"][etf.priority] += 1
 
         # 统计分组
-        if 'etf_list' in self.config:
-            for group_name, group_data in self.config['etf_list'].items():
-                if 'etfs' in group_data:
-                    stats['groups'][group_name] = {
-                        'name': group_data.get('name', group_name),
-                        'count': len(group_data['etfs']),
-                        'description': group_data.get('description', '')
+        if "etf_list" in self.config:
+            for group_name, group_data in self.config["etf_list"].items():
+                if "etfs" in group_data:
+                    stats["groups"][group_name] = {
+                        "name": group_data.get("name", group_name),
+                        "count": len(group_data["etfs"]),
+                        "description": group_data.get("description", ""),
                     }
 
         return stats
@@ -260,39 +276,41 @@ class ETFConfigManager:
         issues = []
 
         # 检查基本结构
-        if 'etf_list' not in self.config:
+        if "etf_list" not in self.config:
             issues.append("缺少etf_list配置节点")
             return issues
 
         # 检查重复代码
         all_codes = []
-        for group_name, group_data in self.config['etf_list'].items():
-            if 'etfs' not in group_data:
+        for group_name, group_data in self.config["etf_list"].items():
+            if "etfs" not in group_data:
                 issues.append(f"分组 {group_name} 缺少etfs列表")
                 continue
 
-            for i, etf in enumerate(group_data['etfs']):
+            for i, etf in enumerate(group_data["etfs"]):
                 # 检查必需字段
-                required_fields = ['code', 'name', 'category', 'priority']
+                required_fields = ["code", "name", "category", "priority"]
                 for field in required_fields:
                     if field not in etf:
                         issues.append(f"{group_name}.etfs[{i}] 缺少必需字段: {field}")
 
                 # 检查代码重复
-                if 'code' in etf:
-                    if etf['code'] in all_codes:
+                if "code" in etf:
+                    if etf["code"] in all_codes:
                         issues.append(f"发现重复ETF代码: {etf['code']}")
                     else:
-                        all_codes.append(etf['code'])
+                        all_codes.append(etf["code"])
 
                     # 检查代码格式
-                    code = etf['code']
-                    if not ('.SH' in code or '.SZ' in code):
+                    code = etf["code"]
+                    if not (".SH" in code or ".SZ" in code):
                         issues.append(f"ETF代码格式不正确: {code}")
 
                 # 检查优先级
-                if 'priority' in etf and etf['priority'] not in [1, 2, 3]:
-                    issues.append(f"{group_name}.etfs[{i}] 优先级必须是1、2或3，当前为: {etf['priority']}")
+                if "priority" in etf and etf["priority"] not in [1, 2, 3]:
+                    issues.append(
+                        f"{group_name}.etfs[{i}] 优先级必须是1、2或3，当前为: {etf['priority']}"
+                    )
 
         return issues
 
@@ -306,20 +324,23 @@ class ETFConfigManager:
         print(f"类别数量: {len(stats['categories'])}")
 
         print("\n=== 按优先级分布 ===")
-        for priority, count in stats['priorities'].items():
+        for priority, count in stats["priorities"].items():
             priority_name = {1: "最高优先级", 2: "高优先级", 3: "一般优先级"}
             print(f"{priority_name[priority]}: {count}只")
 
         print("\n=== 按类别分布 ===")
-        for category, count in sorted(stats['categories'].items()):
+        for category, count in sorted(stats["categories"].items()):
             print(f"{category}: {count}只")
 
         print("\n=== 分组详情 ===")
-        for group_key, group_info in stats['groups'].items():
-            print(f"{group_info['name']}: {group_info['count']}只 - {group_info['description']}")
+        for group_key, group_info in stats["groups"].items():
+            print(
+                f"{group_info['name']}: {group_info['count']}只 - {group_info['description']}"
+            )
 
-    def export_download_list(self, output_file: str = None,
-                           priorities: List[int] = None) -> None:
+    def export_download_list(
+        self, output_file: str = None, priorities: List[int] = None
+    ) -> None:
         """
         导出下载列表
 
@@ -332,7 +353,7 @@ class ETFConfigManager:
 
         download_list = self.get_download_list(priorities=priorities)
 
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write("# ETF下载列表\n")
             f.write(f"# 生成时间: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"# 总数量: {len(download_list)}\n\n")
@@ -377,6 +398,8 @@ if __name__ == "__main__":
         print(f"  {etf.code} - {etf.name}")
 
     # 示例：导出下载列表
-    config_manager.export_download_list("etf_download_priority_1_2.txt", priorities=[1, 2])
+    config_manager.export_download_list(
+        "etf_download_priority_1_2.txt", priorities=[1, 2]
+    )
 
     print("\n=== 示例完成 ===")

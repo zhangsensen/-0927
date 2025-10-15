@@ -16,23 +16,20 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from etf_download_manager import (
-    ETFDownloadManager,
     ETFConfig,
     ETFDataSource,
+    ETFDownloadManager,
     ETFDownloadType,
+    ETFExchange,
     ETFListManager,
     ETFPriority,
-    ETFExchange
 )
 
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('etf_download.log')
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("etf_download.log")],
 )
 logger = logging.getLogger(__name__)
 
@@ -41,7 +38,8 @@ def create_default_config() -> ETFConfig:
     """创建默认配置"""
     try:
         from etf_download_manager.config import load_config
-        return load_config('etf_config')
+
+        return load_config("etf_config")
     except:
         return ETFConfig(
             source=ETFDataSource.TUSHARE,
@@ -53,7 +51,7 @@ def create_default_config() -> ETFConfig:
             request_delay=0.2,
             download_types=[ETFDownloadType.DAILY],
             save_format="parquet",
-            verbose=True
+            verbose=True,
         )
 
 
@@ -61,7 +59,8 @@ def create_quick_download_config() -> ETFConfig:
     """创建快速下载配置（只下载核心ETF）"""
     try:
         from etf_download_manager.config import load_config
-        config = load_config('etf_config')
+
+        config = load_config("etf_config")
         config.years_back = 1  # 只下载1年数据
         config.max_retries = 2
         config.retry_delay = 0.5
@@ -78,7 +77,7 @@ def create_quick_download_config() -> ETFConfig:
             request_delay=0.1,
             download_types=[ETFDownloadType.DAILY],
             save_format="parquet",
-            verbose=True
+            verbose=True,
         )
 
 
@@ -96,7 +95,7 @@ def create_full_download_config() -> ETFConfig:
         save_format="parquet",
         create_summary=True,
         verbose=True,
-        batch_size=20
+        batch_size=20,
     )
 
 
@@ -116,10 +115,12 @@ def print_etf_categories(list_manager: ETFListManager):
     print(f"总数量: {summary['total_count']}")
     print(f"必配ETF: {summary['must_have_count']} ⭐")
     print(f"高优先级: {summary['high_priority_count']}")
-    print(f"下载状态: 已完成{summary['completed_downloads']}, 待下载{summary['pending_downloads']}")
+    print(
+        f"下载状态: 已完成{summary['completed_downloads']}, 待下载{summary['pending_downloads']}"
+    )
 
     print("\n=== 分类统计 ===")
-    for category, count in sorted(summary['categories'].items()):
+    for category, count in sorted(summary["categories"].items()):
         print(f"  {category}: {count}个")
 
 
@@ -163,7 +164,9 @@ def download_core_etfs(config: ETFConfig, list_manager: ETFListManager) -> bool:
     return stats.success_count > 0
 
 
-def download_by_priority(config: ETFConfig, list_manager: ETFListManager, min_priority: str) -> bool:
+def download_by_priority(
+    config: ETFConfig, list_manager: ETFListManager, min_priority: str
+) -> bool:
     """按优先级下载ETF"""
     print(f"\n=== 按优先级下载ETF (>= {min_priority}) ===")
 
@@ -175,7 +178,9 @@ def download_by_priority(config: ETFConfig, list_manager: ETFListManager, min_pr
         return False
 
     # 筛选ETF
-    filtered_etfs = list_manager.filter_etfs(priorities=[p for p in ETFPriority if p.value >= min_priority])
+    filtered_etfs = list_manager.filter_etfs(
+        priorities=[p for p in ETFPriority if p.value >= min_priority]
+    )
 
     if not filtered_etfs:
         print(f"未找到优先级 >= {min_priority} 的ETF")
@@ -207,7 +212,9 @@ def download_by_priority(config: ETFConfig, list_manager: ETFListManager, min_pr
     return stats.success_count > 0
 
 
-def download_specific_etfs(config: ETFConfig, list_manager: ETFListManager, etf_codes: List[str]) -> bool:
+def download_specific_etfs(
+    config: ETFConfig, list_manager: ETFListManager, etf_codes: List[str]
+) -> bool:
     """下载指定的ETF"""
     print(f"\n=== 下载指定ETF ===")
     print(f"指定ETF: {', '.join(etf_codes)}")
@@ -255,7 +262,9 @@ def download_specific_etfs(config: ETFConfig, list_manager: ETFListManager, etf_
     return stats.success_count > 0
 
 
-def list_etfs(list_manager: ETFListManager, category: Optional[str] = None, max_items: int = 50):
+def list_etfs(
+    list_manager: ETFListManager, category: Optional[str] = None, max_items: int = 50
+):
     """列出ETF"""
     print("\n=== ETF列表 ===")
 
@@ -274,7 +283,9 @@ def list_etfs(list_manager: ETFListManager, category: Optional[str] = None, max_
     list_manager.print_etf_list(etfs, max_items=max_items)
 
 
-def update_etf_data(config: ETFConfig, list_manager: ETFListManager, etf_code: str, days_back: int = 30):
+def update_etf_data(
+    config: ETFConfig, list_manager: ETFListManager, etf_code: str, days_back: int = 30
+):
     """更新ETF数据"""
     print(f"\n=== 更新ETF数据 ===")
     print(f"ETF代码: {etf_code}")
@@ -334,9 +345,11 @@ def validate_data(config: ETFConfig, list_manager: ETFListManager):
 
     # 统计结果
     total_count = len(validation_results)
-    valid_count = sum(1 for r in validation_results.values() if r['overall_valid'])
-    daily_valid_count = sum(1 for r in validation_results.values() if r['daily_valid'])
-    moneyflow_valid_count = sum(1 for r in validation_results.values() if r['moneyflow_valid'])
+    valid_count = sum(1 for r in validation_results.values() if r["overall_valid"])
+    daily_valid_count = sum(1 for r in validation_results.values() if r["daily_valid"])
+    moneyflow_valid_count = sum(
+        1 for r in validation_results.values() if r["moneyflow_valid"]
+    )
 
     print(f"总ETF数量: {total_count}")
     print(f"数据完整: {valid_count} ({valid_count/total_count*100:.1f}%)")
@@ -344,7 +357,11 @@ def validate_data(config: ETFConfig, list_manager: ETFListManager):
     print(f"资金流向数据完整: {moneyflow_valid_count}")
 
     # 显示有问题的ETF
-    problematic_etfs = [code for code, result in validation_results.items() if not result['overall_valid']]
+    problematic_etfs = [
+        code
+        for code, result in validation_results.items()
+        if not result["overall_valid"]
+    ]
     if problematic_etfs:
         print(f"\n有问题的ETF ({len(problematic_etfs)}只):")
         for code in problematic_etfs[:10]:
@@ -352,9 +369,9 @@ def validate_data(config: ETFConfig, list_manager: ETFListManager):
             etf = list_manager.get_etf_by_ts_code(code)
             etf_name = etf.name if etf else "未知"
             issues = []
-            if result['daily_exists'] and not result['daily_valid']:
+            if result["daily_exists"] and not result["daily_valid"]:
                 issues.append("日线数据异常")
-            if result['moneyflow_exists'] and not result['moneyflow_valid']:
+            if result["moneyflow_exists"] and not result["moneyflow_valid"]:
                 issues.append("资金流向数据异常")
             print(f"  ❌ {code} - {etf_name}: {', '.join(issues)}")
 
@@ -364,28 +381,55 @@ def validate_data(config: ETFConfig, list_manager: ETFListManager):
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='ETF下载管理器')
-    parser.add_argument('--action', '-a', choices=[
-        'list', 'download-core', 'download-priority', 'download-specific',
-        'update', 'validate', 'summary'
-    ], default='summary', help='执行的动作')
+    parser = argparse.ArgumentParser(description="ETF下载管理器")
+    parser.add_argument(
+        "--action",
+        "-a",
+        choices=[
+            "list",
+            "download-core",
+            "download-priority",
+            "download-specific",
+            "update",
+            "validate",
+            "summary",
+        ],
+        default="summary",
+        help="执行的动作",
+    )
 
-    parser.add_argument('--config', '-c', choices=['default', 'quick', 'full', 'custom'],
-                       default='default', help='配置类型')
-    parser.add_argument('--config-file', help='自定义配置文件路径')
+    parser.add_argument(
+        "--config",
+        "-c",
+        choices=["default", "quick", "full", "custom"],
+        default="default",
+        help="配置类型",
+    )
+    parser.add_argument("--config-file", help="自定义配置文件路径")
 
-    parser.add_argument('--priority', '-p', choices=[p.value for p in ETFPriority],
-                       default='must_have', help='最小优先级 (用于download-priority)')
+    parser.add_argument(
+        "--priority",
+        "-p",
+        choices=[p.value for p in ETFPriority],
+        default="must_have",
+        help="最小优先级 (用于download-priority)",
+    )
 
-    parser.add_argument('--etf-codes', '-e', nargs='+', help='指定ETF代码 (用于download-specific)')
-    parser.add_argument('--etf-code', help='单个ETF代码 (用于update)')
+    parser.add_argument(
+        "--etf-codes", "-e", nargs="+", help="指定ETF代码 (用于download-specific)"
+    )
+    parser.add_argument("--etf-code", help="单个ETF代码 (用于update)")
 
-    parser.add_argument('--category', help='ETF分类 (用于list)')
-    parser.add_argument('--max-items', type=int, default=50, help='最大显示数量 (用于list)')
+    parser.add_argument("--category", help="ETF分类 (用于list)")
+    parser.add_argument(
+        "--max-items", type=int, default=50, help="最大显示数量 (用于list)"
+    )
 
-    parser.add_argument('--days-back', type=int, default=30, help='更新天数 (用于update)')
+    parser.add_argument(
+        "--days-back", type=int, default=30, help="更新天数 (用于update)"
+    )
 
-    parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
+    parser.add_argument("--verbose", "-v", action="store_true", help="详细输出")
 
     args = parser.parse_args()
 
@@ -397,7 +441,7 @@ def main():
     print_banner()
 
     # 加载配置
-    if args.config == 'custom' and args.config_file:
+    if args.config == "custom" and args.config_file:
         try:
             config = ETFConfig.from_yaml(args.config_file)
             print(f"✅ 已加载自定义配置: {args.config_file}")
@@ -406,9 +450,9 @@ def main():
             return
     else:
         config_map = {
-            'default': create_default_config,
-            'quick': create_quick_download_config,
-            'full': create_full_download_config
+            "default": create_default_config,
+            "quick": create_quick_download_config,
+            "full": create_full_download_config,
         }
         config = config_map[args.config]()
         print(f"✅ 使用{args.config}配置")
@@ -432,34 +476,34 @@ def main():
     # 执行动作
     success = False
 
-    if args.action == 'summary':
+    if args.action == "summary":
         list_manager.print_summary()
         print_etf_categories(list_manager)
         success = True
 
-    elif args.action == 'list':
+    elif args.action == "list":
         list_etfs(list_manager, args.category, args.max_items)
         success = True
 
-    elif args.action == 'download-core':
+    elif args.action == "download-core":
         success = download_core_etfs(config, list_manager)
 
-    elif args.action == 'download-priority':
+    elif args.action == "download-priority":
         success = download_by_priority(config, list_manager, args.priority)
 
-    elif args.action == 'download-specific':
+    elif args.action == "download-specific":
         if not args.etf_codes:
             print("❌ 请指定ETF代码 (--etf-codes)")
             return
         success = download_specific_etfs(config, list_manager, args.etf_codes)
 
-    elif args.action == 'update':
+    elif args.action == "update":
         if not args.etf_code:
             print("❌ 请指定ETF代码 (--etf-code)")
             return
         success = update_etf_data(config, list_manager, args.etf_code, args.days_back)
 
-    elif args.action == 'validate':
+    elif args.action == "validate":
         validate_data(config, list_manager)
         success = True
 

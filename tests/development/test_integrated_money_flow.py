@@ -13,10 +13,10 @@ sys.path.insert(0, str(project_root))
 
 from factor_system.factor_engine.core.engine import FactorEngine
 from factor_system.factor_engine.core.registry import get_global_registry
-from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
 from factor_system.factor_engine.providers.money_flow_provider_engine import (
     MoneyFlowDataProvider,
 )
+from factor_system.factor_engine.providers.parquet_provider import ParquetDataProvider
 
 
 def test_integrated_money_flow():

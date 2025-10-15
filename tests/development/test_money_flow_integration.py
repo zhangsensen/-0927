@@ -10,7 +10,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # 设置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # 添加项目路径
 project_root = Path(__file__).parent.parent.parent
@@ -30,8 +32,8 @@ def test_money_flow_integration():
         print("\n1. 测试资金流因子注册...")
         from factor_system.factor_engine.core.registry import get_global_registry
         from factor_system.factor_engine.factors.money_flow.registry import (
+            get_money_flow_factor_sets,
             register_money_flow_factors,
-            get_money_flow_factor_sets
         )
 
         registry = get_global_registry()
@@ -39,9 +41,10 @@ def test_money_flow_integration():
 
         # 检查注册的资金流因子
         money_flow_factors = [
-            f for f in registry.list_factors()
-            if registry.get_metadata(f) and
-               registry.get_metadata(f).get('data_source') == 'money_flow'
+            f
+            for f in registry.list_factors()
+            if registry.get_metadata(f)
+            and registry.get_metadata(f).get("data_source") == "money_flow"
         ]
 
         print(f"   ✅ 注册资金流因子: {len(money_flow_factors)}个")
@@ -49,11 +52,12 @@ def test_money_flow_integration():
 
         # 2. 测试资金流数据提供者
         print("\n2. 测试资金流数据提供者...")
-        from factor_system.factor_engine.providers.money_flow_provider_engine import MoneyFlowDataProvider
+        from factor_system.factor_engine.providers.money_flow_provider_engine import (
+            MoneyFlowDataProvider,
+        )
 
         provider = MoneyFlowDataProvider(
-            money_flow_dir=project_root / "raw/SH/money_flow",
-            enforce_t_plus_1=True
+            money_flow_dir=project_root / "raw/SH/money_flow", enforce_t_plus_1=True
         )
 
         # 测试数据加载
@@ -66,8 +70,12 @@ def test_money_flow_integration():
         )
 
         print(f"   ✅ 资金流数据加载: {money_flow_data.shape}")
-        if not money_flow_data.empty and isinstance(money_flow_data.index, pd.MultiIndex):
-            print(f"   股票: {money_flow_data.index.get_level_values('symbol').unique().tolist()}")
+        if not money_flow_data.empty and isinstance(
+            money_flow_data.index, pd.MultiIndex
+        ):
+            print(
+                f"   股票: {money_flow_data.index.get_level_values('symbol').unique().tolist()}"
+            )
         elif not money_flow_data.empty:
             print(f"   数据索引类型: {type(money_flow_data.index)}")
 
@@ -78,14 +86,18 @@ def test_money_flow_integration():
 
         # 3. 测试增强因子引擎
         print("\n3. 测试增强因子引擎...")
-        from factor_system.factor_engine.core.enhanced_engine import EnhancedFactorEngine
+        from factor_system.factor_engine.core.enhanced_engine import (
+            EnhancedFactorEngine,
+        )
 
         # 创建简单价格提供者（用于测试）
         class SimplePriceProvider:
             def load_price_data(self, symbols, timeframe, start_date, end_date):
                 return pd.DataFrame()
 
-            def load_fundamental_data(self, symbols, fields, start_date=None, end_date=None):
+            def load_fundamental_data(
+                self, symbols, fields, start_date=None, end_date=None
+            ):
                 return pd.DataFrame()
 
             def get_trading_calendar(self, market, start_date, end_date):
@@ -95,15 +107,18 @@ def test_money_flow_integration():
 
         # 创建增强引擎
         enhanced_engine = EnhancedFactorEngine(
-            data_provider=price_provider,
-            registry=registry
+            data_provider=price_provider, registry=registry
         )
 
         print("   ✅ 增强因子引擎创建成功")
 
         # 4. 测试因子计算
         print("\n4. 测试因子计算...")
-        test_factors = ["MainNetInflow_Rate", "OrderConcentration", "MoneyFlow_Hierarchy"]
+        test_factors = [
+            "MainNetInflow_Rate",
+            "OrderConcentration",
+            "MoneyFlow_Hierarchy",
+        ]
 
         start_dt = datetime(2024, 8, 1)
         end_dt = datetime(2024, 12, 31)
@@ -128,6 +143,7 @@ def test_money_flow_integration():
         except Exception as e:
             print(f"   ❌ 因子计算失败: {e}")
             import traceback
+
             traceback.print_exc()
 
         # 5. 测试因子集
@@ -146,6 +162,7 @@ def test_money_flow_integration():
     except Exception as e:
         print(f"\n❌ 测试失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -16,13 +16,21 @@ logger = logging.getLogger(__name__)
 class AShareDataLoader:
     """A股数据加载器"""
 
-    def __init__(self, data_root: str = "/Users/zhangshenshen/深度量化0927/raw/SH"):
+    def __init__(self, data_root: str | None = None):
         """
         初始化数据加载器
 
         Args:
             data_root: 原始数据根目录
         """
+        if data_root is None:
+            try:
+                from scripts.path_utils import get_paths
+
+                paths = get_paths()
+                data_root = Path(paths["raw_root"]) / "SH"
+            except Exception:
+                data_root = Path("raw/SH")
         self.data_root = Path(data_root)
         if not self.data_root.exists():
             raise ValueError(f"数据目录不存在: {self.data_root}")
@@ -79,7 +87,7 @@ class AShareDataLoader:
             df.index = df.index.tz_localize("Asia/Shanghai")
         else:
             df.index = df.index.tz_convert("Asia/Shanghai")
-        
+
         df = df.sort_index()
 
         # 字段映射：turnover -> amount
@@ -104,7 +112,9 @@ class AShareDataLoader:
         # 数据质量检查
         null_counts = result.isnull().sum()
         if null_counts.any():
-            logger.warning(f"{symbol} 存在空值: {null_counts[null_counts > 0].to_dict()}")
+            logger.warning(
+                f"{symbol} 存在空值: {null_counts[null_counts > 0].to_dict()}"
+            )
 
         logger.info(
             f"✅ {symbol} 数据加载完成: {len(result)} 行, "

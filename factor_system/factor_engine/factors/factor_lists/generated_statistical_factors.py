@@ -13,7 +13,6 @@ GENERATED_STATISTICAL_FACTORS = [
     "Momentum12",
     "Momentum15",
     "Momentum20",
-
     # 位置指标
     "Position5",
     "Position8",
@@ -23,7 +22,6 @@ GENERATED_STATISTICAL_FACTORS = [
     "Position20",
     "Position25",
     "Position30",
-
     # 趋势指标
     "Trend5",
     "Trend8",
@@ -32,23 +30,19 @@ GENERATED_STATISTICAL_FACTORS = [
     "Trend15",
     "Trend20",
     "Trend25",
-
     # 随机指标变体
     "STOCH_7_10",
     "STOCH_10_14",
     "STOCH_14_20",
-
     # 统计计算
     "MSTD5",
     "MSTD10",
     "MSTD15",
-
     # 固定回望指标
     "FIXLB3",
     "FIXLB5",
     "FIXLB8",
     "FIXLB10",
-
     # 浮动统计
     "FMEAN5",
     "FMIN5",
@@ -66,25 +60,21 @@ GENERATED_STATISTICAL_FACTORS = [
     "FMAX10",
     "FMAX15",
     "FMAX20",
-
     # 词法分析
     "LEXLB3",
     "LEXLB5",
     "LEXLB8",
     "LEXLB10",
-
     # 均值回望
     "MEANLB3",
     "MEANLB5",
     "MEANLB8",
     "MEANLB10",
-
     # 趋势回望
     "TRENDLB3",
     "TRENDLB5",
     "TRENDLB8",
     "TRENDLB10",
-
     # 随机过程
     "RAND",
     "RANDX",
@@ -93,7 +83,6 @@ GENERATED_STATISTICAL_FACTORS = [
     "RPROBX",
     "RPROBCX",
     "RPROBNX",
-
     # 随机指标扩展
     "STX",
     "STCX",

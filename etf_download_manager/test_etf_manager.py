@@ -13,23 +13,27 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+
 def test_imports():
     """测试模块导入"""
     print("=== 测试模块导入 ===")
 
     try:
         from etf_download_manager import (
-            ETFDownloadManager,
             ETFConfig,
+            ETFDownloadManager,
+            ETFDownloadType,
             ETFListManager,
-            ETFDownloadType
         )
+
         print("✅ 核心模块导入成功")
 
         from etf_download_manager.config import load_config, setup_environment
+
         print("✅ 配置模块导入成功")
 
-        from etf_download_manager.core.models import ETFInfo, DownloadResult
+        from etf_download_manager.core.models import DownloadResult, ETFInfo
+
         print("✅ 模型模块导入成功")
 
         return True
@@ -112,6 +116,7 @@ def test_data_manager():
 
         # 清理测试目录
         import shutil
+
         if Path("test_raw").exists():
             shutil.rmtree("test_raw")
             print("✅ 测试目录清理完成")
@@ -147,7 +152,7 @@ def test_token():
     """测试Token设置"""
     print("\n=== 测试Token设置 ===")
 
-    token = os.getenv('TUSHARE_TOKEN')
+    token = os.getenv("TUSHARE_TOKEN")
     if token:
         print(f"✅ Token已设置 (长度: {len(token)})")
         print(f"   Token预览: {token[:8]}...{token[-8:]}")
@@ -162,7 +167,7 @@ def test_tushare_connection():
     """测试Tushare连接"""
     print("\n=== 测试Tushare连接 ===")
 
-    token = os.getenv('TUSHARE_TOKEN')
+    token = os.getenv("TUSHARE_TOKEN")
     if not token:
         print("❌ Token未设置，跳过Tushare连接测试")
         return False
@@ -174,7 +179,7 @@ def test_tushare_connection():
         pro = ts.pro_api(token)
 
         # 测试获取交易日历（轻量级API）
-        df = pro.trade_cal(exchange='SSE', start_date='20240101', end_date='20240105')
+        df = pro.trade_cal(exchange="SSE", start_date="20240101", end_date="20240105")
 
         if df is not None and not df.empty:
             print(f"✅ Tushare连接成功")

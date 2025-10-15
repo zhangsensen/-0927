@@ -9,19 +9,19 @@ from pathlib import Path
 
 from factor_system.factor_engine.core.registry import FactorRegistry
 from factor_system.factor_engine.factors.money_flow.core import (
-    MainNetInflow_Rate,
-    LargeOrder_Ratio,
-    SuperLargeOrder_Ratio,
-    OrderConcentration,
-    MoneyFlow_Hierarchy,
-    MoneyFlow_Consensus,
-    MainFlow_Momentum,
     Flow_Price_Divergence,
+    LargeOrder_Ratio,
+    MainFlow_Momentum,
+    MainNetInflow_Rate,
+    MoneyFlow_Consensus,
+    MoneyFlow_Hierarchy,
+    OrderConcentration,
+    SuperLargeOrder_Ratio,
 )
 from factor_system.factor_engine.factors.money_flow.enhanced import (
-    Institutional_Absorption,
-    Flow_Tier_Ratio_Delta,
     Flow_Reversal_Ratio,
+    Flow_Tier_Ratio_Delta,
+    Institutional_Absorption,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,6 @@ def register_money_flow_factors(registry: FactorRegistry):
         MoneyFlow_Consensus,
         MainFlow_Momentum,
         Flow_Price_Divergence,
-
         # 增强因子
         Institutional_Absorption,
         Flow_Tier_Ratio_Delta,

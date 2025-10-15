@@ -5,16 +5,23 @@ SH股票资金流数据下载脚本
 基于Tushare Pro接口下载个股资金流向数据
 """
 
+import logging
 import os
 import time
+from datetime import datetime, timedelta
+
 import pandas as pd
 import tushare as ts
-from datetime import datetime, timedelta
-import logging
 
 # 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+from scripts.path_utils import get_paths
+
+paths = get_paths()
+
 
 class SHMoneyFlowDownloader:
     def __init__(self, token=None):
@@ -28,7 +35,7 @@ class SHMoneyFlowDownloader:
             ts.set_token(token)
         else:
             # 尝试从环境变量获取
-            token = os.getenv('TUSHARE_TOKEN')
+            token = os.getenv("TUSHARE_TOKEN")
             if token:
                 ts.set_token(token)
             else:
@@ -38,8 +45,10 @@ class SHMoneyFlowDownloader:
                 ts.set_token(token)
 
         self.pro = ts.pro_api()
-        self.sh_dir = "/Users/zhangshenshen/深度量化0927/raw/SH"
-        self.output_dir = "/Users/zhangshenshen/深度量化0927/raw/SH/money_flow"
+        self.sh_dir = os.environ.get("SH_DATA_DIR", str(paths["raw_root"] / "SH"))
+        self.output_dir = os.environ.get(
+            "SH_MONEYFLOW_OUT", str(paths["raw_root"] / "SH" / "money_flow")
+        )
 
     def get_stock_list(self):
         """
@@ -47,8 +56,8 @@ class SHMoneyFlowDownloader:
         """
         stock_files = []
         for file in os.listdir(self.sh_dir):
-            if file.endswith('.parquet'):
-                stock_code = file.replace('.parquet', '')
+            if file.endswith(".parquet"):
+                stock_code = file.replace(".parquet", "")
                 stock_files.append(stock_code)
 
         logger.info(f"发现 {len(stock_files)} 只股票文件")
@@ -86,13 +95,13 @@ class SHMoneyFlowDownloader:
         """
         for attempt in range(max_retries):
             try:
-                logger.info(f"下载 {stock_code} 资金流向数据 (尝试 {attempt+1}/{max_retries})")
+                logger.info(
+                    f"下载 {stock_code} 资金流向数据 (尝试 {attempt+1}/{max_retries})"
+                )
 
                 # 调用资金流向接口
                 df = self.pro.moneyflow(
-                    ts_code=stock_code,
-                    start_date=start_date,
-                    end_date=end_date
+                    ts_code=stock_code, start_date=start_date, end_date=end_date
                 )
 
                 if df is not None and not df.empty:
@@ -103,7 +112,9 @@ class SHMoneyFlowDownloader:
                     return None
 
             except Exception as e:
-                logger.error(f"下载 {stock_code} 资金流向数据失败 (尝试 {attempt+1}): {e}")
+                logger.error(
+                    f"下载 {stock_code} 资金流向数据失败 (尝试 {attempt+1}): {e}"
+                )
                 if attempt < max_retries - 1:
                     time.sleep(2)  # 等待2秒后重试
 
@@ -201,8 +212,7 @@ def main():
 
         # 批量下载
         success, failed = downloader.download_all(
-            stock_list=stock_list,
-            delay=1.2  # 请求间隔1.2秒，避免频率限制
+            stock_list=stock_list, delay=1.2  # 请求间隔1.2秒，避免频率限制
         )
 
         logger.info(f"=== 下载完成 ===")

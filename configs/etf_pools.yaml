@@ -1,0 +1,202 @@
+# ETF分池配置
+# 用途：A股与QDII分池生产与回测，避免时区/节假日错窗
+
+# 全局路径配置（可被环境变量覆盖）
+paths:
+  raw_root: "raw"                                    # 原始数据根目录
+  output_root: "factor_output/etf_rotation_production"  # 产出根目录
+  logs_root: "logs"                                  # 日志根目录
+  snapshots_root: "snapshots"                        # 快照根目录
+
+# CI 阈值配置（可被命令行参数覆盖）
+ci_thresholds:
+  min_annual_return: 0.08      # 年化收益最小阈值
+  max_drawdown: -0.30          # 最大回撤下限（负数）
+  min_sharpe: 0.50             # 夏普最小阈值
+  min_winrate: 0.45            # 月胜率最小阈值
+  min_coverage: 0.80           # 覆盖率最小阈值
+  min_factors: 8               # 有效因子数最小阈值
+
+# 容量约束默认配置
+capacity_defaults:
+  max_adv_pct: 0.05            # ADV% 默认阈值
+  max_single_weight: 0.25      # 单只最大权重
+
+pools:
+  A_SHARE:
+    name: "A股ETF"
+    description: "境内A股市场ETF"
+    calendar: "SSE"  # 上交所交易日历
+    timezone: "Asia/Shanghai"
+    trading_hours:
+      morning: ["09:30", "11:30"]
+      afternoon: ["13:00", "15:00"]
+    symbols:
+      # 宽基指数
+      - "510050.SH"  # 50ETF
+      - "510300.SH"  # 300ETF
+      - "510500.SH"  # 500ETF
+      - "159919.SZ"  # 300ETF
+      - "159922.SZ"  # 500ETF
+      
+      # 行业ETF
+      - "512880.SH"  # 证券ETF
+      - "512000.SH"  # 券商ETF
+      - "159949.SZ"  # 创业板50
+      - "159915.SZ"  # 创业板
+      
+      # 主题ETF
+      - "515790.SH"  # 光伏ETF
+      - "516160.SH"  # 新能源
+      
+      # 其他A股ETF
+      - "159801.SZ"
+      - "159819.SZ"
+      - "159859.SZ"
+      - "159883.SZ"
+      - "159920.SZ"
+      - "159928.SZ"
+      - "159992.SZ"
+      - "159995.SZ"
+  
+  QDII:
+    name: "QDII ETF"
+    description: "境外市场QDII ETF"
+    calendar: "NYSE"  # 纽交所交易日历（主要参考）
+    timezone: "America/New_York"
+    trading_hours:
+      regular: ["09:30", "16:00"]
+    symbols:
+      # 美股指数
+      - "513100.SH"  # 纳指ETF
+      - "513500.SH"  # 标普500
+      
+      # 港股指数
+      - "513660.SH"  # 恒生ETF
+      - "513050.SH"  # 中概互联
+      - "513130.SH"  # 恒生科技
+      
+      # 其他QDII
+      # （根据实际持仓添加）
+  
+  OTHER:
+    name: "其他ETF"
+    description: "其他主题/行业ETF"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    trading_hours:
+      morning: ["09:30", "11:30"]
+      afternoon: ["13:00", "15:00"]
+    symbols:
+      # 债券ETF
+      - "511010.SH"
+      - "511260.SH"
+      - "511380.SH"
+      
+      # 行业ETF
+      - "512010.SH"
+      - "512100.SH"
+      - "512400.SH"
+      - "512480.SH"
+      - "512660.SH"
+      - "512690.SH"
+      - "512720.SH"
+      - "512800.SH"
+      - "512980.SH"
+      
+      # 主题ETF
+      - "515030.SH"
+      - "515180.SH"
+      - "515210.SH"
+      - "515650.SH"
+      - "516090.SH"
+      - "516520.SH"
+      
+      # 科创板
+      - "588000.SH"
+      - "588200.SH"
+      
+      # 其他
+      - "518850.SH"
+      - "518880.SH"
+      - "159998.SZ"
+
+# 分池策略配置
+strategy:
+  # 分池生产
+  production:
+    separate_panels: true  # 分池生成面板
+    output_dir: "factor_output/{pool_name}"
+    
+  # 分池回测
+  backtest:
+    separate_runs: true  # 分池回测
+    align_calendar: true  # 对齐交易日历
+    
+  # 顶层整合
+  portfolio:
+    combine_pools: true
+    weights:
+      A_SHARE: 0.7  # A股权重70%
+      QDII: 0.3     # QDII权重30%
+    rebalance_freq: "M"  # 月度调仓
+
+# ETF分类（用于容量约束统计，可按需扩展维护）
+etf_categories:
+  # 宽基
+  "510050.SH": "宽基-上证50"
+  "510300.SH": "宽基-沪深300"
+  "159919.SZ": "宽基-沪深300"
+  "510500.SH": "宽基-中证500"
+  "159922.SZ": "宽基-中证500"
+
+  # 行业
+  "512880.SH": "行业-证券"
+  "512000.SH": "行业-券商"
+  "159949.SZ": "行业-创业板50"
+  "159915.SZ": "行业-创业板"
+  "512010.SH": "行业-医药"
+  "512100.SH": "行业-金融"
+  "512400.SH": "行业-有色"
+  "512480.SH": "行业-半导体"
+  "512660.SH": "行业-军工"
+  "512690.SH": "行业-酒"
+  "512720.SH": "行业-计算机"
+  "512800.SH": "行业-银行"
+  "512980.SH": "行业-传媒"
+
+  # 主题
+  "515790.SH": "主题-光伏"
+  "516160.SH": "主题-新能源"
+  "515030.SH": "主题-芯片"
+  "515180.SH": "主题-消费电子"
+  "515210.SH": "主题-生物医药"
+  "515650.SH": "主题-新能车"
+  "516090.SH": "主题-机器人"
+  "516520.SH": "主题-算力"
+
+# 质量控制
+quality:
+  min_trading_days: 252  # 最少交易日数
+  min_liquidity: 1000000  # 最小日均成交额（元）
+  max_missing_rate: 0.05  # 最大缺失率5%
+
+# 资金与约束配置
+capital_constraints:
+  A_SHARE:
+    target_capital: 7000000  # 700万（70%）
+    max_single_weight: 0.25  # 单只最大25%
+    max_sector_weight: 0.40  # 单行业最大40%
+    max_adv_pct: 0.05  # ADV 5%
+  
+  QDII:
+    target_capital: 3000000  # 300万（30%）
+    max_single_weight: 0.30  # 单只最大30%
+    max_sector_weight: 0.50  # 单行业最大50%
+    max_adv_pct: 0.03  # ADV 3%（流动性较差）
+  
+  OTHER:
+    target_capital: 0  # 不参与组合
+    max_single_weight: 0.20
+    max_sector_weight: 0.30
+    max_adv_pct: 0.05

@@ -5,28 +5,35 @@
 支持5600+只股票的资金流数据下载，具有断点续传和进度监控功能
 """
 
-import os
-import time
-import pandas as pd
-import tushare as ts
-from datetime import datetime, timedelta
-import logging
 import json
-from pathlib import Path
-import traceback
+import logging
+import os
 import signal
 import sys
+import time
+import traceback
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import pandas as pd
+import tushare as ts
 
 # 配置日志
+from scripts.path_utils import get_paths
+
+paths = get_paths()
+log_dir = Path(paths["logs_root"])
+log_dir.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler('/Users/zhangshenshen/深度量化0927/moneyflow_download.log'),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler(str(log_dir / "moneyflow_download.log")),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
+
 
 class BatchMoneyFlowDownloader:
     def __init__(self, token=None):
@@ -40,7 +47,7 @@ class BatchMoneyFlowDownloader:
             ts.set_token(token)
         else:
             # 尝试从环境变量获取
-            token = os.getenv('TUSHARE_TOKEN')
+            token = os.getenv("TUSHARE_TOKEN")
             if token:
                 ts.set_token(token)
             else:
@@ -50,10 +57,13 @@ class BatchMoneyFlowDownloader:
                 ts.set_token(token)
 
         self.pro = ts.pro_api()
-        self.source_dir = "/Volumes/Share_Data/data/output/1d"
-        self.output_dir = "/Volumes/Share_Data/data/output/money_flow"
-        self.progress_file = "/Users/zhangshenshen/深度量化0927/moneyflow_progress.json"
-        self.error_file = "/Users/zhangshenshen/深度量化0927/moneyflow_errors.json"
+        # 目录配置（可通过环境变量覆盖）
+        self.source_dir = os.environ.get("MONEYFLOW_SOURCE_DIR", str(paths["raw_root"]))
+        self.output_dir = os.environ.get(
+            "MONEYFLOW_OUTPUT_DIR", str(Path(paths["raw_root"]) / "money_flow")
+        )
+        self.progress_file = str(log_dir / "moneyflow_progress.json")
+        self.error_file = str(log_dir / "moneyflow_errors.json")
 
         # 下载参数
         self.start_date = "20240823"
@@ -83,8 +93,8 @@ class BatchMoneyFlowDownloader:
         """
         stock_files = []
         for file in os.listdir(self.source_dir):
-            if file.endswith('.parquet'):
-                stock_code = file.replace('.parquet', '')
+            if file.endswith(".parquet"):
+                stock_code = file.replace(".parquet", "")
                 stock_files.append(stock_code)
 
         logger.info(f"发现 {len(stock_files)} 只股票文件")
@@ -96,11 +106,13 @@ class BatchMoneyFlowDownloader:
         """
         if os.path.exists(self.progress_file):
             try:
-                with open(self.progress_file, 'r') as f:
+                with open(self.progress_file, "r") as f:
                     progress = json.load(f)
-                    self.processed_stocks = set(progress.get('processed_stocks', []))
-                    self.failed_stocks = set(progress.get('failed_stocks', []))
-                logger.info(f"加载进度: 已处理 {len(self.processed_stocks)} 只股票, 失败 {len(self.failed_stocks)} 只")
+                    self.processed_stocks = set(progress.get("processed_stocks", []))
+                    self.failed_stocks = set(progress.get("failed_stocks", []))
+                logger.info(
+                    f"加载进度: 已处理 {len(self.processed_stocks)} 只股票, 失败 {len(self.failed_stocks)} 只"
+                )
             except Exception as e:
                 logger.warning(f"加载进度文件失败: {e}")
 
@@ -110,13 +122,13 @@ class BatchMoneyFlowDownloader:
         """
         try:
             progress = {
-                'processed_stocks': list(self.processed_stocks),
-                'failed_stocks': list(self.failed_stocks),
-                'timestamp': datetime.now().isoformat(),
-                'total_processed': len(self.processed_stocks),
-                'total_failed': len(self.failed_stocks)
+                "processed_stocks": list(self.processed_stocks),
+                "failed_stocks": list(self.failed_stocks),
+                "timestamp": datetime.now().isoformat(),
+                "total_processed": len(self.processed_stocks),
+                "total_failed": len(self.failed_stocks),
             }
-            with open(self.progress_file, 'w') as f:
+            with open(self.progress_file, "w") as f:
                 json.dump(progress, f, indent=2)
         except Exception as e:
             logger.error(f"保存进度文件失败: {e}")
@@ -126,16 +138,16 @@ class BatchMoneyFlowDownloader:
         记录错误信息
         """
         error_info = {
-            'stock_code': stock_code,
-            'error': error_msg,
-            'timestamp': datetime.now().isoformat(),
-            'traceback': traceback.format_exc()
+            "stock_code": stock_code,
+            "error": error_msg,
+            "timestamp": datetime.now().isoformat(),
+            "traceback": traceback.format_exc(),
         }
 
         errors = []
         if os.path.exists(self.error_file):
             try:
-                with open(self.error_file, 'r') as f:
+                with open(self.error_file, "r") as f:
                     errors = json.load(f)
             except Exception:
                 errors = []
@@ -143,7 +155,7 @@ class BatchMoneyFlowDownloader:
         errors.append(error_info)
 
         try:
-            with open(self.error_file, 'w') as f:
+            with open(self.error_file, "w") as f:
                 json.dump(errors, f, indent=2)
         except Exception as e:
             logger.error(f"保存错误日志失败: {e}")
@@ -162,15 +174,17 @@ class BatchMoneyFlowDownloader:
                 return False
 
             # 检查日期范围是否符合要求
-            df['trade_date'] = pd.to_datetime(df['trade_date'])
-            min_date = df['trade_date'].min().strftime('%Y%m%d')
-            max_date = df['trade_date'].max().strftime('%Y%m%d')
+            df["trade_date"] = pd.to_datetime(df["trade_date"])
+            min_date = df["trade_date"].min().strftime("%Y%m%d")
+            max_date = df["trade_date"].max().strftime("%Y%m%d")
 
             # 检查日期范围是否覆盖我们的需求
             if min_date <= self.start_date and max_date >= self.end_date:
                 return True
             else:
-                logger.info(f"{stock_code} 数据日期范围不符: {min_date} ~ {max_date}, 需要重新下载")
+                logger.info(
+                    f"{stock_code} 数据日期范围不符: {min_date} ~ {max_date}, 需要重新下载"
+                )
                 return False
 
         except Exception as e:
@@ -190,29 +204,35 @@ class BatchMoneyFlowDownloader:
         """
         for attempt in range(max_retries):
             try:
-                logger.debug(f"下载 {stock_code} 资金流向数据 (尝试 {attempt+1}/{max_retries})")
+                logger.debug(
+                    f"下载 {stock_code} 资金流向数据 (尝试 {attempt+1}/{max_retries})"
+                )
 
                 # 调用资金流向接口
                 df = self.pro.moneyflow(
                     ts_code=stock_code,
                     start_date=self.start_date,
-                    end_date=self.end_date
+                    end_date=self.end_date,
                 )
 
                 if df is not None and not df.empty:
-                    logger.debug(f"成功下载 {stock_code} 资金流向数据: {len(df)} 条记录")
+                    logger.debug(
+                        f"成功下载 {stock_code} 资金流向数据: {len(df)} 条记录"
+                    )
                     return df
                 else:
                     logger.warning(f"{stock_code} 没有资金流向数据")
                     return None
 
             except Exception as e:
-                error_msg = f"下载 {stock_code} 资金流向数据失败 (尝试 {attempt+1}): {e}"
+                error_msg = (
+                    f"下载 {stock_code} 资金流向数据失败 (尝试 {attempt+1}): {e}"
+                )
                 logger.error(error_msg)
 
                 if attempt < max_retries - 1:
                     # 指数退避重试
-                    wait_time = (2 ** attempt) * 2
+                    wait_time = (2**attempt) * 2
                     logger.info(f"等待 {wait_time} 秒后重试...")
                     time.sleep(wait_time)
 
@@ -256,7 +276,11 @@ class BatchMoneyFlowDownloader:
         """
         if self.start_time:
             elapsed = datetime.now() - self.start_time
-            rate = len(self.processed_stocks) / elapsed.total_seconds() * 60 if elapsed.total_seconds() > 0 else 0
+            rate = (
+                len(self.processed_stocks) / elapsed.total_seconds() * 60
+                if elapsed.total_seconds() > 0
+                else 0
+            )
 
             logger.info("=== 下载统计 ===")
             logger.info(f"总耗时: {elapsed}")
@@ -265,7 +289,11 @@ class BatchMoneyFlowDownloader:
             logger.info(f"处理速度: {rate:.1f} 只/分钟")
 
             if len(self.processed_stocks) > 0:
-                success_rate = (len(self.processed_stocks) - len(self.failed_stocks)) / len(self.processed_stocks) * 100
+                success_rate = (
+                    (len(self.processed_stocks) - len(self.failed_stocks))
+                    / len(self.processed_stocks)
+                    * 100
+                )
                 logger.info(f"成功率: {success_rate:.1f}%")
 
     def download_batch(self, stock_list, batch_start=0):
@@ -276,7 +304,9 @@ class BatchMoneyFlowDownloader:
         stock_list (list): 股票代码列表
         batch_start (int): 批次起始位置
         """
-        logger.info(f"开始下载第 {batch_start//self.batch_size + 1} 批次股票 (共 {len(stock_list)} 只)")
+        logger.info(
+            f"开始下载第 {batch_start//self.batch_size + 1} 批次股票 (共 {len(stock_list)} 只)"
+        )
 
         for i, stock_code in enumerate(stock_list, batch_start + 1):
             # 检查是否已经处理过
@@ -339,7 +369,9 @@ class BatchMoneyFlowDownloader:
         stock_list = self.get_stock_list()
 
         # 过滤已处理的股票
-        remaining_stocks = [stock for stock in stock_list if stock not in self.processed_stocks]
+        remaining_stocks = [
+            stock for stock in stock_list if stock not in self.processed_stocks
+        ]
 
         logger.info(f"总股票数: {len(stock_list)}")
         logger.info(f"已处理: {len(self.processed_stocks)}")
@@ -356,7 +388,9 @@ class BatchMoneyFlowDownloader:
             batch_end = min(batch_start + self.batch_size, len(remaining_stocks))
             batch_stocks = remaining_stocks[batch_start:batch_end]
 
-            logger.info(f"处理批次 {batch_start//self.batch_size + 1}: 股票 {batch_start+1}-{batch_end}")
+            logger.info(
+                f"处理批次 {batch_start//self.batch_size + 1}: 股票 {batch_start+1}-{batch_end}"
+            )
 
             try:
                 self.download_batch(batch_stocks, batch_start)
@@ -380,7 +414,7 @@ def main():
     """
     logger.info("=== 大规模股票资金流数据下载开始 ===")
     logger.info(f"时间范围: 2024-08-23 ~ 2025-10-13")
-    logger.info(f"存储目录: /Volumes/Share_Data/data/output/money_flow")
+    logger.info(f"存储目录: {downloader.output_dir}")
 
     try:
         # 初始化下载器

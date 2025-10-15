@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+
 import numpy as np
 import pandas as pd
 import vectorbt as vbt
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class RSI(BaseFactor):
     """相对强弱指数"""
+
     factor_id = "RSI"
     category = "vbt_technical"
 
@@ -29,6 +31,7 @@ class RSI(BaseFactor):
 
 class RSI3(BaseFactor):
     """3日相对强弱指数"""
+
     factor_id = "RSI3"
     category = "vbt_technical"
 
@@ -42,6 +45,7 @@ class RSI3(BaseFactor):
 
 class RSI6(BaseFactor):
     """6日相对强弱指数"""
+
     factor_id = "RSI6"
     category = "vbt_technical"
 
@@ -55,6 +59,7 @@ class RSI6(BaseFactor):
 
 class RSI9(BaseFactor):
     """9日相对强弱指数"""
+
     factor_id = "RSI9"
     category = "vbt_technical"
 
@@ -68,6 +73,7 @@ class RSI9(BaseFactor):
 
 class RSI12(BaseFactor):
     """12日相对强弱指数"""
+
     factor_id = "RSI12"
     category = "vbt_technical"
 
@@ -81,6 +87,7 @@ class RSI12(BaseFactor):
 
 class RSI14(BaseFactor):
     """14日相对强弱指数"""
+
     factor_id = "RSI14"
     category = "vbt_technical"
 
@@ -94,6 +101,7 @@ class RSI14(BaseFactor):
 
 class RSI18(BaseFactor):
     """18日相对强弱指数"""
+
     factor_id = "RSI18"
     category = "vbt_technical"
 
@@ -107,6 +115,7 @@ class RSI18(BaseFactor):
 
 class RSI21(BaseFactor):
     """21日相对强弱指数"""
+
     factor_id = "RSI21"
     category = "vbt_technical"
 
@@ -120,6 +129,7 @@ class RSI21(BaseFactor):
 
 class RSI25(BaseFactor):
     """25日相对强弱指数"""
+
     factor_id = "RSI25"
     category = "vbt_technical"
 
@@ -133,6 +143,7 @@ class RSI25(BaseFactor):
 
 class RSI30(BaseFactor):
     """30日相对强弱指数"""
+
     factor_id = "RSI30"
     category = "vbt_technical"
 
@@ -146,12 +157,15 @@ class RSI30(BaseFactor):
 
 class MACD(BaseFactor):
     """MACD指标"""
+
     factor_id = "MACD"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return vbt.MACD.run(data["close"], fast=12, slow=26, signal=9).macd.rename("MACD")
+            return vbt.MACD.run(data["close"], fast=12, slow=26, signal=9).macd.rename(
+                "MACD"
+            )
         except Exception as e:
             logger.error(f"计算MACD失败: {e}")
             return pd.Series(np.nan, index=data.index, name="MACD")
@@ -159,12 +173,15 @@ class MACD(BaseFactor):
 
 class MACD_SIGNAL(BaseFactor):
     """MACD信号线"""
+
     factor_id = "MACD_SIGNAL"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return vbt.MACD.run(data["close"], fast=12, slow=26, signal=9).signal.rename("MACD_SIGNAL")
+            return vbt.MACD.run(
+                data["close"], fast=12, slow=26, signal=9
+            ).signal.rename("MACD_SIGNAL")
         except Exception as e:
             logger.error(f"计算MACD_SIGNAL失败: {e}")
             return pd.Series(np.nan, index=data.index, name="MACD_SIGNAL")
@@ -172,12 +189,15 @@ class MACD_SIGNAL(BaseFactor):
 
 class MACD_HIST(BaseFactor):
     """MACD柱状图"""
+
     factor_id = "MACD_HIST"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return vbt.MACD.run(data["close"], fast=12, slow=26, signal=9).histogram.rename("MACD_HIST")
+            return vbt.MACD.run(
+                data["close"], fast=12, slow=26, signal=9
+            ).histogram.rename("MACD_HIST")
         except Exception as e:
             logger.error(f"计算MACD_HIST失败: {e}")
             return pd.Series(np.nan, index=data.index, name="MACD_HIST")
@@ -185,13 +205,20 @@ class MACD_HIST(BaseFactor):
 
 class STOCH(BaseFactor):
     """随机指标"""
+
     factor_id = "STOCH"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            result = vbt.STOCH.run(data["high"], data["low"], data["close"],
-                                   k_window=14, d_window=3, d_smooth_window=3)
+            result = vbt.STOCH.run(
+                data["high"],
+                data["low"],
+                data["close"],
+                k_window=14,
+                d_window=3,
+                d_smooth_window=3,
+            )
             return result.stoch_k.rename("STOCH")
         except Exception as e:
             logger.error(f"计算STOCH失败: {e}")
@@ -200,12 +227,15 @@ class STOCH(BaseFactor):
 
 class WILLR(BaseFactor):
     """威廉指标"""
+
     factor_id = "WILLR"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return vbt.WILLR.run(data["high"], data["low"], data["close"], window=14).willr.rename("WILLR")
+            return vbt.WILLR.run(
+                data["high"], data["low"], data["close"], window=14
+            ).willr.rename("WILLR")
         except Exception as e:
             logger.error(f"计算WILLR失败: {e}")
             return pd.Series(np.nan, index=data.index, name="WILLR")
@@ -213,12 +243,15 @@ class WILLR(BaseFactor):
 
 class WILLR14(BaseFactor):
     """14日威廉指标"""
+
     factor_id = "WILLR14"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return vbt.WILLR.run(data["high"], data["low"], data["close"], window=14).willr.rename("WILLR14")
+            return vbt.WILLR.run(
+                data["high"], data["low"], data["close"], window=14
+            ).willr.rename("WILLR14")
         except Exception as e:
             logger.error(f"计算WILLR14失败: {e}")
             return pd.Series(np.nan, index=data.index, name="WILLR14")
@@ -226,6 +259,7 @@ class WILLR14(BaseFactor):
 
 class CCI(BaseFactor):
     """商品通道指标"""
+
     factor_id = "CCI"
     category = "vbt_technical"
 
@@ -243,6 +277,7 @@ class CCI(BaseFactor):
 
 class CCI14(BaseFactor):
     """14日商品通道指标"""
+
     factor_id = "CCI14"
     category = "vbt_technical"
 
@@ -259,6 +294,7 @@ class CCI14(BaseFactor):
 
 class Momentum1(BaseFactor):
     """1期动量"""
+
     factor_id = "Momentum1"
     category = "vbt_technical"
 
@@ -272,6 +308,7 @@ class Momentum1(BaseFactor):
 
 class Momentum3(BaseFactor):
     """3期动量"""
+
     factor_id = "Momentum3"
     category = "vbt_technical"
 
@@ -285,6 +322,7 @@ class Momentum3(BaseFactor):
 
 class Momentum5(BaseFactor):
     """5期动量"""
+
     factor_id = "Momentum5"
     category = "vbt_technical"
 
@@ -298,6 +336,7 @@ class Momentum5(BaseFactor):
 
 class Momentum8(BaseFactor):
     """8期动量"""
+
     factor_id = "Momentum8"
     category = "vbt_technical"
 
@@ -311,6 +350,7 @@ class Momentum8(BaseFactor):
 
 class Momentum10(BaseFactor):
     """10期动量"""
+
     factor_id = "Momentum10"
     category = "vbt_technical"
 
@@ -324,6 +364,7 @@ class Momentum10(BaseFactor):
 
 class Momentum12(BaseFactor):
     """12期动量"""
+
     factor_id = "Momentum12"
     category = "vbt_technical"
 
@@ -337,6 +378,7 @@ class Momentum12(BaseFactor):
 
 class Momentum15(BaseFactor):
     """15期动量"""
+
     factor_id = "Momentum15"
     category = "vbt_technical"
 
@@ -350,6 +392,7 @@ class Momentum15(BaseFactor):
 
 class Momentum20(BaseFactor):
     """20期动量"""
+
     factor_id = "Momentum20"
     category = "vbt_technical"
 
@@ -363,12 +406,15 @@ class Momentum20(BaseFactor):
 
 class Position5(BaseFactor):
     """5期位置"""
+
     factor_id = "Position5"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(5).min()) / (data["close"].rolling(5).max() - data["close"].rolling(5).min()).rename("Position5")
+            return (data["close"] - data["close"].rolling(5).min()) / (
+                data["close"].rolling(5).max() - data["close"].rolling(5).min()
+            ).rename("Position5")
         except Exception as e:
             logger.error(f"计算Position5失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position5")
@@ -376,12 +422,15 @@ class Position5(BaseFactor):
 
 class Position8(BaseFactor):
     """8期位置"""
+
     factor_id = "Position8"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(8).min()) / (data["close"].rolling(8).max() - data["close"].rolling(8).min()).rename("Position8")
+            return (data["close"] - data["close"].rolling(8).min()) / (
+                data["close"].rolling(8).max() - data["close"].rolling(8).min()
+            ).rename("Position8")
         except Exception as e:
             logger.error(f"计算Position8失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position8")
@@ -389,12 +438,15 @@ class Position8(BaseFactor):
 
 class Position10(BaseFactor):
     """10期位置"""
+
     factor_id = "Position10"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(10).min()) / (data["close"].rolling(10).max() - data["close"].rolling(10).min()).rename("Position10")
+            return (data["close"] - data["close"].rolling(10).min()) / (
+                data["close"].rolling(10).max() - data["close"].rolling(10).min()
+            ).rename("Position10")
         except Exception as e:
             logger.error(f"计算Position10失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position10")
@@ -402,12 +454,15 @@ class Position10(BaseFactor):
 
 class Position12(BaseFactor):
     """12期位置"""
+
     factor_id = "Position12"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(12).min()) / (data["close"].rolling(12).max() - data["close"].rolling(12).min()).rename("Position12")
+            return (data["close"] - data["close"].rolling(12).min()) / (
+                data["close"].rolling(12).max() - data["close"].rolling(12).min()
+            ).rename("Position12")
         except Exception as e:
             logger.error(f"计算Position12失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position12")
@@ -415,12 +470,15 @@ class Position12(BaseFactor):
 
 class Position15(BaseFactor):
     """15期位置"""
+
     factor_id = "Position15"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(15).min()) / (data["close"].rolling(15).max() - data["close"].rolling(15).min()).rename("Position15")
+            return (data["close"] - data["close"].rolling(15).min()) / (
+                data["close"].rolling(15).max() - data["close"].rolling(15).min()
+            ).rename("Position15")
         except Exception as e:
             logger.error(f"计算Position15失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position15")
@@ -428,12 +486,15 @@ class Position15(BaseFactor):
 
 class Position20(BaseFactor):
     """20期位置"""
+
     factor_id = "Position20"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(20).min()) / (data["close"].rolling(20).max() - data["close"].rolling(20).min()).rename("Position20")
+            return (data["close"] - data["close"].rolling(20).min()) / (
+                data["close"].rolling(20).max() - data["close"].rolling(20).min()
+            ).rename("Position20")
         except Exception as e:
             logger.error(f"计算Position20失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position20")
@@ -441,12 +502,15 @@ class Position20(BaseFactor):
 
 class Position25(BaseFactor):
     """25期位置"""
+
     factor_id = "Position25"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(25).min()) / (data["close"].rolling(25).max() - data["close"].rolling(25).min()).rename("Position25")
+            return (data["close"] - data["close"].rolling(25).min()) / (
+                data["close"].rolling(25).max() - data["close"].rolling(25).min()
+            ).rename("Position25")
         except Exception as e:
             logger.error(f"计算Position25失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position25")
@@ -454,12 +518,15 @@ class Position25(BaseFactor):
 
 class Position30(BaseFactor):
     """30期位置"""
+
     factor_id = "Position30"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] - data["close"].rolling(30).min()) / (data["close"].rolling(30).max() - data["close"].rolling(30).min()).rename("Position30")
+            return (data["close"] - data["close"].rolling(30).min()) / (
+                data["close"].rolling(30).max() - data["close"].rolling(30).min()
+            ).rename("Position30")
         except Exception as e:
             logger.error(f"计算Position30失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Position30")
@@ -467,6 +534,7 @@ class Position30(BaseFactor):
 
 class Trend5(BaseFactor):
     """5期趋势"""
+
     factor_id = "Trend5"
     category = "vbt_technical"
 
@@ -480,6 +548,7 @@ class Trend5(BaseFactor):
 
 class Trend8(BaseFactor):
     """8期趋势"""
+
     factor_id = "Trend8"
     category = "vbt_technical"
 
@@ -493,12 +562,15 @@ class Trend8(BaseFactor):
 
 class Trend10(BaseFactor):
     """10期趋势"""
+
     factor_id = "Trend10"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] > data["close"].shift(10)).astype(int).rename("Trend10")
+            return (
+                (data["close"] > data["close"].shift(10)).astype(int).rename("Trend10")
+            )
         except Exception as e:
             logger.error(f"计算Trend10失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Trend10")
@@ -506,12 +578,15 @@ class Trend10(BaseFactor):
 
 class Trend12(BaseFactor):
     """12期趋势"""
+
     factor_id = "Trend12"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] > data["close"].shift(12)).astype(int).rename("Trend12")
+            return (
+                (data["close"] > data["close"].shift(12)).astype(int).rename("Trend12")
+            )
         except Exception as e:
             logger.error(f"计算Trend12失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Trend12")
@@ -519,12 +594,15 @@ class Trend12(BaseFactor):
 
 class Trend15(BaseFactor):
     """15期趋势"""
+
     factor_id = "Trend15"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] > data["close"].shift(15)).astype(int).rename("Trend15")
+            return (
+                (data["close"] > data["close"].shift(15)).astype(int).rename("Trend15")
+            )
         except Exception as e:
             logger.error(f"计算Trend15失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Trend15")
@@ -532,12 +610,15 @@ class Trend15(BaseFactor):
 
 class Trend20(BaseFactor):
     """20期趋势"""
+
     factor_id = "Trend20"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] > data["close"].shift(20)).astype(int).rename("Trend20")
+            return (
+                (data["close"] > data["close"].shift(20)).astype(int).rename("Trend20")
+            )
         except Exception as e:
             logger.error(f"计算Trend20失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Trend20")
@@ -545,12 +626,15 @@ class Trend20(BaseFactor):
 
 class Trend25(BaseFactor):
     """25期趋势"""
+
     factor_id = "Trend25"
     category = "vbt_technical"
 
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         try:
-            return (data["close"] > data["close"].shift(25)).astype(int).rename("Trend25")
+            return (
+                (data["close"] > data["close"].shift(25)).astype(int).rename("Trend25")
+            )
         except Exception as e:
             logger.error(f"计算Trend25失败: {e}")
             return pd.Series(np.nan, index=data.index, name="Trend25")

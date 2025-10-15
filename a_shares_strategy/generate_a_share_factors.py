@@ -29,9 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SUPPORTED_TIMEFRAMES = tuple(
-    dict.fromkeys(timeframe.value for timeframe in TimeFrame)
-)
+SUPPORTED_TIMEFRAMES = tuple(dict.fromkeys(timeframe.value for timeframe in TimeFrame))
 
 
 def load_a_share_config(config_path: str) -> IndicatorConfig:
@@ -188,7 +186,7 @@ def resample_to_timeframe(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
 
     # 删除全为NaN的行（resample会生成24小时网格，需过滤非交易时间）
     resampled = resampled.dropna(how="all")
-    
+
     # 进一步过滤：只保留有实际数据的行（volume > 0）
     resampled = resampled[resampled["volume"] > 0]
 
