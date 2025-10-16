@@ -1,0 +1,40 @@
+# ETF横截面传统因子配置
+# 所有因子必须在etf_cross_section_enhanced.py中有对应实现
+
+legacy_factors:
+  # 动量类因子
+  momentum:
+    - MOMENTUM_21D      # 21日动量
+    - MOMENTUM_63D      # 63日动量（季度）
+    - MOMENTUM_126D     # 126日动量（半年）
+    - MOMENTUM_252D     # 252日动量（年度）
+  
+  # 波动率类因子
+  volatility:
+    - VOLATILITY_20D    # 20日波动率
+    - VOLATILITY_60D    # 60日波动率
+    - VOLATILITY_120D   # 120日波动率
+    - VOLATILITY_252D   # 252日波动率
+    - ATR14             # 14日ATR
+  
+  # 技术指标类因子（仅保留VBT不支持的或特殊实现的）
+  technical:
+    - BB_20_2.0_Width   # 布林带宽度（自定义实现）
+    - BOLB_20           # 布林带位置（自定义实现）
+    # 注意：RSI、CCI、MACD、WILLR等由VBT/TA-LIB提供动态因子实现
+  
+  # 成交量类因子
+  volume:
+    - OBV               # 能量潮指标
+
+# 因子启用配置
+enabled_categories:
+  - momentum
+  - volatility
+  - technical
+  - volume
+
+# 因子计算参数
+calculation_params:
+  min_periods: 20      # 最小计算周期
+  max_lookback: 252    # 最大回看窗口

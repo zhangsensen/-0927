@@ -1,14 +1,5 @@
 {
   "mcpServers": {
-    "context7": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@upstash/context7-mcp@latest"
-      ],
-      "env": {}
-    },
     "zai-mcp-server": {
       "type": "stdio",
       "command": "npx",
@@ -19,20 +10,6 @@
       "env": {
         "Z_AI_API_KEY": "da3cdb217c954a929dcdebb793a5ffeb.sPMPB00AsqiivfIw"
       }
-    },
-    "memory": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "@modelcontextprotocol/server-memory"
-      ],
-      "env": {}
-    },
-    "sequential-thinking": {
-      "type": "stdio",
-      "command": "mcp-server-sequential-thinking",
-      "args": [],
-      "env": {}
     },
     "github": {
       "type": "stdio",
@@ -97,6 +74,14 @@
         "Authorization": "Bearer da3cdb217c954a929dcdebb793a5ffeb.sPMPB00AsqiivfIw"
       }
     },
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "env": {}
+    },
     "filesystem": {
       "type": "stdio",
       "command": "npx",
@@ -104,6 +89,25 @@
         "@modelcontextprotocol/server-filesystem"
       ],
       "env": {}
+    },
+    "memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
+      "env": {
+        "CONTEXT7_API_KEY": "ctx7sk-64a01db0-5951-4a19-b960-1b8aee60bba1"
+      }
     }
   }
 }

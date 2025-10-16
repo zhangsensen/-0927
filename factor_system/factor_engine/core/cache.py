@@ -317,7 +317,7 @@ class CacheManager:
         ]
 
         key_str = "|".join(key_parts)
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     def get_stats(self) -> Dict[str, Any]:
         """获取缓存统计"""

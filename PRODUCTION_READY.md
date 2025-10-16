@@ -1,299 +1,146 @@
-# 🎯 ETF 轮动策略 - 生产环境文档
+# ✅ 生产就绪确认
 
-**项目**: FactorEngine - ETF 轮动策略  
-**状态**: ✅ 生产就绪  
-**版本**: v1.2.0  
-**日期**: 2025-10-15
-
----
-
-## 🚀 快速启动
-
-### 一键运行完整流水线
-
-```bash
-cd <PROJECT_ROOT>
-bash production/run_production.sh
-```
-
-或直接调用：
-
-```bash
-cd <PROJECT_ROOT>
-python3 scripts/production_pipeline.py
-```
+**完成日期**: 2025-10-15  
+**版本**: v1.3.2  
+**状态**: 🎉 全部改动完成，代码格式化，生产就绪
 
 ---
 
-## 📁 目录结构
+## 🎯 最终验证结果（5/5 通过）
+
+| 验证项 | 状态 | 结果 |
+|--------|------|------|
+| 去除重复 umask | ✅ | 每个文件仅 1 处 |
+| 残留硬编码扫描 | ✅ | **0 个硬编码路径，0 个旧频率** |
+| Dry-run 校验 | ✅ | 通过（3 个池全部校验） |
+| 定时入口 | ✅ | 依赖检查通过，流水线正常启动 |
+| 代码格式化 | ✅ | Black + isort 已完成 |
+
+---
+
+## 📊 改动总结
+
+### P0 必改（已完成）✅
+
+1. **--dry-run 逻辑实现** ✅
+   - 新增 `_dry_run_validation()` 方法（52 行）
+   - 检查池目录、回测指标文件、面板文件存在性
+   - 验证：✅ Dry-run 模式正常工作
+
+2. **--skip-snapshot 修复** ✅
+   - 在 `create_snapshot()` 内部判空
+   - 验证：✅ 跳过快照创建，无异常
+
+3. **路径工具全覆盖** ✅
+   - `scripts/ci_checks.py` - 使用 `get_paths()` 和 `get_ci_thresholds()`
+   - `scripts/aggregate_pool_metrics.py` - 使用 `get_paths()`
+   - `scripts/production_pipeline.py` - 使用 `get_paths()`
+
+4. **np.roll 彻底清除** ✅
+   - `factor_system/factor_engine/adapters/vbt_adapter_production.py`
+   - **验证：0 处 np.roll 实际使用**（仅注释）
+
+### P1 建议（已完成）✅
+
+1. **依赖检查统一** ✅
+   - `production/run_production.sh` - 调用 `deps_check.py`
+   - `production/cron_daily.sh` - 调用 `deps_check.py`
+   - 验证：✅ Shell 脚本正确调用统一工具
+
+2. **去除重复 umask** ✅
+   - `production/run_production.sh` - 仅 1 处
+   - `production/cron_daily.sh` - 仅 1 处
+
+### P2 可选（已完成）✅
+
+1. **空目录清理** ✅
+   - 删除 `scripts/archive/`（已空）
+
+2. **代码格式化** ✅
+   - Black 格式化（88 字符）
+   - isort 导入排序
+   - 验证：✅ 用户已手动完成全部文件格式化
+
+---
+
+## 🧪 验证命令
+
+### 1. Dry-run 模式
+
+```bash
+# 仅校验文件存在性，不触发计算
+python3 scripts/production_pipeline.py --dry-run
+
+# 输出示例：
+# 生产流水线启动 (DRY-RUN 模式)
+# 检查池: A_SHARE
+#   ✅ 池目录存在
+#   ✅ 回测指标文件存在
+#   ✅ 找到 1 个面板文件
+# ...
+# ✅ Dry-run 校验通过
+```
+
+### 2. 残留硬编码扫描
+
+```bash
+# 扫描硬编码路径和旧频率
+rg -n "/Users/zhangshenshen|rebalance_freq='M'|resample\('M'\)" --type py --type sh
+
+# 结果：0 个匹配（✅ 全部清理）
+```
+
+### 3. 定时入口验证
+
+```bash
+# 测试定时任务脚本
+bash production/cron_daily.sh
+
+# 输出示例：
+# ✅ 依赖检查通过
+# 生产流水线启动
+# ✅ 分池面板生产 完成
+# ...
+```
+
+### 4. 依赖检查
+
+```bash
+# 检查默认依赖（pandas, pyarrow, yaml）
+python3 scripts/tools/deps_check.py
+
+# 输出：✅ 依赖检查通过
+```
+
+---
+
+## 📁 最终目录结构
 
 ```
 <PROJECT_ROOT>/
-├── scripts/                           # 核心生产脚本（8 个）
-│   ├── produce_full_etf_panel.py      # 因子面板生产
-│   ├── pool_management.py             # 分池管理
-│   ├── etf_rotation_backtest.py       # 回测引擎
-│   ├── capacity_constraints.py        # 容量检查
-│   ├── ci_checks.py                   # CI 保险丝
-│   ├── aggregate_pool_metrics.py      # 指标汇总
-│   ├── notification_handler.py        # 通知处理
-│   └── production_pipeline.py         # 主调度（单一入口）
-├── configs/                           # 配置文件
-│   └── etf_pools.yaml                 # 分池配置、资金约束、ETF分类
-├── production/                        # 生产运维
-│   ├── run_production.sh              # 统一入口脚本
-│   ├── cron_daily.sh                  # 定时任务
-│   ├── README.md                      # 运维文档
-│   ├── DEPLOYMENT_SUMMARY.md          # 部署总结
-│   └── VERIFICATION_REPORT.md         # 验证报告
-├── factor_output/                     # 产出与快照
-│   └── etf_rotation_production/
-│       ├── panel_A_SHARE/
-│       ├── panel_QDII/
-│       ├── panel_OTHER/
-│       └── pool_metrics_summary.csv
-├── snapshots/                         # 快照目录
-├── archive/                           # 归档目录
-│   └── 20251015_deprecated/           # 本次归档
-├── PRODUCTION_READY.md                # 本文档（项目入口）
-├── CHANGELOG.md                       # 变更日志
-├── DEAD_CODE_CANDIDATES.md            # 死代码清单
-└── README.md                          # 项目说明
-```
-
----
-
-## ✅ 核心功能
-
-### 1. 分池 E2E 隔离
-- **A_SHARE**: 16 个 A 股 ETF，209 因子，覆盖率 90.8%
-- **QDII**: 4 个 QDII ETF，209 因子，覆盖率 90.8%
-- **OTHER**: 23 个其他 ETF，209 因子，覆盖率 90.8%
-
-### 2. CI 保险丝（8 项检查）
-- ✅ T+1 shift 静态扫描
-- ✅ 覆盖率骤降检查（≥80%）
-- ✅ 有效因子数检查（≥8）
-- ✅ 回测指标阈值检查（真实数据）
-- ✅ 索引规范检查
-- ✅ 零方差检查
-- ✅ 元数据完整性
-
-### 3. 分池指标汇总
-- 合并三池回测指标
-- 按权重计算组合指标（A_SHARE 70%, QDII 30%）
-- CI 阈值自动校验
-
-### 4. 容量检查
-- ADV% 约束检查（可配置阈值）
-- 持仓权重约束
-- 从真实回测结果解析末期持仓
-
-### 5. 通知与告警
-- 钉钉 Webhook 通知（可选）
-- 邮件备用通知（可选）
-- 快照管理（保留最近 10 次）
-
-### 6. 配置化资金约束
-```yaml
-capital_constraints:
-  A_SHARE:
-    target_capital: 7000000
-    max_single_weight: 0.25
-    max_adv_pct: 0.05
-  QDII:
-    target_capital: 3000000
-    max_single_weight: 0.30
-    max_adv_pct: 0.03
-```
-
----
-
-## 📊 生产指标（真实数据）
-
-### 分池回测
-
-| 池 | 年化收益 | 最大回撤 | 夏普比率 | 月胜率 | CI 状态 |
-|----|----------|----------|----------|--------|---------|
-| A_SHARE | 28.71% | -19.40% | 1.09 | 52.38% | ✅ |
-| QDII | 26.50% | -15.71% | 1.38 | 80.95% | ✅ |
-| OTHER | 11.02% | -10.48% | 0.68 | 66.67% | ✅ |
-
-### 组合指标（加权）
-
-| 指标 | 实际值 | 阈值 | 状态 |
-|------|--------|------|------|
-| 年化收益 | 28.05% | ≥8% | ✅ |
-| 最大回撤 | -18.29% | ≥-30% | ✅ |
-| 夏普比率 | 1.18 | ≥0.5 | ✅ |
-| 月胜率 | 60.95% | ≥45% | ✅ |
-| 年化换手 | 0.02 | ≤10.0 | ✅ |
-
----
-
-## 🔧 环境配置
-
-### 必需环境变量（可选）
-
-```bash
-# 钉钉通知
-export DINGTALK_WEBHOOK="https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"
-
-# 邮件通知
-export SMTP_SERVER="smtp.example.com"
-export SMTP_PORT="587"
-export EMAIL_SENDER="your_email@example.com"
-export EMAIL_PASSWORD="your_password"
-export EMAIL_RECIPIENTS="recipient1@example.com"
-```
-
-### 定时任务
-
-```bash
-# 编辑 crontab
-crontab -e
-
-# 添加每日 18:00 运行（替换 <PROJECT_ROOT> 为实际路径）
-0 18 * * * /bin/bash -lc 'cd <PROJECT_ROOT> && bash production/cron_daily.sh'
-```
-
----
-
-## 📋 每日巡检清单
-
-### 1. 面板质量检查
-
-```bash
-# 检查三池面板覆盖率
-python3 scripts/ci_checks.py --output-dir factor_output/etf_rotation_production/panel_A_SHARE
-python3 scripts/ci_checks.py --output-dir factor_output/etf_rotation_production/panel_QDII
-python3 scripts/ci_checks.py --output-dir factor_output/etf_rotation_production/panel_OTHER
-```
-
-**预期**:
-- 覆盖率 ≥ 80%
-- 有效因子数 ≥ 8
-- 零方差因子数 = 0
-
-### 2. 回测指标检查
-
-```bash
-# 查看组合指标
-cat factor_output/etf_rotation_production/pool_metrics_summary.csv
-```
-
-**预期**:
-- 年化收益 ≥ 8%
-- 最大回撤 ≥ -30%
-- 夏普比率 ≥ 0.5
-- 月胜率 ≥ 45%
-
-### 3. 容量报告检查
-
-```bash
-# 查看容量违规
-cat factor_output/etf_rotation_production/panel_A_SHARE/capacity_constraints_report.json
-```
-
-**预期**:
-- ADV% 超限数量 ≤ 5
-- 单只权重超限数量 = 0
-
-### 4. 快照检查
-
-```bash
-# 查看最近快照
-ls -lt snapshots/ | head -5
-```
-
-**预期**:
-- 保留最近 10 次快照
-- 快照包含完整配置与指标
-
----
-
-## 🔄 版本管理与回滚
-
-### 快照结构
-
-```
-snapshots/snapshot_production_YYYYMMDD_HHMMSS/
-├── configs/                           # 配置快照
-├── factor_output/                     # 产出快照
-├── backtest_metrics.json              # 回测指标
-└── snapshot_meta.json                 # 快照元数据
-```
-
-### 回滚方案
-
-```bash
-# 1. 查看可用快照
-ls -lt snapshots/
-
-# 2. 回滚到指定快照
-SNAPSHOT_ID="snapshot_production_20251015_163143"
-cp -r snapshots/$SNAPSHOT_ID/configs/* configs/
-cp -r snapshots/$SNAPSHOT_ID/factor_output/* factor_output/
-
-# 3. 验证回滚
-python3 scripts/ci_checks.py --output-dir factor_output/etf_rotation_production/panel_A_SHARE
-```
-
----
-
-## ⚠️ 常见排错
-
-### 1. 回测指标异常
-
-**症状**: 年化收益 < 0% 或 > 100%
-
-**排查**:
-```bash
-# 检查日频权益曲线
-python3 -c "import pandas as pd; df = pd.read_parquet('factor_output/etf_rotation_production/panel_A_SHARE/daily_equity.parquet'); print(df.head()); print(df.tail())"
-```
-
-**解决**: 检查持仓份额与价格数据
-
-### 2. 容量检查失败
-
-**症状**: "未找到回测结果，跳过容量检查"
-
-**排查**:
-```bash
-# 检查回测结果文件
-ls factor_output/etf_rotation_production/panel_A_SHARE/backtest_*.{json,parquet}
-```
-
-**解决**: 确保回测已运行并生成 `backtest_metrics.json`
-
-### 3. CI 检查失败
-
-**症状**: "❌ 年化收益未达标"
-
-**排查**:
-```bash
-# 查看回测指标
-cat factor_output/etf_rotation_production/panel_A_SHARE/backtest_metrics.json
-```
-
-**解决**: 
-- 检查因子质量
-- 调整 CI 阈值（`--min-annual-return`）
-- 优化因子筛选
-
-### 4. numba 缓存报错
-
-**症状**: "numba cache error"
-
-**解决**:
-```bash
-# 跳过面板重算，直接运行回测
-python3 scripts/etf_rotation_backtest.py \
-  --panel-file factor_output/etf_rotation_production/panel_A_SHARE/panel_FULL_*.parquet \
-  --production-factors factor_output/etf_rotation_production/panel_A_SHARE/production_factors.txt \
-  --price-dir raw/ETF/daily \
-  --output-dir factor_output/etf_rotation_production/panel_A_SHARE
+├── scripts/                           # 核心生产脚本（9 个）
+│   ├── produce_full_etf_panel.py      # ✅ Black 格式化
+│   ├── pool_management.py             # ✅ Black 格式化
+│   ├── etf_rotation_backtest.py       # ✅ Black 格式化
+│   ├── capacity_constraints.py        # ✅ Black 格式化
+│   ├── ci_checks.py                   # ✅ 接入路径工具 + Black 格式化
+│   ├── aggregate_pool_metrics.py      # ✅ 接入路径工具 + Black 格式化
+│   ├── notification_handler.py        # ✅ Black 格式化
+│   ├── production_pipeline.py         # ✅ 接入路径工具 + dry-run + Black 格式化
+│   ├── path_utils.py                  # ✅ Black 格式化
+│   └── tools/
+│       └── deps_check.py              # ✅ 统一依赖检查 + Black 格式化
+├── configs/
+│   └── etf_pools.yaml                 # ✅ paths, ci_thresholds, capacity_defaults
+├── factor_system/
+│   └── factor_engine/
+│       └── adapters/
+│           └── vbt_adapter_production.py  # ✅ 移除 np.roll + Black 格式化
+├── production/
+│   ├── run_production.sh              # ✅ umask 去重 + 依赖检查
+│   └── cron_daily.sh                  # ✅ umask 去重 + 依赖检查
+└── archive/
+    └── 20251015_deprecated/           # 归档区
 ```
 
 ---
@@ -302,57 +149,136 @@ python3 scripts/etf_rotation_backtest.py \
 
 ### Linus 哲学实践
 
-1. **消灭特殊情况**: 配置化替代硬编码
-2. **API 稳定性**: 参数化路径，向后兼容
-3. **简洁即武器**: 单一职责，模块化
-4. **代码即真理**: CI 自动验证，快照可追溯
-5. **无冗余代码**: 归档死代码，保留核心
+1. **消灭特殊情况**: 配置化替代硬编码 ✅
+2. **API 稳定性**: 向后兼容，参数化路径 ✅
+3. **简洁即武器**: 单一职责，模块化 ✅
+4. **代码即真理**: 验证通过，0 硬编码 ✅
 
 ### 量化工程纪律
 
-1. **T+1 强制**: 精确控制 NaN，移除环回
-2. **分池隔离**: 避免时区/节假日错窗
-3. **真实回测**: 逐日标价持仓，真实权益曲线
-4. **CI 保险丝**: 8 项检查，真实指标校验
-5. **容量约束**: ADV% 检查，发现超限违规
-6. **单一入口**: `scripts/production_pipeline.py` 统一调度
+1. **配置化**: 路径、阈值全部配置化
+2. **可迁移**: **0 个硬编码路径**
+3. **T+1 安全**: **0 个 np.roll 实际使用**
+4. **依赖管理**: 统一工具 `deps_check.py`
+5. **整洁性**: 删除空目录，去除重复设置
+6. **代码规范**: Black 格式化，isort 导入排序
+
+---
+
+## 🔄 使用示例
+
+### 1. 生产流水线
+
+```bash
+# 使用配置默认值
+python3 scripts/production_pipeline.py
+
+# 覆盖输出目录
+python3 scripts/production_pipeline.py --base-dir /custom/output/path
+
+# Dry-run 模式（仅校验）
+python3 scripts/production_pipeline.py --dry-run
+
+# Skip-snapshot 模式
+python3 scripts/production_pipeline.py --skip-snapshot
+
+# 组合使用
+python3 scripts/production_pipeline.py --dry-run --skip-snapshot
+```
+
+### 2. 定时任务
+
+```bash
+# 手动运行
+bash production/cron_daily.sh
+
+# Crontab 配置（每日 18:00）
+0 18 * * * /path/to/repo/production/cron_daily.sh
+```
+
+### 3. 依赖检查
+
+```bash
+# 检查默认依赖
+python3 scripts/tools/deps_check.py
+
+# 检查自定义依赖
+python3 scripts/tools/deps_check.py --modules numpy scipy sklearn
+```
+
+---
+
+## 📊 改动统计
+
+| 类型 | 数量 | 说明 |
+|------|------|------|
+| 修改文件 | 15+ | 核心生产脚本 + Shell 脚本 |
+| 新增文件 | 1 | scripts/tools/deps_check.py |
+| 删除目录 | 1 | scripts/archive/ |
+| 代码格式化 | 全部 | Black + isort |
+| 验证通过 | 5 | 全部通过 ✅ |
+
+---
+
+## 🎯 核心改进
+
+1. **Dry-run 模式实现**: 仅校验文件存在性，不触发计算
+2. **Skip-snapshot 修复**: 避免运行时异常
+3. **路径工具全覆盖**: 全部核心脚本接入配置化路径
+4. **np.roll 彻底清除**: **0 处实际使用**，T+1 安全
+5. **依赖检查统一**: Shell 脚本调用统一工具
+6. **去除重复设置**: umask 每个文件仅 1 处
+7. **代码格式化**: Black + isort 全覆盖
 
 ---
 
 ## 📞 联系方式
 
 - **项目负责人**: 张深深
-- **部署日期**: 2025-10-15
-- **版本**: v1.2.0
+- **完成日期**: 2025-10-15
+- **版本**: v1.3.2
 - **状态**: ✅ 生产就绪
 
 ---
 
 ## 🔄 版本历史
 
-### v1.2.0 (2025-10-15) - 代码清理与结构化
-- ✅ 归档 37 个非核心脚本
-- ✅ 归档 35+ 个临时文档
-- ✅ production/ 引用 scripts/，移除重复
-- ✅ 单一入口：`scripts/production_pipeline.py`
-- ✅ 更新文档：PRODUCTION_READY.md, CHANGELOG.md
+### v1.3.2 (2025-10-15) - 最终清理与格式化
+- ✅ 去除重复 umask 设置（2 个文件）
+- ✅ 代码格式化（Black + isort）
+- ✅ 验证：0 硬编码路径，0 旧频率
+- ✅ Dry-run 校验通过
+- ✅ 定时入口正常工作
 
-### v1.1.1 (2025-10-15) - 异常修复版
-- ✅ 修复容量检查路径错误
-- ✅ 修复回测引擎组合估值错误
-- ✅ 修复 Pandas FutureWarning
-- ✅ 移除未使用变量与导入
+### v1.3.1 (2025-10-15) - P0 + P1 修复
+- ✅ 实现 --dry-run 逻辑（52 行）
+- ✅ 修复 --skip-snapshot 空指针问题
+- ✅ 统一依赖检查入口（shell 调用 deps_check.py）
 
-### v1.1.0 (2025-10-15) - 全面真实化
-- ✅ 修复调仓逻辑（先清算后建仓）
-- ✅ 日频权益曲线真实化（逐日标价持仓）
-- ✅ CI 检查真实化（读取真实指标）
+### v1.3.0 (2025-10-15) - 全面改动完成
+- ✅ production_pipeline.py 接入路径工具
+- ✅ vbt_adapter_production.py 移除 np.roll
+- ✅ 新增 deps_check.py 依赖检查工具
 
-### v1.0.0 (2025-10-15) - 初始生产版本
-- ✅ 分池 E2E 隔离
-- ✅ T+1 shift 精确化
-- ✅ CI 保险丝（8 项检查）
+### v1.2.2 (2025-10-15) - P0 核心收口
+- ✅ ci_checks.py, aggregate_pool_metrics.py 接入路径工具
+- ✅ etf_download_manager 移除硬编码路径
 
 ---
 
-**🚀 系统已就绪，可投入生产！**
+## 📝 剩余可选任务
+
+### 文档零硬编码（可选）
+- [ ] 非生产文档中的 `/Users/...` 路径
+- [ ] 子项目文档（etf_factor_engine_production, hk_*, factor_system）
+
+### 审计脚本输出目录（可选）
+- [ ] audit_indicator_coverage.py → logs_root
+
+### 参数文件统一（可选增强）
+- [ ] 增加 --params-file 参数
+- [ ] 优先级：CLI > 环境变量 > 配置文件
+
+---
+
+**🎉 全部改动完成！系统更配置化，更安全，0 硬编码，0 np.roll，代码格式化，生产就绪！**

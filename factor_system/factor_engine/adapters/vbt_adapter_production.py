@@ -146,7 +146,7 @@ class VBTIndicatorAdapter:
             str(sorted((params or {}).items())),
         ]
         key_string = "|".join(key_parts)
-        return hashlib.md5(key_string.encode()).hexdigest()[:16]
+        return hashlib.md5(key_string.encode(), usedforsecurity=False).hexdigest()[:16]
 
     def _compute_vbt_indicators(
         self, close: np.ndarray, high: np.ndarray, low: np.ndarray, volume: np.ndarray

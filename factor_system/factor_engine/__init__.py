@@ -9,7 +9,7 @@
 
 推荐使用方式:
     from factor_system.factor_engine import api
-    
+
     # 计算因子
     factors = api.calculate_factors(
         factor_ids=["RSI", "STOCH"],

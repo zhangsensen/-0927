@@ -92,7 +92,7 @@ class FactorConsistencyGuard:
                 content = f.read()
 
             # 计算文件哈希
-            file_hash = hashlib.md5(content.encode()).hexdigest()
+            file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
             # 提取因子类
             factors = {}
@@ -176,7 +176,7 @@ class FactorConsistencyGuard:
                 content = f.read()
 
             # 计算文件哈希
-            file_hash = hashlib.md5(content.encode()).hexdigest()
+            file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
             factors = {}
             lines = content.split("\n")
@@ -213,7 +213,7 @@ class FactorConsistencyGuard:
                 content = f.read()
 
             # 计算文件哈希
-            file_hash = hashlib.md5(content.encode()).hexdigest()
+            file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
             factors = {}
             lines = content.split("\n")

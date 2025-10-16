@@ -8,8 +8,8 @@
   {
     "type": "sector_concentration",
     "sector": "未分类",
-    "value": 1.0,
+    "value": 0.7971458227118604,
     "limit": 0.4,
-    "message": "❌ 赛道权重超限: 未分类 100.00% > 40%"
+    "message": "❌ 赛道权重超限: 未分类 79.71% > 40%"
   }
 ]
