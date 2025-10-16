@@ -4,7 +4,6 @@
 # 0 18 * * * /path/to/repo/production/cron_daily.sh
 
 set -euo pipefail
-umask 0027
 
 # 设置文件权限掩码（日志/文件权限控制）
 umask 0027

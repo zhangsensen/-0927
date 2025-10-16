@@ -5,15 +5,18 @@ ETF横截面策略引擎
 基于多因子模型的ETF选择和配置策略
 """
 
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-import logging
-from typing import Dict, List, Optional, Tuple, Union
-from datetime import datetime, timedelta
-from dataclasses import dataclass
 
-from factor_system.factor_engine.providers.etf_cross_section_provider import ETFCrossSectionDataManager
 from factor_system.factor_engine.factors.etf_cross_section import ETFCrossSectionFactors
+from factor_system.factor_engine.providers.etf_cross_section_provider import (
+    ETFCrossSectionDataManager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StrategyConfig:
     """策略配置"""
+
     # 基础配置
     start_date: str
     end_date: str
@@ -71,7 +75,9 @@ class ETFCrossSectionStrategy:
             是否成功加载
         """
         try:
-            logger.info(f"开始加载因子数据: {self.config.start_date} ~ {self.config.end_date}")
+            logger.info(
+                f"开始加载因子数据: {self.config.start_date} ~ {self.config.end_date}"
+            )
 
             # 确定ETF投资域
             if self.config.etf_universe is None:
@@ -83,9 +89,7 @@ class ETFCrossSectionStrategy:
 
             # 计算因子数据
             self.factor_data = self.factor_calculator.calculate_all_factors(
-                self.config.start_date,
-                self.config.end_date,
-                self.config.etf_universe
+                self.config.start_date, self.config.end_date, self.config.etf_universe
             )
 
             if self.factor_data.empty:
@@ -110,7 +114,7 @@ class ETFCrossSectionStrategy:
             return []
 
         # 获取所有交易日期
-        all_dates = sorted(self.factor_data['date'].unique())
+        all_dates = sorted(self.factor_data["date"].unique())
         start_date = pd.to_datetime(self.config.start_date)
         end_date = pd.to_datetime(self.config.end_date)
 
@@ -127,7 +131,9 @@ class ETFCrossSectionStrategy:
             # 月度调仓：每月最后一个交易日
             for year in range(valid_dates[0].year, valid_dates[-1].year + 1):
                 for month in range(1, 13):
-                    month_dates = [d for d in valid_dates if d.year == year and d.month == month]
+                    month_dates = [
+                        d for d in valid_dates if d.year == year and d.month == month
+                    ]
                     if month_dates:
                         rebalance_dates.append(max(month_dates))
 
@@ -141,8 +147,13 @@ class ETFCrossSectionStrategy:
             # 季度调仓：每季度最后一个交易日
             for year in range(valid_dates[0].year, valid_dates[-1].year + 1):
                 for quarter in [3, 6, 9, 12]:
-                    quarter_dates = [d for d in valid_dates
-                                   if d.year == year and d.month <= quarter and d.month > quarter - 3]
+                    quarter_dates = [
+                        d
+                        for d in valid_dates
+                        if d.year == year
+                        and d.month <= quarter
+                        and d.month > quarter - 3
+                    ]
                     if quarter_dates:
                         rebalance_dates.append(max(quarter_dates))
 
@@ -166,7 +177,7 @@ class ETFCrossSectionStrategy:
             return []
 
         # 获取该日期的因子数据
-        date_factors = self.factor_data[self.factor_data['date'] == date].copy()
+        date_factors = self.factor_data[self.factor_data["date"] == date].copy()
 
         if date_factors.empty:
             logger.warning(f"日期 {date} 没有因子数据")
@@ -174,20 +185,22 @@ class ETFCrossSectionStrategy:
 
         # 基础筛选
         # 1. 最小综合得分（调整为负值允许）
-        if 'composite_score' in date_factors.columns:
-            date_factors = date_factors[date_factors['composite_score'] >= self.config.min_score]
+        if "composite_score" in date_factors.columns:
+            date_factors = date_factors[
+                date_factors["composite_score"] >= self.config.min_score
+            ]
 
         # 2. 最小流动性要求（调整为0，允许所有有流动性的ETF）
-        if 'liquidity_score' in date_factors.columns:
-            date_factors = date_factors[date_factors['liquidity_score'] >= 0]
+        if "liquidity_score" in date_factors.columns:
+            date_factors = date_factors[date_factors["liquidity_score"] >= 0]
 
         if date_factors.empty:
             logger.warning(f"日期 {date} 筛选后无符合条件的ETF")
             return []
 
         # 按综合得分排序
-        if 'composite_score' in date_factors.columns:
-            date_factors = date_factors.sort_values('composite_score', ascending=False)
+        if "composite_score" in date_factors.columns:
+            date_factors = date_factors.sort_values("composite_score", ascending=False)
 
         # 选择前N只
         selected_etfs = date_factors.head(self.config.top_n)
@@ -201,7 +214,9 @@ class ETFCrossSectionStrategy:
         logger.info(f"日期 {date} 选择了 {len(weights)} 只ETF")
         return weights
 
-    def _calculate_weights(self, selected_etfs: pd.DataFrame) -> List[Tuple[str, float]]:
+    def _calculate_weights(
+        self, selected_etfs: pd.DataFrame
+    ) -> List[Tuple[str, float]]:
         """
         计算权重
 
@@ -217,29 +232,29 @@ class ETFCrossSectionStrategy:
             # 等权重
             equal_weight = 1.0 / len(selected_etfs)
             for _, row in selected_etfs.iterrows():
-                weights.append((row['etf_code'], equal_weight))
+                weights.append((row["etf_code"], equal_weight))
 
         elif self.config.weight_method == "score":
             # 因子加权
-            if 'composite_score' in selected_etfs.columns:
-                total_score = selected_etfs['composite_score'].sum()
+            if "composite_score" in selected_etfs.columns:
+                total_score = selected_etfs["composite_score"].sum()
                 for _, row in selected_etfs.iterrows():
-                    weight = row['composite_score'] / total_score
-                    weights.append((row['etf_code'], weight))
+                    weight = row["composite_score"] / total_score
+                    weights.append((row["etf_code"], weight))
 
         elif self.config.weight_method == "inverse_vol":
             # 波动率倒数加权
-            if 'volatility_1y' in selected_etfs.columns:
+            if "volatility_1y" in selected_etfs.columns:
                 # 避免除零
-                vols = selected_etfs['volatility_1y'].replace(0, np.nan).dropna()
+                vols = selected_etfs["volatility_1y"].replace(0, np.nan).dropna()
                 if len(vols) > 0:
                     inv_vols = 1.0 / vols
                     total_inv_vol = inv_vols.sum()
 
                     for _, row in selected_etfs.iterrows():
-                        if row['volatility_1y'] > 0:
-                            weight = (1.0 / row['volatility_1y']) / total_inv_vol
-                            weights.append((row['etf_code'], weight))
+                        if row["volatility_1y"] > 0:
+                            weight = (1.0 / row["volatility_1y"]) / total_inv_vol
+                            weights.append((row["etf_code"], weight))
 
         # 归一化权重
         if weights:
@@ -249,7 +264,9 @@ class ETFCrossSectionStrategy:
 
         return weights
 
-    def _apply_risk_controls(self, weights: List[Tuple[str, float]], date: datetime) -> List[Tuple[str, float]]:
+    def _apply_risk_controls(
+        self, weights: List[Tuple[str, float]], date: datetime
+    ) -> List[Tuple[str, float]]:
         """
         应用风险控制
 
@@ -272,7 +289,9 @@ class ETFCrossSectionStrategy:
         # 2. 重新归一化
         total_weight = sum(weight for _, weight in adjusted_weights)
         if total_weight > 0:
-            adjusted_weights = [(etf, weight / total_weight) for etf, weight in adjusted_weights]
+            adjusted_weights = [
+                (etf, weight / total_weight) for etf, weight in adjusted_weights
+            ]
 
         # TODO: 3. 行业权重控制（需要ETF分类数据）
 
@@ -310,10 +329,10 @@ class ETFCrossSectionStrategy:
 
             # 记录组合
             portfolio_record = {
-                'date': rebalance_date,
-                'etfs': selected_etfs,
-                'etf_codes': [etf for etf, _ in selected_etfs],
-                'weights': [weight for _, weight in selected_etfs]
+                "date": rebalance_date,
+                "etfs": selected_etfs,
+                "etf_codes": [etf for etf, _ in selected_etfs],
+                "weights": [weight for _, weight in selected_etfs],
             }
             self.portfolio_history.append(portfolio_record)
 
@@ -327,7 +346,7 @@ class ETFCrossSectionStrategy:
             "config": self.config,
             "portfolio_history": portfolio_weights,
             "performance": performance,
-            "rebalance_count": len(rebalance_dates)
+            "rebalance_count": len(rebalance_dates),
         }
 
         logger.info(f"回测完成: {len(portfolio_weights)} 次调仓")
@@ -347,11 +366,11 @@ class ETFCrossSectionStrategy:
             return {}
 
         # 获取价格数据
-        all_etfs = list(set([etf for record in portfolio_weights for etf, _ in record['etfs']]))
+        all_etfs = list(
+            set([etf for record in portfolio_weights for etf, _ in record["etfs"]])
+        )
         price_data = self.data_manager.get_time_series_data(
-            self.config.start_date,
-            self.config.end_date,
-            all_etfs
+            self.config.start_date, self.config.end_date, all_etfs
         )
 
         if price_data.empty:
@@ -363,33 +382,37 @@ class ETFCrossSectionStrategy:
         portfolio_dates = []
 
         for i, record in enumerate(portfolio_weights):
-            current_date = record['date']
+            current_date = record["date"]
             portfolio_dates.append(current_date)
 
             if i == 0:
                 continue
 
-            prev_date = portfolio_weights[i-1]['date']
-            prev_etfs = {etf: weight for etf, weight in portfolio_weights[i-1]['etfs']}
+            prev_date = portfolio_weights[i - 1]["date"]
+            prev_etfs = {
+                etf: weight for etf, weight in portfolio_weights[i - 1]["etfs"]
+            }
 
             # 计算期间收益
             period_return = 0.0
             valid_returns = []
 
             for etf, weight in prev_etfs.items():
-                etf_data = price_data[price_data['etf_code'] == etf]
-                etf_data = etf_data[(etf_data['trade_date'] >= prev_date) &
-                                  (etf_data['trade_date'] <= current_date)]
+                etf_data = price_data[price_data["etf_code"] == etf]
+                etf_data = etf_data[
+                    (etf_data["trade_date"] >= prev_date)
+                    & (etf_data["trade_date"] <= current_date)
+                ]
 
                 if len(etf_data) >= 2:
-                    start_price = etf_data.iloc[0]['close']
-                    end_price = etf_data.iloc[-1]['close']
+                    start_price = etf_data.iloc[0]["close"]
+                    end_price = etf_data.iloc[-1]["close"]
                     etf_return = (end_price / start_price) - 1
                     period_return += weight * etf_return
                     valid_returns.append(etf_return)
 
             if valid_returns:
-                portfolio_value *= (1 + period_return)
+                portfolio_value *= 1 + period_return
                 portfolio_values.append(portfolio_value)
 
         # 计算统计指标
@@ -400,10 +423,14 @@ class ETFCrossSectionStrategy:
                 "total_return": portfolio_values[-1] - 1,
                 "annualized_return": (portfolio_values[-1] ** (252 / len(returns))) - 1,
                 "volatility": np.std(returns) * np.sqrt(252),
-                "sharpe_ratio": (np.mean(returns) / np.std(returns) * np.sqrt(252)) if np.std(returns) > 0 else 0,
+                "sharpe_ratio": (
+                    (np.mean(returns) / np.std(returns) * np.sqrt(252))
+                    if np.std(returns) > 0
+                    else 0
+                ),
                 "max_drawdown": self._calculate_max_drawdown(portfolio_values),
                 "portfolio_values": portfolio_values,
-                "portfolio_dates": portfolio_dates
+                "portfolio_dates": portfolio_dates,
             }
         else:
             performance = {"portfolio_values": portfolio_values}
@@ -437,7 +464,7 @@ class ETFCrossSectionStrategy:
             return None
 
         latest_record = self.portfolio_history[-1]
-        return latest_record['etfs']
+        return latest_record["etfs"]
 
     def export_results(self, filepath: str):
         """
@@ -453,12 +480,10 @@ class ETFCrossSectionStrategy:
         # 转换为DataFrame
         results_data = []
         for record in self.portfolio_history:
-            for etf, weight in record['etfs']:
-                results_data.append({
-                    'date': record['date'],
-                    'etf_code': etf,
-                    'weight': weight
-                })
+            for etf, weight in record["etfs"]:
+                results_data.append(
+                    {"date": record["date"], "etf_code": etf, "weight": weight}
+                )
 
         results_df = pd.DataFrame(results_data)
         results_df.to_csv(filepath, index=False)
@@ -471,7 +496,7 @@ def run_etf_cross_section_strategy(
     end_date: str,
     top_n: int = 8,
     rebalance_freq: str = "M",
-    weight_method: str = "equal"
+    weight_method: str = "equal",
 ) -> Dict:
     """
     运行ETF横截面策略的便捷函数
@@ -491,7 +516,7 @@ def run_etf_cross_section_strategy(
         end_date=end_date,
         top_n=top_n,
         rebalance_freq=rebalance_freq,
-        weight_method=weight_method
+        weight_method=weight_method,
     )
 
     strategy = ETFCrossSectionStrategy(config)
@@ -508,7 +533,7 @@ if __name__ == "__main__":
         end_date="2025-10-14",
         top_n=5,
         rebalance_freq="M",
-        weight_method="equal"
+        weight_method="equal",
     )
 
     strategy = ETFCrossSectionStrategy(config)

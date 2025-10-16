@@ -6,13 +6,14 @@
 2. 4条安全约束：T+1、min_history、价格口径、容错记账
 3. 告警不阻塞：覆盖率/零方差/重复列/时序哨兵只告警，仍保留
 4. VectorBT优先：使用成熟引擎，避免手写循环
+5. 配置驱动：使用配置管理器，消除硬编码
 """
 
 import argparse
-import hashlib
 import json
 import logging
 import random
+import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +21,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from factor_system.factor_engine.core.registry import FactorRegistry
+# 添加项目根目录到路径
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from etf_factor_engine_production.configs.config_manager import get_config
+from etf_factor_engine_production.scripts.metadata_generator import MetadataGenerator
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -33,19 +39,22 @@ class FullPanelProducer:
 
     def __init__(
         self,
-        data_dir: str = "raw/ETF/daily",
-        output_dir: str = "factor_output/etf_rotation",
-        engine_version: str = "1.0.0",
+        data_dir: str = None,
+        output_dir: str = None,
+        engine_version: str = None,
         diagnose_mode: bool = False,
     ):
-        self.data_dir = Path(data_dir)
-        self.output_dir = Path(output_dir)
+        # 使用配置管理器
+        config = get_config()
+        
+        self.data_dir = Path(data_dir or config.data_source_dir)
+        self.output_dir = Path(output_dir or config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.engine_version = engine_version
+        self.engine_version = engine_version or config.engine_version
         self.diagnose_mode = diagnose_mode
 
         # 价格口径
-        self.price_field = None
+        self.price_field = config.price_field
 
         # 因子概要
         self.factor_summary = []
@@ -64,8 +73,9 @@ class FullPanelProducer:
         logger.info("Step 1: 加载ETF数据")
         logger.info("=" * 60)
 
-        # 查找所有parquet文件
-        etf_files = list(self.data_dir.glob("*.parquet"))
+        # 查找所有parquet文件 - 修复：确保data_dir是Path对象
+        data_dir_path = Path(self.data_dir)
+        etf_files = list(data_dir_path.glob("*.parquet"))
         logger.info(f"发现 {len(etf_files)} 个ETF数据文件")
 
         if not etf_files:
@@ -360,12 +370,29 @@ class FullPanelProducer:
 
 
 def main():
+    # 加载配置
+    config = get_config()
+    
     parser = argparse.ArgumentParser(description="ETF全量因子面板生产（One Pass）")
-    parser.add_argument("--start-date", default="20240101", help="起始日期(YYYYMMDD)")
-    parser.add_argument("--end-date", default="20251014", help="结束日期(YYYYMMDD)")
-    parser.add_argument("--data-dir", default="raw/ETF/daily", help="ETF数据目录")
     parser.add_argument(
-        "--output-dir", default="factor_output/etf_rotation", help="输出目录"
+        "--start-date", 
+        default=config.start_date, 
+        help=f"起始日期(YYYYMMDD，默认{config.start_date})"
+    )
+    parser.add_argument(
+        "--end-date", 
+        default=config.end_date, 
+        help=f"结束日期(YYYYMMDD，默认{config.end_date})"
+    )
+    parser.add_argument(
+        "--data-dir", 
+        default=config.data_source_dir, 
+        help=f"ETF数据目录（默认{config.data_source_dir}）"
+    )
+    parser.add_argument(
+        "--output-dir", 
+        default=config.output_dir, 
+        help=f"输出目录（默认{config.output_dir}）"
     )
     parser.add_argument(
         "--diagnose", action="store_true", help="诊断模式：输出详细计算信息"

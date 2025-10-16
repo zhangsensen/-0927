@@ -1,0 +1,43 @@
+[
+  {
+    "type": "single_position",
+    "value": 0.2523087717720223,
+    "limit": 0.2,
+    "message": "❌ 单票权重超限: 25.23% > 20%"
+  },
+  {
+    "type": "sector_concentration",
+    "sector": "未分类",
+    "value": 1.0,
+    "limit": 0.4,
+    "message": "❌ 赛道权重超限: 未分类 100.00% > 40%"
+  },
+  {
+    "type": "adv_constraint",
+    "symbol": "513050.SH",
+    "value": 0.1813266423769784,
+    "limit": 0.03,
+    "message": "❌ ADV%超限: 18.13% > 3%"
+  },
+  {
+    "type": "adv_constraint",
+    "symbol": "513100.SH",
+    "value": 0.9576589784467825,
+    "limit": 0.03,
+    "message": "❌ ADV%超限: 95.77% > 3%"
+  },
+  {
+    "type": "adv_constraint",
+    "symbol": "513130.SH",
+    "value": 0.09875368702945961,
+    "limit": 0.03,
+    "message": "❌ ADV%超限: 9.88% > 3%"
+  },
+  {
+    "type": "adv_constraint",
+    "symbol": "513500.SH",
+    "value": 2.044884992148688,
+    "limit": 0.03,
+    "message": "❌ ADV%超限: 204.49% > 3%"
+  }
+]

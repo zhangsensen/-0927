@@ -5,17 +5,24 @@ ETF横截面数据存储演示脚本
 展示横截面数据的持久化存储、缓存和查询功能
 """
 
-import pandas as pd
-import numpy as np
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-from factor_system.factor_engine.providers.etf_cross_section_provider import ETFCrossSectionDataManager
-from factor_system.factor_engine.providers.etf_cross_section_storage import ETFCrossSectionStorage
-from factor_system.factor_engine.factors.etf_cross_section import ETFCrossSectionFactors
+import numpy as np
+import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from factor_system.factor_engine.factors.etf_cross_section import ETFCrossSectionFactors
+from factor_system.factor_engine.providers.etf_cross_section_provider import (
+    ETFCrossSectionDataManager,
+)
+from factor_system.factor_engine.providers.etf_cross_section_storage import (
+    ETFCrossSectionStorage,
+)
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +62,7 @@ def demo_factor_calculation_with_storage():
     # 计算因子（会自动保存）
     start_date = "2025-09-01"
     end_date = "2025-10-14"
-    test_etfs = ['510300.SH', '159915.SZ', '515030.SH', '518880.SH', '513100.SH']
+    test_etfs = ["510300.SH", "159915.SZ", "515030.SH", "518880.SH", "513100.SH"]
 
     print(f"⚙️ 开始计算因子: {start_date} ~ {end_date}")
     print(f"📈 ETF列表: {test_etfs}")
@@ -67,7 +74,7 @@ def demo_factor_calculation_with_storage():
         end_date=end_date,
         etf_codes=test_etfs,
         use_cache=False,  # 不使用缓存
-        save_to_storage=True  # 保存到存储
+        save_to_storage=True,  # 保存到存储
     )
 
     if not factors_df.empty:
@@ -90,7 +97,7 @@ def demo_factor_calculation_with_storage():
             end_date=end_date,
             etf_codes=test_etfs,
             use_cache=True,  # 使用缓存
-            save_to_storage=False  # 不再保存
+            save_to_storage=False,  # 不再保存
         )
         end_time = datetime.now()
         cache_time = (end_time - start_time).total_seconds()
@@ -127,15 +134,17 @@ def demo_data_loading():
         print(f"✅ 成功加载综合因子数据:")
         print(f"   记录数: {len(stored_factors)}")
         print(f"   ETF数: {stored_factors['etf_code'].nunique()}")
-        print(f"   因子列数: {len([col for col in stored_factors.columns if col not in ['etf_code', 'date']])}")
+        print(
+            f"   因子列数: {len([col for col in stored_factors.columns if col not in ['etf_code', 'date']])}"
+        )
 
         # 显示最新数据
-        latest_date = stored_factors['date'].max()
-        latest_data = stored_factors[stored_factors['date'] == latest_date]
+        latest_date = stored_factors["date"].max()
+        latest_data = stored_factors[stored_factors["date"] == latest_date]
 
-        if not latest_data.empty and 'composite_score' in latest_data.columns:
+        if not latest_data.empty and "composite_score" in latest_data.columns:
             print(f"\n📊 最新因子排名 ({latest_date}):")
-            top_etfs = latest_data.nlargest(5, 'composite_score')
+            top_etfs = latest_data.nlargest(5, "composite_score")
             for i, (_, row) in enumerate(top_etfs.iterrows()):
                 print(f"   {i+1}. {row['etf_code']}: {row['composite_score']:.4f}")
     else:
@@ -152,13 +161,15 @@ def demo_cache_management():
     calculator = ETFCrossSectionFactors(enable_storage=True)
 
     # 生成测试数据
-    test_data = pd.DataFrame({
-        'etf_code': ['510300.SH', '159915.SZ', '515030.SH'],
-        'date': ['2025-10-14', '2025-10-14', '2025-10-14'],
-        'composite_score': [0.1, 0.2, 0.3],
-        'momentum_score': [0.15, 0.25, 0.35],
-        'quality_score': [0.12, 0.22, 0.32]
-    })
+    test_data = pd.DataFrame(
+        {
+            "etf_code": ["510300.SH", "159915.SZ", "515030.SH"],
+            "date": ["2025-10-14", "2025-10-14", "2025-10-14"],
+            "composite_score": [0.1, 0.2, 0.3],
+            "momentum_score": [0.15, 0.25, 0.35],
+            "quality_score": [0.12, 0.22, 0.32],
+        }
+    )
 
     print(f"🧪 创建测试缓存数据: {len(test_data)} 条记录")
 
@@ -207,19 +218,17 @@ def demo_factor_ranking():
 
     # 获取因子排名
     ranking_df = calculator.get_factor_ranking(
-        date=test_date,
-        top_n=5,
-        factor_col='composite_score'
+        date=test_date, top_n=5, factor_col="composite_score"
     )
 
     if not ranking_df.empty:
         print(f"✅ 成功获取因子排名:")
         for i, (_, row) in enumerate(ranking_df.iterrows()):
-            score = row.get('composite_score', 0)
+            score = row.get("composite_score", 0)
             print(f"   {i+1}. {row['etf_code']}: {score:.4f}")
 
         # 尝试其他因子排名
-        other_factors = ['momentum_score', 'quality_score', 'liquidity_score']
+        other_factors = ["momentum_score", "quality_score", "liquidity_score"]
         print(f"\n📊 其他因子排名 ({test_date}):")
 
         for factor in other_factors:
@@ -248,14 +257,18 @@ def demo_data_validation():
         print(f"   总记录数: {len(factors_df)}")
         print(f"   ETF数量: {factors_df['etf_code'].nunique()}")
         print(f"   日期范围: {factors_df['date'].min()} ~ {factors_df['date'].max()}")
-        print(f"   因子列数: {len([col for col in factors_df.columns if col not in ['etf_code', 'date']])}")
+        print(
+            f"   因子列数: {len([col for col in factors_df.columns if col not in ['etf_code', 'date']])}"
+        )
 
         # 检查数据完整性
         print(f"\n🔍 数据完整性检查:")
 
         # 检查空值
         null_counts = factors_df.isnull().sum()
-        high_null_cols = null_counts[null_counts > len(factors_df) * 0.1]  # 超过10%空值的列
+        high_null_cols = null_counts[
+            null_counts > len(factors_df) * 0.1
+        ]  # 超过10%空值的列
 
         if high_null_cols.empty:
             print(f"   ✅ 无高缺失率列")
@@ -267,17 +280,28 @@ def demo_data_validation():
 
         # 检查数值范围
         numeric_cols = factors_df.select_dtypes(include=[np.number]).columns
-        for col in ['composite_score', 'momentum_score', 'quality_score', 'liquidity_score']:
+        for col in [
+            "composite_score",
+            "momentum_score",
+            "quality_score",
+            "liquidity_score",
+        ]:
             if col in numeric_cols:
                 col_data = factors_df[col].dropna()
                 if not col_data.empty:
-                    print(f"   {col}: 范围 [{col_data.min():.4f}, {col_data.max():.4f}], 均值 {col_data.mean():.4f}")
+                    print(
+                        f"   {col}: 范围 [{col_data.min():.4f}, {col_data.max():.4f}], 均值 {col_data.mean():.4f}"
+                    )
 
         # 检查ETF覆盖度
-        etf_counts = factors_df.groupby('etf_code').size().sort_values(ascending=False)
+        etf_counts = factors_df.groupby("etf_code").size().sort_values(ascending=False)
         print(f"\n📈 ETF覆盖度:")
         for etf, count in etf_counts.head(10).items():
-            coverage = count / len(factors_df[factors_df['date'] == factors_df['date'].max()]) * 100
+            coverage = (
+                count
+                / len(factors_df[factors_df["date"] == factors_df["date"].max()])
+                * 100
+            )
             print(f"   {etf}: {count} 条记录 ({coverage:.1f}% 覆盖度)")
 
     else:

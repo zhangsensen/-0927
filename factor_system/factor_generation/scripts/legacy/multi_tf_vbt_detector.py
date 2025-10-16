@@ -25,11 +25,11 @@ except ImportError:  # pragma: no cover - optional dependency fallback
 
 warnings.filterwarnings("ignore")
 
-# 配置管理
-from config import get_config, setup_logging
-
 # 导入154指标引擎
 from enhanced_factor_calculator import EnhancedFactorCalculator, IndicatorConfig
+
+# 配置管理
+from config import get_config, setup_logging
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())

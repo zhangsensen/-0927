@@ -5,11 +5,9 @@ data:
   source_dir: "raw/ETF/daily"
   output_dir: "factor_output/etf_rotation"
   price_field: "close"  # 优先使用close，如有adj_close会自动映射
-
-# 时间范围
-timeframe:
-  start_date: "20200102"
-  end_date: "20251014"
+  date_range:
+    start: "20200102"
+    end: "20251014"
   frequency: "daily"
 
 # 因子计算
@@ -59,3 +57,21 @@ diagnostics:
   coverage_threshold: 0.10
   correlation_threshold: 0.999
   temporal_samples: 5
+
+# 引擎配置
+engine:
+  version: "1.0.0"
+  price_field: "close"
+
+# 性能优化配置
+performance:
+  compression: "snappy"  # 压缩算法: snappy, gzip, lz4
+  dtype_optimization: true  # 启用float32优化
+  parallel_workers: 4  # 并行计算线程数
+
+# 质量控制配置
+quality:
+  correlation_threshold: 0.95  # 因子去重相关性阈值
+  null_threshold: 0.10  # 缺失率阈值
+  zero_threshold: 0.50  # 零值率阈值
+  volatility_threshold: 100.0  # 波动率阈值

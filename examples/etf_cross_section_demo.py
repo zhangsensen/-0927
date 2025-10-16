@@ -5,25 +5,32 @@ ETF横截面策略演示脚本
 展示完整的ETF横截面策略分析流程
 """
 
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
 from factor_system.factor_engine.etf_cross_section_strategy import (
-    ETFCrossSectionStrategy, StrategyConfig, run_etf_cross_section_strategy
+    ETFCrossSectionStrategy,
+    StrategyConfig,
+    run_etf_cross_section_strategy,
 )
-from factor_system.factor_engine.providers.etf_cross_section_provider import ETFCrossSectionDataManager
 from factor_system.factor_engine.factors.etf_cross_section import ETFCrossSectionFactors
+from factor_system.factor_engine.providers.etf_cross_section_provider import (
+    ETFCrossSectionDataManager,
+)
 
 # 设置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS']
-plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams["font.sans-serif"] = ["SimHei", "Arial Unicode MS"]
+plt.rcParams["axes.unicode_minus"] = False
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -39,11 +46,13 @@ def demo_etf_data_overview():
     print(f"📊 数据摘要:")
     print(f"   总ETF数量: {summary['total_etfs']}")
     print(f"   数据目录: {summary['data_directory']}")
-    if 'date_range' in summary:
-        print(f"   数据时间范围: {summary['date_range']['start']} ~ {summary['date_range']['end']}")
+    if "date_range" in summary:
+        print(
+            f"   数据时间范围: {summary['date_range']['start']} ~ {summary['date_range']['end']}"
+        )
 
     print(f"\n📈 前10只ETF:")
-    for i, etf in enumerate(summary['etf_list'][:10]):
+    for i, etf in enumerate(summary["etf_list"][:10]):
         print(f"   {i+1:2d}. {etf}")
 
     # 获取最新横截面数据
@@ -57,7 +66,7 @@ def demo_etf_data_overview():
         print(f"   总成交额: {cross_section['amount'].sum()/1e8:.2f} 亿元")
 
         # 按成交额排序
-        top_by_amount = cross_section.nlargest(5, 'amount')
+        top_by_amount = cross_section.nlargest(5, "amount")
         print(f"\n💰 成交额前5名:")
         for _, row in top_by_amount.iterrows():
             print(f"   {row['etf_code']}: {row['amount']/1e8:.2f} 亿元")
@@ -72,7 +81,7 @@ def demo_factor_calculation():
     # 计算因子
     start_date = "2025-01-01"
     end_date = "2025-10-14"
-    test_etfs = ['510300.SH', '159915.SZ', '515030.SH', '518880.SH', '513100.SH']
+    test_etfs = ["510300.SH", "159915.SZ", "515030.SH", "518880.SH", "513100.SH"]
 
     calculator = ETFCrossSectionFactors()
     factors_df = calculator.calculate_all_factors(start_date, end_date, test_etfs)
@@ -87,21 +96,21 @@ def demo_factor_calculation():
     print(f"📅 时间范围: {factors_df['date'].min()} ~ {factors_df['date'].max()}")
 
     # 显示可用因子
-    factor_cols = [col for col in factors_df.columns if col not in ['etf_code', 'date']]
+    factor_cols = [col for col in factors_df.columns if col not in ["etf_code", "date"]]
     print(f"\n📋 可用因子 ({len(factor_cols)} 个):")
     for i, col in enumerate(factor_cols):
         print(f"   {i+1:2d}. {col}")
 
     # 最新因子排名
-    latest_date = factors_df['date'].max()
-    latest_factors = factors_df[factors_df['date'] == latest_date].copy()
+    latest_date = factors_df["date"].max()
+    latest_factors = factors_df[factors_df["date"] == latest_date].copy()
 
-    if 'composite_score' in latest_factors.columns:
-        latest_factors = latest_factors.sort_values('composite_score', ascending=False)
+    if "composite_score" in latest_factors.columns:
+        latest_factors = latest_factors.sort_values("composite_score", ascending=False)
 
         print(f"\n🏆 最新因子排名 ({latest_date}):")
         for i, (_, row) in enumerate(latest_factors.iterrows()):
-            score = row['composite_score'] if not pd.isna(row['composite_score']) else 0
+            score = row["composite_score"] if not pd.isna(row["composite_score"]) else 0
             print(f"   {i+1:2d}. {row['etf_code']}: {score:.4f}")
 
 
@@ -118,7 +127,7 @@ def demo_strategy_backtest():
         top_n=8,
         rebalance_freq="M",
         weight_method="equal",
-        max_single_weight=0.20
+        max_single_weight=0.20,
     )
 
     print(f"⚙️ 策略配置:")
@@ -160,7 +169,7 @@ def demo_strategy_backtest():
         print(f"\n📈 组合历史分析:")
         etf_counts = {}
         for record in portfolio_history:
-            for etf, _ in record['etfs']:
+            for etf, _ in record["etfs"]:
                 etf_counts[etf] = etf_counts.get(etf, 0) + 1
 
         # 按出现次数排序
@@ -194,31 +203,33 @@ def demo_strategy_comparison():
             start_date="2024-01-01",
             end_date="2025-10-14",
             top_n=strategy_config["top_n"],
-            weight_method=strategy_config["weight_method"]
+            weight_method=strategy_config["weight_method"],
         )
 
         if result["success"]:
             performance = result.get("performance", {})
-            results.append({
-                "策略": strategy_config["name"],
-                "ETF数量": strategy_config["top_n"],
-                "权重方法": strategy_config["weight_method"],
-                "总收益": performance.get("total_return", 0),
-                "年化收益": performance.get("annualized_return", 0),
-                "夏普比率": performance.get("sharpe_ratio", 0),
-                "最大回撤": performance.get("max_drawdown", 0),
-                "调仓次数": result.get("rebalance_count", 0)
-            })
+            results.append(
+                {
+                    "策略": strategy_config["name"],
+                    "ETF数量": strategy_config["top_n"],
+                    "权重方法": strategy_config["weight_method"],
+                    "总收益": performance.get("total_return", 0),
+                    "年化收益": performance.get("annualized_return", 0),
+                    "夏普比率": performance.get("sharpe_ratio", 0),
+                    "最大回撤": performance.get("max_drawdown", 0),
+                    "调仓次数": result.get("rebalance_count", 0),
+                }
+            )
 
     # 显示对比结果
     if results:
         comparison_df = pd.DataFrame(results)
         print(f"\n📊 策略对比结果:")
-        print(comparison_df.to_string(index=False, float_format='%.2%'))
+        print(comparison_df.to_string(index=False, float_format="%.2%"))
 
         # 找出最佳策略
-        best_sharpe = comparison_df.loc[comparison_df['夏普比率'].idxmax()]
-        best_return = comparison_df.loc[comparison_df['年化收益'].idxmax()]
+        best_sharpe = comparison_df.loc[comparison_df["夏普比率"].idxmax()]
+        best_return = comparison_df.loc[comparison_df["年化收益"].idxmax()]
 
         print(f"\n🏆 最佳夏普比率策略: {best_sharpe['策略']}")
         print(f"   夏普比率: {best_sharpe['夏普比率']:.2f}")
@@ -238,8 +249,18 @@ def demo_factor_analysis():
     # 获取因子数据
     start_date = "2024-01-01"
     end_date = "2025-10-14"
-    etf_list = ['510300.SH', '159915.SZ', '515030.SH', '518880.SH', '513100.SH',
-                '512880.SH', '512480.SH', '159995.SZ', '159801.SZ', '512400.SH']
+    etf_list = [
+        "510300.SH",
+        "159915.SZ",
+        "515030.SH",
+        "518880.SH",
+        "513100.SH",
+        "512880.SH",
+        "512480.SH",
+        "159995.SZ",
+        "159801.SZ",
+        "512400.SH",
+    ]
 
     calculator = ETFCrossSectionFactors()
     factors_df = calculator.calculate_all_factors(start_date, end_date, etf_list)
@@ -249,7 +270,7 @@ def demo_factor_analysis():
         return
 
     # 因子统计
-    factor_cols = [col for col in factors_df.columns if col not in ['etf_code', 'date']]
+    factor_cols = [col for col in factors_df.columns if col not in ["etf_code", "date"]]
     print(f"📊 因子统计 ({len(factor_cols)} 个因子):")
 
     for col in factor_cols[:10]:  # 显示前10个因子
@@ -271,14 +292,16 @@ def demo_factor_analysis():
         # 找出高相关性因子对
         high_corr_pairs = []
         for i in range(len(correlation_matrix.columns)):
-            for j in range(i+1, len(correlation_matrix.columns)):
+            for j in range(i + 1, len(correlation_matrix.columns)):
                 corr_val = correlation_matrix.iloc[i, j]
                 if abs(corr_val) > 0.7 and not pd.isna(corr_val):
-                    high_corr_pairs.append((
-                        correlation_matrix.columns[i],
-                        correlation_matrix.columns[j],
-                        corr_val
-                    ))
+                    high_corr_pairs.append(
+                        (
+                            correlation_matrix.columns[i],
+                            correlation_matrix.columns[j],
+                            corr_val,
+                        )
+                    )
 
         if high_corr_pairs:
             print(f"\n🔗 高相关性因子对 (|相关系数| > 0.7):")

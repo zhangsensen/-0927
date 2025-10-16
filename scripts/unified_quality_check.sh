@@ -126,7 +126,7 @@ if command_exists vulture; then
     fi
 
     # 统计死代码数量
-    dead_code_count=$(grep -c "unused" "$TEMP_DIR/vulture_report.txt" 2>/dev/null || echo 0)
+    dead_code_count=$(grep -c "unused" "$TEMP_DIR/vulture_report.txt" 2>/dev/null | tr -d '\n' || echo 0)
 
     if [[ $dead_code_count -eq 0 ]]; then
         print_success "未发现死代码问题"
@@ -146,7 +146,7 @@ print_info "检查未来函数使用情况..."
 if [[ -f "factor_system/factor_screening/scripts/check_future_functions.py" ]]; then
     python factor_system/factor_screening/scripts/check_future_functions.py > "$TEMP_DIR/future_check.txt" 2>&1 || true
 
-    if grep -q "发现未来函数" "$TEMP_DIR/future_check.txt" 2>/dev/null; then
+    if grep -q "^❌" "$TEMP_DIR/future_check.txt" 2>/dev/null; then
         print_error "发现未来函数使用！这是严重的安全风险"
         grep "未来函数" "$TEMP_DIR/future_check.txt" | head -5
     else
@@ -214,7 +214,7 @@ fi
 if command_exists mypy; then
     print_info "类型检查（可选）..."
     mypy factor_system/ --ignore-missing-imports > "$TEMP_DIR/mypy_report.txt" 2>&1 || true
-    type_errors=$(grep -c "error:" "$TEMP_DIR/mypy_report.txt" 2>/dev/null || echo 0)
+    type_errors=$(grep -c "error:" "$TEMP_DIR/mypy_report.txt" 2>/dev/null | tr -d '\n' || echo 0)
 
     if [[ $type_errors -eq 0 ]]; then
         print_success "类型检查通过"
@@ -229,7 +229,7 @@ if command_exists bandit; then
     bandit -r factor_system/ -f json -o "$TEMP_DIR/bandit_report.json" >/dev/null 2>&1 || true
 
     if [[ -f "$TEMP_DIR/bandit_report.json" ]]; then
-        high_issues=$(jq -r '.results | map(select(.issue_severity == "HIGH")) | length' "$TEMP_DIR/bandit_report.json" 2>/dev/null || echo 0)
+        high_issues=$(jq -r '.results | map(select(.issue_severity == "HIGH")) | length' "$TEMP_DIR/bandit_report.json" 2>/dev/null | tr -d '\n' || echo 0)
         if [[ $high_issues -eq 0 ]]; then
             print_success "未发现高风险安全问题"
         else
@@ -268,7 +268,7 @@ fi
 
 # 收集Vulture数据
 if [[ -f "$TEMP_DIR/vulture_report.txt" ]]; then
-    dead_count=$(grep -c "unused" "$TEMP_DIR/vulture_report.txt" 2>/dev/null || echo "0")
+    dead_count=$(grep -c "unused" "$TEMP_DIR/vulture_report.txt" 2>/dev/null | tr -d '\n' || echo "0")
     echo "### Vulture 死代码检测" >> "$REPORT_DIR/quality_summary.md"
     if [[ $dead_count -eq 0 ]]; then
         echo "- 状态: ✅ 无死代码" >> "$REPORT_DIR/quality_summary.md"
@@ -281,7 +281,7 @@ fi
 # 添加量化系统检查结果
 echo "### 量化系统安全检查" >> "$REPORT_DIR/quality_summary.md"
 if [[ -f "$TEMP_DIR/future_check.txt" ]]; then
-    if grep -q "发现未来函数" "$TEMP_DIR/future_check.txt" 2>/dev/null; then
+    if grep -q "^❌" "$TEMP_DIR/future_check.txt" 2>/dev/null; then
         echo "- 未来函数检查: ❌ 发现违规" >> "$REPORT_DIR/quality_summary.md"
     else
         echo "- 未来函数检查: ✅ 通过" >> "$REPORT_DIR/quality_summary.md"
@@ -324,7 +324,7 @@ if [[ -f "$TEMP_DIR/pyscn_report.json" ]]; then
 fi
 
 if [[ -f "$TEMP_DIR/vulture_report.txt" ]]; then
-    dead_count=$(grep -c "unused" "$TEMP_DIR/vulture_report.txt" 2>/dev/null || echo "0")
+    dead_count=$(grep -c "unused" "$TEMP_DIR/vulture_report.txt" 2>/dev/null | tr -d '\n' || echo "0")
     if [[ $dead_count -eq 0 ]]; then
         echo -e "${GEAR} 死代码检测: ${GREEN}通过${NC}"
     else
@@ -333,7 +333,7 @@ if [[ -f "$TEMP_DIR/vulture_report.txt" ]]; then
 fi
 
 if [[ -f "$TEMP_DIR/future_check.txt" ]]; then
-    if grep -q "发现未来函数" "$TEMP_DIR/future_check.txt" 2>/dev/null; then
+    if grep -q "^❌" "$TEMP_DIR/future_check.txt" 2>/dev/null; then
         echo -e "${GEAR} 未来函数检查: ${RED}未通过${NC}"
     else
         echo -e "${GEAR} 未来函数检查: ${GREEN}通过${NC}"

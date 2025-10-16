@@ -11,7 +11,8 @@
 - **向量化计算**: 100%采用Pandas/NumPy向量化，无循环
 - **双层缓存系统**: 内存+磁盘缓存，大幅提升性能
 - **严格风控**: 无前视偏差，T+1执行约束，可交易性过滤
-- **ETF横截面系统**: 完整的ETF轮动因子计算框架
+- **ETF横截面系统**: 完整的ETF轮动因子计算框架，支持生产级横截面分析
+- **生产就绪**: 完整的一致性验证、质量控制和生产流水线
 
 ### 支持的时间框架
 
@@ -107,22 +108,34 @@ print(f"可用因子数: {len(registry)}")
 │   │   ├── api.py               # 统一API入口
 │   │   ├── core/                # 核心引擎组件
 │   │   ├── providers/           # 数据提供者
-│   │   └── factors/             # 因子实现
-│   │       ├── etf_cross_section/  # ETF横截面因子系统
-│   │       ├── money_flow/      # 资金流因子
-│   │       ├── technical/       # 技术指标因子
-│   │       └── factor_registry.py  # 统一因子注册表
+│   │   ├── adapters/            # 生产适配器
+│   │   ├── factors/             # 因子实现
+│   │   │   ├── etf_cross_section/  # ETF横截面因子系统
+│   │   │   ├── money_flow/      # 资金流因子
+│   │   │   ├── technical/       # 技术指标因子
+│   │   │   └── factor_registry.py  # 统一因子注册表
+│   │   └── settings.py          # 引擎配置管理
 │   ├── factor_generation/       # 批量因子生成
 │   ├── factor_screening/        # 专业因子筛选
+│   ├── research/                # 研究工具
+│   ├── shared/                  # 共享组件
 │   └── utils/                   # 工具函数
 ├── a_shares_strategy/           # A股策略框架
 ├── etf_download_manager/        # ETF数据管理
 ├── etf_rotation/                # ETF轮动策略
+├── etf_cross_section_production/ # ETF横截面生产系统
 ├── hk_midfreq/                  # 港股中频策略
 ├── examples/                    # 使用示例
 ├── scripts/                     # 工具脚本
+│   ├── production_pipeline.py   # 生产流水线
+│   ├── ci_checks.py            # CI检查
+│   ├── cache_cleaner.py        # 缓存清理
+│   └── comprehensive_smoke_test.py # 冒烟测试
 ├── tests/                       # 测试套件
+├── production/                  # 生产配置
 ├── raw/                         # 原始数据存储
+├── cache/                       # 缓存目录
+├── factor_output/               # 因子输出
 └── docs/                        # 详细文档
 ```
 
@@ -139,7 +152,6 @@ make test           # 运行测试（pytest）
 make test-cov       # 运行测试并生成覆盖率报告
 make clean          # 清理缓存和临时文件
 make check          # 运行所有质量检查（pre-commit）
-make run-example    # 运行示例筛选任务
 make update-deps    # 更新依赖
 make setup-dev      # 初始化开发环境
 ```
@@ -161,6 +173,22 @@ pytest -v
 pre-commit run --all-files
 ```
 
+### 生产命令
+
+```bash
+# 运行生产流水线
+python scripts/production_pipeline.py
+
+# 运行一致性检查
+python scripts/ci_checks.py
+
+# 清理缓存
+python scripts/cache_cleaner.py --etf-cross-section
+
+# 运行冒烟测试
+python scripts/comprehensive_smoke_test.py
+```
+
 ## 因子系统详解
 
 ### 可用因子类别
@@ -176,8 +204,8 @@ pre-commit run --all-files
 9. **成交量指标类** (6个): OBV, VWAP, Volume_Momentum等
 10. **方向性指标类** (6个): ADX, PLUS_DI, MINUS_DI等
 11. **K线形态类** (60+个): CDL3WHITESOLDIERS, CDLMORNINGSTAR等
-12. **资金流因子类** (12个): MainNetInflow_Rate, LargeOrder_Ratio等
-13. **ETF横截面因子类**: 专门的ETF轮动因子系统
+12. **资金流因子类** (15个): MainNetInflow_Rate, LargeOrder_Ratio等
+13. **ETF横截面因子类**: 专门的ETF轮动因子系统，支持生产级横截面分析
 
 ### 核心因子集
 
@@ -220,6 +248,10 @@ from etf_rotation.portfolio import ETFPortfolio
 
 scorer = ETFScorer()
 portfolio = ETFPortfolio()
+
+# ETF横截面生产系统
+from factor_system.factor_engine.factors.etf_cross_section import create_etf_cross_section_manager
+manager = create_etf_cross_section_manager()
 ```
 
 ## 配置管理
@@ -262,7 +294,8 @@ settings = get_research_config()
 - **缓存命中率**: >90%（智能预热）
 - **总因子数**: 258+ (包括参数化变体)
 - **核心因子**: 约112个 (不含参数化变体)
-- **ETF横截面因子**: 专门的ETF轮动因子系统
+- **ETF横截面因子**: 专门的ETF轮动因子系统，支持生产级分析
+- **生产验证**: 完整的一致性验证和质量控制体系
 
 ## 质量控制
 
@@ -273,6 +306,7 @@ settings = get_research_config()
 - **静态分析**: flake8, vulture, bandit安全扫描
 - **测试覆盖**: pytest + coverage，核心组件全覆盖
 - **依赖管理**: uv现代包管理器，支持依赖分组
+- **生产验证**: 自动化CI检查和一致性验证
 
 ### 数据质量标准
 
@@ -281,6 +315,7 @@ settings = get_research_config()
 - **可交易性约束**: `tradability_mask`有效过滤不可交易样本
 - **统一口径**: 所有占比因子分母锁死为`turnover_amount`
 - **ETF横截面一致性**: 专门的冒烟测试验证系统
+- **生产监控**: 实时质量监控和异常检测
 
 ## 开发最佳实践
 
@@ -348,6 +383,12 @@ python scripts/cache_cleaner.py --etf-cross-section
 
 # 验证系统一致性
 python tests/test_factor_engine_consistency.py
+
+# 运行生产验证
+python scripts/production_cross_section_validation.py
+
+# 运行质量检查
+make check
 ```
 
 ## 相关文档
@@ -358,6 +399,7 @@ python tests/test_factor_engine_consistency.py
 - **项目结构**: `docs/README.md` - 详细文档索引
 - **CLAUDE指南**: `CLAUDE.md` - 完整项目指导
 - **ETF横截面**: `scripts/smoke_test_report.md` - 系统测试报告
+- **生产验证**: `FINAL_PRODUCTION_REPORT.md` - 生产就绪报告
 
 ## 环境信息
 
@@ -366,14 +408,22 @@ python tests/test_factor_engine_consistency.py
 - **包管理器**: uv (现代Python包管理)
 - **项目路径**: `/Users/zhangshenshen/深度量化0927`
 - **Git仓库**: https://github.com/zhangsensen/-0927.git
+- **项目名称**: factor-engine
+- **当前版本**: 0.2.0
 
 ## 维护信息
 
 - **维护者**: 量化工程团队
 - **更新日期**: 2025-10-16
-- **版本**: v3.1
+- **版本**: v0.2.0
 - **状态**: 生产就绪
-- **新增特性**: ETF横截面因子系统、统一管理器、专业因子筛选
+- **新增特性**: 
+  - ETF横截面因子系统增强
+  - 生产级一致性验证
+  - 完整的质量控制体系
+  - 自动化CI/CD流水线
+  - 路径管理工具集成
+  - 增强的错误处理和监控
 
 ---
 

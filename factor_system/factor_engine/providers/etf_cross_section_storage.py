@@ -5,13 +5,14 @@ ETF横截面数据持久化存储模块
 提供横截面数据的读写、缓存和管理功能
 """
 
+import hashlib
 import json
 import logging
-import pandas as pd
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
-from datetime import datetime, timedelta
-import hashlib
+
+import pandas as pd
 
 from factor_system.utils import get_factor_output_dir
 
@@ -41,14 +42,24 @@ class ETFCrossSectionStorage:
         self.metadata_dir = self.base_dir / "metadata"
 
         # 确保目录存在
-        for dir_path in [self.daily_dir, self.monthly_dir, self.factors_dir, self.cache_dir, self.metadata_dir]:
+        for dir_path in [
+            self.daily_dir,
+            self.monthly_dir,
+            self.factors_dir,
+            self.cache_dir,
+            self.metadata_dir,
+        ]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"ETF横截面存储初始化完成: {self.base_dir}")
 
-    def _get_file_path(self, data_type: str, date: Union[str, datetime],
-                      etf_code: Optional[str] = None,
-                      suffix: str = "parquet") -> Path:
+    def _get_file_path(
+        self,
+        data_type: str,
+        date: Union[str, datetime],
+        etf_code: Optional[str] = None,
+        suffix: str = "parquet",
+    ) -> Path:
         """
         获取文件路径
 
@@ -90,10 +101,12 @@ class ETFCrossSectionStorage:
 
         return dir_path / year_month / filename
 
-    def save_cross_section_data(self,
-                               cross_section_df: pd.DataFrame,
-                               date: Union[str, datetime],
-                               data_type: str = "daily") -> bool:
+    def save_cross_section_data(
+        self,
+        cross_section_df: pd.DataFrame,
+        date: Union[str, datetime],
+        data_type: str = "daily",
+    ) -> bool:
         """
         保存横截面数据
 
@@ -126,9 +139,9 @@ class ETFCrossSectionStorage:
             logger.error(f"保存横截面数据失败: {e}")
             return False
 
-    def load_cross_section_data(self,
-                               date: Union[str, datetime],
-                               data_type: str = "daily") -> Optional[pd.DataFrame]:
+    def load_cross_section_data(
+        self, date: Union[str, datetime], data_type: str = "daily"
+    ) -> Optional[pd.DataFrame]:
         """
         加载横截面数据
 
@@ -156,11 +169,13 @@ class ETFCrossSectionStorage:
             logger.error(f"加载横截面数据失败: {e}")
             return None
 
-    def save_factor_data(self,
-                         factors_df: pd.DataFrame,
-                         etf_code: str,
-                         start_date: Union[str, datetime],
-                         end_date: Union[str, datetime]) -> bool:
+    def save_factor_data(
+        self,
+        factors_df: pd.DataFrame,
+        etf_code: str,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+    ) -> bool:
         """
         保存单只ETF的因子数据
 
@@ -203,11 +218,13 @@ class ETFCrossSectionStorage:
                 "record_count": len(factors_df),
                 "factor_columns": factors_df.columns.tolist(),
                 "created_at": datetime.now().isoformat(),
-                "data_hash": self._calculate_hash(factors_df)
+                "data_hash": self._calculate_hash(factors_df),
             }
 
-            metadata_file = self.metadata_dir / f"{etf_code}_factors_{start_str}_{end_str}.json"
-            with open(metadata_file, 'w', encoding='utf-8') as f:
+            metadata_file = (
+                self.metadata_dir / f"{etf_code}_factors_{start_str}_{end_str}.json"
+            )
+            with open(metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
 
             logger.info(f"ETF {etf_code} 因子数据已保存: {file_path}")
@@ -217,10 +234,12 @@ class ETFCrossSectionStorage:
             logger.error(f"保存ETF {etf_code} 因子数据失败: {e}")
             return False
 
-    def load_factor_data(self,
-                         etf_code: str,
-                         start_date: Union[str, datetime],
-                         end_date: Union[str, datetime]) -> Optional[pd.DataFrame]:
+    def load_factor_data(
+        self,
+        etf_code: str,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+    ) -> Optional[pd.DataFrame]:
         """
         加载单只ETF的因子数据
 
@@ -261,11 +280,13 @@ class ETFCrossSectionStorage:
             logger.error(f"加载ETF {etf_code} 因子数据失败: {e}")
             return None
 
-    def save_composite_factors(self,
-                              composite_df: pd.DataFrame,
-                              etf_list: List[str],
-                              start_date: Union[str, datetime],
-                              end_date: Union[str, datetime]) -> bool:
+    def save_composite_factors(
+        self,
+        composite_df: pd.DataFrame,
+        etf_list: List[str],
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+    ) -> bool:
         """
         保存综合因子数据
 
@@ -296,7 +317,9 @@ class ETFCrossSectionStorage:
 
             # 生成数据哈希用于去重
             data_hash = self._calculate_hash(composite_df)
-            filename = f"composite_factors_{start_str}_{end_str}_{data_hash[:8]}.parquet"
+            filename = (
+                f"composite_factors_{start_str}_{end_str}_{data_hash[:8]}.parquet"
+            )
             file_path = self.factors_dir / filename
 
             # 保存数据
@@ -311,11 +334,14 @@ class ETFCrossSectionStorage:
                 "record_count": len(composite_df),
                 "factor_columns": composite_df.columns.tolist(),
                 "created_at": datetime.now().isoformat(),
-                "data_hash": data_hash
+                "data_hash": data_hash,
             }
 
-            metadata_file = self.metadata_dir / f"composite_factors_{start_str}_{end_str}_{data_hash[:8]}.json"
-            with open(metadata_file, 'w', encoding='utf-8') as f:
+            metadata_file = (
+                self.metadata_dir
+                / f"composite_factors_{start_str}_{end_str}_{data_hash[:8]}.json"
+            )
+            with open(metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
 
             logger.info(f"综合因子数据已保存: {file_path}")
@@ -325,9 +351,9 @@ class ETFCrossSectionStorage:
             logger.error(f"保存综合因子数据失败: {e}")
             return False
 
-    def load_composite_factors(self,
-                               start_date: Union[str, datetime],
-                               end_date: Union[str, datetime]) -> Optional[pd.DataFrame]:
+    def load_composite_factors(
+        self, start_date: Union[str, datetime], end_date: Union[str, datetime]
+    ) -> Optional[pd.DataFrame]:
         """
         加载综合因子数据
 
@@ -371,7 +397,9 @@ class ETFCrossSectionStorage:
             logger.error(f"加载综合因子数据失败: {e}")
             return None
 
-    def save_cache(self, cache_key: str, data: pd.DataFrame, ttl_hours: int = 24) -> bool:
+    def save_cache(
+        self, cache_key: str, data: pd.DataFrame, ttl_hours: int = 24
+    ) -> bool:
         """
         保存缓存数据
 
@@ -404,11 +432,11 @@ class ETFCrossSectionStorage:
                 "created_at": datetime.now().isoformat(),
                 "expires_at": (datetime.now() + timedelta(hours=ttl_hours)).isoformat(),
                 "record_count": len(data),
-                "data_hash": self._calculate_hash(data)
+                "data_hash": self._calculate_hash(data),
             }
 
             metadata_file = self.cache_dir / f"cache_{cache_hash}_{timestamp}.json"
-            with open(metadata_file, 'w', encoding='utf-8') as f:
+            with open(metadata_file, "w", encoding="utf-8") as f:
                 json.dump(cache_metadata, f, indent=2, ensure_ascii=False)
 
             logger.debug(f"缓存数据已保存: {cache_key}")
@@ -441,7 +469,7 @@ class ETFCrossSectionStorage:
             # 检查缓存是否过期
             now = datetime.now()
             for metadata_file in metadata_files:
-                with open(metadata_file, 'r', encoding='utf-8') as f:
+                with open(metadata_file, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
 
                 expires_at = datetime.fromisoformat(metadata["expires_at"])
@@ -479,7 +507,7 @@ class ETFCrossSectionStorage:
 
             for metadata_file in self.cache_dir.glob("cache_*.json"):
                 try:
-                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                    with open(metadata_file, "r", encoding="utf-8") as f:
                         metadata = json.load(f)
 
                     expires_at = datetime.fromisoformat(metadata["expires_at"])
@@ -516,7 +544,8 @@ class ETFCrossSectionStorage:
                 "factors_files": len(list(self.factors_dir.glob("*.parquet"))),
                 "cache_files": len(list(self.cache_dir.glob("*.parquet"))),
                 "metadata_files": len(list(self.metadata_dir.glob("*.json"))),
-                "total_size_mb": self._calculate_directory_size(self.base_dir) / (1024 * 1024)
+                "total_size_mb": self._calculate_directory_size(self.base_dir)
+                / (1024 * 1024),
             }
 
             return info

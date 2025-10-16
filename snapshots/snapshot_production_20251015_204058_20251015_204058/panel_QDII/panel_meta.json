@@ -1,0 +1,23 @@
+{
+  "engine_version": "1.0.0",
+  "price_field": "close",
+  "price_field_priority": [
+    "adj_close",
+    "close"
+  ],
+  "generated_at": "2025-10-15T12:40:45Z",
+  "data_range": {
+    "start_date": "2024-01-02",
+    "end_date": "2025-10-14"
+  },
+  "run_params": {
+    "start_date": "20240101",
+    "end_date": "20251014",
+    "data_dir": "raw/ETF/daily",
+    "output_dir": "factor_output/etf_rotation_production/panel_QDII"
+  },
+  "factors": {},
+  "panel_columns_hash": "2aee2db290d00388",
+  "pools_used": "QDII",
+  "cache_key_salt": "panel"
+}

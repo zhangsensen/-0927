@@ -11,13 +11,13 @@
 使用方法：
     # 单股单时间框架
     python run_screening.py --symbol 0700.HK --timeframe 5min
-    
+
     # 单股多时间框架
     python run_screening.py --symbol 0700.HK --timeframes 5min 15min 60min
-    
+
     # 批量筛选（高性能并行）
     python run_screening.py --batch --market HK --limit 10
-    
+
     # 全市场筛选
     python run_screening.py --batch --market HK
     python run_screening.py --batch --market US

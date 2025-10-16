@@ -6,10 +6,11 @@ ETF横截面数据管理器
 """
 
 import logging
-import pandas as pd
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
-from datetime import datetime, timedelta
+
+import pandas as pd
 
 from factor_system.utils import get_raw_data_dir
 
@@ -42,7 +43,7 @@ class ETFCrossSectionDataManager:
 
         # 扫描parquet文件获取ETF列表
         etf_files = list(self.etf_data_dir.glob("*.parquet"))
-        self.etf_list = [f.stem.split('_daily_')[0] for f in etf_files]
+        self.etf_list = [f.stem.split("_daily_")[0] for f in etf_files]
 
         logger.info(f"加载ETF列表: {len(self.etf_list)}只ETF")
 
@@ -50,7 +51,9 @@ class ETFCrossSectionDataManager:
         """获取所有ETF代码列表"""
         return self.etf_list.copy()
 
-    def load_single_etf(self, etf_code: str, use_cache: bool = True) -> Optional[pd.DataFrame]:
+    def load_single_etf(
+        self, etf_code: str, use_cache: bool = True
+    ) -> Optional[pd.DataFrame]:
         """
         加载单只ETF数据
 
@@ -77,11 +80,20 @@ class ETFCrossSectionDataManager:
             df = pd.read_parquet(etf_files[0])
 
             # 数据预处理
-            df['trade_date'] = pd.to_datetime(df['trade_date'], format='%Y%m%d')
-            df = df.sort_values('trade_date').reset_index(drop=True)
+            df["trade_date"] = pd.to_datetime(df["trade_date"], format="%Y%m%d")
+            df = df.sort_values("trade_date").reset_index(drop=True)
 
             # 基础数据验证
-            required_columns = ['ts_code', 'trade_date', 'open', 'high', 'low', 'close', 'vol', 'amount']
+            required_columns = [
+                "ts_code",
+                "trade_date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "vol",
+                "amount",
+            ]
             missing_cols = [col for col in required_columns if col not in df.columns]
             if missing_cols:
                 raise ValueError(f"缺少必需列: {missing_cols}")
@@ -89,14 +101,18 @@ class ETFCrossSectionDataManager:
             if use_cache:
                 self.data_cache[etf_code] = df.copy()
 
-            logger.info(f"加载ETF {etf_code}: {len(df)} 条记录 ({df['trade_date'].min()} ~ {df['trade_date'].max()})")
+            logger.info(
+                f"加载ETF {etf_code}: {len(df)} 条记录 ({df['trade_date'].min()} ~ {df['trade_date'].max()})"
+            )
             return df
 
         except Exception as e:
             logger.error(f"加载ETF {etf_code} 数据失败: {e}")
             return None
 
-    def load_multiple_etfs(self, etf_codes: List[str], use_cache: bool = True) -> Dict[str, pd.DataFrame]:
+    def load_multiple_etfs(
+        self, etf_codes: List[str], use_cache: bool = True
+    ) -> Dict[str, pd.DataFrame]:
         """
         加载多只ETF数据
 
@@ -129,7 +145,9 @@ class ETFCrossSectionDataManager:
         """
         return self.load_multiple_etfs(self.etf_list, use_cache)
 
-    def get_cross_section_data(self, date: Union[str, datetime]) -> Optional[pd.DataFrame]:
+    def get_cross_section_data(
+        self, date: Union[str, datetime]
+    ) -> Optional[pd.DataFrame]:
         """
         获取指定日期的横截面数据
 
@@ -150,7 +168,7 @@ class ETFCrossSectionDataManager:
                 continue
 
             # 查找指定日期或之前最近的数据
-            valid_data = df[df['trade_date'] <= date]
+            valid_data = df[df["trade_date"] <= date]
             if valid_data.empty:
                 continue
 
@@ -158,14 +176,14 @@ class ETFCrossSectionDataManager:
 
             # 构建横截面数据
             cross_section_row = {
-                'etf_code': etf_code,
-                'ts_code': latest_data['ts_code'],
-                'date': date,
-                'close': latest_data['close'],
-                'volume': latest_data['vol'],
-                'amount': latest_data['amount'],
-                'pct_chg': latest_data.get('pct_chg', 0),
-                'data_date': latest_data['trade_date']
+                "etf_code": etf_code,
+                "ts_code": latest_data["ts_code"],
+                "date": date,
+                "close": latest_data["close"],
+                "volume": latest_data["vol"],
+                "amount": latest_data["amount"],
+                "pct_chg": latest_data.get("pct_chg", 0),
+                "data_date": latest_data["trade_date"],
             }
 
             cross_section_data.append(cross_section_row)
@@ -175,15 +193,19 @@ class ETFCrossSectionDataManager:
             return None
 
         cross_section_df = pd.DataFrame(cross_section_data)
-        cross_section_df = cross_section_df.sort_values('etf_code').reset_index(drop=True)
+        cross_section_df = cross_section_df.sort_values("etf_code").reset_index(
+            drop=True
+        )
 
         logger.info(f"横截面数据 {date}: {len(cross_section_df)} 只ETF")
         return cross_section_df
 
-    def get_time_series_data(self,
-                           start_date: Union[str, datetime],
-                           end_date: Union[str, datetime],
-                           etf_codes: Optional[List[str]] = None) -> pd.DataFrame:
+    def get_time_series_data(
+        self,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+        etf_codes: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
         """
         获取时间序列数据
 
@@ -211,13 +233,13 @@ class ETFCrossSectionDataManager:
                 continue
 
             # 筛选日期范围
-            mask = (df['trade_date'] >= start_date) & (df['trade_date'] <= end_date)
+            mask = (df["trade_date"] >= start_date) & (df["trade_date"] <= end_date)
             filtered_df = df[mask].copy()
 
             if filtered_df.empty:
                 continue
 
-            filtered_df['etf_code'] = etf_code
+            filtered_df["etf_code"] = etf_code
             time_series_data.append(filtered_df)
 
         if not time_series_data:
@@ -225,9 +247,13 @@ class ETFCrossSectionDataManager:
             return pd.DataFrame()
 
         result_df = pd.concat(time_series_data, ignore_index=True)
-        result_df = result_df.sort_values(['etf_code', 'trade_date']).reset_index(drop=True)
+        result_df = result_df.sort_values(["etf_code", "trade_date"]).reset_index(
+            drop=True
+        )
 
-        logger.info(f"时间序列数据 {start_date} ~ {end_date}: {len(result_df)} 条记录，{result_df['etf_code'].nunique()} 只ETF")
+        logger.info(
+            f"时间序列数据 {start_date} ~ {end_date}: {len(result_df)} 条记录，{result_df['etf_code'].nunique()} 只ETF"
+        )
         return result_df
 
     def get_etf_universe(self, min_trading_days: int = 252) -> List[str]:
@@ -258,10 +284,10 @@ class ETFCrossSectionDataManager:
     def get_data_summary(self) -> Dict:
         """获取数据摘要信息"""
         summary = {
-            'total_etfs': len(self.etf_list),
-            'cache_size': len(self.data_cache),
-            'data_directory': str(self.etf_data_dir),
-            'etf_list': self.etf_list
+            "total_etfs": len(self.etf_list),
+            "cache_size": len(self.data_cache),
+            "data_directory": str(self.etf_data_dir),
+            "etf_list": self.etf_list,
         }
 
         # 获取数据时间范围
@@ -271,13 +297,13 @@ class ETFCrossSectionDataManager:
         for etf_code in self.etf_list[:5]:  # 只检查前5只，节省时间
             df = self.load_single_etf(etf_code, use_cache=True)
             if df is not None and not df.empty:
-                all_start_dates.append(df['trade_date'].min())
-                all_end_dates.append(df['trade_date'].max())
+                all_start_dates.append(df["trade_date"].min())
+                all_end_dates.append(df["trade_date"].max())
 
         if all_start_dates:
-            summary['date_range'] = {
-                'start': min(all_start_dates),
-                'end': max(all_end_dates)
+            summary["date_range"] = {
+                "start": min(all_start_dates),
+                "end": max(all_end_dates),
             }
 
         return summary
@@ -324,7 +350,9 @@ if __name__ == "__main__":
     # 测试时间序列数据
     start_date = "2025-10-01"
     end_date = "2025-10-14"
-    time_series = manager.get_time_series_data(start_date, end_date, ['159801.SZ', '510300.SH'])
+    time_series = manager.get_time_series_data(
+        start_date, end_date, ["159801.SZ", "510300.SH"]
+    )
     if not time_series.empty:
         print(f"时间序列数据示例 ({start_date} ~ {end_date}):")
         print(time_series.head())
