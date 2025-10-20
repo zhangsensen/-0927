@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 """配置类定义 - 类型安全的配置管理"""
 from dataclasses import dataclass, field
+from logging import getLogger
 from pathlib import Path
 from typing import Dict, List, Optional
+
 import yaml
-from logging import getLogger
 
 logger = getLogger(__name__)
 
@@ -13,6 +14,7 @@ logger = getLogger(__name__)
 @dataclass
 class TradingConfig:
     """交易参数配置"""
+
     days_per_year: int = 252
     epsilon_small: float = 1e-10
     min_periods: int = 1
@@ -30,6 +32,7 @@ class TradingConfig:
 @dataclass
 class FactorWindowsConfig:
     """因子时间窗口配置"""
+
     momentum: List[int] = field(default_factory=lambda: [20, 63, 126, 252])
     volatility: List[int] = field(default_factory=lambda: [20, 60, 120])
     drawdown: List[int] = field(default_factory=lambda: [63, 126])
@@ -51,8 +54,12 @@ class FactorWindowsConfig:
         """验证窗口参数"""
         # 验证所有窗口都是正整数
         all_windows = (
-            self.momentum + self.volatility + self.drawdown +
-            self.rsi + self.price_position + self.volume_ratio
+            self.momentum
+            + self.volatility
+            + self.drawdown
+            + self.rsi
+            + self.price_position
+            + self.volume_ratio
         )
 
         for window in all_windows:
@@ -69,6 +76,7 @@ class FactorWindowsConfig:
 @dataclass
 class ThresholdsConfig:
     """阈值参数配置"""
+
     large_order_volume_ratio: float = 1.2
     doji_body_threshold: Optional[float] = None
     hammer_lower_shadow_ratio: float = 2.0
@@ -87,6 +95,7 @@ class ThresholdsConfig:
 @dataclass
 class PathsConfig:
     """路径配置"""
+
     data_dir: str = "raw/ETF/daily"
     output_dir: str = "etf_rotation_system/data/results/panels"
     config_file: str = "config/etf_config.yaml"
@@ -100,6 +109,7 @@ class PathsConfig:
 @dataclass
 class ProcessingConfig:
     """并行处理配置"""
+
     max_workers: int = 4
     continue_on_symbol_error: bool = True
     max_failure_rate: float = 0.1
@@ -115,6 +125,7 @@ class ProcessingConfig:
 @dataclass
 class FactorEnableConfig:
     """因子开关配置"""
+
     # 原有18个因子
     momentum: bool = True
     volatility: bool = True
@@ -149,9 +160,18 @@ class FactorEnableConfig:
 @dataclass
 class DataProcessingConfig:
     """数据处理配置"""
-    required_columns: List[str] = field(default_factory=lambda: [
-        "date", "open", "high", "low", "close", "volume", "symbol"
-    ])
+
+    required_columns: List[str] = field(
+        default_factory=lambda: [
+            "date",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "symbol",
+        ]
+    )
     optional_columns: List[str] = field(default_factory=lambda: ["amount"])
     volume_column_alias: str = "vol"
     fallback_estimation: bool = True
@@ -168,6 +188,7 @@ class DataProcessingConfig:
 @dataclass
 class OutputConfig:
     """输出配置"""
+
     save_execution_log: bool = True
     save_metadata: bool = True
     timestamp_subdirectory: bool = True
@@ -176,6 +197,7 @@ class OutputConfig:
 @dataclass
 class LoggingConfig:
     """日志配置"""
+
     level: str = "INFO"
     format: str = "%(asctime)s [%(levelname)s] %(message)s"
     date_format: str = "%Y-%m-%d %H:%M:%S"
@@ -190,6 +212,7 @@ class LoggingConfig:
 @dataclass
 class DisplayConfig:
     """显示配置"""
+
     log_separator_length: int = 80
     progress_bar_desc: str = "计算因子"
     factor_list_start: int = 1
@@ -209,6 +232,7 @@ class DisplayConfig:
 @dataclass
 class ConstantsConfig:
     """计算常量配置"""
+
     rsi_multiplier: int = 100
     concat_axis: int = 1
     astype_float: str = "float"
@@ -233,6 +257,7 @@ class ConstantsConfig:
 @dataclass
 class FactorPanelConfig:
     """因子面板生成完整配置"""
+
     trading: TradingConfig = field(default_factory=TradingConfig)
     factor_windows: FactorWindowsConfig = field(default_factory=FactorWindowsConfig)
     thresholds: ThresholdsConfig = field(default_factory=ThresholdsConfig)
@@ -246,10 +271,10 @@ class FactorPanelConfig:
     constants: ConstantsConfig = field(default_factory=ConstantsConfig)
 
     @classmethod
-    def from_yaml(cls, config_path: str) -> 'FactorPanelConfig':
+    def from_yaml(cls, config_path: str) -> "FactorPanelConfig":
         """从YAML文件加载配置"""
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config_dict = yaml.safe_load(f)
 
             return cls.from_dict(config_dict)
@@ -263,20 +288,26 @@ class FactorPanelConfig:
             return cls()
 
     @classmethod
-    def from_dict(cls, config_dict: Dict) -> 'FactorPanelConfig':
+    def from_dict(cls, config_dict: Dict) -> "FactorPanelConfig":
         """从字典创建配置"""
         # 递归创建嵌套配置对象
-        trading_config = TradingConfig(**config_dict.get('trading', {}))
-        factor_windows_config = FactorWindowsConfig(**config_dict.get('factor_windows', {}))
-        thresholds_config = ThresholdsConfig(**config_dict.get('thresholds', {}))
-        paths_config = PathsConfig(**config_dict.get('paths', {}))
-        processing_config = ProcessingConfig(**config_dict.get('processing', {}))
-        factor_enable_config = FactorEnableConfig(**config_dict.get('factor_enable', {}))
-        data_processing_config = DataProcessingConfig(**config_dict.get('data_processing', {}))
-        output_config = OutputConfig(**config_dict.get('output', {}))
-        logging_config = LoggingConfig(**config_dict.get('logging', {}))
-        display_config = DisplayConfig(**config_dict.get('display', {}))
-        constants_config = ConstantsConfig(**config_dict.get('constants', {}))
+        trading_config = TradingConfig(**config_dict.get("trading", {}))
+        factor_windows_config = FactorWindowsConfig(
+            **config_dict.get("factor_windows", {})
+        )
+        thresholds_config = ThresholdsConfig(**config_dict.get("thresholds", {}))
+        paths_config = PathsConfig(**config_dict.get("paths", {}))
+        processing_config = ProcessingConfig(**config_dict.get("processing", {}))
+        factor_enable_config = FactorEnableConfig(
+            **config_dict.get("factor_enable", {})
+        )
+        data_processing_config = DataProcessingConfig(
+            **config_dict.get("data_processing", {})
+        )
+        output_config = OutputConfig(**config_dict.get("output", {}))
+        logging_config = LoggingConfig(**config_dict.get("logging", {}))
+        display_config = DisplayConfig(**config_dict.get("display", {}))
+        constants_config = ConstantsConfig(**config_dict.get("constants", {}))
 
         return cls(
             trading=trading_config,
@@ -289,18 +320,18 @@ class FactorPanelConfig:
             output=output_config,
             logging=logging_config,
             display=display_config,
-            constants=constants_config
+            constants=constants_config,
         )
 
     def to_legacy_format(self) -> Dict:
         """转换为原有格式，保持向后兼容"""
         return {
-            'factor_generation': {
-                'momentum_periods': self.factor_windows.momentum,
-                'volatility_windows': self.factor_windows.volatility,
-                'rsi_windows': self.factor_windows.rsi,
-                'price_position_windows': self.factor_windows.price_position,
-                'volume_ratio_windows': self.factor_windows.volume_ratio
+            "factor_generation": {
+                "momentum_periods": self.factor_windows.momentum,
+                "volatility_windows": self.factor_windows.volatility,
+                "rsi_windows": self.factor_windows.rsi,
+                "price_position_windows": self.factor_windows.price_position,
+                "volume_ratio_windows": self.factor_windows.volume_ratio,
             }
         }
 
@@ -311,32 +342,34 @@ class FactorPanelConfig:
             # 这里可以添加额外的跨配置验证
 
             # 检查因子数量合理性
-            enabled_factors = sum([
-                self.factor_enable.momentum,
-                self.factor_enable.volatility,
-                self.factor_enable.drawdown,
-                self.factor_enable.momentum_acceleration,
-                self.factor_enable.rsi,
-                self.factor_enable.price_position,
-                self.factor_enable.volume_ratio,
-                self.factor_enable.overnight_return,
-                self.factor_enable.atr,
-                self.factor_enable.doji_pattern,
-                self.factor_enable.intraday_range,
-                self.factor_enable.bullish_engulfing,
-                self.factor_enable.hammer_pattern,
-                self.factor_enable.price_impact,
-                self.factor_enable.volume_price_trend,
-                self.factor_enable.vol_ma_ratio_5,
-                self.factor_enable.vol_volatility_20,
-                self.factor_enable.true_range,
-                self.factor_enable.buy_pressure,
-                self.factor_enable.vwap_deviation,
-                self.factor_enable.amount_surge_5d,
-                self.factor_enable.price_volume_div,
-                self.factor_enable.intraday_position,
-                self.factor_enable.large_order_signal
-            ])
+            enabled_factors = sum(
+                [
+                    self.factor_enable.momentum,
+                    self.factor_enable.volatility,
+                    self.factor_enable.drawdown,
+                    self.factor_enable.momentum_acceleration,
+                    self.factor_enable.rsi,
+                    self.factor_enable.price_position,
+                    self.factor_enable.volume_ratio,
+                    self.factor_enable.overnight_return,
+                    self.factor_enable.atr,
+                    self.factor_enable.doji_pattern,
+                    self.factor_enable.intraday_range,
+                    self.factor_enable.bullish_engulfing,
+                    self.factor_enable.hammer_pattern,
+                    self.factor_enable.price_impact,
+                    self.factor_enable.volume_price_trend,
+                    self.factor_enable.vol_ma_ratio_5,
+                    self.factor_enable.vol_volatility_20,
+                    self.factor_enable.true_range,
+                    self.factor_enable.buy_pressure,
+                    self.factor_enable.vwap_deviation,
+                    self.factor_enable.amount_surge_5d,
+                    self.factor_enable.price_volume_div,
+                    self.factor_enable.intraday_position,
+                    self.factor_enable.large_order_signal,
+                ]
+            )
 
             if enabled_factors == 0:
                 raise ValueError("至少需要启用一个因子")

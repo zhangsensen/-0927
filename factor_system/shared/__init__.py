@@ -13,4 +13,3 @@ __all__ = [
     "SharedFactorCalculators",
     "SHARED_CALCULATORS",
 ]
-

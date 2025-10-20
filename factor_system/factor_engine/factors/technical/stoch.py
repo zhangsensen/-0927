@@ -72,4 +72,3 @@ class STOCH(BaseFactor):
         )
 
         return stoch_result["slowk"]
-

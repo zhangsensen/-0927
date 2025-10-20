@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from .config import StaticCheckConfig
-from .exceptions import StaticCheckError, FutureFunctionDetectedError
-from .utils import FileCache, get_file_hash, batch_processing
+from .exceptions import FutureFunctionDetectedError, StaticCheckError
+from .utils import FileCache, batch_processing, get_file_hash
 
 
 class FutureFunctionVisitor(ast.NodeVisitor):
@@ -36,7 +36,13 @@ class FutureFunctionVisitor(ast.NodeVisitor):
         self.current_class: Optional[str] = None
         self.imports: Set[str] = set()
         self.future_function_patterns: Set[str] = {
-            "shift", "lead", "future", "ahead", "lookahead", "lead_", "future_"
+            "shift",
+            "lead",
+            "future",
+            "ahead",
+            "lookahead",
+            "lead_",
+            "future_",
         }
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -94,7 +100,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                 "future_variable_name",
                 f"发现可疑的未来函数变量名: {var_name}",
                 variable_name=var_name,
-                variable_type="name"
+                variable_type="name",
             )
 
         # 检查变量名是否包含未来函数模式
@@ -104,7 +110,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                 "future_variable_name",
                 f"发现包含未来函数模式的变量名: {var_name}",
                 variable_name=var_name,
-                variable_type="name"
+                variable_type="name",
             )
 
         self.generic_visit(node)
@@ -120,7 +126,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                     "future_function_call",
                     f"发现未来函数调用: {func_name}()",
                     function_name=func_name,
-                    call_type="direct"
+                    call_type="direct",
                 )
 
         # 检查方法调用中的参数
@@ -140,7 +146,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                 "future_function_attribute",
                 f"发现未来函数属性: .{attr_name}",
                 attribute_name=attr_name,
-                access_type="attribute"
+                access_type="attribute",
             )
 
         # 检查前缀匹配（如 future_xxx, lead_xxx）
@@ -150,7 +156,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                 "future_function_attribute",
                 f"发现可疑的未来函数变量: {attr_name}",
                 attribute_name=attr_name,
-                access_type="attribute"
+                access_type="attribute",
             )
 
         # 检查变量名是否包含未来函数模式
@@ -160,7 +166,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                 "future_function_attribute",
                 f"发现包含未来函数模式的变量: {attr_name}",
                 attribute_name=attr_name,
-                access_type="attribute"
+                access_type="attribute",
             )
 
     def _check_shift_arguments(self, node: ast.Call, method_name: str) -> None:
@@ -174,14 +180,16 @@ class FutureFunctionVisitor(ast.NodeVisitor):
             # 对于负数，如 -1，operand.value 会是 1（正数），但因为是负数操作，所以整体是负数
             if isinstance(first_arg.operand, ast.Constant):
                 value = first_arg.operand.value
-                if isinstance(value, int) and value >= 0:  # 注意：对于 -1，value 是 1，但整体表示 -1
+                if (
+                    isinstance(value, int) and value >= 0
+                ):  # 注意：对于 -1，value 是 1，但整体表示 -1
                     self._add_issue(
                         node.lineno,
                         "negative_shift",
                         f"发现负数shift: shift(-{value})",
                         function_name=method_name,
                         parameters=f"-{value}",
-                        severity="high"
+                        severity="high",
                     )
             elif isinstance(first_arg.operand, ast.Num):  # Python < 3.8
                 value = first_arg.operand.n
@@ -192,7 +200,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                         f"发现负数shift: shift(-{value})",
                         function_name=method_name,
                         parameters=f"-{value}",
-                        severity="high"
+                        severity="high",
                     )
 
         # 检查变量参数（可能包含负数）
@@ -204,7 +212,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
                     f"shift使用变量参数，可能包含负数: shift({arg.id})",
                     function_name=method_name,
                     parameters=arg.id,
-                    severity="medium"
+                    severity="medium",
                 )
 
     def _add_issue(
@@ -213,7 +221,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
         issue_type: str,
         message: str,
         severity: str = "medium",
-        **kwargs
+        **kwargs,
     ) -> None:
         """添加问题记录"""
         issue = {
@@ -226,7 +234,7 @@ class FutureFunctionVisitor(ast.NodeVisitor):
             "function": self.current_function,
             "class": self.current_class,
             "imports": list(self.imports),
-            **kwargs
+            **kwargs,
         }
         self.issues.append(issue)
 
@@ -238,10 +246,11 @@ class StaticChecker:
         self.config = config
         self.cache = FileCache(
             cache_dir=Path.home() / ".future_function_guard_cache" / "static_check",
-            config=type('obj', (object,), {
-                'ttl_hours': config.cache_ttl_hours,
-                'compression_enabled': True
-            })()
+            config=type(
+                "obj",
+                (object,),
+                {"ttl_hours": config.cache_ttl_hours, "compression_enabled": True},
+            )(),
         )
         self._compiled_patterns = self._compile_patterns()
 
@@ -290,32 +299,34 @@ class StaticChecker:
         issues = []
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
         except UnicodeDecodeError:
             # 尝试其他编码
             try:
-                with open(file_path, 'r', encoding='gbk') as f:
+                with open(file_path, "r", encoding="gbk") as f:
                     content = f.read()
             except Exception:
                 return []
 
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         for pattern in self._compiled_patterns:
             for line_num, line in enumerate(lines, 1):
                 matches = pattern.finditer(line)
                 for match in matches:
-                    issues.append({
-                        "file_path": str(file_path),
-                        "line": line_num,
-                        "column": match.start(),
-                        "issue_type": "regex_match",
-                        "message": f"发现可疑模式: {match.group()}",
-                        "severity": "medium",
-                        "matched_text": match.group(),
-                        "pattern": pattern.pattern
-                    })
+                    issues.append(
+                        {
+                            "file_path": str(file_path),
+                            "line": line_num,
+                            "column": match.start(),
+                            "issue_type": "regex_match",
+                            "message": f"发现可疑模式: {match.group()}",
+                            "severity": "medium",
+                            "matched_text": match.group(),
+                            "pattern": pattern.pattern,
+                        }
+                    )
 
         return issues
 
@@ -324,11 +335,11 @@ class StaticChecker:
         issues = []
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
         except UnicodeDecodeError:
             try:
-                with open(file_path, 'r', encoding='gbk') as f:
+                with open(file_path, "r", encoding="gbk") as f:
                     content = f.read()
             except Exception:
                 return []
@@ -336,15 +347,17 @@ class StaticChecker:
         try:
             tree = ast.parse(content)
         except SyntaxError as e:
-            issues.append({
-                "file_path": str(file_path),
-                "line": e.lineno or 0,
-                "column": e.offset or 0,
-                "issue_type": "syntax_error",
-                "message": f"语法错误: {e.msg}",
-                "severity": "low",
-                "syntax_error": str(e)
-            })
+            issues.append(
+                {
+                    "file_path": str(file_path),
+                    "line": e.lineno or 0,
+                    "column": e.offset or 0,
+                    "issue_type": "syntax_error",
+                    "message": f"语法错误: {e.msg}",
+                    "severity": "low",
+                    "syntax_error": str(e),
+                }
+            )
             return issues
 
         visitor = FutureFunctionVisitor(file_path)
@@ -370,7 +383,7 @@ class StaticChecker:
         if not file_path.is_file():
             raise StaticCheckError(f"Path is not a file: {file_path}")
 
-        if not file_path.suffix == '.py':
+        if not file_path.suffix == ".py":
             raise StaticCheckError(f"Not a Python file: {file_path}")
 
         if self._should_exclude_file(file_path):
@@ -379,13 +392,13 @@ class StaticChecker:
                 "status": "excluded",
                 "issues": [],
                 "scan_time": 0.0,
-                "message": "File excluded by pattern"
+                "message": "File excluded by pattern",
             }
 
         if not self._check_file_size(file_path):
             raise StaticCheckError(
                 f"File too large: {file_path} (max: {self.config.max_file_size_mb}MB)",
-                file_path=str(file_path)
+                file_path=str(file_path),
             )
 
         # 缓存检查
@@ -401,7 +414,9 @@ class StaticChecker:
 
         try:
             # 正则扫描
-            regex_issues = self._regex_scan(file_path) if self._compiled_patterns else []
+            regex_issues = (
+                self._regex_scan(file_path) if self._compiled_patterns else []
+            )
 
             # AST扫描
             ast_issues = self._ast_scan(file_path)
@@ -421,7 +436,7 @@ class StaticChecker:
                 "scan_time": scan_time,
                 "issue_count": len(unique_issues),
                 "severity_counts": self._count_by_severity(unique_issues),
-                "from_cache": False
+                "from_cache": False,
             }
 
             # 缓存结果
@@ -436,16 +451,11 @@ class StaticChecker:
         except Exception as e:
             scan_time = time.time() - start_time
             raise StaticCheckError(
-                f"Failed to scan file: {e}",
-                file_path=str(file_path),
-                cause=e
+                f"Failed to scan file: {e}", file_path=str(file_path), cause=e
             ) from e
 
     def check_directory(
-        self,
-        directory: Union[str, Path],
-        recursive: bool = True,
-        pattern: str = "*.py"
+        self, directory: Union[str, Path], recursive: bool = True, pattern: str = "*.py"
     ) -> Dict[str, Any]:
         """
         检查目录中的Python文件
@@ -482,7 +492,7 @@ class StaticChecker:
                 "files_checked": 0,
                 "total_issues": 0,
                 "total_scan_time": 0.0,
-                "results": []
+                "results": [],
             }
 
         # 批量检查
@@ -497,14 +507,16 @@ class StaticChecker:
                 total_issues += result["issue_count"]
             except StaticCheckError as e:
                 # 记录失败的文件，但继续检查其他文件
-                all_results.append({
-                    "file_path": str(file_path),
-                    "status": "error",
-                    "error": str(e),
-                    "issues": [],
-                    "scan_time": 0.0,
-                    "issue_count": 0
-                })
+                all_results.append(
+                    {
+                        "file_path": str(file_path),
+                        "status": "error",
+                        "error": str(e),
+                        "issues": [],
+                        "scan_time": 0.0,
+                        "issue_count": 0,
+                    }
+                )
 
         total_scan_time = time.time() - start_time
 
@@ -514,9 +526,11 @@ class StaticChecker:
             "files_checked": len(python_files),
             "total_issues": total_issues,
             "total_scan_time": total_scan_time,
-            "average_scan_time": total_scan_time / len(python_files) if python_files else 0,
+            "average_scan_time": (
+                total_scan_time / len(python_files) if python_files else 0
+            ),
             "results": all_results,
-            "severity_counts": self._aggregate_severity_counts(all_results)
+            "severity_counts": self._aggregate_severity_counts(all_results),
         }
 
     def check_files(self, file_paths: List[Union[str, Path]]) -> Dict[str, Any]:
@@ -535,7 +549,7 @@ class StaticChecker:
                 "files_checked": 0,
                 "total_issues": 0,
                 "total_scan_time": 0.0,
-                "results": []
+                "results": [],
             }
 
         start_time = time.time()
@@ -548,14 +562,16 @@ class StaticChecker:
                 all_results.append(result)
                 total_issues += result["issue_count"]
             except StaticCheckError as e:
-                all_results.append({
-                    "file_path": str(file_path),
-                    "status": "error",
-                    "error": str(e),
-                    "issues": [],
-                    "scan_time": 0.0,
-                    "issue_count": 0
-                })
+                all_results.append(
+                    {
+                        "file_path": str(file_path),
+                        "status": "error",
+                        "error": str(e),
+                        "issues": [],
+                        "scan_time": 0.0,
+                        "issue_count": 0,
+                    }
+                )
 
         total_scan_time = time.time() - start_time
 
@@ -566,7 +582,7 @@ class StaticChecker:
             "total_scan_time": total_scan_time,
             "average_scan_time": total_scan_time / len(file_paths),
             "results": all_results,
-            "severity_counts": self._aggregate_severity_counts(all_results)
+            "severity_counts": self._aggregate_severity_counts(all_results),
         }
 
     def _deduplicate_issues(self, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -580,7 +596,7 @@ class StaticChecker:
                 issue["file_path"],
                 issue["line"],
                 issue["issue_type"],
-                issue.get("matched_text", "")
+                issue.get("matched_text", ""),
             )
             if key not in seen:
                 seen.add(key)
@@ -597,7 +613,9 @@ class StaticChecker:
                 counts[severity] += 1
         return counts
 
-    def _aggregate_severity_counts(self, results: List[Dict[str, Any]]) -> Dict[str, int]:
+    def _aggregate_severity_counts(
+        self, results: List[Dict[str, Any]]
+    ) -> Dict[str, int]:
         """聚合多个文件的严重程度统计"""
         total_counts = {"high": 0, "medium": 0, "low": 0}
         for result in results:
@@ -615,9 +633,7 @@ class StaticChecker:
         return self.cache.get_size_info()
 
     def generate_report(
-        self,
-        results: Dict[str, Any],
-        output_format: str = "text"
+        self, results: Dict[str, Any], output_format: str = "text"
     ) -> str:
         """
         生成检查报告
@@ -631,6 +647,7 @@ class StaticChecker:
         """
         if output_format == "json":
             import json
+
             return json.dumps(results, indent=2, ensure_ascii=False, default=str)
 
         elif output_format == "markdown":
@@ -657,16 +674,20 @@ class StaticChecker:
 
         if results["total_issues"] > 0:
             severity_counts = results.get("severity_counts", {})
-            lines.append(f"严重程度分布: 高({severity_counts.get('high', 0)}) "
-                        f"中({severity_counts.get('medium', 0)}) "
-                        f"低({severity_counts.get('low', 0)})")
+            lines.append(
+                f"严重程度分布: 高({severity_counts.get('high', 0)}) "
+                f"中({severity_counts.get('medium', 0)}) "
+                f"低({severity_counts.get('low', 0)})"
+            )
 
             lines.append("\n问题详情:")
             lines.append("-" * 40)
 
             for result in results.get("results", []):
                 if result.get("status") == "error":
-                    lines.append(f"\n❌ {result['file_path']}: {result.get('error', 'Unknown error')}")
+                    lines.append(
+                        f"\n❌ {result['file_path']}: {result.get('error', 'Unknown error')}"
+                    )
                     continue
 
                 issues = result.get("issues", [])
@@ -677,7 +698,9 @@ class StaticChecker:
                         severity_icon = {"high": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(
                             issue.get("severity", "medium"), "⚠️"
                         )
-                        lines.append(f"  {severity_icon} 第{issue['line']}行: {issue['message']}")
+                        lines.append(
+                            f"  {severity_icon} 第{issue['line']}行: {issue['message']}"
+                        )
                         if issue.get("matched_text"):
                             lines.append(f"     匹配文本: {issue['matched_text']}")
 
@@ -715,13 +738,19 @@ class StaticChecker:
 
                 issues = result.get("issues", [])
                 if issues:
-                    lines.append(f"### 📁 {result['file_path']} ({len(issues)}个问题)\n")
+                    lines.append(
+                        f"### 📁 {result['file_path']} ({len(issues)}个问题)\n"
+                    )
 
                     for issue in issues:
-                        severity_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(
-                            issue.get("severity", "medium"), "🟡"
+                        severity_emoji = {
+                            "high": "🔴",
+                            "medium": "🟡",
+                            "low": "🟢",
+                        }.get(issue.get("severity", "medium"), "🟡")
+                        lines.append(
+                            f"- {severity_emoji} **第{issue['line']}行**: {issue['message']}"
                         )
-                        lines.append(f"- {severity_emoji} **第{issue['line']}行**: {issue['message']}")
                         if issue.get("matched_text"):
                             lines.append(f"  - 匹配文本: `{issue['matched_text']}`")
                     lines.append("")

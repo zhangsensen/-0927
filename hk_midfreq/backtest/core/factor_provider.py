@@ -164,4 +164,3 @@ class BacktestFactorProvider:
     def get_cache_stats(self) -> Dict:
         """获取缓存统计"""
         return self.engine.get_cache_stats()
-

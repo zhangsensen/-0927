@@ -14,9 +14,9 @@
 
 from __future__ import annotations
 
-import os
 import json
-from dataclasses import dataclass, field, asdict
+import os
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -26,50 +26,59 @@ from .exceptions import ConfigurationError
 
 class StrictMode(Enum):
     """严格模式枚举"""
-    DISABLED = "disabled"      # 禁用严格模式
-    WARN_ONLY = "warn_only"    # 仅警告
-    ENFORCED = "enforced"      # 强制执行
+
+    DISABLED = "disabled"  # 禁用严格模式
+    WARN_ONLY = "warn_only"  # 仅警告
+    ENFORCED = "enforced"  # 强制执行
 
 
 class MonitoringLevel(Enum):
     """监控级别枚举"""
-    NONE = "none"              # 无监控
-    BASIC = "basic"            # 基础监控
+
+    NONE = "none"  # 无监控
+    BASIC = "basic"  # 基础监控
     COMPREHENSIVE = "comprehensive"  # 全面监控
-    REAL_TIME = "real_time"    # 实时监控
+    REAL_TIME = "real_time"  # 实时监控
 
 
 class AlertThreshold(Enum):
     """报警阈值枚举"""
-    LIBERAL = "liberal"        # 宽松阈值
-    MODERATE = "moderate"      # 适中阈值
+
+    LIBERAL = "liberal"  # 宽松阈值
+    MODERATE = "moderate"  # 适中阈值
     CONSERVATIVE = "conservative"  # 保守阈值
 
 
 @dataclass
 class StaticCheckConfig:
     """静态检查配置"""
+
     enabled: bool = True
     cache_enabled: bool = True
     cache_ttl_hours: int = 24
-    check_patterns: List[str] = field(default_factory=lambda: [
-        r"\.shift\(-\d+\)",      # .shift(-n)
-        r"future_\w+",           # future_变量
-        r"lead_\w+",             # lead_变量
-        r"\.shift\(-",           # .shift(- 开头
-        r"shift\(-\d",           # shift(-d 开头
-    ])
-    exclude_patterns: List[str] = field(default_factory=lambda: [
-        r"_test\.py$",           # 测试文件
-        r"__pycache__/",         # 缓存目录
-        r"\.git/",               # Git目录
-    ])
+    check_patterns: List[str] = field(
+        default_factory=lambda: [
+            r"\.shift\(-\d+\)",  # .shift(-n)
+            r"future_\w+",  # future_变量
+            r"lead_\w+",  # lead_变量
+            r"\.shift\(-",  # .shift(- 开头
+            r"shift\(-\d",  # shift(-d 开头
+        ]
+    )
+    exclude_patterns: List[str] = field(
+        default_factory=lambda: [
+            r"_test\.py$",  # 测试文件
+            r"__pycache__/",  # 缓存目录
+            r"\.git/",  # Git目录
+        ]
+    )
     max_file_size_mb: int = 10  # 最大文件大小限制
 
 
 @dataclass
 class RuntimeValidationConfig:
     """运行时验证配置"""
+
     enabled: bool = True
     strict_mode: StrictMode = StrictMode.WARN_ONLY
     time_series_safety: bool = True
@@ -77,18 +86,20 @@ class RuntimeValidationConfig:
     statistical_checks: bool = True
     correlation_threshold: float = 0.95
     coverage_threshold: float = 0.9
-    min_history_map: Dict[str, int] = field(default_factory=lambda: {
-        "1min": 60,
-        "5min": 48,
-        "15min": 16,
-        "30min": 8,
-        "60min": 24,
-        "120min": 12,
-        "240min": 6,
-        "daily": 252,
-        "weekly": 52,
-        "monthly": 12,
-    })
+    min_history_map: Dict[str, int] = field(
+        default_factory=lambda: {
+            "1min": 60,
+            "5min": 48,
+            "15min": 16,
+            "30min": 8,
+            "60min": 24,
+            "120min": 12,
+            "240min": 6,
+            "daily": 252,
+            "weekly": 52,
+            "monthly": 12,
+        }
+    )
     price_consistency: bool = True
     error_tolerance: float = 0.01  # 错误容忍度
 
@@ -96,6 +107,7 @@ class RuntimeValidationConfig:
 @dataclass
 class HealthMonitorConfig:
     """健康监控配置"""
+
     enabled: bool = True
     monitoring_level: MonitoringLevel = MonitoringLevel.BASIC
     alert_threshold: AlertThreshold = AlertThreshold.MODERATE
@@ -111,6 +123,7 @@ class HealthMonitorConfig:
 @dataclass
 class CacheConfig:
     """缓存配置"""
+
     enabled: bool = True
     cache_dir: Optional[str] = None
     max_cache_size_mb: int = 100
@@ -121,6 +134,7 @@ class CacheConfig:
 @dataclass
 class LoggingConfig:
     """日志配置"""
+
     level: str = "INFO"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     file_path: Optional[str] = None
@@ -132,13 +146,16 @@ class LoggingConfig:
 @dataclass
 class GuardConfig:
     """未来函数防护组件总配置"""
+
     # 基础配置
     mode: str = "auto"  # auto, development, research, production
     strict_mode: StrictMode = StrictMode.WARN_ONLY
 
     # 子模块配置
     static_check: StaticCheckConfig = field(default_factory=StaticCheckConfig)
-    runtime_validation: RuntimeValidationConfig = field(default_factory=RuntimeValidationConfig)
+    runtime_validation: RuntimeValidationConfig = field(
+        default_factory=RuntimeValidationConfig
+    )
     health_monitor: HealthMonitorConfig = field(default_factory=HealthMonitorConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
@@ -181,7 +198,7 @@ class GuardConfig:
         if errors:
             raise ConfigurationError(
                 f"Configuration validation failed: {'; '.join(errors)}",
-                context={"validation_errors": errors}
+                context={"validation_errors": errors},
             )
 
     @classmethod
@@ -198,6 +215,7 @@ class GuardConfig:
         if environment == "auto":
             # auto模式使用环境变量或默认为research模式
             import os
+
             env_mode = os.getenv("FUTURE_GUARD_MODE", "research")
             return cls.preset(env_mode)
 
@@ -206,8 +224,7 @@ class GuardConfig:
                 mode="development",
                 strict_mode=StrictMode.DISABLED,
                 static_check=StaticCheckConfig(
-                    enabled=True,
-                    cache_enabled=False  # 开发环境不使用缓存
+                    enabled=True, cache_enabled=False  # 开发环境不使用缓存
                 ),
                 runtime_validation=RuntimeValidationConfig(
                     enabled=True,
@@ -219,7 +236,7 @@ class GuardConfig:
                     monitoring_level=MonitoringLevel.BASIC,
                     alert_threshold=AlertThreshold.LIBERAL,
                 ),
-                logging=LoggingConfig(level="DEBUG")
+                logging=LoggingConfig(level="DEBUG"),
             )
 
         elif environment == "research":
@@ -237,7 +254,7 @@ class GuardConfig:
                     monitoring_level=MonitoringLevel.COMPREHENSIVE,
                     alert_threshold=AlertThreshold.MODERATE,
                 ),
-                logging=LoggingConfig(level="INFO")
+                logging=LoggingConfig(level="INFO"),
             )
 
         elif environment == "production":
@@ -257,7 +274,7 @@ class GuardConfig:
                     alert_threshold=AlertThreshold.CONSERVATIVE,
                     real_time_alerts=True,
                 ),
-                logging=LoggingConfig(level="WARNING")
+                logging=LoggingConfig(level="WARNING"),
             )
 
         else:
@@ -276,7 +293,9 @@ class GuardConfig:
         """
         try:
             # 处理枚举类型
-            if "strict_mode" in config_dict and isinstance(config_dict["strict_mode"], str):
+            if "strict_mode" in config_dict and isinstance(
+                config_dict["strict_mode"], str
+            ):
                 # 尝试通过值查找枚举成员
                 strict_mode_value = config_dict["strict_mode"]
                 for mode in StrictMode:
@@ -288,25 +307,30 @@ class GuardConfig:
                     config_dict["strict_mode"] = StrictMode.WARN_ONLY
 
             # 处理嵌套配置中的枚举
-            def convert_enums_in_dict(config_data: Dict[str, Any], config_class: type) -> Dict[str, Any]:
+            def convert_enums_in_dict(
+                config_data: Dict[str, Any], config_class: type
+            ) -> Dict[str, Any]:
                 """转换字典中的枚举值"""
                 result = config_data.copy()
 
                 # 定义枚举映射
                 enum_mappings = {
-                    'StrictMode': StrictMode,
-                    'MonitoringLevel': MonitoringLevel,
-                    'AlertThreshold': AlertThreshold
+                    "StrictMode": StrictMode,
+                    "MonitoringLevel": MonitoringLevel,
+                    "AlertThreshold": AlertThreshold,
                 }
 
                 # 获取配置类的字段信息
-                if hasattr(config_class, '__dataclass_fields__'):
-                    for field_name, field_info in config_class.__dataclass_fields__.items():
+                if hasattr(config_class, "__dataclass_fields__"):
+                    for (
+                        field_name,
+                        field_info,
+                    ) in config_class.__dataclass_fields__.items():
                         if field_name in result:
                             field_value = result[field_name]
 
                             # 如果值已经是枚举类型，跳过
-                            if hasattr(field_value, 'value'):
+                            if hasattr(field_value, "value"):
                                 continue
 
                             # 尝试通过字段名和类型推断枚举类型
@@ -314,7 +338,9 @@ class GuardConfig:
 
                             # 检查字段类型是否包含枚举名称
                             for enum_name, enum_class in enum_mappings.items():
-                                if enum_name in field_type_str and isinstance(field_value, str):
+                                if enum_name in field_type_str and isinstance(
+                                    field_value, str
+                                ):
                                     # 尝试通过值查找枚举成员
                                     for enum_member in enum_class:
                                         if enum_member.value == field_value:
@@ -326,23 +352,35 @@ class GuardConfig:
 
             # 处理嵌套配置
             if "static_check" in config_dict:
-                static_check_dict = convert_enums_in_dict(config_dict["static_check"], StaticCheckConfig)
+                static_check_dict = convert_enums_in_dict(
+                    config_dict["static_check"], StaticCheckConfig
+                )
                 config_dict["static_check"] = StaticCheckConfig(**static_check_dict)
 
             if "runtime_validation" in config_dict:
-                runtime_validation_dict = convert_enums_in_dict(config_dict["runtime_validation"], RuntimeValidationConfig)
-                config_dict["runtime_validation"] = RuntimeValidationConfig(**runtime_validation_dict)
+                runtime_validation_dict = convert_enums_in_dict(
+                    config_dict["runtime_validation"], RuntimeValidationConfig
+                )
+                config_dict["runtime_validation"] = RuntimeValidationConfig(
+                    **runtime_validation_dict
+                )
 
             if "health_monitor" in config_dict:
-                health_monitor_dict = convert_enums_in_dict(config_dict["health_monitor"], HealthMonitorConfig)
-                config_dict["health_monitor"] = HealthMonitorConfig(**health_monitor_dict)
+                health_monitor_dict = convert_enums_in_dict(
+                    config_dict["health_monitor"], HealthMonitorConfig
+                )
+                config_dict["health_monitor"] = HealthMonitorConfig(
+                    **health_monitor_dict
+                )
 
             if "cache" in config_dict:
                 cache_dict = convert_enums_in_dict(config_dict["cache"], CacheConfig)
                 config_dict["cache"] = CacheConfig(**cache_dict)
 
             if "logging" in config_dict:
-                logging_dict = convert_enums_in_dict(config_dict["logging"], LoggingConfig)
+                logging_dict = convert_enums_in_dict(
+                    config_dict["logging"], LoggingConfig
+                )
                 config_dict["logging"] = LoggingConfig(**logging_dict)
 
             return cls(**config_dict)
@@ -367,11 +405,13 @@ class GuardConfig:
             raise ConfigurationError(f"Config file not found: {file_path}")
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                if file_path.suffix.lower() == '.json':
+            with open(file_path, "r", encoding="utf-8") as f:
+                if file_path.suffix.lower() == ".json":
                     config_dict = json.load(f)
                 else:
-                    raise ConfigurationError(f"Unsupported config file format: {file_path.suffix}")
+                    raise ConfigurationError(
+                        f"Unsupported config file format: {file_path.suffix}"
+                    )
 
             return cls.from_dict(config_dict)
 
@@ -464,7 +504,7 @@ class GuardConfig:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
         except Exception as e:
             raise ConfigurationError(f"Failed to save config file: {e}")
@@ -486,7 +526,11 @@ class GuardConfig:
         def deep_merge(dict1: Dict, dict2: Dict) -> Dict:
             result = dict1.copy()
             for key, value in dict2.items():
-                if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                if (
+                    key in result
+                    and isinstance(result[key], dict)
+                    and isinstance(value, dict)
+                ):
                     result[key] = deep_merge(result[key], value)
                 else:
                     result[key] = value

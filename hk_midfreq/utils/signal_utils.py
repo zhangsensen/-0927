@@ -189,4 +189,3 @@ def calculate_correlation_matrix(
     corr = corr.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
     return corr
-

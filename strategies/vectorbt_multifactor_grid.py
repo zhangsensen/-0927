@@ -36,22 +36,22 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import itertools
 import json
 import math
 import os
-import time
 import random
-import glob
-import yaml
+import time
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Sequence, Tuple, Optional, Set, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
 from functools import partial
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import pandas as pd
+import yaml
 from tqdm import tqdm
 
 # === 设置BLAS线程数，避免多进程冲突 ===
@@ -91,14 +91,14 @@ def load_top_factors_from_json(json_path: str, top_k: int = 10) -> List[str]:
     """
     # 黑名单：严禁使用的未来函数和有问题的因子
     BLACKLISTED_FACTORS = [
-        'RETURN_',    # ❌ 未来函数 - 严格禁止
-        'FUTURE_',    # ❌ 未来函数 - 严格禁止
-        'TARGET_',    # ❌ 未来函数 - 严格禁止
+        "RETURN_",  # ❌ 未来函数 - 严格禁止
+        "FUTURE_",  # ❌ 未来函数 - 严格禁止
+        "TARGET_",  # ❌ 未来函数 - 严格禁止
         # 其他潜在问题因子暂保留，待验证
     ]
 
     # 支持通配符，自动找到最新的文件
-    if '*' in json_path:
+    if "*" in json_path:
         matching_files = glob.glob(json_path)
         if not matching_files:
             raise FileNotFoundError(f"未找到匹配的因子文件: {json_path}")
@@ -108,29 +108,33 @@ def load_top_factors_from_json(json_path: str, top_k: int = 10) -> List[str]:
     if not os.path.exists(json_path):
         raise FileNotFoundError(f"因子文件不存在: {json_path}")
 
-    with open(json_path, 'r', encoding='utf-8') as f:
+    with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # 提取因子信息 - 适配新的JSON格式
     # 优先使用 all_factors，特别是当 top_k > 10 时
-    if 'all_factors' in data and top_k > 10:
+    if "all_factors" in data and top_k > 10:
         # 如果all_factors存在且需要超过10个因子，使用IC值排序取前top_k个
-        all_factors = data['all_factors']
+        all_factors = data["all_factors"]
         # 按ic_mean或ic_ir排序，优先使用ic_ir
-        sorted_factors = sorted(all_factors, key=lambda x: x.get('ic_ir', x.get('ic_mean', 0)), reverse=True)
+        sorted_factors = sorted(
+            all_factors, key=lambda x: x.get("ic_ir", x.get("ic_mean", 0)), reverse=True
+        )
         top_factors = sorted_factors[:top_k]
         print(f"📊 使用 all_factors，按IC_IR排序取前 {top_k} 个因子")
-    elif 'top_factors' in data:
-        top_factors = data['top_factors'][:top_k]
+    elif "top_factors" in data:
+        top_factors = data["top_factors"][:top_k]
         print(f"📊 使用 top_factors，取前 {top_k} 个因子")
-    elif 'factor_analysis' in data and 'top_factors' in data['factor_analysis']:
-        top_factors = data['factor_analysis']['top_factors'][:top_k]
+    elif "factor_analysis" in data and "top_factors" in data["factor_analysis"]:
+        top_factors = data["factor_analysis"]["top_factors"][:top_k]
         print(f"📊 使用 factor_analysis.top_factors，取前 {top_k} 个因子")
-    elif 'all_factors' in data:
+    elif "all_factors" in data:
         # 如果all_factors存在，使用IC值排序取前top_k个
-        all_factors = data['all_factors']
+        all_factors = data["all_factors"]
         # 按ic_mean或ic_ir排序，优先使用ic_ir
-        sorted_factors = sorted(all_factors, key=lambda x: x.get('ic_ir', x.get('ic_mean', 0)), reverse=True)
+        sorted_factors = sorted(
+            all_factors, key=lambda x: x.get("ic_ir", x.get("ic_mean", 0)), reverse=True
+        )
         top_factors = sorted_factors[:top_k]
         print(f"📊 使用 all_factors，按IC_IR排序取前 {top_k} 个因子")
     else:
@@ -141,7 +145,9 @@ def load_top_factors_from_json(json_path: str, top_k: int = 10) -> List[str]:
     for item in top_factors:
         if isinstance(item, dict):
             # 新格式：使用panel_column字段
-            factor_name = item.get('panel_column', item.get('factor', item.get('display_name', '')))
+            factor_name = item.get(
+                "panel_column", item.get("factor", item.get("display_name", ""))
+            )
             if factor_name:
                 factor_names.append(factor_name)
         else:
@@ -150,7 +156,11 @@ def load_top_factors_from_json(json_path: str, top_k: int = 10) -> List[str]:
 
     # 严格过滤黑名单因子
     original_count = len(factor_names)
-    factor_names = [f for f in factor_names if not any(f.startswith(blacklisted) for blacklisted in BLACKLISTED_FACTORS)]
+    factor_names = [
+        f
+        for f in factor_names
+        if not any(f.startswith(blacklisted) for blacklisted in BLACKLISTED_FACTORS)
+    ]
 
     if len(factor_names) < original_count:
         filtered_count = original_count - len(factor_names)
@@ -163,9 +173,9 @@ def load_top_factors_from_json(json_path: str, top_k: int = 10) -> List[str]:
     # 显示加载的因子信息
     print(f"🏆 已加载Top {len(factor_names)}因子:")
     for i, factor in enumerate(factor_names[:10], 1):  # 只显示前10个
-        if isinstance(top_factors[i-1], dict):
-            ic_ir = top_factors[i-1].get('ic_ir', 0)
-            category = top_factors[i-1].get('category', 'unknown')
+        if isinstance(top_factors[i - 1], dict):
+            ic_ir = top_factors[i - 1].get("ic_ir", 0)
+            category = top_factors[i - 1].get("category", "unknown")
             print(f"   {i:2d}. {factor:<20} (IC_IR: {ic_ir:.4f}, 类别: {category})")
     if len(factor_names) > 10:
         print(f"   ... 还有 {len(factor_names) - 10} 个因子")
@@ -184,16 +194,24 @@ def validate_factors_safety(factors: List[str]) -> List[str]:
     """
     # 黑名单：严禁使用的未来函数和有问题的因子
     BLACKLISTED_FACTORS = [
-        'RETURN_',    # ❌ 未来函数 - 严格禁止
+        "RETURN_",  # ❌ 未来函数 - 严格禁止
     ]
 
     original_count = len(factors)
-    safe_factors = [f for f in factors if not any(f.startswith(blacklisted) for blacklisted in BLACKLISTED_FACTORS)]
+    safe_factors = [
+        f
+        for f in factors
+        if not any(f.startswith(blacklisted) for blacklisted in BLACKLISTED_FACTORS)
+    ]
 
     if len(safe_factors) < original_count:
         filtered_count = original_count - len(safe_factors)
         print(f"🚨 安全过滤: 移除了 {filtered_count} 个黑名单因子")
-        removed_factors = [f for f in factors if any(f.startswith(blacklisted) for blacklisted in BLACKLISTED_FACTORS)]
+        removed_factors = [
+            f
+            for f in factors
+            if any(f.startswith(blacklisted) for blacklisted in BLACKLISTED_FACTORS)
+        ]
         print(f"   移除的因子: {', '.join(removed_factors)}")
         print(f"   黑名单模式: {BLACKLISTED_FACTORS}")
 
@@ -205,6 +223,7 @@ def validate_factors_safety(factors: List[str]) -> List[str]:
 
 # Schema缓存（避免重复读取）
 _SCHEMA_CACHE: Dict[Path, Set[str]] = {}
+
 
 def _read_parquet_schema(panel_path: Path) -> Set[str]:
     """读取Parquet文件schema（只读元数据，带缓存）
@@ -224,11 +243,13 @@ def _read_parquet_schema(panel_path: Path) -> Set[str]:
     # 方法1: pyarrow.ParquetFile (最快)
     try:
         import pyarrow.parquet as pq
+
         parquet_file = pq.ParquetFile(panel_path)
         panel_columns = set(parquet_file.schema_arrow.names)
     except ImportError:
         # pyarrow不可用，给出一次性警告
         import warnings
+
         warnings.warn("pyarrow不可用，将使用pandas读取schema（较慢）", UserWarning)
     except Exception:
         pass
@@ -278,8 +299,7 @@ def map_factor_names_to_panel(factors: List[str], panel_path: Path) -> List[str]
 
     if missing:
         raise ValueError(
-            "以下因子在面板中找不到，请在因子筛选阶段修正命名："
-            + ", ".join(missing)
+            "以下因子在面板中找不到，请在因子筛选阶段修正命名：" + ", ".join(missing)
         )
 
     print(f"🔗 因子映射完成: {len(factors)} 个因子全部与面板列一致")
@@ -341,6 +361,7 @@ def normalize_factors(panel: pd.DataFrame, method: str = "zscore") -> pd.DataFra
         return normalized - 0.5  # 居中
 
     if method == "zscore":
+
         def _zscore(df: pd.DataFrame) -> pd.DataFrame:
             return (df - df.mean()) / df.std(ddof=0)
 
@@ -357,7 +378,7 @@ def normalize_factors(panel: pd.DataFrame, method: str = "zscore") -> pd.DataFra
 
 class VectorizedBacktestEngine:
     """向量化回测引擎：预对齐数据，批量numpy计算
-    
+
     核心优化：
     1. 预先将 normalized_panel 转为 (n_dates, n_factors, n_etfs) tensor
     2. 价格/收益率矩阵预对齐为 (n_dates, n_etfs)
@@ -365,7 +386,7 @@ class VectorizedBacktestEngine:
     4. np.argpartition 做 Top-N 选股
     5. 纯 numpy 公式计算回测收益
     """
-    
+
     def __init__(
         self,
         normalized_panel: pd.DataFrame,
@@ -373,10 +394,10 @@ class VectorizedBacktestEngine:
         factors: List[str],
         fees: float = 0.001,
         init_cash: float = 1_000_000.0,
-        freq: str = "1D"
+        freq: str = "1D",
     ):
         """初始化向量化引擎
-        
+
         Args:
             normalized_panel: MultiIndex(symbol, date) 标准化因子面板
             price_pivot: (date x symbol) 价格矩阵
@@ -389,63 +410,73 @@ class VectorizedBacktestEngine:
         self.fees = fees
         self.init_cash = init_cash
         self.freq = freq
-        
+
         # === 1. 数据对齐与转换 ===
         # 将 MultiIndex 面板转为 (date x symbol x factor) 格式
         panel_unstacked = normalized_panel.unstack(level="symbol")
-        
+
         # 对齐日期索引
         common_dates = panel_unstacked.index.intersection(price_pivot.index)
         panel_unstacked = panel_unstacked.loc[common_dates]
         price_pivot = price_pivot.loc[common_dates]
-        
+
         # 对齐标的列
-        common_symbols = list(set(panel_unstacked.columns.get_level_values(1)) & set(price_pivot.columns))
+        common_symbols = list(
+            set(panel_unstacked.columns.get_level_values(1)) & set(price_pivot.columns)
+        )
         common_symbols.sort()
-        
+
         # 提取对齐后的数据
         self.dates = common_dates
         self.symbols = common_symbols
         self.n_dates = len(common_dates)
         self.n_etfs = len(common_symbols)
         self.n_factors = len(factors)
-        
+
         # === 2. 转为 numpy 数组 ===
         # factor_tensor: (n_dates, n_factors, n_etfs)
-        self.factor_tensor = np.zeros((self.n_dates, self.n_factors, self.n_etfs), dtype=np.float32)
+        self.factor_tensor = np.zeros(
+            (self.n_dates, self.n_factors, self.n_etfs), dtype=np.float32
+        )
         for i, factor in enumerate(factors):
             factor_data = panel_unstacked[factor][common_symbols].values
             self.factor_tensor[:, i, :] = np.nan_to_num(factor_data, nan=0.0)
-        
+
         # price_tensor: (n_dates, n_etfs) - 保留NaN用于收益率计算
         self.price_tensor = price_pivot[common_symbols].values.astype(np.float32)
-        
+
         # returns_tensor: (n_dates, n_etfs) - 先计算收益率，再处理NaN和异常值
         self.returns_tensor = np.zeros_like(self.price_tensor)
         prev_prices = self.price_tensor[:-1]
         curr_prices = self.price_tensor[1:]
-        
+
         # 只在前一日价格有效时计算收益率，避免除0
-        valid_mask = (prev_prices > 1e-6) & np.isfinite(prev_prices) & np.isfinite(curr_prices)
+        valid_mask = (
+            (prev_prices > 1e-6) & np.isfinite(prev_prices) & np.isfinite(curr_prices)
+        )
         returns_raw = np.zeros_like(prev_prices)
-        returns_raw[valid_mask] = (curr_prices[valid_mask] - prev_prices[valid_mask]) / prev_prices[valid_mask]
-        
+        returns_raw[valid_mask] = (
+            curr_prices[valid_mask] - prev_prices[valid_mask]
+        ) / prev_prices[valid_mask]
+
         # 限制收益率在合理范围内（日收益率 ±100%），防止数据异常
         returns_raw = np.clip(returns_raw, -1.0, 1.0)
         self.returns_tensor[1:] = returns_raw
-        
+
         # 最后统一填充NaN为0（此时已没有爆炸收益）
         self.price_tensor = np.nan_to_num(self.price_tensor, nan=0.0)
         self.returns_tensor = np.nan_to_num(self.returns_tensor, nan=0.0)
-        
+
         # === 数据质量验证：检测异常收益率 ===
         self._validate_returns_quality()
-        
-        print(f"🚀 向量化引擎初始化完成: {self.n_dates}天 × {self.n_factors}因子 × {self.n_etfs}标的")
-    
+
+        print(
+            f"🚀 向量化引擎初始化完成: {self.n_dates}天 × {self.n_factors}因子 × {self.n_etfs}标的"
+        )
+
     def _validate_returns_quality(self) -> None:
         """验证收益率数据质量，检测异常值
-        
+
         Raises:
             ValueError: 如果发现极端异常的收益率
         """
@@ -454,35 +485,40 @@ class VectorizedBacktestEngine:
         max_return = np.max(abs_returns)
         mean_return = np.mean(abs_returns)
         std_return = np.std(abs_returns)
-        
+
         # 检查是否有超出合理范围的收益率
         # 日收益率绝对值超过100%视为异常（已被clip限制，这里是保险检查）
         extreme_mask = abs_returns > 1.0
         n_extreme = np.sum(extreme_mask)
-        
+
         if n_extreme > 0:
             raise ValueError(
                 f"❌ 发现 {n_extreme} 个极端收益率（|r| > 100%），数据可能有问题。"
                 f"最大绝对收益率: {max_return:.4f}"
             )
-        
+
         # 检查是否有异常高的收益率（超过5个标准差）
         if max_return > mean_return + 10 * std_return and max_return > 0.5:
             import warnings
+
             warnings.warn(
                 f"⚠️ 发现异常高的收益率: {max_return:.4f} "
                 f"(均值={mean_return:.4f}, 标准差={std_return:.4f})，"
                 f"可能存在数据质量问题",
-                UserWarning
+                UserWarning,
             )
-        
+
         # 统计信息（用于调试）
         non_zero_returns = abs_returns[abs_returns > 1e-6]
         if len(non_zero_returns) > 0:
-            print(f"   收益率统计: 最大={max_return:.4f}, 均值={mean_return:.4f}, "
-                  f"标准差={std_return:.4f}, 非零率={len(non_zero_returns)/abs_returns.size:.2%}")
-    
-    def compute_scores_batch(self, weight_matrix: np.ndarray, chunk_size: int = 2000) -> np.ndarray:
+            print(
+                f"   收益率统计: 最大={max_return:.4f}, 均值={mean_return:.4f}, "
+                f"标准差={std_return:.4f}, 非零率={len(non_zero_returns)/abs_returns.size:.2%}"
+            )
+
+    def compute_scores_batch(
+        self, weight_matrix: np.ndarray, chunk_size: int = 2000
+    ) -> np.ndarray:
         """批量计算多个权重组合的得分矩阵（分块优化，支持大规模计算）
 
         Args:
@@ -504,7 +540,7 @@ class VectorizedBacktestEngine:
 
         # 如果组合数较少，直接计算
         if n_combos <= chunk_size:
-            scores = np.einsum('dfe,cf->cde', self.factor_tensor, weight_matrix)
+            scores = np.einsum("dfe,cf->cde", self.factor_tensor, weight_matrix)
             return scores
 
         # 分块计算以节省内存
@@ -517,35 +553,34 @@ class VectorizedBacktestEngine:
             chunk_weights = weight_matrix[i:end]
 
             # 分块 einsum: (n_dates, n_factors, n_etfs) @ (chunk_size, n_factors) -> (chunk_size, n_dates, n_etfs)
-            chunk_scores = np.einsum('dfe,cf->cde', self.factor_tensor, chunk_weights)
+            chunk_scores = np.einsum("dfe,cf->cde", self.factor_tensor, chunk_weights)
             scores[i:end] = chunk_scores
 
             # 进度输出（每10个分块或每25%进度）
-            if i % (chunk_size * 10) == 0 or end / n_combos >= 0.25 * (1 + i // (n_combos // 4)):
+            if i % (chunk_size * 10) == 0 or end / n_combos >= 0.25 * (
+                1 + i // (n_combos // 4)
+            ):
                 print(f"  已处理: {end}/{n_combos} ({end/n_combos:.1%})")
 
         print(f"✅ 分块计算完成")
         return scores
-    
+
     def build_weights_batch(
-        self,
-        scores: np.ndarray,
-        top_n: int,
-        min_score: float = None
+        self, scores: np.ndarray, top_n: int, min_score: float = None
     ) -> np.ndarray:
         """批量构建目标权重（完全向量化 Top-N 选股）
-        
+
         Args:
             scores: (n_combos, n_dates, n_etfs) 得分张量
             top_n: 每日持有数量
             min_score: 得分阈值
-        
+
         Returns:
             weights: (n_combos, n_dates, n_etfs) 权重张量
         """
         n_combos, n_dates, n_etfs = scores.shape
         weights = np.zeros_like(scores, dtype=np.float32)
-        
+
         if top_n >= n_etfs:
             # 全选，直接等权
             if min_score is None:
@@ -559,150 +594,140 @@ class VectorizedBacktestEngine:
             # 将 scores reshape 为 (n_combos * n_dates, n_etfs) 以便批量处理
             scores_flat = scores.reshape(-1, n_etfs)  # (n_combos*n_dates, n_etfs)
             weights_flat = np.zeros_like(scores_flat)
-            
+
             # 批量 argpartition：对每一行找 Top-N
             # argpartition 将最大的 top_n 个元素放到数组后部
             top_indices = np.argpartition(-scores_flat, top_n, axis=1)[:, :top_n]
-            
+
             # 应用得分阈值（向量化）
             if min_score is not None:
                 # 获取 top_n 位置的得分
                 row_indices = np.arange(scores_flat.shape[0])[:, None]
                 top_scores = scores_flat[row_indices, top_indices]
                 valid_mask = top_scores >= min_score
-                
+
                 # 计算每行有效数量
                 valid_counts = np.sum(valid_mask, axis=1, keepdims=True)
-                
+
                 # 设置权重：只对有效位置赋值
-                valid_weights = np.where(valid_mask, 1.0 / np.maximum(valid_counts, 1), 0.0)
+                valid_weights = np.where(
+                    valid_mask, 1.0 / np.maximum(valid_counts, 1), 0.0
+                )
                 np.put_along_axis(weights_flat, top_indices, valid_weights, axis=1)
             else:
                 # 无阈值，直接等权
                 equal_weight = 1.0 / top_n
                 np.put_along_axis(weights_flat, top_indices, equal_weight, axis=1)
-            
+
             # reshape 回原始形状
             weights = weights_flat.reshape(n_combos, n_dates, n_etfs)
-        
+
         return weights
-    
-    def run_backtest_batch(
-        self,
-        weights: np.ndarray
-    ) -> List[Dict[str, float]]:
+
+    def run_backtest_batch(self, weights: np.ndarray) -> List[Dict[str, float]]:
         """批量运行回测（完全向量化，无Python循环）
-        
+
         Args:
             weights: (n_combos, n_dates, n_etfs) 权重张量
-        
+
         Returns:
             metrics: 每个组合的指标字典列表
         """
         n_combos, n_dates, n_etfs = weights.shape
-        
+
         # === 1. 滞后权重（避免前视偏差）===
         # (C, D, E) -> (C, D, E)
         prev_weights = np.zeros_like(weights)
         prev_weights[:, 1:, :] = weights[:, :-1, :]
-        
+
         # === 2. 组合收益 ===
         # (C, D, E) * (D, E) -> (C, D)
         gross_returns = np.sum(prev_weights * self.returns_tensor[None, :, :], axis=2)
-        
+
         # === 3. 换手率 ===
         # (C, D-1, E) -> (C, D-1)
         weight_diff = np.sum(np.abs(np.diff(weights, axis=1)), axis=2)
         turnover = 0.5 * weight_diff
         # 第一天换手为0: (C, D-1) -> (C, D)
-        turnover = np.pad(turnover, ((0, 0), (1, 0)), mode='constant', constant_values=0.0)
-        
+        turnover = np.pad(
+            turnover, ((0, 0), (1, 0)), mode="constant", constant_values=0.0
+        )
+
         # === 4. 净收益 ===
         net_returns = gross_returns - self.fees * turnover  # (C, D)
-        
+
         # === 5. 权益曲线 ===
         equity_curve = np.cumprod(1.0 + net_returns, axis=1) * self.init_cash  # (C, D)
-        
+
         # === 6. 批量计算所有指标 ===
         metrics_batch = self._compute_metrics_batch(equity_curve, net_returns, turnover)
-        
+
         # === 7. 向量化字典转换 ===
         # 使用numpy数组和列表推导式完全向量化字典创建
         results = [
             {
-                'annual_return': float(metrics_batch['annual_return'][c]),
-                'max_drawdown': float(metrics_batch['max_drawdown'][c]),
-                'sharpe': float(metrics_batch['sharpe'][c]),
-                'calmar': float(metrics_batch['calmar'][c]),
-                'win_rate': float(metrics_batch['win_rate'][c]),
-                'turnover': float(metrics_batch['turnover'][c])
+                "annual_return": float(metrics_batch["annual_return"][c]),
+                "max_drawdown": float(metrics_batch["max_drawdown"][c]),
+                "sharpe": float(metrics_batch["sharpe"][c]),
+                "calmar": float(metrics_batch["calmar"][c]),
+                "win_rate": float(metrics_batch["win_rate"][c]),
+                "turnover": float(metrics_batch["turnover"][c]),
             }
             for c in range(n_combos)
         ]
 
         return results
-    
+
     def _compute_metrics_batch(
-        self,
-        equity_curve: np.ndarray,
-        net_returns: np.ndarray,
-        turnover: np.ndarray
+        self, equity_curve: np.ndarray, net_returns: np.ndarray, turnover: np.ndarray
     ) -> Dict[str, np.ndarray]:
         """批量计算回测指标（完全向量化）
-        
+
         Args:
             equity_curve: (n_combos, n_dates) 权益曲线
             net_returns: (n_combos, n_dates) 净收益率
             turnover: (n_combos, n_dates) 换手率
-        
+
         Returns:
             指标字典，每个值为 (n_combos,) 数组
         """
         n_combos = equity_curve.shape[0]
         n_years = self.n_dates / 252.0
-        
+
         # === 1. 年化收益率 ===
         total_return = equity_curve[:, -1] / self.init_cash - 1.0  # (C,)
         annual_return = np.where(
-            n_years > 0,
-            np.power(1.0 + total_return, 1.0 / n_years) - 1.0,
-            0.0
+            n_years > 0, np.power(1.0 + total_return, 1.0 / n_years) - 1.0, 0.0
         )
-        
+
         # === 2. 最大回撤 ===
         cummax = np.maximum.accumulate(equity_curve, axis=1)  # (C, D)
         drawdowns = (equity_curve - cummax) / (cummax + 1e-12)  # (C, D)
         max_drawdown = -np.min(drawdowns, axis=1)  # (C,)
-        
+
         # === 3. 夏普比率 ===
         returns_mean = np.mean(net_returns, axis=1)  # (C,)
         returns_std = np.std(net_returns, axis=1, ddof=0)  # (C,)
         sharpe = np.where(
-            returns_std > 1e-12,
-            returns_mean / returns_std * np.sqrt(252),
-            0.0
+            returns_std > 1e-12, returns_mean / returns_std * np.sqrt(252), 0.0
         )
-        
+
         # === 4. Calmar 比率 ===
-        calmar = np.where(
-            max_drawdown > 1e-6,
-            annual_return / max_drawdown,
-            0.0
-        )
-        
+        calmar = np.where(max_drawdown > 1e-6, annual_return / max_drawdown, 0.0)
+
         # === 5. 胜率 ===
         win_rate = np.mean(net_returns > 0, axis=1)  # (C,)
-        
+
         # === 6. 平均换手率（年化）===
         avg_turnover = np.mean(turnover, axis=1) * 252  # (C,)
-        
+
         return {
-            'annual_return': annual_return,
-            'max_drawdown': max_drawdown,
-            'sharpe': sharpe,
-            'calmar': calmar,
-            'win_rate': win_rate,
-            'turnover': avg_turnover
+            "annual_return": annual_return,
+            "max_drawdown": max_drawdown,
+            "sharpe": sharpe,
+            "calmar": calmar,
+            "win_rate": win_rate,
+            "turnover": avg_turnover,
         }
 
 
@@ -718,7 +743,7 @@ def generate_weight_grid_stream(
     max_active_factors: Optional[int] = None,
     random_seed: Optional[int] = None,
     max_total_combos: Optional[int] = None,
-    debug: bool = False
+    debug: bool = False,
 ) -> List[Tuple[float, ...]]:
     """生成权重组合（稳定排序，跨批次可复现）
 
@@ -767,8 +792,12 @@ def generate_weight_grid_stream(
         combos_set_small: Set[Tuple[float, ...]] = set()
 
         for active_count in active_counts:
-            for active_indices in itertools.combinations(range(num_factors), active_count):
-                for weight_combo in itertools.product(non_zero_weights, repeat=active_count):
+            for active_indices in itertools.combinations(
+                range(num_factors), active_count
+            ):
+                for weight_combo in itertools.product(
+                    non_zero_weights, repeat=active_count
+                ):
                     weights = [0.0] * num_factors
                     for pos, w in zip(active_indices, weight_combo):
                         weights[pos] = w
@@ -793,7 +822,9 @@ def generate_weight_grid_stream(
     if max_total_combos is None:
         target_count = min(DEFAULT_SAMPLE, total_valid_combos)
         if total_valid_combos > DEFAULT_SAMPLE:
-            print(f"⚠️  未指定 max_total_combos，仅随机采样 {target_count}/{total_valid_combos:,} 个组合。如需全量或更大规模，请显式设置 --max-total-combos。")
+            print(
+                f"⚠️  未指定 max_total_combos，仅随机采样 {target_count}/{total_valid_combos:,} 个组合。如需全量或更大规模，请显式设置 --max-total-combos。"
+            )
     else:
         if max_total_combos <= 0:
             target_count = total_valid_combos
@@ -801,7 +832,9 @@ def generate_weight_grid_stream(
             target_count = min(max_total_combos, total_valid_combos)
 
     if debug:
-        print(f"🎯 无偏随机生成 {target_count} 个组合 (理论总数: {total_valid_combos:,})")
+        print(
+            f"🎯 无偏随机生成 {target_count} 个组合 (理论总数: {total_valid_combos:,})"
+        )
 
     combos_set: Set[Tuple[float, ...]] = set()
     attempts = 0
@@ -815,7 +848,7 @@ def generate_weight_grid_stream(
         cumulative_weights.append(cumsum)
 
     last_report = 0
-    report_interval = max(5000, target_count // 5) if debug else float('inf')
+    report_interval = max(5000, target_count // 5) if debug else float("inf")
 
     while len(combos_set) < target_count and attempts < max_attempts:
         attempts += 1
@@ -856,24 +889,26 @@ def generate_weight_grid_stream(
 
     if len(combos_set) < target_count:
         if debug:
-            print(f"⚠️ 警告: 生成 {len(combos_set)} 个唯一组合 (目标 {target_count}，尝试 {attempts:,} 次)")
+            print(
+                f"⚠️ 警告: 生成 {len(combos_set)} 个唯一组合 (目标 {target_count}，尝试 {attempts:,} 次)"
+            )
         if attempts >= max_attempts:
             print(f"⚠️ 达到最大尝试次数 {max_attempts:,}，可能存在重复率过高的问题")
 
     # 🔧 稳定排序：保证跨运行、跨批次可复现
     combos_sorted = sorted(list(combos_set))
-    
+
     if debug:
         efficiency = len(combos_set) / attempts if attempts > 0 else 0
-        print(f"📊 随机生成完成: {len(combos_sorted)} 组合 (效率: {efficiency:.1%}，已排序)")
+        print(
+            f"📊 随机生成完成: {len(combos_sorted)} 组合 (效率: {efficiency:.1%}，已排序)"
+        )
 
     return combos_sorted
 
 
 def generate_batch_combos(
-    all_combos: List[Tuple[float, ...]],
-    batch_size: int,
-    batch_idx: int
+    all_combos: List[Tuple[float, ...]], batch_size: int, batch_idx: int
 ) -> List[Tuple[float, ...]]:
     """分批获取权重组合
 
@@ -936,7 +971,7 @@ def build_target_weights_multi(
     scores: pd.DataFrame,
     top_n_list: List[int],
     min_score_list: List[float | None],
-    debug: bool = False
+    debug: bool = False,
 ) -> List[Tuple[int, float | None, pd.DataFrame]]:
     """批量构建多个Top-N和min_score组合的目标权重
 
@@ -972,7 +1007,7 @@ def run_backtest_safe(
     freq: str = "1D",
     init_cash: float = 1_000_000.0,
     fees: float = 0.001,
-    check_data_quality: bool = True
+    check_data_quality: bool = True,
 ) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """基于目标权重运行安全回测（增强错误处理）
 
@@ -1031,7 +1066,7 @@ def run_batch_backtest(
     init_cash: float = 1_000_000.0,
     fees: float = 0.001,
     parallel: bool = False,
-    max_workers: int = 4
+    max_workers: int = 4,
 ) -> List[Tuple[pd.Series, pd.Series, pd.Series]]:
     """批量运行回测（支持并行）
 
@@ -1047,7 +1082,10 @@ def run_batch_backtest(
     Returns:
         (equity_curve, net_returns, turnover) 元组列表
     """
-    def _single_backtest(weights: pd.DataFrame) -> Tuple[pd.Series, pd.Series, pd.Series]:
+
+    def _single_backtest(
+        weights: pd.DataFrame,
+    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
         return run_backtest_safe(prices, weights, freq, init_cash, fees)
 
     if not parallel:
@@ -1070,7 +1108,9 @@ def run_batch_backtest(
             for idx, weights in enumerate(weights_list)
         }
 
-        for future in tqdm(as_completed(future_to_idx), total=len(weights_list), desc="并行回测"):
+        for future in tqdm(
+            as_completed(future_to_idx), total=len(weights_list), desc="并行回测"
+        ):
             idx = future_to_idx[future]
             try:
                 result = future.result()
@@ -1101,9 +1141,7 @@ def evaluate_portfolio(
     running_max = equity_curve.cummax()
     drawdown = equity_curve / running_max - 1.0
     max_drawdown = drawdown.min()
-    calmar = (
-        annual_return / abs(max_drawdown) if max_drawdown < 0 else np.nan
-    )
+    calmar = annual_return / abs(max_drawdown) if max_drawdown < 0 else np.nan
     turnover_ratio = float(turnover.sum())
     if _HAS_VECTORBT:
         pf = vbt.Portfolio.from_holding(
@@ -1330,38 +1368,38 @@ def parse_args() -> argparse.Namespace:
 
 def load_config_from_yaml(config_path: str) -> Dict[str, Any]:
     """从 YAML 文件加载配置
-    
+
     Args:
         config_path: YAML 配置文件路径
-        
+
     Returns:
         配置字典
     """
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    return config.get('parameters', {})
+    return config.get("parameters", {})
 
 
 def merge_config_with_args(args: argparse.Namespace) -> argparse.Namespace:
     """合并 YAML 配置和 CLI 参数（YAML 优先级更高）
-    
+
     Args:
         args: CLI 参数
-        
+
     Returns:
         合并后的参数
     """
     if args.config is None:
         return args
-    
+
     config = load_config_from_yaml(args.config)
-    
+
     # YAML 键名映射到 argparse 参数名（下划线转连字符）
     for key, value in config.items():
-        arg_name = key.replace('-', '_')
+        arg_name = key.replace("-", "_")
         if hasattr(args, arg_name):
             setattr(args, arg_name, value)
-    
+
     return args
 
 
@@ -1380,7 +1418,7 @@ def create_output_directory(base_path: str, timestamp: str) -> Tuple[Path, Path]
         base_path = script_dir / base_path
 
     # 如果以.csv结尾，则视为文件路径，返回父目录
-    if base_path.suffix == '.csv':
+    if base_path.suffix == ".csv":
         output_dir = base_path.parent
         csv_file = base_path
     else:
@@ -1394,7 +1432,7 @@ def create_output_directory(base_path: str, timestamp: str) -> Tuple[Path, Path]
 
 def save_checkpoint(results: List[Dict], checkpoint_path: Path) -> None:
     """保存检查点文件"""
-    with open(checkpoint_path, 'w', encoding='utf-8') as f:
+    with open(checkpoint_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
 
@@ -1408,10 +1446,10 @@ def run_backtest_worker(
     min_score_list: List[float],
     fees: float,
     init_cash: float,
-    freq: str
+    freq: str,
 ) -> List[Dict[str, float]]:
     """多进程worker函数：处理一个权重组合块
-    
+
     Args:
         combos_chunk: 权重组合块
         global_start_idx: 该块在全局组合列表中的起始索引
@@ -1423,7 +1461,7 @@ def run_backtest_worker(
         fees: 交易费用
         init_cash: 初始资金
         freq: 时间频率
-    
+
     Returns:
         结果列表
     """
@@ -1434,50 +1472,50 @@ def run_backtest_worker(
         factors=factors,
         fees=fees,
         init_cash=init_cash,
-        freq=freq
+        freq=freq,
     )
-    
+
     # 转为numpy数组
     weight_matrix = np.array(combos_chunk, dtype=np.float32)
-    
+
     # 批量计算得分
     all_scores = engine.compute_scores_batch(weight_matrix)
-    
+
     # 对每个Top-N和min_score组合进行回测
     results = []
     for top_n in top_n_list:
         for min_score in min_score_list:
             # 批量构建目标权重
             target_weights = engine.build_weights_batch(
-                all_scores,
-                top_n=top_n,
-                min_score=min_score
+                all_scores, top_n=top_n, min_score=min_score
             )
-            
+
             # 批量运行回测
             batch_metrics = engine.run_backtest_batch(target_weights)
-            
+
             # 构建结果条目（使用全局索引）
-            for local_idx, (weights, metrics) in enumerate(zip(combos_chunk, batch_metrics)):
+            for local_idx, (weights, metrics) in enumerate(
+                zip(combos_chunk, batch_metrics)
+            ):
                 result_entry = {
                     "combo_idx": global_start_idx + local_idx,  # 🔧 全局索引
                     "weights": tuple(f"{w:.3f}" for w in weights),
                     "top_n": top_n,
                     "min_score": min_score,
-                    **metrics
+                    **metrics,
                 }
-                
+
                 # 过滤无效结果
-                if not (np.isnan(metrics['sharpe']) or metrics['sharpe'] < -10):
+                if not (np.isnan(metrics["sharpe"]) or metrics["sharpe"] < -10):
                     results.append(result_entry)
-    
+
     return results
 
 
 def main() -> None:
     start_time = time.time()
     args = parse_args()
-    
+
     # 合并 YAML 配置（如果提供）
     args = merge_config_with_args(args)
 
@@ -1488,7 +1526,7 @@ def main() -> None:
         print("🚀 Sanity Run模式已启用，限制组合数量")
 
     # 创建时间戳
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # === 1. 因子选择 ===
     if args.factors is None:
@@ -1526,7 +1564,7 @@ def main() -> None:
         max_active_factors=args.max_active_factors,
         random_seed=args.random_seed,
         max_total_combos=args.max_total_combos,
-        debug=args.debug
+        debug=args.debug,
     )
 
     if not all_weight_combos:
@@ -1534,7 +1572,9 @@ def main() -> None:
 
     # === 4. 分批处理 ===
     total_combos = len(all_weight_combos)
-    batch_combos = generate_batch_combos(all_weight_combos, args.batch_size, args.batch_idx)
+    batch_combos = generate_batch_combos(
+        all_weight_combos, args.batch_size, args.batch_idx
+    )
 
     print(f"📦 批次 {args.batch_idx}: 处理 {len(batch_combos)}/{total_combos} 组合")
 
@@ -1543,38 +1583,47 @@ def main() -> None:
 
     # === 6. 批量向量化回测（支持费率敏感性分析）===
     all_results: List[Dict[str, float]] = []
-    
+
     # 🔧 计算当前batch在全局组合中的起始索引（考虑batch_idx）
     global_combo_offset = args.batch_idx * args.batch_size
-    
-    total_tasks = len(batch_combos) * len(args.top_n_list) * len(args.min_score_list) * len(args.fees)
+
+    total_tasks = (
+        len(batch_combos)
+        * len(args.top_n_list)
+        * len(args.min_score_list)
+        * len(args.fees)
+    )
     print(f"🎯 总任务数: {total_tasks} (权重组合 × Top-N × min_score × fees)")
-    print(f"🔢 全局combo_idx范围: [{global_combo_offset}, {global_combo_offset + len(batch_combos) - 1}]")
+    print(
+        f"🔢 全局combo_idx范围: [{global_combo_offset}, {global_combo_offset + len(batch_combos) - 1}]"
+    )
     print(f"💰 费率列表: {args.fees}")
-    
+
     # 外层循环：遍历费率列表
     for fee_idx, current_fee in enumerate(args.fees):
         print(f"\n{'='*60}")
         print(f"💰 费率 {fee_idx+1}/{len(args.fees)}: {current_fee:.4f}")
         print(f"{'='*60}")
-        
+
         results: List[Dict[str, float]] = []
         failed_count = 0
-        
+
         if args.num_workers > 1:
             # === 多进程并行模式 ===
             print(f"🚀 启用多进程并行: {args.num_workers} workers")
-            
+
             # 将组合分块，记录每块的全局起始索引（加上batch偏移）
             chunk_size = max(1, len(batch_combos) // args.num_workers)
             chunks_with_idx = []
             for i in range(0, len(batch_combos), chunk_size):
-                chunk = batch_combos[i:i + chunk_size]
-                global_start = global_combo_offset + i  # 🔧 全局索引 = batch偏移 + 块内偏移
+                chunk = batch_combos[i : i + chunk_size]
+                global_start = (
+                    global_combo_offset + i
+                )  # 🔧 全局索引 = batch偏移 + 块内偏移
                 chunks_with_idx.append((chunk, global_start))
-            
+
             print(f"📦 分为 {len(chunks_with_idx)} 个块，每块约 {chunk_size} 个组合")
-            
+
             # 准备worker参数（不包含chunk和global_start_idx）
             worker_fn = partial(
                 run_backtest_worker,
@@ -1585,18 +1634,21 @@ def main() -> None:
                 min_score_list=args.min_score_list,
                 fees=current_fee,
                 init_cash=args.init_cash,
-                freq=args.freq
+                freq=args.freq,
             )
-            
+
             # 多进程执行
             with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
                 # 提交任务时传入chunk和global_start_idx
                 futures = [
-                    executor.submit(worker_fn, chunk, global_start) 
+                    executor.submit(worker_fn, chunk, global_start)
                     for chunk, global_start in chunks_with_idx
                 ]
-                
-                with tqdm(total=len(futures), desc=f"批次{args.batch_idx}-费率{current_fee:.4f}") as pbar:
+
+                with tqdm(
+                    total=len(futures),
+                    desc=f"批次{args.batch_idx}-费率{current_fee:.4f}",
+                ) as pbar:
                     for future in as_completed(futures):
                         try:
                             chunk_results = future.result()
@@ -1605,16 +1657,20 @@ def main() -> None:
                         except Exception as e:
                             if args.debug:
                                 print(f"\n⚠️ Worker失败: {e}")
-                            failed_count += chunk_size * len(args.top_n_list) * len(args.min_score_list)
+                            failed_count += (
+                                chunk_size
+                                * len(args.top_n_list)
+                                * len(args.min_score_list)
+                            )
                             pbar.update(1)
-            
+
             # 补充batch_idx、factors和fee字段
             for result in results:
-                result['batch_idx'] = args.batch_idx
-                result['factors'] = factors
-                result['timestamp'] = timestamp
-                result['fee'] = current_fee
-        
+                result["batch_idx"] = args.batch_idx
+                result["factors"] = factors
+                result["timestamp"] = timestamp
+                result["fee"] = current_fee
+
         else:
             # === 单进程模式 ===
             print("⚡ 初始化向量化回测引擎...")
@@ -1624,62 +1680,72 @@ def main() -> None:
                 factors=factors,
                 fees=current_fee,
                 init_cash=args.init_cash,
-                freq=args.freq
+                freq=args.freq,
             )
-            
+
             print(f"🚀 开始向量化回测 {len(batch_combos)} 个组合...")
-            
+
             # 将权重组合转为numpy数组
             weight_matrix = np.array(batch_combos, dtype=np.float32)
-            
+
             # 批量计算所有组合的得分矩阵
             print("📊 批量计算因子得分...")
             all_scores = engine.compute_scores_batch(weight_matrix)
-            
-            task_count = len(batch_combos) * len(args.top_n_list) * len(args.min_score_list)
-            with tqdm(total=task_count, desc=f"批次{args.batch_idx}-费率{current_fee:.4f}") as pbar:
+
+            task_count = (
+                len(batch_combos) * len(args.top_n_list) * len(args.min_score_list)
+            )
+            with tqdm(
+                total=task_count, desc=f"批次{args.batch_idx}-费率{current_fee:.4f}"
+            ) as pbar:
                 for top_n in args.top_n_list:
                     for min_score in args.min_score_list:
                         try:
                             # 批量构建目标权重
                             target_weights = engine.build_weights_batch(
-                                all_scores,
-                                top_n=top_n,
-                                min_score=min_score
+                                all_scores, top_n=top_n, min_score=min_score
                             )
-                            
+
                             # 批量运行回测
                             batch_metrics = engine.run_backtest_batch(target_weights)
-                            
+
                             # 构建结果条目（使用全局索引）
-                            for local_idx, (weights, metrics) in enumerate(zip(batch_combos, batch_metrics)):
+                            for local_idx, (weights, metrics) in enumerate(
+                                zip(batch_combos, batch_metrics)
+                            ):
                                 result_entry = {
                                     "batch_idx": args.batch_idx,
-                                    "combo_idx": global_combo_offset + local_idx,  # 🔧 全局索引
+                                    "combo_idx": global_combo_offset
+                                    + local_idx,  # 🔧 全局索引
                                     "weights": tuple(f"{w:.3f}" for w in weights),
                                     "factors": factors,
                                     "top_n": top_n,
                                     "min_score": min_score,
                                     "timestamp": timestamp,
                                     "fee": current_fee,
-                                    **metrics
+                                    **metrics,
                                 }
-                                
+
                                 # 过滤无效结果
-                                if not (np.isnan(metrics['sharpe']) or metrics['sharpe'] < -10):
+                                if not (
+                                    np.isnan(metrics["sharpe"])
+                                    or metrics["sharpe"] < -10
+                                ):
                                     results.append(result_entry)
                                 else:
                                     failed_count += 1
-                                
+
                                 pbar.update(1)
-                        
+
                         except Exception as e:
                             if args.debug:
-                                print(f"\n⚠️ Top-N={top_n}, min_score={min_score} 批次失败: {e}")
+                                print(
+                                    f"\n⚠️ Top-N={top_n}, min_score={min_score} 批次失败: {e}"
+                                )
                             failed_count += len(batch_combos)
                             pbar.update(len(batch_combos))
                             continue
-        
+
         # 合并当前费率的结果到总结果
         all_results.extend(results)
         print(f"✅ 费率 {current_fee:.4f} 完成: {len(results)} 个有效结果")
@@ -1703,7 +1769,9 @@ def main() -> None:
     print(f"🏆 暴力枚举回测结果 - 批次 {args.batch_idx} (按夏普降序)")
     print("=" * 100)
     print(f"执行时间: {execution_time:.2f}秒 | 有效组合: {len(all_results)}")
-    print(f"参数范围: {len(args.top_n_list)}个Top-N x {len(args.min_score_list)}个min-score x {len(args.fees)}个费率")
+    print(
+        f"参数范围: {len(args.top_n_list)}个Top-N x {len(args.min_score_list)}个min-score x {len(args.fees)}个费率"
+    )
     print("-" * 100)
 
     display_cols = [
@@ -1715,7 +1783,7 @@ def main() -> None:
         "sharpe",
         "calmar",
         "win_rate",
-        "turnover"
+        "turnover",
     ]
 
     top_results = result_df.head(20)[display_cols]
@@ -1730,7 +1798,9 @@ def main() -> None:
             keep_count = min(args.top_k_results, len(result_df))
             filtered_df = result_df.head(keep_count).copy()
             if keep_count < len(result_df):
-                print(f"📉 仅保留夏普最高的前 {keep_count} 个结果用于输出（原始 {len(result_df)} 个）。")
+                print(
+                    f"📉 仅保留夏普最高的前 {keep_count} 个结果用于输出（原始 {len(result_df)} 个）。"
+                )
 
     # 保存CSV结果 (默认保存)
     filtered_df.to_csv(csv_file, index=False)
@@ -1742,32 +1812,37 @@ def main() -> None:
     # 保存详细JSON（如果需要）
     if args.keep_metrics_json:
         json_file = output_dir / f"detailed_results_{timestamp}.json"
-        with open(json_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                'execution_info': {
-                    'timestamp': timestamp,
-                    'execution_time': execution_time,
-                    'batch_idx': args.batch_idx,
-                    'batch_size': args.batch_size,
-                    'total_combos': total_combos,
-                    'valid_results': len(results),
-                    'failed_count': failed_count
+        with open(json_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "execution_info": {
+                        "timestamp": timestamp,
+                        "execution_time": execution_time,
+                        "batch_idx": args.batch_idx,
+                        "batch_size": args.batch_size,
+                        "total_combos": total_combos,
+                        "valid_results": len(results),
+                        "failed_count": failed_count,
+                    },
+                    "parameters": {
+                        "factors": factors,
+                        "weight_grid": args.weight_grid,
+                        "top_n_list": args.top_n_list,
+                        "min_score_list": args.min_score_list,
+                        "fees": args.fees,
+                        "norm_method": args.norm_method,
+                    },
+                    "results": filtered_df.to_dict("records"),
                 },
-                'parameters': {
-                    'factors': factors,
-                    'weight_grid': args.weight_grid,
-                    'top_n_list': args.top_n_list,
-                    'min_score_list': args.min_score_list,
-                    'fees': args.fees,
-                    'norm_method': args.norm_method
-                },
-                'results': filtered_df.to_dict('records')
-            }, f, indent=2, ensure_ascii=False)
+                f,
+                indent=2,
+                ensure_ascii=False,
+            )
         print(f"📊 详细结果已保存到: {json_file}")
 
     # 保存检查点 (默认保存)
     checkpoint_file = output_dir / f"checkpoint_batch_{args.batch_idx}.json"
-    save_checkpoint(filtered_df.to_dict('records'), checkpoint_file)
+    save_checkpoint(filtered_df.to_dict("records"), checkpoint_file)
     if args.output:
         print(f"💾 检查点已保存到: {checkpoint_file}")
     else:
@@ -1783,33 +1858,44 @@ def main() -> None:
 
 def run_regression_tests() -> None:
     """回归测试：验证关键修复是否生效（真实引擎测试）
-    
+
     测试项：
     1. 收益率计算：真实引擎验证无爆炸收益
     2. 批量回测：实际跑完整流程
     3. 跨batch编号：验证 batch_idx > 0 时 combo_idx 正确
     """
     print("🧪 运行回归测试（真实引擎）...")
-    
+
     # === 测试1：收益率计算（真实引擎）===
     print("\n[测试1] 收益率计算安全性（含异常数据）")
-    
+
     # 构造有缺失值的价格数据
-    test_dates = pd.date_range('2020-01-01', periods=50)
-    test_prices = pd.DataFrame({
-        'ETF_A': [np.nan] * 10 + list(10.0 + np.random.randn(40) * 0.5),  # 前10日NaN（未上市）
-        'ETF_B': 100.0 + np.random.randn(50) * 2.0,  # 正常波动
-        'ETF_C': [50.0] * 20 + [0.0] + list(52.0 + np.random.randn(29) * 1.0),  # 第21日价格为0（异常）
-    }, index=test_dates)
-    
+    test_dates = pd.date_range("2020-01-01", periods=50)
+    test_prices = pd.DataFrame(
+        {
+            "ETF_A": [np.nan] * 10
+            + list(10.0 + np.random.randn(40) * 0.5),  # 前10日NaN（未上市）
+            "ETF_B": 100.0 + np.random.randn(50) * 2.0,  # 正常波动
+            "ETF_C": [50.0] * 20
+            + [0.0]
+            + list(52.0 + np.random.randn(29) * 1.0),  # 第21日价格为0（异常）
+        },
+        index=test_dates,
+    )
+
     # 构造因子面板
-    test_factors = ['FACTOR_A', 'FACTOR_B']
-    symbols = ['ETF_A', 'ETF_B', 'ETF_C']
-    test_panel = pd.DataFrame({
-        'FACTOR_A': np.random.randn(len(symbols) * len(test_dates)),
-        'FACTOR_B': np.random.randn(len(symbols) * len(test_dates)),
-    }, index=pd.MultiIndex.from_product([symbols, test_dates], names=['symbol', 'date']))
-    
+    test_factors = ["FACTOR_A", "FACTOR_B"]
+    symbols = ["ETF_A", "ETF_B", "ETF_C"]
+    test_panel = pd.DataFrame(
+        {
+            "FACTOR_A": np.random.randn(len(symbols) * len(test_dates)),
+            "FACTOR_B": np.random.randn(len(symbols) * len(test_dates)),
+        },
+        index=pd.MultiIndex.from_product(
+            [symbols, test_dates], names=["symbol", "date"]
+        ),
+    )
+
     try:
         engine = VectorizedBacktestEngine(
             normalized_panel=test_panel,
@@ -1817,24 +1903,24 @@ def run_regression_tests() -> None:
             factors=test_factors,
             fees=0.001,
             init_cash=1_000_000.0,
-            freq="1D"
+            freq="1D",
         )
-        
+
         # 检查收益率范围
         max_abs_return = np.max(np.abs(engine.returns_tensor))
         assert max_abs_return <= 1.0, f"❌ 爆炸收益率: {max_abs_return}"
         assert not np.any(np.isnan(engine.returns_tensor)), "❌ 收益率中存在NaN"
         assert not np.any(np.isinf(engine.returns_tensor)), "❌ 收益率中存在Inf"
-        
+
         print(f"   ✅ 收益率范围正常: 最大={max_abs_return:.4f}")
-        
+
     except Exception as e:
         print(f"   ❌ 收益率测试失败: {e}")
         raise
-    
+
     # === 测试2：完整回测流程 ===
     print("\n[测试2] 完整回测流程（10组合 × 2Top-N）")
-    
+
     # 生成测试权重组合
     test_combos = [
         (1.0, 0.0),
@@ -1848,57 +1934,71 @@ def run_regression_tests() -> None:
         (0.4, 0.6),
         (0.9, 0.1),
     ]
-    
+
     weight_matrix = np.array(test_combos, dtype=np.float32)
-    
+
     try:
         # 批量计算得分
         scores = engine.compute_scores_batch(weight_matrix)
         assert scores.shape == (len(test_combos), engine.n_dates, engine.n_etfs)
-        
+
         # 批量构建权重并回测
         for top_n in [2, 3]:
             target_weights = engine.build_weights_batch(scores, top_n=top_n)
             metrics = engine.run_backtest_batch(target_weights)
-            
-            assert len(metrics) == len(test_combos), f"结果数量不匹配: {len(metrics)} vs {len(test_combos)}"
-            
+
+            assert len(metrics) == len(
+                test_combos
+            ), f"结果数量不匹配: {len(metrics)} vs {len(test_combos)}"
+
             # 检查指标合理性
             for i, m in enumerate(metrics):
-                assert -10 < m['sharpe'] < 10, f"组合{i} Sharpe异常: {m['sharpe']}"
-                assert -1 < m['annual_return'] < 5, f"组合{i} 年化收益异常: {m['annual_return']}"
-                assert 0 <= m['max_drawdown'] <= 1, f"组合{i} 最大回撤异常: {m['max_drawdown']}"
-        
+                assert -10 < m["sharpe"] < 10, f"组合{i} Sharpe异常: {m['sharpe']}"
+                assert (
+                    -1 < m["annual_return"] < 5
+                ), f"组合{i} 年化收益异常: {m['annual_return']}"
+                assert (
+                    0 <= m["max_drawdown"] <= 1
+                ), f"组合{i} 最大回撤异常: {m['max_drawdown']}"
+
         print(f"   ✅ 完整流程正常: 10组合 × 2Top-N = 20结果")
-        
+
     except Exception as e:
         print(f"   ❌ 回测流程失败: {e}")
         raise
-    
+
     # === 测试3：真实多进程路径测试 ===
     print("\n[测试3] 真实多进程路径（2 workers × 5组合）")
-    
+
     try:
         # 生成10个测试组合
         test_combos_mp = [
-            (1.0, 0.0), (0.0, 1.0), (0.5, 0.5), (0.7, 0.3), (0.3, 0.7),
-            (0.8, 0.2), (0.2, 0.8), (0.6, 0.4), (0.4, 0.6), (0.9, 0.1),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (0.5, 0.5),
+            (0.7, 0.3),
+            (0.3, 0.7),
+            (0.8, 0.2),
+            (0.2, 0.8),
+            (0.6, 0.4),
+            (0.4, 0.6),
+            (0.9, 0.1),
         ]
-        
+
         # 模拟跨batch场景：batch_idx=1（全局起始索引100）
         global_offset_test = 100
-        
+
         # 分成2个chunk
         chunk_size = 5
         chunks_with_idx = [
             (test_combos_mp[0:5], global_offset_test + 0),
             (test_combos_mp[5:10], global_offset_test + 5),
         ]
-        
+
         # 使用真实worker函数
         from concurrent.futures import ProcessPoolExecutor, as_completed
         from functools import partial
-        
+
         worker_fn = partial(
             run_backtest_worker,
             factors=test_factors,
@@ -1908,9 +2008,9 @@ def run_regression_tests() -> None:
             min_score_list=[None],
             fees=0.001,
             init_cash=1_000_000.0,
-            freq="1D"
+            freq="1D",
         )
-        
+
         all_results = []
         try:
             with ProcessPoolExecutor(max_workers=2) as executor:
@@ -1918,7 +2018,7 @@ def run_regression_tests() -> None:
                     executor.submit(worker_fn, chunk, global_start)
                     for chunk, global_start in chunks_with_idx
                 ]
-                
+
                 for future in as_completed(futures):
                     chunk_results = future.result()
                     all_results.extend(chunk_results)
@@ -1926,30 +2026,34 @@ def run_regression_tests() -> None:
             print("   ⚠️ 系统限制无法启动多进程，回退到单进程验证。")
             for chunk, global_start in chunks_with_idx:
                 all_results.extend(worker_fn(chunk, global_start))
-        
+
         # 验证结果
         assert len(all_results) == 10, f"结果数量错误: {len(all_results)}"
-        
+
         # 提取combo_idx
-        combo_ids = [r['combo_idx'] for r in all_results]
-        
+        combo_ids = [r["combo_idx"] for r in all_results]
+
         # 检查唯一性
-        assert len(set(combo_ids)) == 10, f"❌ combo_idx不唯一: {len(set(combo_ids))} unique"
-        
+        assert (
+            len(set(combo_ids)) == 10
+        ), f"❌ combo_idx不唯一: {len(set(combo_ids))} unique"
+
         # 检查范围正确（应该是[100, 109]）
         expected_range = set(range(100, 110))
         actual_range = set(combo_ids)
-        assert expected_range == actual_range, f"❌ combo_idx范围错误: 期望{expected_range}, 实际{actual_range}"
-        
+        assert (
+            expected_range == actual_range
+        ), f"❌ combo_idx范围错误: 期望{expected_range}, 实际{actual_range}"
+
         print(f"   ✅ 多进程路径正常: 2 workers × 5组合，combo_idx=[100, 109]全部唯一")
-        
+
     except Exception as e:
         print(f"   ❌ 多进程测试失败: {e}")
         raise
-    
+
     # === 测试4：跨batch可复现性 ===
     print("\n[测试4] 权重生成稳定性（跨运行可复现）")
-    
+
     try:
         # 生成两次相同参数的权重组合
         combos_1 = generate_weight_grid_stream(
@@ -1957,35 +2061,40 @@ def run_regression_tests() -> None:
             weight_grid=[0.0, 0.5, 1.0],
             random_seed=42,
             max_total_combos=100,
-            debug=False
+            debug=False,
         )
-        
+
         combos_2 = generate_weight_grid_stream(
             num_factors=3,
             weight_grid=[0.0, 0.5, 1.0],
             random_seed=42,
             max_total_combos=100,
-            debug=False
+            debug=False,
         )
-        
+
         # 检查完全一致（包括顺序）
-        assert len(combos_1) == len(combos_2), f"数量不一致: {len(combos_1)} vs {len(combos_2)}"
-        
+        assert len(combos_1) == len(
+            combos_2
+        ), f"数量不一致: {len(combos_1)} vs {len(combos_2)}"
+
         for i, (c1, c2) in enumerate(zip(combos_1, combos_2)):
             assert c1 == c2, f"索引{i}组合不一致: {c1} vs {c2}"
-        
-        print(f"   ✅ 权重生成可复现: 2次运行产生{len(combos_1)}个完全一致的组合（含顺序）")
-        
+
+        print(
+            f"   ✅ 权重生成可复现: 2次运行产生{len(combos_1)}个完全一致的组合（含顺序）"
+        )
+
     except Exception as e:
         print(f"   ❌ 可复现性测试失败: {e}")
         raise
-    
+
     print("\n✅ 所有回归测试通过！真实引擎+多进程路径验证完成。")
 
 
 if __name__ == "__main__":
     # 如果环境变量REGRESSION_TEST=1，运行回归测试
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
         run_regression_tests()
     else:

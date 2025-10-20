@@ -19,7 +19,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -27,6 +27,7 @@ from tqdm import tqdm
 
 try:
     import vectorbt as vbt
+
     _HAS_VECTORBT = True
 except ImportError:
     vbt = None
@@ -46,9 +47,9 @@ class ThresholdOptimizationEngine:
     def __init__(
         self,
         factor_scores: np.ndarray,  # (n_dates, n_etfs) 因子得分
-        price_data: pd.DataFrame,    # (date x symbol) 价格数据
+        price_data: pd.DataFrame,  # (date x symbol) 价格数据
         trading_costs: float = 0.0014,  # 单边交易成本
-        init_cash: float = 1_000_000.0
+        init_cash: float = 1_000_000.0,
     ):
         self.factor_scores = factor_scores
         self.price_data = price_data
@@ -86,10 +87,7 @@ class ThresholdOptimizationEngine:
         return weights
 
     def apply_threshold_strategy(
-        self,
-        threshold: float,
-        holding_period: int,
-        top_n: int = 8
+        self, threshold: float, holding_period: int, top_n: int = 8
     ) -> np.ndarray:
         """应用阈值调仓策略
 
@@ -121,10 +119,12 @@ class ThresholdOptimizationEngine:
 
             # 条件2: 信号变化超过阈值（检查持仓变化）
             baseline_positions = set(np.where(baseline_weights[t] > 0)[0])
-            current_positions = set(np.where(optimized_weights[t-1] > 0)[0])
+            current_positions = set(np.where(optimized_weights[t - 1] > 0)[0])
 
             # 计算持仓变化比例
-            position_change = len(baseline_positions.symmetric_difference(current_positions)) / top_n
+            position_change = (
+                len(baseline_positions.symmetric_difference(current_positions)) / top_n
+            )
             if position_change > threshold:
                 should_rebalance = True
 
@@ -148,8 +148,8 @@ class ThresholdOptimizationEngine:
                 days_held[closed] = 0
             else:
                 # 保持原权重
-                optimized_weights[t] = optimized_weights[t-1]
-                days_held[optimized_weights[t-1] > 0] += 1
+                optimized_weights[t] = optimized_weights[t - 1]
+                days_held[optimized_weights[t - 1] > 0] += 1
 
         return optimized_weights
 
@@ -163,11 +163,7 @@ class ThresholdOptimizationEngine:
             回测指标字典
         """
         # 转换为DataFrame
-        weights_df = pd.DataFrame(
-            weights,
-            index=self.dates,
-            columns=self.symbols
-        )
+        weights_df = pd.DataFrame(weights, index=self.dates, columns=self.symbols)
 
         # 计算收益率
         returns = self.price_data.pct_change().fillna(0.0)
@@ -202,7 +198,8 @@ class ThresholdOptimizationEngine:
         # 夏普比率
         sharpe = (
             net_returns.mean() / net_returns.std() * np.sqrt(252)
-            if net_returns.std() > 0 else 0.0
+            if net_returns.std() > 0
+            else 0.0
         )
 
         # 胜率
@@ -215,23 +212,23 @@ class ThresholdOptimizationEngine:
         annual_costs = trading_costs.mean() * 252
 
         return {
-            'total_return': total_return,
-            'annual_return': annual_return,
-            'max_drawdown': max_drawdown,
-            'sharpe': sharpe,
-            'win_rate': win_rate,
-            'annual_turnover': annual_turnover,
-            'annual_costs': annual_costs,
-            'net_annual_return': annual_return,  # net_return after costs
-            'equity_curve': equity_curve,
-            'returns_series': net_returns
+            "total_return": total_return,
+            "annual_return": annual_return,
+            "max_drawdown": max_drawdown,
+            "sharpe": sharpe,
+            "win_rate": win_rate,
+            "annual_turnover": annual_turnover,
+            "annual_costs": annual_costs,
+            "net_annual_return": annual_return,  # net_return after costs
+            "equity_curve": equity_curve,
+            "returns_series": net_returns,
         }
 
     def optimize_parameters(
         self,
         threshold_range: List[float],
         holding_period_range: List[int],
-        top_n: int = 8
+        top_n: int = 8,
     ) -> List[Dict]:
         """暴力优化参数
 
@@ -244,7 +241,9 @@ class ThresholdOptimizationEngine:
             优化结果列表
         """
         results = []
-        param_combinations = list(itertools.product(threshold_range, holding_period_range))
+        param_combinations = list(
+            itertools.product(threshold_range, holding_period_range)
+        )
 
         print(f"🎯 开始参数优化: {len(param_combinations)} 个组合")
         print(f"📊 阈值范围: {threshold_range}")
@@ -256,9 +255,7 @@ class ThresholdOptimizationEngine:
                 try:
                     # 应用策略
                     weights = self.apply_threshold_strategy(
-                        threshold=threshold,
-                        holding_period=holding_period,
-                        top_n=top_n
+                        threshold=threshold, holding_period=holding_period, top_n=top_n
                     )
 
                     # 运行回测
@@ -266,21 +263,23 @@ class ThresholdOptimizationEngine:
 
                     # 记录结果
                     result = {
-                        'threshold': threshold,
-                        'holding_period': holding_period,
-                        'top_n': top_n,
-                        **metrics
+                        "threshold": threshold,
+                        "holding_period": holding_period,
+                        "top_n": top_n,
+                        **metrics,
                     }
 
                     # 移除大数据对象，保留关键指标
-                    for key in ['equity_curve', 'returns_series']:
+                    for key in ["equity_curve", "returns_series"]:
                         if key in result:
                             del result[key]
 
                     results.append(result)
 
                     # 实时显示最优结果
-                    if len(results) == 1 or result['sharpe'] > max(r['sharpe'] for r in results):
+                    if len(results) == 1 or result["sharpe"] > max(
+                        r["sharpe"] for r in results
+                    ):
                         print(f"\n🏆 新的最优组合 (Sharpe: {result['sharpe']:.4f}):")
                         print(f"   阈值: {threshold}, 持有期: {holding_period}天")
                         print(f"   年化收益: {result['annual_return']:.4f}")
@@ -301,7 +300,10 @@ def main():
     """主函数"""
     # 解析参数
     parser = argparse.ArgumentParser(description="阈值调仓参数优化")
-    parser.add_argument("--factor-panel", default="../factor_output/etf_rotation_production/panel_FULL_20200102_20251014.parquet")
+    parser.add_argument(
+        "--factor-panel",
+        default="../factor_output/etf_rotation_production/panel_FULL_20200102_20251014.parquet",
+    )
     parser.add_argument("--data-dir", default="../raw/ETF/daily")
     parser.add_argument("--factors", nargs="+", default=None)
     parser.add_argument("--top-factors-json", default=None)
@@ -334,10 +336,10 @@ def main():
         try:
             # 检查文件是否包含必要的列
             df = pd.read_parquet(fp)
-            if 'close' in df.columns and 'trade_date' in df.columns:
+            if "close" in df.columns and "trade_date" in df.columns:
                 # 提取symbol：从文件名中提取（格式：515030.SH_daily_...）
                 symbol = fp.stem.split("_")[0]
-                df_selected = df[['trade_date', 'close']].copy()
+                df_selected = df[["trade_date", "close"]].copy()
                 df_selected["symbol"] = symbol
                 price_dfs.append(df_selected)
             else:
@@ -350,7 +352,9 @@ def main():
 
     prices = pd.concat(price_dfs, ignore_index=True)
     prices["date"] = pd.to_datetime(prices["trade_date"])
-    price_pivot = prices.pivot(index="date", columns="symbol", values="close").sort_index()
+    price_pivot = prices.pivot(
+        index="date", columns="symbol", values="close"
+    ).sort_index()
     price_pivot = price_pivot.ffill().dropna(how="all")
 
     print(f"✅ 价格数据: {len(price_pivot)}天 × {len(price_pivot.columns)}个标的")
@@ -361,13 +365,26 @@ def main():
     else:
         # 使用经过因子筛选验证的Top-20有效因子
         factors = [
-            "PRICE_POSITION_60", "VBT_STOCH_K_20_3", "VBT_STOCH_K_20_5",
-            "PRICE_POSITION_20", "VBT_STOCH_D_20_3", "VBT_STOCH_D_20_5",
-            "TA_EMA_252", "TA_ADOSC", "PRICE_POSITION_30",
-            "TA_EMA_200", "VBT_MA_252", "TA_SMA_252",
-            "VBT_MA_200", "TA_SMA_200", "VBT_STOCH_K_14_3",
-            "VBT_STOCH_K_14_5", "TA_RSI_20", "TA_RSI_30",
-            "TA_RSI_24", "VBT_MA_150"
+            "PRICE_POSITION_60",
+            "VBT_STOCH_K_20_3",
+            "VBT_STOCH_K_20_5",
+            "PRICE_POSITION_20",
+            "VBT_STOCH_D_20_3",
+            "VBT_STOCH_D_20_5",
+            "TA_EMA_252",
+            "TA_ADOSC",
+            "PRICE_POSITION_30",
+            "TA_EMA_200",
+            "VBT_MA_252",
+            "TA_SMA_252",
+            "VBT_MA_200",
+            "TA_SMA_200",
+            "VBT_STOCH_K_14_3",
+            "VBT_STOCH_K_14_5",
+            "TA_RSI_20",
+            "TA_RSI_30",
+            "TA_RSI_24",
+            "VBT_MA_150",
         ]
         print(f"📊 使用因子筛选验证的Top-20有效因子")
 
@@ -386,8 +403,10 @@ def main():
     def normalize_factors(panel, method="zscore"):
         grouped = panel.groupby(level="date")
         if method == "zscore":
+
             def _zscore(df):
                 return (df - df.mean()) / df.std(ddof=0)
+
             normalized = grouped.transform(_zscore)
         else:
             normalized = grouped.rank(pct=True) - 0.5
@@ -396,10 +415,12 @@ def main():
     normalized_panel = normalize_factors(factor_panel)
 
     # 转换为numpy数组
-    factor_scores = normalized_panel.unstack(level="symbol").reindex(
-        index=price_pivot.index,
-        columns=price_pivot.columns
-    ).fillna(0.0).values
+    factor_scores = (
+        normalized_panel.unstack(level="symbol")
+        .reindex(index=price_pivot.index, columns=price_pivot.columns)
+        .fillna(0.0)
+        .values
+    )
 
     print(f"✅ 因子数据: {len(factors)}个因子")
 
@@ -407,7 +428,7 @@ def main():
     engine = ThresholdOptimizationEngine(
         factor_scores=factor_scores,
         price_data=price_pivot,
-        trading_costs=args.trading_costs
+        trading_costs=args.trading_costs,
     )
 
     # 4. 定义参数范围
@@ -425,7 +446,7 @@ def main():
     # 检查每日调仓变化
     changes = []
     for t in range(1, engine.n_dates):
-        pos1 = set(np.where(baseline_weights[t-1] > 0)[0])
+        pos1 = set(np.where(baseline_weights[t - 1] > 0)[0])
         pos2 = set(np.where(baseline_weights[t] > 0)[0])
         change = len(pos1.symmetric_difference(pos2)) / 8
         changes.append(change)
@@ -439,7 +460,7 @@ def main():
     results = engine.optimize_parameters(
         threshold_range=threshold_range,
         holding_period_range=holding_period_range,
-        top_n=8
+        top_n=8,
     )
     optimization_time = time.time() - start_time
 
@@ -462,15 +483,20 @@ def main():
     print("=" * 100)
 
     display_cols = [
-        "threshold", "holding_period", "sharpe", "annual_return",
-        "max_drawdown", "annual_turnover", "annual_costs"
+        "threshold",
+        "holding_period",
+        "sharpe",
+        "annual_return",
+        "max_drawdown",
+        "annual_turnover",
+        "annual_costs",
     ]
 
     top_results = results_df.head(10)[display_cols]
     print(top_results.to_string(index=False, float_format=lambda x: f"{x: .4f}"))
 
     # 8. 保存结果
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -482,7 +508,7 @@ def main():
     best_params = results_df.iloc[0]
     best_params_file = output_dir / f"best_params_{timestamp}.json"
     best_params_dict = best_params.to_dict()
-    with open(best_params_file, 'w', encoding='utf-8') as f:
+    with open(best_params_file, "w", encoding="utf-8") as f:
         json.dump(best_params_dict, f, indent=2, ensure_ascii=False)
 
     print(f"\n📁 详细结果已保存到: {results_file}")
@@ -493,7 +519,9 @@ def main():
     print("📊 优化总结报告")
     print("=" * 80)
 
-    baseline_result = results_df[results_df['threshold'] == 0.02].iloc[0]  # 最接近无限制的
+    baseline_result = results_df[results_df["threshold"] == 0.02].iloc[
+        0
+    ]  # 最接近无限制的
 
     print(f"🎯 最优组合:")
     print(f"   阈值: {best_params['threshold']:.3f}")
@@ -506,12 +534,20 @@ def main():
     print(f"   净收益: {best_params['net_annual_return']:.4f}")
 
     print(f"\n📈 相比基准改善:")
-    print(f"   换手率: {baseline_result['annual_turnover']:.2f} → {best_params['annual_turnover']:.2f}")
-    print(f"   交易成本: {baseline_result['annual_costs']:.4f} → {best_params['annual_costs']:.4f}")
+    print(
+        f"   换手率: {baseline_result['annual_turnover']:.2f} → {best_params['annual_turnover']:.2f}"
+    )
+    print(
+        f"   交易成本: {baseline_result['annual_costs']:.4f} → {best_params['annual_costs']:.4f}"
+    )
     print(f"   夏普比率: {baseline_result['sharpe']:.4f} → {best_params['sharpe']:.4f}")
 
-    turnover_reduction = (1 - best_params['annual_turnover'] / baseline_result['annual_turnover']) * 100
-    cost_reduction = (1 - best_params['annual_costs'] / baseline_result['annual_costs']) * 100
+    turnover_reduction = (
+        1 - best_params["annual_turnover"] / baseline_result["annual_turnover"]
+    ) * 100
+    cost_reduction = (
+        1 - best_params["annual_costs"] / baseline_result["annual_costs"]
+    ) * 100
 
     print(f"\n💰 成本节约:")
     print(f"   换手率降低: {turnover_reduction:.1f}%")

@@ -24,7 +24,7 @@ import pandas as pd
 
 from .config import RuntimeValidationConfig, StrictMode
 from .exceptions import RuntimeValidationError, TimeSeriesSafetyError
-from .utils import validate_time_series_data, calculate_factor_statistics, safe_divide
+from .utils import calculate_factor_statistics, safe_divide, validate_time_series_data
 
 
 class ValidationResult:
@@ -36,7 +36,7 @@ class ValidationResult:
         validation_type: str,
         message: str = "",
         details: Optional[Dict[str, Any]] = None,
-        warnings: Optional[List[str]] = None
+        warnings: Optional[List[str]] = None,
     ):
         self.is_valid = is_valid
         self.validation_type = validation_type
@@ -53,7 +53,7 @@ class ValidationResult:
             "message": self.message,
             "details": self.details,
             "warnings": self.warnings,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
     @classmethod
@@ -64,12 +64,16 @@ class ValidationResult:
     @classmethod
     def failure(cls, validation_type: str, message: str, **kwargs) -> ValidationResult:
         """创建失败的验证结果"""
-        return cls(is_valid=False, validation_type=validation_type, message=message, **kwargs)
+        return cls(
+            is_valid=False, validation_type=validation_type, message=message, **kwargs
+        )
 
     @classmethod
     def warning(cls, validation_type: str, message: str, **kwargs) -> ValidationResult:
         """创建带警告的验证结果"""
-        return cls(is_valid=True, validation_type=validation_type, message=message, **kwargs)
+        return cls(
+            is_valid=True, validation_type=validation_type, message=message, **kwargs
+        )
 
 
 class TimeSeriesValidator:
@@ -79,10 +83,7 @@ class TimeSeriesValidator:
         self.config = config
 
     def validate_temporal_alignment(
-        self,
-        factor_data: pd.Series,
-        return_data: pd.Series,
-        horizon: int = 1
+        self, factor_data: pd.Series, return_data: pd.Series, horizon: int = 1
     ) -> ValidationResult:
         """
         验证时间序列对齐
@@ -103,8 +104,8 @@ class TimeSeriesValidator:
                     "因子数据或收益数据为空",
                     details={
                         "factor_empty": factor_data.empty,
-                        "return_empty": return_data.empty
-                    }
+                        "return_empty": return_data.empty,
+                    },
                 )
 
             # 检查时间索引类型
@@ -112,14 +113,14 @@ class TimeSeriesValidator:
                 return ValidationResult.failure(
                     "temporal_alignment",
                     "因子数据索引不是DatetimeIndex",
-                    details={"index_type": str(type(factor_data.index))}
+                    details={"index_type": str(type(factor_data.index))},
                 )
 
             if not isinstance(return_data.index, pd.DatetimeIndex):
                 return ValidationResult.failure(
                     "temporal_alignment",
                     "收益率数据索引不是DatetimeIndex",
-                    details={"index_type": str(type(return_data.index))}
+                    details={"index_type": str(type(return_data.index))},
                 )
 
             # 对齐数据
@@ -131,8 +132,8 @@ class TimeSeriesValidator:
                     details={
                         "common_points": len(common_index),
                         "required_points": max(30, horizon * 2),
-                        "horizon": horizon
-                    }
+                        "horizon": horizon,
+                    },
                 )
 
             aligned_factor = factor_data.loc[common_index]
@@ -143,7 +144,7 @@ class TimeSeriesValidator:
                 return ValidationResult.failure(
                     "temporal_alignment",
                     f"预测周期不能为负数: {horizon}",
-                    details={"horizon": horizon}
+                    details={"horizon": horizon},
                 )
 
             # 计算IC
@@ -152,7 +153,7 @@ class TimeSeriesValidator:
                 return ValidationResult.warning(
                     "temporal_alignment",
                     f"有效数据点不足，仅{valid_mask.sum()}个有效数据点",
-                    details={"valid_points": valid_mask.sum()}
+                    details={"valid_points": valid_mask.sum()},
                 )
 
             ic = aligned_factor[valid_mask].corr(aligned_return[valid_mask])
@@ -160,7 +161,7 @@ class TimeSeriesValidator:
                 return ValidationResult.warning(
                     "temporal_alignment",
                     "IC计算结果为NaN",
-                    details={"valid_points": valid_mask.sum()}
+                    details={"valid_points": valid_mask.sum()},
                 )
 
             return ValidationResult.success(
@@ -170,18 +171,20 @@ class TimeSeriesValidator:
                     "ic": float(ic),
                     "horizon": horizon,
                     "common_points": len(common_index),
-                    "valid_points": valid_mask.sum()
-                }
+                    "valid_points": valid_mask.sum(),
+                },
             )
 
         except Exception as e:
             return ValidationResult.failure(
                 "temporal_alignment",
                 f"时间序列对齐验证失败: {e}",
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
-    def validate_shift_operation(self, data: pd.Series, periods: int) -> ValidationResult:
+    def validate_shift_operation(
+        self, data: pd.Series, periods: int
+    ) -> ValidationResult:
         """
         验证shift操作的安全性
 
@@ -200,31 +203,26 @@ class TimeSeriesValidator:
                     details={
                         "periods": periods,
                         "data_length": len(data),
-                        "violation_type": "negative_shift"
-                    }
+                        "violation_type": "negative_shift",
+                    },
                 )
 
             if periods > len(data):
                 return ValidationResult.warning(
                     "shift_operation",
                     f"shift周期{periods}超过数据长度{len(data)}",
-                    details={
-                        "periods": periods,
-                        "data_length": len(data)
-                    }
+                    details={"periods": periods, "data_length": len(data)},
                 )
 
             return ValidationResult.success(
                 "shift_operation",
                 message=f"shift操作验证通过: {periods}期",
-                details={"periods": periods}
+                details={"periods": periods},
             )
 
         except Exception as e:
             return ValidationResult.failure(
-                "shift_operation",
-                f"shift操作验证失败: {e}",
-                details={"error": str(e)}
+                "shift_operation", f"shift操作验证失败: {e}", details={"error": str(e)}
             )
 
     def validate_time_series_integrity(self, data: pd.DataFrame) -> ValidationResult:
@@ -242,12 +240,13 @@ class TimeSeriesValidator:
 
             if not issues:
                 return ValidationResult.success(
-                    "time_series_integrity",
-                    message="时间序列数据完整性验证通过"
+                    "time_series_integrity", message="时间序列数据完整性验证通过"
                 )
 
             # 分类问题
-            critical_issues = [issue for issue in issues if "空" in issue or "不是" in issue]
+            critical_issues = [
+                issue for issue in issues if "空" in issue or "不是" in issue
+            ]
             warning_issues = [issue for issue in issues if issue not in critical_issues]
 
             if critical_issues:
@@ -257,8 +256,8 @@ class TimeSeriesValidator:
                     details={
                         "critical_issues": critical_issues,
                         "warning_issues": warning_issues,
-                        "total_issues": len(issues)
-                    }
+                        "total_issues": len(issues),
+                    },
                 )
             else:
                 return ValidationResult.warning(
@@ -266,15 +265,15 @@ class TimeSeriesValidator:
                     f"发现问题: {'; '.join(warning_issues)}",
                     details={
                         "warning_issues": warning_issues,
-                        "total_issues": len(issues)
-                    }
+                        "total_issues": len(issues),
+                    },
                 )
 
         except Exception as e:
             return ValidationResult.failure(
                 "time_series_integrity",
                 f"时间序列完整性验证失败: {e}",
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
 
@@ -296,13 +295,15 @@ class DataIntegrityValidator:
         """
         try:
             required_columns = ["open", "high", "low", "close", "volume"]
-            missing_columns = [col for col in required_columns if col not in data.columns]
+            missing_columns = [
+                col for col in required_columns if col not in data.columns
+            ]
 
             if missing_columns:
                 return ValidationResult.failure(
                     "price_consistency",
                     f"缺少必要列: {missing_columns}",
-                    details={"missing_columns": missing_columns}
+                    details={"missing_columns": missing_columns},
                 )
 
             issues = []
@@ -324,11 +325,11 @@ class DataIntegrityValidator:
 
             # 检查OHLC逻辑
             logic_errors = (
-                (data["high"] < data["low"]) |
-                (data["high"] < data["open"]) |
-                (data["high"] < data["close"]) |
-                (data["low"] > data["open"]) |
-                (data["low"] > data["close"])
+                (data["high"] < data["low"])
+                | (data["high"] < data["open"])
+                | (data["high"] < data["close"])
+                | (data["low"] > data["open"])
+                | (data["low"] > data["close"])
             )
             if logic_errors.any():
                 issues.append(f"OHLC逻辑错误{logic_errors.sum()}个")
@@ -342,8 +343,7 @@ class DataIntegrityValidator:
 
             if not issues:
                 return ValidationResult.success(
-                    "price_consistency",
-                    message="价格数据一致性验证通过"
+                    "price_consistency", message="价格数据一致性验证通过"
                 )
 
             # 根据配置决定是否失败或警告
@@ -354,9 +354,15 @@ class DataIntegrityValidator:
                     details={
                         "issues": issues,
                         "negative_prices": negative_prices,
-                        "negative_volume_count": negative_volume_mask.sum() if 'negative_volume_mask' in locals() else 0,
-                        "logic_errors_count": logic_errors.sum() if 'logic_errors' in locals() else 0
-                    }
+                        "negative_volume_count": (
+                            negative_volume_mask.sum()
+                            if "negative_volume_mask" in locals()
+                            else 0
+                        ),
+                        "logic_errors_count": (
+                            logic_errors.sum() if "logic_errors" in locals() else 0
+                        ),
+                    },
                 )
             else:
                 return ValidationResult.warning(
@@ -365,22 +371,26 @@ class DataIntegrityValidator:
                     details={
                         "issues": issues,
                         "negative_prices": negative_prices,
-                        "negative_volume_count": negative_volume_mask.sum() if 'negative_volume_mask' in locals() else 0,
-                        "logic_errors_count": logic_errors.sum() if 'logic_errors' in locals() else 0
-                    }
+                        "negative_volume_count": (
+                            negative_volume_mask.sum()
+                            if "negative_volume_mask" in locals()
+                            else 0
+                        ),
+                        "logic_errors_count": (
+                            logic_errors.sum() if "logic_errors" in locals() else 0
+                        ),
+                    },
                 )
 
         except Exception as e:
             return ValidationResult.failure(
                 "price_consistency",
                 f"价格一致性验证失败: {e}",
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
     def validate_data_coverage(
-        self,
-        factor_data: pd.Series,
-        min_coverage: Optional[float] = None
+        self, factor_data: pd.Series, min_coverage: Optional[float] = None
     ) -> ValidationResult:
         """
         验证数据覆盖率
@@ -395,9 +405,7 @@ class DataIntegrityValidator:
         try:
             if factor_data.empty:
                 return ValidationResult.failure(
-                    "data_coverage",
-                    "数据为空",
-                    details={"data_length": 0}
+                    "data_coverage", "数据为空", details={"data_length": 0}
                 )
 
             min_coverage = min_coverage or self.config.coverage_threshold
@@ -411,8 +419,8 @@ class DataIntegrityValidator:
                         "coverage": coverage,
                         "threshold": min_coverage,
                         "total_points": len(factor_data),
-                        "missing_points": factor_data.isna().sum()
-                    }
+                        "missing_points": factor_data.isna().sum(),
+                    },
                 )
 
             return ValidationResult.success(
@@ -422,15 +430,13 @@ class DataIntegrityValidator:
                     "coverage": coverage,
                     "threshold": min_coverage,
                     "total_points": len(factor_data),
-                    "missing_points": factor_data.isna().sum()
-                }
+                    "missing_points": factor_data.isna().sum(),
+                },
             )
 
         except Exception as e:
             return ValidationResult.failure(
-                "data_coverage",
-                f"数据覆盖率验证失败: {e}",
-                details={"error": str(e)}
+                "data_coverage", f"数据覆盖率验证失败: {e}", details={"error": str(e)}
             )
 
     def validate_min_history(
@@ -438,7 +444,7 @@ class DataIntegrityValidator:
         factor_data: pd.Series,
         factor_id: str,
         timeframe: str,
-        custom_min_history: Optional[int] = None
+        custom_min_history: Optional[int] = None,
     ) -> ValidationResult:
         """
         验证最小历史数据要求
@@ -454,9 +460,8 @@ class DataIntegrityValidator:
         """
         try:
             # 获取最小历史数据要求
-            min_history = (
-                custom_min_history or
-                self.config.min_history_map.get(timeframe, 20)
+            min_history = custom_min_history or self.config.min_history_map.get(
+                timeframe, 20
             )
 
             actual_length = len(factor_data.dropna())
@@ -469,8 +474,8 @@ class DataIntegrityValidator:
                         "factor_id": factor_id,
                         "timeframe": timeframe,
                         "actual_length": actual_length,
-                        "required_length": min_history
-                    }
+                        "required_length": min_history,
+                    },
                 )
 
             return ValidationResult.success(
@@ -480,15 +485,13 @@ class DataIntegrityValidator:
                     "factor_id": factor_id,
                     "timeframe": timeframe,
                     "actual_length": actual_length,
-                    "required_length": min_history
-                }
+                    "required_length": min_history,
+                },
             )
 
         except Exception as e:
             return ValidationResult.failure(
-                "min_history",
-                f"最小历史数据验证失败: {e}",
-                details={"error": str(e)}
+                "min_history", f"最小历史数据验证失败: {e}", details={"error": str(e)}
             )
 
 
@@ -510,16 +513,12 @@ class StatisticalValidator:
         """
         try:
             if factor_data.empty:
-                return ValidationResult.failure(
-                    "factor_distribution",
-                    "因子数据为空"
-                )
+                return ValidationResult.failure("factor_distribution", "因子数据为空")
 
             valid_data = factor_data.dropna()
             if len(valid_data) < 10:
                 return ValidationResult.warning(
-                    "factor_distribution",
-                    f"有效数据点过少: {len(valid_data)}"
+                    "factor_distribution", f"有效数据点过少: {len(valid_data)}"
                 )
 
             # 计算统计特性
@@ -534,8 +533,8 @@ class StatisticalValidator:
                     details={
                         "variance": variance,
                         "mean": stats.get("mean", 0),
-                        "constant_value": stats.get("mean", 0)
-                    }
+                        "constant_value": stats.get("mean", 0),
+                    },
                 )
 
             # 检查极值比例
@@ -544,8 +543,8 @@ class StatisticalValidator:
             if iqr > 0:
                 lower_bound = q1 - 3 * iqr
                 upper_bound = q3 + 3 * iqr
-                extreme_outliers = (
-                    (valid_data < lower_bound) | (valid_data > upper_bound)
+                extreme_outliers = (valid_data < lower_bound) | (
+                    valid_data > upper_bound
                 )
                 extreme_ratio = extreme_outliers.mean()
 
@@ -557,8 +556,8 @@ class StatisticalValidator:
                             "extreme_ratio": extreme_ratio,
                             "extreme_count": extreme_outliers.sum(),
                             "lower_bound": lower_bound,
-                            "upper_bound": upper_bound
-                        }
+                            "upper_bound": upper_bound,
+                        },
                     )
 
             # 检查分布偏度
@@ -567,26 +566,22 @@ class StatisticalValidator:
                 return ValidationResult.warning(
                     "factor_distribution",
                     f"分布偏度异常: {skewness:.2f}",
-                    details={"skewness": skewness}
+                    details={"skewness": skewness},
                 )
 
             return ValidationResult.success(
-                "factor_distribution",
-                message="因子分布特性验证通过",
-                details=stats
+                "factor_distribution", message="因子分布特性验证通过", details=stats
             )
 
         except Exception as e:
             return ValidationResult.failure(
                 "factor_distribution",
                 f"因子分布验证失败: {e}",
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
     def validate_correlation_matrix(
-        self,
-        factor_panel: pd.DataFrame,
-        max_correlation: Optional[float] = None
+        self, factor_panel: pd.DataFrame, max_correlation: Optional[float] = None
     ) -> ValidationResult:
         """
         验证因子相关性矩阵
@@ -601,8 +596,7 @@ class StatisticalValidator:
         try:
             if factor_panel.empty or factor_panel.shape[1] < 2:
                 return ValidationResult.success(
-                    "correlation_matrix",
-                    message="因子数量不足，跳过相关性检查"
+                    "correlation_matrix", message="因子数量不足，跳过相关性检查"
                 )
 
             max_correlation = max_correlation or self.config.correlation_threshold
@@ -612,7 +606,7 @@ class StatisticalValidator:
             if len(clean_data) < 10:
                 return ValidationResult.warning(
                     "correlation_matrix",
-                    f"有效数据不足，无法计算相关性: {len(clean_data)}"
+                    f"有效数据不足，无法计算相关性: {len(clean_data)}",
                 )
 
             correlation_matrix = clean_data.corr().abs()
@@ -634,8 +628,10 @@ class StatisticalValidator:
                     details={
                         "high_correlation_pairs": high_corr_pairs,
                         "max_correlation": max_correlation,
-                        "max_observed_correlation": max(corr for _, _, corr in high_corr_pairs)
-                    }
+                        "max_observed_correlation": max(
+                            corr for _, _, corr in high_corr_pairs
+                        ),
+                    },
                 )
 
             return ValidationResult.success(
@@ -644,15 +640,15 @@ class StatisticalValidator:
                 details={
                     "factor_count": len(correlation_matrix.columns),
                     "max_correlation": max_correlation,
-                    "data_points": len(clean_data)
-                }
+                    "data_points": len(clean_data),
+                },
             )
 
         except Exception as e:
             return ValidationResult.failure(
                 "correlation_matrix",
                 f"相关性矩阵验证失败: {e}",
-                details={"error": str(e)}
+                details={"error": str(e)},
             )
 
 
@@ -670,7 +666,7 @@ class RuntimeValidator:
         factor_data: pd.Series,
         factor_id: str,
         timeframe: str,
-        reference_data: Optional[pd.DataFrame] = None
+        reference_data: Optional[pd.DataFrame] = None,
     ) -> ValidationResult:
         """
         验证因子计算的完整性和安全性
@@ -686,8 +682,7 @@ class RuntimeValidator:
         """
         if not self.config.enabled:
             return ValidationResult.success(
-                "factor_calculation",
-                message="运行时验证已禁用"
+                "factor_calculation", message="运行时验证已禁用"
             )
 
         start_time = time.time()
@@ -698,12 +693,18 @@ class RuntimeValidator:
             # 1. 数据完整性验证
             if self.config.data_integrity:
                 if reference_data is not None:
-                    data_result = self.data_integrity_validator.validate_price_consistency(reference_data)
+                    data_result = (
+                        self.data_integrity_validator.validate_price_consistency(
+                            reference_data
+                        )
+                    )
                     results.append(data_result)
                     if not data_result.is_valid:
                         warnings.extend(data_result.warnings)
 
-                coverage_result = self.data_integrity_validator.validate_data_coverage(factor_data)
+                coverage_result = self.data_integrity_validator.validate_data_coverage(
+                    factor_data
+                )
                 results.append(coverage_result)
                 if not coverage_result.is_valid:
                     warnings.extend(coverage_result.warnings)
@@ -717,7 +718,9 @@ class RuntimeValidator:
 
             # 2. 统计特性验证
             if self.config.statistical_checks:
-                dist_result = self.statistical_validator.validate_factor_distribution(factor_data)
+                dist_result = self.statistical_validator.validate_factor_distribution(
+                    factor_data
+                )
                 results.append(dist_result)
                 if not dist_result.is_valid:
                     warnings.extend(dist_result.warnings)
@@ -726,8 +729,10 @@ class RuntimeValidator:
             if self.config.time_series_safety and reference_data is not None:
                 if "close" in reference_data.columns:
                     returns = reference_data["close"].pct_change()
-                    temporal_result = self.time_series_validator.validate_temporal_alignment(
-                        factor_data, returns, horizon=1
+                    temporal_result = (
+                        self.time_series_validator.validate_temporal_alignment(
+                            factor_data, returns, horizon=1
+                        )
                     )
                     results.append(temporal_result)
                     if not temporal_result.is_valid:
@@ -746,9 +751,11 @@ class RuntimeValidator:
                         "timeframe": timeframe,
                         "validation_time": validation_time,
                         "failed_validations": [r.to_dict() for r in failed_results],
-                        "successful_validations": len([r for r in results if r.is_valid])
+                        "successful_validations": len(
+                            [r for r in results if r.is_valid]
+                        ),
                     },
-                    warnings=warnings
+                    warnings=warnings,
                 )
             else:
                 return ValidationResult.success(
@@ -758,9 +765,9 @@ class RuntimeValidator:
                         "factor_id": factor_id,
                         "timeframe": timeframe,
                         "validation_time": validation_time,
-                        "validations_performed": len(results)
+                        "validations_performed": len(results),
                     },
-                    warnings=warnings
+                    warnings=warnings,
                 )
 
         except Exception as e:
@@ -771,8 +778,8 @@ class RuntimeValidator:
                     "factor_id": factor_id,
                     "timeframe": timeframe,
                     "validation_time": time.time() - start_time,
-                    "error": str(e)
-                }
+                    "error": str(e),
+                },
             )
 
     def validate_batch_factors(
@@ -780,7 +787,7 @@ class RuntimeValidator:
         factor_panel: pd.DataFrame,
         factor_ids: List[str],
         timeframe: str,
-        reference_data: Optional[pd.DataFrame] = None
+        reference_data: Optional[pd.DataFrame] = None,
     ) -> ValidationResult:
         """
         批量验证多个因子
@@ -795,10 +802,7 @@ class RuntimeValidator:
             批量验证结果
         """
         if not self.config.enabled:
-            return ValidationResult.success(
-                "batch_factors",
-                message="运行时验证已禁用"
-            )
+            return ValidationResult.success("batch_factors", message="运行时验证已禁用")
 
         start_time = time.time()
         results = []
@@ -811,32 +815,32 @@ class RuntimeValidator:
                 result = self.validate_factor_calculation(
                     factor_data, factor_id, timeframe, reference_data
                 )
-                results.append({
-                    "factor_id": factor_id,
-                    "result": result.to_dict()
-                })
+                results.append({"factor_id": factor_id, "result": result.to_dict()})
                 all_warnings.extend(result.warnings)
             else:
-                results.append({
-                    "factor_id": factor_id,
-                    "result": ValidationResult.failure(
-                        "batch_factors",
-                        f"因子{factor_id}不存在",
-                        details={"factor_id": factor_id}
-                    ).to_dict()
-                })
+                results.append(
+                    {
+                        "factor_id": factor_id,
+                        "result": ValidationResult.failure(
+                            "batch_factors",
+                            f"因子{factor_id}不存在",
+                            details={"factor_id": factor_id},
+                        ).to_dict(),
+                    }
+                )
 
         # 相关性矩阵验证
         if self.config.statistical_checks and len(factor_ids) > 1:
-            available_factors = [fid for fid in factor_ids if fid in factor_panel.columns]
+            available_factors = [
+                fid for fid in factor_ids if fid in factor_panel.columns
+            ]
             if available_factors:
                 corr_result = self.statistical_validator.validate_correlation_matrix(
                     factor_panel[available_factors]
                 )
-                results.append({
-                    "factor_id": "correlation_matrix",
-                    "result": corr_result.to_dict()
-                })
+                results.append(
+                    {"factor_id": "correlation_matrix", "result": corr_result.to_dict()}
+                )
                 all_warnings.extend(corr_result.warnings)
 
         validation_time = time.time() - start_time
@@ -851,9 +855,9 @@ class RuntimeValidator:
                     "validation_time": validation_time,
                     "total_factors": len(factor_ids),
                     "failed_factors": failed_count,
-                    "results": results
+                    "results": results,
                 },
-                warnings=all_warnings
+                warnings=all_warnings,
             )
         else:
             return ValidationResult.success(
@@ -863,7 +867,7 @@ class RuntimeValidator:
                     "timeframe": timeframe,
                     "validation_time": validation_time,
                     "total_factors": len(factor_ids),
-                    "results": results
+                    "results": results,
                 },
-                warnings=all_warnings
+                warnings=all_warnings,
             )

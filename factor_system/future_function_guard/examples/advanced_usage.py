@@ -5,26 +5,28 @@ FutureFunctionGuard 高级使用示例
 演示高级功能包括批量处理、自定义验证器、集成使用等
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
 
 # 导入FutureFunctionGuard高级功能
 from factor_system.future_function_guard import (
     FutureFunctionGuard,
     GuardConfig,
+    HealthMonitor,
     RuntimeValidationConfig,
     StaticChecker,
-    HealthMonitor,
     batch_safe,
-    safe_shift,
     monitor_factor_health,
-    validate_time_series
+    safe_shift,
+    validate_time_series,
 )
 
 # ==================== 批量处理示例 ====================
+
 
 @batch_safe(batch_size=100, validate_batch=True, aggregate_results=True)
 def calculate_factors_batch(symbols_list):
@@ -46,13 +48,15 @@ def calculate_factors_batch(symbols_list):
             price_data = price_data * (1 + returns).cumprod()
 
             # 计算多个因子
-            factors = pd.DataFrame({
-                'MA_10': price_data.rolling(10).mean(),
-                'MA_30': price_data.rolling(30).mean(),
-                'RSI_14': calculate_rsi_simple(price_data, 14),
-                'Volatility_20': price_data.pct_change().rolling(20).std(),
-                'Momentum_20': price_data.pct_change(20)
-            })
+            factors = pd.DataFrame(
+                {
+                    "MA_10": price_data.rolling(10).mean(),
+                    "MA_30": price_data.rolling(30).mean(),
+                    "RSI_14": calculate_rsi_simple(price_data, 14),
+                    "Volatility_20": price_data.pct_change().rolling(20).std(),
+                    "Momentum_20": price_data.pct_change(20),
+                }
+            )
 
             results[symbol] = factors
 
@@ -62,6 +66,7 @@ def calculate_factors_batch(symbols_list):
 
     return results
 
+
 def calculate_rsi_simple(data, periods=14):
     """简单RSI计算"""
     delta = data.diff()
@@ -69,6 +74,7 @@ def calculate_rsi_simple(data, periods=14):
     loss = (-delta.where(delta < 0, 0)).rolling(window=periods).mean()
     rs = gain / loss
     return 100 - (100 / (1 + rs))
+
 
 def demonstrate_batch_processing():
     """演示批量处理功能"""
@@ -104,7 +110,9 @@ def demonstrate_batch_processing():
     except Exception as e:
         print(f"❌ 批量处理失败: {e}")
 
+
 # ==================== 自定义验证器示例 ====================
+
 
 class CustomFactorValidator:
     """自定义因子验证器"""
@@ -136,7 +144,7 @@ class CustomFactorValidator:
                 "ic_mean": float(ic_mean),
                 "ic_std": float(ic_std),
                 "ir": float(ir),
-                "ic_count": len(aligned_factor)
+                "ic_count": len(aligned_factor),
             }
 
             # 检查IC是否满足要求
@@ -161,7 +169,7 @@ class CustomFactorValidator:
             result = {
                 "valid": True,
                 "turnover": float(turnover),
-                "threshold": threshold
+                "threshold": threshold,
             }
 
             if turnover > self.max_turnover:
@@ -172,6 +180,7 @@ class CustomFactorValidator:
 
         except Exception as e:
             return {"valid": False, "reason": f"换手率计算失败: {e}"}
+
 
 def demonstrate_custom_validation():
     """演示自定义验证功能"""
@@ -189,8 +198,7 @@ def demonstrate_custom_validation():
 
     # 模拟收益率数据（与因子有一定相关性）
     returns = pd.Series(
-        0.001 + 0.02 * factor_data + np.random.randn(252) * 0.01,
-        index=dates
+        0.001 + 0.02 * factor_data + np.random.randn(252) * 0.01, index=dates
     )
 
     print(f"创建了 {len(factor_data)} 天的测试数据")
@@ -202,7 +210,7 @@ def demonstrate_custom_validation():
     ic_result = validator.validate_ic_performance(factor_data, returns)
     print(f"✅ IC验证:")
     print(f"  - 验证状态: {'通过' if ic_result['valid'] else '失败'}")
-    if ic_result['valid']:
+    if ic_result["valid"]:
         print(f"  - IC均值: {ic_result['ic_mean']:.4f}")
         print(f"  - IR: {ic_result['ir']:.4f}")
     else:
@@ -212,15 +220,18 @@ def demonstrate_custom_validation():
     turnover_result = validator.validate_turnover(factor_data)
     print(f"\n✅ 换手率验证:")
     print(f"  - 验证状态: {'通过' if turnover_result['valid'] else '失败'}")
-    if turnover_result['valid']:
+    if turnover_result["valid"]:
         print(f"  - 换手率: {turnover_result['turnover']:.3f}")
     else:
         print(f"  - 失败原因: {turnover_result['reason']}")
 
+
 # ==================== 多线程安全验证示例 ====================
+
 
 def parallel_factor_validation(symbols, guard):
     """并行验证多个因子"""
+
     def validate_single_symbol(symbol):
         try:
             # 模拟数据获取
@@ -239,27 +250,30 @@ def parallel_factor_validation(symbols, guard):
                 factor_data,
                 factor_id=f"{symbol}_MA10",
                 timeframe="daily",
-                reference_data=pd.DataFrame({'price': price_data})
+                reference_data=pd.DataFrame({"price": price_data}),
             )
 
             return {
-                'symbol': symbol,
-                'success': True,
-                'result': result,
-                'quality_score': result.get('validation_time', 0)
+                "symbol": symbol,
+                "success": True,
+                "result": result,
+                "quality_score": result.get("validation_time", 0),
             }
 
         except Exception as e:
             return {
-                'symbol': symbol,
-                'success': False,
-                'error': str(e),
-                'quality_score': 0
+                "symbol": symbol,
+                "success": False,
+                "error": str(e),
+                "quality_score": 0,
             }
 
     # 使用线程池并行验证
     with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {executor.submit(validate_single_symbol, symbol): symbol for symbol in symbols}
+        futures = {
+            executor.submit(validate_single_symbol, symbol): symbol
+            for symbol in symbols
+        }
         results = []
 
         for future in as_completed(futures):
@@ -268,12 +282,17 @@ def parallel_factor_validation(symbols, guard):
 
             # 实时进度显示
             progress = len(results) / len(symbols)
-            status = "✅" if result['success'] else "❌"
-            print(f"\r进度: {progress:.1%} | {status} {result['symbol']}", end="", flush=True)
+            status = "✅" if result["success"] else "❌"
+            print(
+                f"\r进度: {progress:.1%} | {status} {result['symbol']}",
+                end="",
+                flush=True,
+            )
 
     print()  # 换行
 
     return results
+
 
 def demonstrate_parallel_validation():
     """演示并行验证功能"""
@@ -292,8 +311,8 @@ def demonstrate_parallel_validation():
     validation_time = time.time() - start_time
 
     # 统计结果
-    successful = sum(1 for r in results if r['success'])
-    avg_quality = np.mean([r['quality_score'] for r in results if r['success']])
+    successful = sum(1 for r in results if r["success"])
+    avg_quality = np.mean([r["quality_score"] for r in results if r["success"]])
 
     print(f"\n✅ 并行验证完成:")
     print(f"  - 验证时间: {validation_time:.2f}秒")
@@ -301,13 +320,15 @@ def demonstrate_parallel_validation():
     print(f"  - 平均质量评分: {avg_quality:.4f}")
     print(f"  - 验证速度: {len(symbols)/validation_time:.1f} 标的/秒")
 
+
 # ==================== 时间序列高级验证示例 ====================
+
 
 @validate_time_series(
     require_datetime_index=True,
     check_monotonic=True,
     check_duplicates=True,
-    min_length=50
+    min_length=50,
 )
 @safe_shift(max_periods=30, allow_negative=False)
 @monitor_factor_health(strict_mode=True)
@@ -329,6 +350,7 @@ def advanced_time_series_processor(data, operation_type="momentum"):
         raise ValueError(f"Unsupported operation type: {operation_type}")
 
     return result
+
 
 def demonstrate_advanced_time_series():
     """演示高级时间序列处理"""
@@ -363,7 +385,9 @@ def demonstrate_advanced_time_series():
         except Exception as e:
             print(f"❌ {op} 操作失败: {e}")
 
+
 # ==================== 集成监控示例 ====================
+
 
 def setup_integrated_monitoring():
     """设置集成监控系统"""
@@ -388,6 +412,7 @@ def setup_integrated_monitoring():
 
     return guard
 
+
 def simulate_integrated_monitoring(guard):
     """模拟集成监控场景"""
     print("\n模拟集成监控场景:")
@@ -404,9 +429,7 @@ def simulate_integrated_monitoring(guard):
 
         # 计算因子健康（会触发报警）
         health_result = guard.check_factor_health(
-            factor_data,
-            f"Daily_Factor_{i}",
-            strict_mode=False
+            factor_data, f"Daily_Factor_{i}", strict_mode=False
         )
 
         print(f"质量评分: {health_result['quality_score']:.1f}")
@@ -423,7 +446,9 @@ def simulate_integrated_monitoring(guard):
     report = guard.generate_comprehensive_report()
     print(report[:300] + "..." if len(report) > 300 else report)
 
+
 # ==================== 性能优化示例 ====================
+
 
 def demonstrate_performance_optimization():
     """演示性能优化技巧"""
@@ -464,11 +489,13 @@ def demonstrate_performance_optimization():
 
     # 缓存效果测试
     print(f"\n缓存效果测试:")
-    cache_info = guard.get_cache_info()['cache_info']
+    cache_info = guard.get_cache_info()["cache_info"]
     print(f"  - 静态检查缓存文件: {cache_info['static_check']['file_count']}")
     print(f"  - 健康监控缓存文件: {cache_info['health_monitor']['file_count']}")
 
+
 # ==================== 主函数 ====================
+
 
 def main():
     """主函数 - 运行所有高级示例"""
@@ -501,7 +528,9 @@ def main():
     except Exception as e:
         print(f"\n❌ 高级示例运行出错: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()

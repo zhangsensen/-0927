@@ -14,8 +14,9 @@
 
 from __future__ import annotations
 
-import pandas as pd
 from typing import Optional
+
+import pandas as pd
 
 # 版本信息
 __version__ = "1.0.0"
@@ -23,76 +24,72 @@ __author__ = "量化首席工程师"
 __email__ = "quant_engineer@example.com"
 __description__ = "专业级未来函数防护组件，为量化交易系统提供多层次安全保障"
 
+# 子模块（高级用法）
+from . import health_monitor, runtime_validator, static_checker
+
 # 核心类和配置
 from .config import (
-    GuardConfig,
-    StaticCheckConfig,
-    RuntimeValidationConfig,
-    HealthMonitorConfig,
+    AlertThreshold,
     CacheConfig,
+    GuardConfig,
+    HealthMonitorConfig,
     LoggingConfig,
-    StrictMode,
     MonitoringLevel,
-    AlertThreshold
-)
-
-from .guard import FutureFunctionGuard
-
-# 异常类
-from .exceptions import (
-    FutureFunctionGuardError,
-    StaticCheckError,
-    RuntimeValidationError,
-    TimeSeriesSafetyError,
-    ConfigurationError,
-    HealthMonitorError,
-    CacheError,
-    FutureFunctionDetectedError,
-    create_error,
-    format_exception_for_logging
+    RuntimeValidationConfig,
+    StaticCheckConfig,
+    StrictMode,
 )
 
 # 装饰器接口
 from .decorators import (
-    future_safe,
-    safe_shift,
-    monitor_factor_health,
-    validate_time_series,
     batch_safe,
-    safe_research,
+    future_safe,
+    monitor_factor_health,
+    safe_development,
     safe_production,
-    safe_development
+    safe_research,
+    safe_shift,
+    validate_time_series,
 )
+
+# 异常类
+from .exceptions import (
+    CacheError,
+    ConfigurationError,
+    FutureFunctionDetectedError,
+    FutureFunctionGuardError,
+    HealthMonitorError,
+    RuntimeValidationError,
+    StaticCheckError,
+    TimeSeriesSafetyError,
+    create_error,
+    format_exception_for_logging,
+)
+from .guard import FutureFunctionGuard
 
 # 工具函数
 from .utils import (
-    SimpleCache,
     FileCache,
+    SimpleCache,
+    batch_processing,
+    calculate_factor_statistics,
+    create_directory_if_not_exists,
+    format_duration,
+    generate_timestamp,
+    get_file_hash,
+    is_valid_time_range,
+    merge_dicts,
+    normalize_factor_name,
+    safe_divide,
     setup_logging,
     validate_time_series_data,
-    calculate_factor_statistics,
-    generate_timestamp,
-    format_duration,
-    safe_divide,
-    normalize_factor_name,
-    create_directory_if_not_exists,
-    get_file_hash,
-    batch_processing,
-    is_valid_time_range,
-    merge_dicts
 )
-
-# 子模块（高级用法）
-from . import static_checker
-from . import runtime_validator
-from . import health_monitor
 
 # ==================== 便捷函数 ====================
 
+
 def create_guard(
-    mode: str = "auto",
-    strict_mode: str = "warn_only",
-    **kwargs
+    mode: str = "auto", strict_mode: str = "warn_only", **kwargs
 ) -> FutureFunctionGuard:
     """
     创建未来函数防护组件的便捷函数
@@ -139,11 +136,7 @@ def create_guard(
     return FutureFunctionGuard(config)
 
 
-def quick_check(
-    target,
-    mode: str = "auto",
-    output_format: str = "text"
-) -> str:
+def quick_check(target, mode: str = "auto", output_format: str = "text") -> str:
     """
     快速静态检查代码的便捷函数
 
@@ -173,7 +166,7 @@ def validate_factors(
     factor_data,
     factor_ids: Optional[list] = None,
     timeframe: str = "daily",
-    mode: str = "auto"
+    mode: str = "auto",
 ) -> dict:
     """
     快速验证因子数据的便捷函数
@@ -207,10 +200,7 @@ def validate_factors(
 
 
 def monitor_health(
-    factor_data,
-    factor_id: str,
-    strict_mode: bool = False,
-    mode: str = "auto"
+    factor_data, factor_id: str, strict_mode: bool = False, mode: str = "auto"
 ) -> dict:
     """
     快速监控因子健康的便捷函数
@@ -235,7 +225,7 @@ def monitor_health(
 def comprehensive_check(
     code_paths: Optional[list] = None,
     data_dict: Optional[dict] = None,
-    mode: str = "auto"
+    mode: str = "auto",
 ) -> dict:
     """
     综合安全检查的便捷函数
@@ -262,6 +252,7 @@ def comprehensive_check(
 
 # ==================== 环境预设 ====================
 
+
 def development_guard(**kwargs) -> FutureFunctionGuard:
     """创建开发环境防护组件"""
     return create_guard(mode="development", **kwargs)
@@ -279,6 +270,7 @@ def production_guard(**kwargs) -> FutureFunctionGuard:
 
 # ==================== 版本信息 ====================
 
+
 def get_version() -> str:
     """获取版本信息"""
     return __version__
@@ -292,13 +284,8 @@ def get_info() -> dict:
         "author": __author__,
         "description": __description__,
         "python_requires": ">=3.8",
-        "dependencies": [
-            "pandas>=1.3.0",
-            "numpy>=1.20.0"
-        ],
-        "optional_dependencies": [
-            "scipy>=1.7.0"  # 用于统计检查
-        ]
+        "dependencies": ["pandas>=1.3.0", "numpy>=1.20.0"],
+        "optional_dependencies": ["scipy>=1.7.0"],  # 用于统计检查
     }
 
 
@@ -320,11 +307,9 @@ __all__ = [
     "__description__",
     "get_version",
     "get_info",
-
     # 核心类
     "FutureFunctionGuard",
     "GuardConfig",
-
     # 配置类
     "StaticCheckConfig",
     "RuntimeValidationConfig",
@@ -334,7 +319,6 @@ __all__ = [
     "StrictMode",
     "MonitoringLevel",
     "AlertThreshold",
-
     # 异常类
     "FutureFunctionGuardError",
     "StaticCheckError",
@@ -346,7 +330,6 @@ __all__ = [
     "FutureFunctionDetectedError",
     "create_error",
     "format_exception_for_logging",
-
     # 装饰器
     "future_safe",
     "safe_shift",
@@ -356,7 +339,6 @@ __all__ = [
     "safe_research",
     "safe_production",
     "safe_development",
-
     # 工具函数
     "SimpleCache",
     "FileCache",
@@ -372,32 +354,29 @@ __all__ = [
     "batch_processing",
     "is_valid_time_range",
     "merge_dicts",
-
     # 便捷函数
     "create_guard",
     "quick_check",
     "validate_factors",
     "monitor_health",
     "comprehensive_check",
-
     # 环境预设
     "development_guard",
     "research_guard",
     "production_guard",
-
     # 子模块
     "static_checker",
     "runtime_validator",
     "health_monitor",
-
     # 向后兼容别名
     "FutureGuard",
     "StaticChecker",
     "RuntimeValidator",
-    "HealthMonitor"
+    "HealthMonitor",
 ]
 
 # ==================== 模块初始化 ====================
+
 
 def _init_module():
     """模块初始化"""
@@ -410,12 +389,14 @@ def _init_module():
     # 检查可选依赖
     try:
         import scipy
+
         logger.debug("SciPy available - advanced statistical checks enabled")
     except ImportError:
         logger.debug("SciPy not available - some statistical checks will be skipped")
 
     try:
         import sklearn
+
         logger.debug("Scikit-learn available - advanced ML checks enabled")
     except ImportError:
         logger.debug("Scikit-learn not available - ML checks will be skipped")

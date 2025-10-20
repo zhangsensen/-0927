@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 
-from .config import GuardConfig, StrictMode, RuntimeValidationConfig
+from .config import GuardConfig, RuntimeValidationConfig, StrictMode
 from .exceptions import FutureFunctionGuardError, RuntimeValidationError
 from .runtime_validator import RuntimeValidator
 from .utils import setup_logging
@@ -36,7 +36,7 @@ def future_safe(
     correlation_threshold: Optional[float] = None,
     coverage_threshold: Optional[float] = None,
     config: Optional[GuardConfig] = None,
-    logger_name: Optional[str] = None
+    logger_name: Optional[str] = None,
 ):
     """
     未来函数安全装饰器
@@ -54,6 +54,7 @@ def future_safe(
     Returns:
         装饰器函数
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -110,14 +111,18 @@ def future_safe(
                             raise RuntimeValidationError(
                                 f"Function {func.__name__} failed safety validation: {validation_result.message}",
                                 validation_type="function_result",
-                                function_name=func.__name__
+                                function_name=func.__name__,
                             )
                         elif runtime_config.strict_mode == StrictMode.WARN_ONLY:
-                            logger.warning(f"Function {func.__name__} safety warning: {validation_result.message}")
+                            logger.warning(
+                                f"Function {func.__name__} safety warning: {validation_result.message}"
+                            )
 
                 # 记录执行信息
                 if guard_config.performance_monitoring:
-                    logger.debug(f"Function {func.__name__} executed in {execution_time:.3f}s")
+                    logger.debug(
+                        f"Function {func.__name__} executed in {execution_time:.3f}s"
+                    )
 
                 return result
 
@@ -130,10 +135,11 @@ def future_safe(
                     raise FutureFunctionGuardError(
                         f"Function {func.__name__} execution error: {e}",
                         function_name=func.__name__,
-                        cause=e
+                        cause=e,
                     ) from e
 
         return wrapper
+
     return decorator
 
 
@@ -141,7 +147,7 @@ def safe_shift(
     max_periods: Optional[int] = None,
     allow_negative: bool = False,
     strict_mode: Optional[Union[str, StrictMode]] = None,
-    config: Optional[GuardConfig] = None
+    config: Optional[GuardConfig] = None,
 ):
     """
     安全shift装饰器
@@ -155,6 +161,7 @@ def safe_shift(
     Returns:
         装饰器函数
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -184,7 +191,12 @@ def safe_shift(
             # 从关键字参数查找
             if shift_periods is None:
                 for key, value in kwargs.items():
-                    if key.lower() in ['periods', 'n', 'shift', 'period'] and isinstance(value, (int, float)):
+                    if key.lower() in [
+                        "periods",
+                        "n",
+                        "shift",
+                        "period",
+                    ] and isinstance(value, (int, float)):
                         shift_periods = int(value)
                         break
 
@@ -196,24 +208,28 @@ def safe_shift(
                         raise RuntimeValidationError(
                             error_msg,
                             validation_type="shift_validation",
-                            periods=shift_periods
+                            periods=shift_periods,
                         )
                     elif current_strict == StrictMode.WARN_ONLY:
                         import logging
+
                         logger = logging.getLogger(func.__module__)
                         logger.warning(f"{func.__name__}: {error_msg}")
 
                 if max_periods is not None and abs(shift_periods) > max_periods:
-                    error_msg = f"Shift period {shift_periods} exceeds maximum {max_periods}"
+                    error_msg = (
+                        f"Shift period {shift_periods} exceeds maximum {max_periods}"
+                    )
                     if current_strict == StrictMode.ENFORCED:
                         raise RuntimeValidationError(
                             error_msg,
                             validation_type="shift_validation",
                             periods=shift_periods,
-                            max_periods=max_periods
+                            max_periods=max_periods,
                         )
                     elif current_strict == StrictMode.WARN_ONLY:
                         import logging
+
                         logger = logging.getLogger(func.__module__)
                         logger.warning(f"{func.__name__}: {error_msg}")
 
@@ -221,6 +237,7 @@ def safe_shift(
             return func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -228,7 +245,7 @@ def monitor_factor_health(
     factor_id: Optional[str] = None,
     timeframe: Optional[str] = None,
     strict_mode: bool = False,
-    config: Optional[GuardConfig] = None
+    config: Optional[GuardConfig] = None,
 ):
     """
     因子健康监控装饰器
@@ -242,6 +259,7 @@ def monitor_factor_health(
     Returns:
         装饰器函数
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -268,15 +286,20 @@ def monitor_factor_health(
                 health_monitor = HealthMonitor(guard_config.health_monitor)
 
                 if isinstance(result, pd.Series):
-                    health_monitor.check_factor_health(result, inferred_factor_id, strict_mode)
+                    health_monitor.check_factor_health(
+                        result, inferred_factor_id, strict_mode
+                    )
                 else:
                     # DataFrame情况，检查每一列
                     for col in result.columns:
-                        health_monitor.check_factor_health(result[col], col, strict_mode)
+                        health_monitor.check_factor_health(
+                            result[col], col, strict_mode
+                        )
 
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -286,7 +309,7 @@ def validate_time_series(
     check_duplicates: bool = True,
     min_length: Optional[int] = None,
     strict_mode: Optional[Union[str, StrictMode]] = None,
-    config: Optional[GuardConfig] = None
+    config: Optional[GuardConfig] = None,
 ):
     """
     时间序列验证装饰器
@@ -302,6 +325,7 @@ def validate_time_series(
     Returns:
         装饰器函数
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -331,7 +355,9 @@ def validate_time_series(
                 issues = []
 
                 # 检查索引类型
-                if require_datetime_index and not isinstance(result.index, pd.DatetimeIndex):
+                if require_datetime_index and not isinstance(
+                    result.index, pd.DatetimeIndex
+                ):
                     issues.append("Index is not DatetimeIndex")
 
                 # 检查单调性
@@ -345,7 +371,9 @@ def validate_time_series(
 
                 # 检查最小长度
                 if min_length is not None and len(result) < min_length:
-                    issues.append(f"Length {len(result)} is less than required {min_length}")
+                    issues.append(
+                        f"Length {len(result)} is less than required {min_length}"
+                    )
 
                 # 处理验证结果
                 if issues:
@@ -354,16 +382,18 @@ def validate_time_series(
                         raise RuntimeValidationError(
                             error_msg,
                             validation_type="time_series_validation",
-                            issues=issues
+                            issues=issues,
                         )
                     elif current_strict == StrictMode.WARN_ONLY:
                         import logging
+
                         logger = logging.getLogger(func.__module__)
                         logger.warning(f"{func.__name__}: {error_msg}")
 
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -371,7 +401,7 @@ def batch_safe(
     batch_size: Optional[int] = None,
     validate_batch: bool = True,
     aggregate_results: bool = True,
-    config: Optional[GuardConfig] = None
+    config: Optional[GuardConfig] = None,
 ):
     """
     批量处理安全装饰器
@@ -385,6 +415,7 @@ def batch_safe(
     Returns:
         装饰器函数
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -424,14 +455,14 @@ def batch_safe(
             validation_results = []
 
             for i in range(0, len(batch_data), effective_batch_size):
-                batch = batch_data[i:i + effective_batch_size]
+                batch = batch_data[i : i + effective_batch_size]
 
                 # 创建新的参数
                 new_args = list(args)
                 new_kwargs = kwargs.copy()
 
-                if batch_param_name.startswith('arg_'):
-                    arg_index = int(batch_param_name.split('_')[1])
+                if batch_param_name.startswith("arg_"):
+                    arg_index = int(batch_param_name.split("_")[1])
                     new_args[arg_index] = batch
                 else:
                     new_kwargs[batch_param_name] = batch
@@ -447,15 +478,19 @@ def batch_safe(
                             batch_result,
                             RuntimeValidator(guard_config.runtime_validation),
                             f"{func.__name__}_batch_{i // effective_batch_size}",
-                            guard_config.runtime_validation
+                            guard_config.runtime_validation,
                         )
                         validation_results.append(validation_result)
 
                 except Exception as e:
-                    if guard_config.runtime_validation.strict_mode == StrictMode.ENFORCED:
+                    if (
+                        guard_config.runtime_validation.strict_mode
+                        == StrictMode.ENFORCED
+                    ):
                         raise
                     else:
                         import logging
+
                         logger = logging.getLogger(func.__module__)
                         logger.error(f"Batch {i // effective_batch_size} failed: {e}")
                         results.append(None)
@@ -463,14 +498,20 @@ def batch_safe(
             # 聚合结果
             if aggregate_results:
                 try:
-                    if all(isinstance(r, (pd.Series, pd.DataFrame)) and r is not None for r in results):
+                    if all(
+                        isinstance(r, (pd.Series, pd.DataFrame)) and r is not None
+                        for r in results
+                    ):
                         # pandas数据聚合
                         if isinstance(results[0], pd.Series):
                             aggregated = pd.concat(results, axis=0)
                         else:
                             aggregated = pd.concat(results, axis=0)
                         return aggregated
-                    elif all(isinstance(r, (list, np.ndarray)) and r is not None for r in results):
+                    elif all(
+                        isinstance(r, (list, np.ndarray)) and r is not None
+                        for r in results
+                    ):
                         # 数组聚合
                         if isinstance(results[0], np.ndarray):
                             return np.concatenate(results)
@@ -480,6 +521,7 @@ def batch_safe(
                         return results
                 except Exception as e:
                     import logging
+
                     logger = logging.getLogger(func.__module__)
                     logger.warning(f"Batch aggregation failed: {e}")
                     return results
@@ -487,6 +529,7 @@ def batch_safe(
                 return results
 
         return wrapper
+
     return decorator
 
 
@@ -494,7 +537,7 @@ def _validate_function_result(
     result: Union[pd.Series, pd.DataFrame],
     validator: RuntimeValidator,
     function_name: str,
-    config: RuntimeValidationConfig
+    config: RuntimeValidationConfig,
 ) -> Any:
     """
     验证函数结果的安全性
@@ -516,21 +559,23 @@ def _validate_function_result(
     elif isinstance(result, pd.DataFrame):
         # 验证因子面板
         factor_ids = list(result.columns)
-        return validator.validate_batch_factors(
-            result, factor_ids, "unknown", None
-        )
+        return validator.validate_batch_factors(result, factor_ids, "unknown", None)
     else:
         # 非时间序列数据，跳过验证
         from .runtime_validator import ValidationResult
+
         return ValidationResult.success(
             "function_result",
-            message=f"Non-time-series result from {function_name}, validation skipped"
+            message=f"Non-time-series result from {function_name}, validation skipped",
         )
 
 
 # 便捷装饰器
-def safe_research(func: Optional[Callable] = None) -> Union[Callable, Callable[[Callable], Callable]]:
+def safe_research(
+    func: Optional[Callable] = None,
+) -> Union[Callable, Callable[[Callable], Callable]]:
     """研究环境安全装饰器"""
+
     def decorator(f: Callable) -> Callable:
         return future_safe(config=GuardConfig.preset("research"))(f)
 
@@ -540,8 +585,11 @@ def safe_research(func: Optional[Callable] = None) -> Union[Callable, Callable[[
         return decorator(func)
 
 
-def safe_production(func: Optional[Callable] = None) -> Union[Callable, Callable[[Callable], Callable]]:
+def safe_production(
+    func: Optional[Callable] = None,
+) -> Union[Callable, Callable[[Callable], Callable]]:
     """生产环境安全装饰器"""
+
     def decorator(f: Callable) -> Callable:
         return future_safe(config=GuardConfig.preset("production"))(f)
 
@@ -551,8 +599,11 @@ def safe_production(func: Optional[Callable] = None) -> Union[Callable, Callable
         return decorator(func)
 
 
-def safe_development(func: Optional[Callable] = None) -> Union[Callable, Callable[[Callable], Callable]]:
+def safe_development(
+    func: Optional[Callable] = None,
+) -> Union[Callable, Callable[[Callable], Callable]]:
     """开发环境安全装饰器"""
+
     def decorator(f: Callable) -> Callable:
         return future_safe(config=GuardConfig.preset("development"))(f)
 

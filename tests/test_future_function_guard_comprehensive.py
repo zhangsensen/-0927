@@ -12,39 +12,40 @@
 - 性能测试和异常处理验证
 """
 
-import pandas as pd
-import numpy as np
 import tempfile
 import time
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # 导入被测试的组件
 from factor_system.future_function_guard import (
+    FileCache,
     FutureFunctionGuard,
     GuardConfig,
-    StaticChecker,
-    RuntimeValidator,
     HealthMonitor,
+    RuntimeValidator,
     SimpleCache,
-    FileCache,
-    future_safe,
-    validate_factors,
-    monitor_health,
+    StaticChecker,
     create_guard,
     development_guard,
+    future_safe,
+    monitor_health,
+    production_guard,
     research_guard,
-    production_guard
+    validate_factors,
+)
+from factor_system.future_function_guard.exceptions import (
+    CacheError,
+    ConfigurationError,
+    FutureFunctionGuardError,
+    HealthMonitorError,
+    RuntimeValidationError,
+    StaticCheckError,
 )
 
-from factor_system.future_function_guard.exceptions import (
-    FutureFunctionGuardError,
-    ConfigurationError,
-    StaticCheckError,
-    RuntimeValidationError,
-    HealthMonitorError,
-    CacheError
-)
 
 class TestFutureFunctionGuard:
     """未来函数防护组件测试类"""
@@ -97,7 +98,7 @@ class TestFutureFunctionGuard:
         assert rebuilt_config.mode == research_config.mode
 
         # 测试文件操作
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             research_config.save_to_file(f.name)
             self.temp_files.append(f.name)
             loaded_config = GuardConfig.load_from_file(f.name)
@@ -110,8 +111,9 @@ class TestFutureFunctionGuard:
         checker = StaticChecker(GuardConfig.preset("research").static_check)
 
         # 创建测试文件
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-            f.write('''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(
+                """
 import pandas as pd
 
 def normal_function(data):
@@ -120,7 +122,8 @@ def normal_function(data):
 def problematic_function(data):
     # 未来函数使用
     return data.shift(-1)  # This should be detected
-''')
+"""
+            )
             self.temp_files.append(f.name)
 
         # 测试文件检查
@@ -148,17 +151,21 @@ def problematic_function(data):
         validator = RuntimeValidator(GuardConfig.preset("research").runtime_validation)
 
         # 创建测试数据
-        dates = pd.date_range('2025-01-01', periods=100, freq='D')
+        dates = pd.date_range("2025-01-01", periods=100, freq="D")
         normal_data = pd.Series(np.random.randn(100).cumsum(), index=dates)
 
         # 测试正常数据验证
-        result = validator.validate_factor_calculation(normal_data, "test_factor", "daily", dates[0])
-        assert hasattr(result, 'is_valid')
-        assert hasattr(result, 'message')
+        result = validator.validate_factor_calculation(
+            normal_data, "test_factor", "daily", dates[0]
+        )
+        assert hasattr(result, "is_valid")
+        assert hasattr(result, "message")
 
         # 测试空数据
         empty_data = pd.Series([], dtype=float)
-        result = validator.validate_factor_calculation(empty_data, "empty_factor", "daily", pd.Timestamp("2025-01-01"))
+        result = validator.validate_factor_calculation(
+            empty_data, "empty_factor", "daily", pd.Timestamp("2025-01-01")
+        )
         assert not result.is_valid
 
         return True
@@ -168,7 +175,7 @@ def problematic_function(data):
         monitor = HealthMonitor(GuardConfig.preset("research").health_monitor)
 
         # 创建测试数据
-        dates = pd.date_range('2025-01-01', periods=200, freq='D')
+        dates = pd.date_range("2025-01-01", periods=200, freq="D")
 
         # 健康数据
         healthy_data = pd.Series(np.random.randn(200).cumsum(), index=dates)
@@ -187,6 +194,7 @@ def problematic_function(data):
 
     def test_decorators(self):
         """测试装饰器功能"""
+
         @future_safe(strict_mode="warn_only")
         def safe_rsi_calculation(data, periods=14):
             delta = data.diff()
@@ -196,7 +204,7 @@ def problematic_function(data):
             return 100 - (100 / (1 + rs))
 
         # 测试装饰器正常工作
-        dates = pd.date_range('2025-01-01', periods=50, freq='D')
+        dates = pd.date_range("2025-01-01", periods=50, freq="D")
         test_data = pd.Series(np.random.randn(50).cumsum(), index=dates)
         result = safe_rsi_calculation(test_data)
         assert len(result) == len(test_data)
@@ -215,7 +223,7 @@ def problematic_function(data):
         assert prod_guard.config.mode == "production"
 
         # 测试validate_factors便捷函数
-        dates = pd.date_range('2025-01-01', periods=100, freq='D')
+        dates = pd.date_range("2025-01-01", periods=100, freq="D")
         factor_data = pd.Series(np.random.randn(100).cumsum(), index=dates)
         result = validate_factors(factor_data, "test_factor")
         assert "is_valid" in result
@@ -245,13 +253,16 @@ def problematic_function(data):
 
         # 测试所有异常类都有error_code
         exception_classes = [
-            ConfigurationError, StaticCheckError, RuntimeValidationError,
-            HealthMonitorError, CacheError
+            ConfigurationError,
+            StaticCheckError,
+            RuntimeValidationError,
+            HealthMonitorError,
+            CacheError,
         ]
 
         for exc_class in exception_classes:
             instance = exc_class("Test message")
-            assert hasattr(instance, 'error_code')
+            assert hasattr(instance, "error_code")
             assert instance.error_code is not None
 
         return True
@@ -286,11 +297,13 @@ def problematic_function(data):
 
         sizes = [1000, 5000]
         for size in sizes:
-            dates = pd.date_range('2020-01-01', periods=size, freq='D')
+            dates = pd.date_range("2020-01-01", periods=size, freq="D")
             data = pd.Series(np.random.randn(size).cumsum(), index=dates)
 
             start_time = time.time()
-            result = validator.validate_factor_calculation(data, f'test_factor_{size}', 'daily')
+            result = validator.validate_factor_calculation(
+                data, f"test_factor_{size}", "daily"
+            )
             validation_time = time.time() - start_time
 
             throughput = size / validation_time
@@ -298,7 +311,7 @@ def problematic_function(data):
 
         # 健康监控性能测试
         monitor = HealthMonitor(GuardConfig.preset("research").health_monitor)
-        dates = pd.date_range('2025-01-01', periods=1000, freq='D')
+        dates = pd.date_range("2025-01-01", periods=1000, freq="D")
         data = pd.Series(np.random.randn(1000).cumsum(), index=dates)
 
         start_time = time.time()
@@ -352,6 +365,7 @@ def problematic_function(data):
             print("⚠️  部分测试失败，请检查相关功能。")
             return False
 
+
 def main():
     """主函数"""
     tester = TestFutureFunctionGuard()
@@ -359,6 +373,7 @@ def main():
         return tester.run_all_tests()
     finally:
         tester.cleanup()
+
 
 if __name__ == "__main__":
     success = main()

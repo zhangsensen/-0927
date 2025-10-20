@@ -52,7 +52,9 @@ class SimpleCache:
         """如果需要，淘汰最久未使用的项"""
         if len(self._cache) >= self.max_size:
             # 找到最久未访问的键
-            oldest_key = min(self._access_times.keys(), key=lambda k: self._access_times[k])
+            oldest_key = min(
+                self._access_times.keys(), key=lambda k: self._access_times[k]
+            )
             self._evict(oldest_key)
 
     def _evict(self, key: str) -> None:
@@ -101,7 +103,7 @@ class FileCache:
     def _get_cache_path(self, key: str) -> Path:
         """获取缓存文件路径"""
         # 使用MD5哈希作为文件名，避免文件名过长或包含特殊字符
-        hash_key = hashlib.md5(key.encode('utf-8')).hexdigest()
+        hash_key = hashlib.md5(key.encode("utf-8")).hexdigest()
         return self.cache_dir / f"{hash_key}.cache"
 
     def _is_expired(self, cache_path: Path) -> bool:
@@ -119,10 +121,10 @@ class FileCache:
         if cache_path.exists() and not self._is_expired(cache_path):
             try:
                 if self.config.compression_enabled:
-                    with open(cache_path, 'rb') as f:
+                    with open(cache_path, "rb") as f:
                         return pickle.load(f)
                 else:
-                    with open(cache_path, 'r', encoding='utf-8') as f:
+                    with open(cache_path, "r", encoding="utf-8") as f:
                         return json.load(f)
             except Exception as e:
                 raise CacheError(f"Failed to load cache: {e}", cache_key=key)
@@ -135,10 +137,10 @@ class FileCache:
 
         try:
             if self.config.compression_enabled:
-                with open(cache_path, 'wb') as f:
+                with open(cache_path, "wb") as f:
                     pickle.dump(value, f)
             else:
-                with open(cache_path, 'w', encoding='utf-8') as f:
+                with open(cache_path, "w", encoding="utf-8") as f:
                     json.dump(value, f, ensure_ascii=False, default=str)
         except Exception as e:
             raise CacheError(f"Failed to save cache: {e}", cache_key=key)
@@ -176,7 +178,7 @@ class FileCache:
             "total_size_bytes": total_size,
             "total_size_mb": total_size / (1024 * 1024),
             "file_count": file_count,
-            "cache_dir": str(self.cache_dir)
+            "cache_dir": str(self.cache_dir),
         }
 
 
@@ -207,11 +209,12 @@ def setup_logging(config) -> logging.Logger:
     # 文件处理器
     if config.file_path:
         from logging.handlers import RotatingFileHandler
+
         file_handler = RotatingFileHandler(
             config.file_path,
             maxBytes=config.max_file_size_mb * 1024 * 1024,
             backupCount=config.backup_count,
-            encoding='utf-8'
+            encoding="utf-8",
         )
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
@@ -280,11 +283,11 @@ def validate_time_series_data(data: Union[pd.DataFrame, pd.Series]) -> List[str]
 
             # 检查OHLC逻辑
             logic_errors = (
-                (df["high"] < df["low"]) |
-                (df["high"] < df["open"]) |
-                (df["high"] < df["close"]) |
-                (df["low"] > df["open"]) |
-                (df["low"] > df["close"])
+                (df["high"] < df["low"])
+                | (df["high"] < df["open"])
+                | (df["high"] < df["close"])
+                | (df["low"] > df["open"])
+                | (df["low"] > df["close"])
             )
             if logic_errors.any():
                 issues.append("OHLC数据存在逻辑错误")
@@ -293,9 +296,7 @@ def validate_time_series_data(data: Union[pd.DataFrame, pd.Series]) -> List[str]
 
 
 def calculate_factor_statistics(
-    factor_data: pd.Series,
-    return_data: Optional[pd.Series] = None,
-    horizon: int = 1
+    factor_data: pd.Series, return_data: Optional[pd.Series] = None, horizon: int = 1
 ) -> Dict[str, Any]:
     """
     计算因子统计信息
@@ -313,7 +314,7 @@ def calculate_factor_statistics(
     # 基础统计
     stats["count"] = len(factor_data)
     stats["missing_count"] = factor_data.isna().sum()
-    stats["coverage"] = (factor_data.notna().mean() if len(factor_data) > 0 else 0)
+    stats["coverage"] = factor_data.notna().mean() if len(factor_data) > 0 else 0
 
     if factor_data.notna().sum() > 0:
         valid_data = factor_data.dropna()
@@ -328,6 +329,7 @@ def calculate_factor_statistics(
         # 分布统计
         try:
             from scipy import stats as scipy_stats
+
             stats["skewness"] = float(scipy_stats.skew(valid_data))
             stats["kurtosis"] = float(scipy_stats.kurtosis(valid_data))
         except ImportError:
@@ -414,11 +416,12 @@ def normalize_factor_name(name: str) -> str:
     """
     # 移除特殊字符，替换为下划线
     import re
-    normalized = re.sub(r'[^\w\s-]', '_', name)
+
+    normalized = re.sub(r"[^\w\s-]", "_", name)
     # 替换多个连续的下划线
-    normalized = re.sub(r'_+', '_', normalized)
+    normalized = re.sub(r"_+", "_", normalized)
     # 移除首尾下划线
-    normalized = normalized.strip('_')
+    normalized = normalized.strip("_")
     return normalized
 
 
@@ -470,7 +473,7 @@ def batch_processing(items: List[Any], batch_size: int = 100):
         批次数据
     """
     for i in range(0, len(items), batch_size):
-        yield items[i:i + batch_size]
+        yield items[i : i + batch_size]
 
 
 def is_valid_time_range(start_date: datetime, end_date: datetime) -> bool:

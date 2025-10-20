@@ -50,7 +50,9 @@ class FutureFunctionChecker(ast.NodeVisitor):
                                     "line": node.lineno,
                                     "type": "negative_shift",
                                     "code": "function_call",
-                                    "message": f"发现未来函数: shift({node.args[0].value})",
+                                    "message": "发现未来函数: shift({})".format(
+                                        node.args[0].operand.value
+                                    ),
                                 }
                             )
 
@@ -65,7 +67,7 @@ class FutureFunctionChecker(ast.NodeVisitor):
                         "line": node.lineno,
                         "type": "future_variable",
                         "code": ast.get_source_segment(node),
-                        "message": f"发现未来变量: {node.func.id}",
+                        "message": "发现未来变量: {}".format(node.func.id),
                     }
                 )
 
@@ -96,7 +98,7 @@ def check_file_for_future_functions(file_path: Path) -> List[dict]:
                         "line": line_num,
                         "type": "regex_match",
                         "code": match.group(),
-                        "message": f"发现可疑模式: {match.group()}",
+                        "message": "发现可疑模式: {}".format(match.group()),
                     }
                 )
 

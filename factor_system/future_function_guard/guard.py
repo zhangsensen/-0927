@@ -19,16 +19,16 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Iterator
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 import numpy as np
 import pandas as pd
 
 from .config import GuardConfig
-from .exceptions import FutureFunctionGuardError, ConfigurationError
-from .static_checker import StaticChecker
-from .runtime_validator import RuntimeValidator
+from .exceptions import ConfigurationError, FutureFunctionGuardError
 from .health_monitor import HealthMonitor
+from .runtime_validator import RuntimeValidator
+from .static_checker import StaticChecker
 from .utils import setup_logging
 
 
@@ -70,13 +70,17 @@ class FutureFunctionGuard:
             "runtime_validations": 0,
             "health_checks": 0,
             "issues_detected": 0,
-            "alerts_generated": 0
+            "alerts_generated": 0,
         }
 
         self.logger.info(f"FutureFunctionGuard initialized in {self.config.mode} mode")
         self.logger.debug(f"Static check enabled: {self.config.static_check.enabled}")
-        self.logger.debug(f"Runtime validation enabled: {self.config.runtime_validation.enabled}")
-        self.logger.debug(f"Health monitoring enabled: {self.config.health_monitor.enabled}")
+        self.logger.debug(
+            f"Runtime validation enabled: {self.config.runtime_validation.enabled}"
+        )
+        self.logger.debug(
+            f"Health monitoring enabled: {self.config.health_monitor.enabled}"
+        )
 
     # ==================== 静态检查方法 ====================
 
@@ -84,7 +88,7 @@ class FutureFunctionGuard:
         self,
         target: Union[str, Path, List[Union[str, Path]]],
         recursive: bool = True,
-        pattern: str = "*.py"
+        pattern: str = "*.py",
     ) -> Dict[str, Any]:
         """
         检查代码中的未来函数使用
@@ -114,11 +118,15 @@ class FutureFunctionGuard:
                     result = self.static_checker.check_file(target_path)
                 elif target_path.is_dir():
                     # 检查目录
-                    result = self.static_checker.check_directory(target_path, recursive, pattern)
+                    result = self.static_checker.check_directory(
+                        target_path, recursive, pattern
+                    )
                 else:
                     raise FutureFunctionGuardError(f"Invalid target: {target}")
             else:
-                raise FutureFunctionGuardError(f"Unsupported target type: {type(target)}")
+                raise FutureFunctionGuardError(
+                    f"Unsupported target type: {type(target)}"
+                )
 
             # 更新统计
             scan_time = time.time() - start_time
@@ -140,7 +148,7 @@ class FutureFunctionGuard:
         self,
         target: Union[str, Path, List[Union[str, Path]]],
         output_format: str = "text",
-        save_to_file: Optional[Union[str, Path]] = None
+        save_to_file: Optional[Union[str, Path]] = None,
     ) -> str:
         """
         生成静态检查报告
@@ -159,7 +167,7 @@ class FutureFunctionGuard:
         if save_to_file:
             save_path = Path(save_to_file)
             save_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(save_path, 'w', encoding='utf-8') as f:
+            with open(save_path, "w", encoding="utf-8") as f:
                 f.write(report)
             self.logger.info(f"Static check report saved to: {save_path}")
 
@@ -171,7 +179,7 @@ class FutureFunctionGuard:
         self,
         data: pd.DataFrame,
         factor_ids: Optional[List[str]] = None,
-        timeframe: str = "unknown"
+        timeframe: str = "unknown",
     ) -> Dict[str, Any]:
         """
         验证时间序列数据
@@ -215,14 +223,16 @@ class FutureFunctionGuard:
 
         except Exception as e:
             self.logger.error(f"Runtime validation failed: {e}")
-            raise FutureFunctionGuardError(f"Runtime validation failed: {e}", cause=e) from e
+            raise FutureFunctionGuardError(
+                f"Runtime validation failed: {e}", cause=e
+            ) from e
 
     def validate_factor_calculation(
         self,
         factor_data: pd.Series,
         factor_id: str,
         timeframe: str = "unknown",
-        reference_data: Optional[pd.DataFrame] = None
+        reference_data: Optional[pd.DataFrame] = None,
     ) -> Dict[str, Any]:
         """
         验证单个因子计算
@@ -264,15 +274,14 @@ class FutureFunctionGuard:
 
         except Exception as e:
             self.logger.error(f"Factor validation failed: {e}")
-            raise FutureFunctionGuardError(f"Factor validation failed: {e}", cause=e) from e
+            raise FutureFunctionGuardError(
+                f"Factor validation failed: {e}", cause=e
+            ) from e
 
     # ==================== 健康监控方法 ====================
 
     def check_factor_health(
-        self,
-        factor_data: pd.Series,
-        factor_id: str,
-        strict_mode: bool = False
+        self, factor_data: pd.Series, factor_id: str, strict_mode: bool = False
     ) -> Dict[str, Any]:
         """
         检查因子健康状况
@@ -322,7 +331,7 @@ class FutureFunctionGuard:
         self,
         factor_panel: pd.DataFrame,
         factor_ids: Optional[List[str]] = None,
-        strict_mode: bool = False
+        strict_mode: bool = False,
     ) -> Dict[str, Any]:
         """
         批量检查因子健康状况
@@ -362,7 +371,7 @@ class FutureFunctionGuard:
                 "factor_results": {
                     factor_id: metrics.to_dict()
                     for factor_id, metrics in health_results.items()
-                }
+                },
             }
 
             self.logger.info(
@@ -374,7 +383,9 @@ class FutureFunctionGuard:
 
         except Exception as e:
             self.logger.error(f"Batch health check failed: {e}")
-            raise FutureFunctionGuardError(f"Batch health check failed: {e}", cause=e) from e
+            raise FutureFunctionGuardError(
+                f"Batch health check failed: {e}", cause=e
+            ) from e
 
     # ==================== 综合安全检查方法 ====================
 
@@ -382,7 +393,7 @@ class FutureFunctionGuard:
         self,
         code_targets: Optional[List[Union[str, Path]]] = None,
         data_targets: Optional[Dict[str, pd.DataFrame]] = None,
-        generate_report: bool = True
+        generate_report: bool = True,
     ) -> Dict[str, Any]:
         """
         综合安全检查
@@ -401,7 +412,7 @@ class FutureFunctionGuard:
             "check_components": [],
             "overall_status": "passed",
             "total_issues": 0,
-            "total_alerts": 0
+            "total_alerts": 0,
         }
 
         try:
@@ -423,7 +434,9 @@ class FutureFunctionGuard:
                 for name, data in data_targets.items():
                     try:
                         if isinstance(data, pd.Series):
-                            runtime_result = self.validate_factor_calculation(data, name)
+                            runtime_result = self.validate_factor_calculation(
+                                data, name
+                            )
                         else:
                             runtime_result = self.validate_time_series_data(data)
                         runtime_results[name] = runtime_result
@@ -433,10 +446,7 @@ class FutureFunctionGuard:
 
                     except Exception as e:
                         self.logger.error(f"Runtime validation failed for {name}: {e}")
-                        runtime_results[name] = {
-                            "status": "error",
-                            "error": str(e)
-                        }
+                        runtime_results[name] = {"status": "error", "error": str(e)}
                         results["overall_status"] = "failed"
 
                 results["runtime_validation"] = runtime_results
@@ -456,10 +466,7 @@ class FutureFunctionGuard:
 
                     except Exception as e:
                         self.logger.error(f"Health check failed for {name}: {e}")
-                        health_results[name] = {
-                            "status": "error",
-                            "error": str(e)
-                        }
+                        health_results[name] = {"status": "error", "error": str(e)}
 
                 results["health_monitoring"] = health_results
                 results["check_components"].append("health_monitoring")
@@ -514,10 +521,14 @@ class FutureFunctionGuard:
         try:
             # 根据模式调整配置
             if mode == "strict":
-                self.config.runtime_validation.strict_mode = self.config.runtime_validation.strict_mode.ENFORCED
+                self.config.runtime_validation.strict_mode = (
+                    self.config.runtime_validation.strict_mode.ENFORCED
+                )
                 self.config.health_monitor.real_time_alerts = True
             elif mode == "permissive":
-                self.config.runtime_validation.strict_mode = self.config.runtime_validation.strict_mode.WARN_ONLY
+                self.config.runtime_validation.strict_mode = (
+                    self.config.runtime_validation.strict_mode.WARN_ONLY
+                )
                 self.config.health_monitor.real_time_alerts = False
 
             self.logger.debug(f"Entered protection context in {mode} mode")
@@ -530,7 +541,9 @@ class FutureFunctionGuard:
 
     # ==================== 报告生成方法 ====================
 
-    def generate_comprehensive_report(self, check_results: Optional[Dict[str, Any]] = None) -> str:
+    def generate_comprehensive_report(
+        self, check_results: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         生成综合安全报告
 
@@ -545,7 +558,7 @@ class FutureFunctionGuard:
             check_results = {
                 "statistics": self.get_statistics(),
                 "health_summary": self.health_monitor.get_health_summary(),
-                "alert_count": len(self.health_monitor.alerts)
+                "alert_count": len(self.health_monitor.alerts),
             }
 
         lines = [
@@ -554,68 +567,84 @@ class FutureFunctionGuard:
             f"报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"运行模式: {self.config.mode}",
             f"整体状态: {check_results.get('overall_status', 'unknown')}",
-            ""
+            "",
         ]
 
         # 统计信息
         stats = check_results.get("statistics", {})
-        lines.extend([
-            "使用统计:",
-            f"- 静态检查次数: {stats.get('static_checks', 0)}",
-            f"- 运行时验证次数: {stats.get('runtime_validations', 0)}",
-            f"- 健康检查次数: {stats.get('health_checks', 0)}",
-            f"- 检测问题总数: {stats.get('issues_detected', 0)}",
-            f"- 生成报警总数: {stats.get('alerts_generated', 0)}",
-            ""
-        ])
+        lines.extend(
+            [
+                "使用统计:",
+                f"- 静态检查次数: {stats.get('static_checks', 0)}",
+                f"- 运行时验证次数: {stats.get('runtime_validations', 0)}",
+                f"- 健康检查次数: {stats.get('health_checks', 0)}",
+                f"- 检测问题总数: {stats.get('issues_detected', 0)}",
+                f"- 生成报警总数: {stats.get('alerts_generated', 0)}",
+                "",
+            ]
+        )
 
         # 静态检查结果
         if "static_check" in check_results:
             static = check_results["static_check"]
-            lines.extend([
-                "静态代码检查:",
-                f"- 检查文件数: {static.get('files_checked', 0)}",
-                f"- 发现问题数: {static.get('total_issues', 0)}",
-                f"- 检查耗时: {static.get('scan_time', 0):.3f}秒",
-                ""
-            ])
+            lines.extend(
+                [
+                    "静态代码检查:",
+                    f"- 检查文件数: {static.get('files_checked', 0)}",
+                    f"- 发现问题数: {static.get('total_issues', 0)}",
+                    f"- 检查耗时: {static.get('scan_time', 0):.3f}秒",
+                    "",
+                ]
+            )
 
         # 运行时验证结果
         if "runtime_validation" in check_results:
             runtime = check_results["runtime_validation"]
             passed_count = sum(1 for r in runtime.values() if r.get("is_valid", True))
             total_count = len(runtime)
-            lines.extend([
-                "运行时数据验证:",
-                f"- 验证数据集数: {total_count}",
-                f"- 通过验证数: {passed_count}",
-                f"- 验证失败数: {total_count - passed_count}",
-                ""
-            ])
+            lines.extend(
+                [
+                    "运行时数据验证:",
+                    f"- 验证数据集数: {total_count}",
+                    f"- 通过验证数: {passed_count}",
+                    f"- 验证失败数: {total_count - passed_count}",
+                    "",
+                ]
+            )
 
         # 健康监控结果
         if "health_monitoring" in check_results:
             health = check_results["health_monitoring"]
-            lines.extend([
-                "健康监控:",
-                f"- 监控数据集数: {len(health)}",
-                f"- 活跃报警数: {len(self.health_monitor.alerts)}",
-                ""
-            ])
+            lines.extend(
+                [
+                    "健康监控:",
+                    f"- 监控数据集数: {len(health)}",
+                    f"- 活跃报警数: {len(self.health_monitor.alerts)}",
+                    "",
+                ]
+            )
 
         # 最近报警
-        recent_alerts = self.health_monitor.alerts[-5:] if self.health_monitor.alerts else []
+        recent_alerts = (
+            self.health_monitor.alerts[-5:] if self.health_monitor.alerts else []
+        )
         if recent_alerts:
             lines.append("最近报警:")
             for alert in recent_alerts:
-                severity_icon = {"high": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(alert.severity, "⚠️")
-                lines.append(f"{severity_icon} {alert.timestamp.strftime('%H:%M:%S')} - {alert.message}")
+                severity_icon = {"high": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(
+                    alert.severity, "⚠️"
+                )
+                lines.append(
+                    f"{severity_icon} {alert.timestamp.strftime('%H:%M:%S')} - {alert.message}"
+                )
         else:
             lines.append("✅ 无活跃报警")
 
         return "\n".join(lines)
 
-    def export_data(self, file_path: Union[str, Path], include_alerts: bool = True) -> None:
+    def export_data(
+        self, file_path: Union[str, Path], include_alerts: bool = True
+    ) -> None:
         """
         导出防护数据到文件
 
@@ -632,15 +661,18 @@ class FutureFunctionGuard:
                 "export_timestamp": datetime.now().isoformat(),
                 "config": self.config.to_dict(),
                 "statistics": self.get_statistics(),
-                "health_summary": self.health_monitor.get_health_summary()
+                "health_summary": self.health_monitor.get_health_summary(),
             }
 
             if include_alerts:
-                export_data["alerts"] = [alert.to_dict() for alert in self.health_monitor.alerts]
+                export_data["alerts"] = [
+                    alert.to_dict() for alert in self.health_monitor.alerts
+                ]
 
             # 保存到文件
             import json
-            with open(export_path, 'w', encoding='utf-8') as f:
+
+            with open(export_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, indent=2, ensure_ascii=False, default=str)
 
             self.logger.info(f"Guard data exported to: {export_path}")
@@ -658,12 +690,12 @@ class FutureFunctionGuard:
         return {
             **self.stats,
             "uptime_seconds": uptime.total_seconds(),
-            "uptime_human": str(uptime).split('.')[0],
+            "uptime_human": str(uptime).split(".")[0],
             "current_time": current_time.isoformat(),
             "cache_info": {
                 "static_check": self.static_checker.get_cache_info(),
-                "health_monitor": self.health_monitor.cache.get_size_info()
-            }
+                "health_monitor": self.health_monitor.cache.get_size_info(),
+            },
         }
 
     def reset_statistics(self) -> None:
@@ -674,7 +706,7 @@ class FutureFunctionGuard:
             "runtime_validations": 0,
             "health_checks": 0,
             "issues_detected": 0,
-            "alerts_generated": 0
+            "alerts_generated": 0,
         }
         self.logger.info("Statistics reset")
 
@@ -723,8 +755,10 @@ class FutureFunctionGuard:
 
     def __repr__(self) -> str:
         """详细字符串表示"""
-        return (f"FutureFunctionGuard(mode={self.config.mode}, "
-                f"enabled={self.config.enabled}, "
-                f"static_checks={self.stats['static_checks']}, "
-                f"runtime_validations={self.stats['runtime_validations']}, "
-                f"health_checks={self.stats['health_checks']})")
+        return (
+            f"FutureFunctionGuard(mode={self.config.mode}, "
+            f"enabled={self.config.enabled}, "
+            f"static_checks={self.stats['static_checks']}, "
+            f"runtime_validations={self.stats['runtime_validations']}, "
+            f"health_checks={self.stats['health_checks']})"
+        )

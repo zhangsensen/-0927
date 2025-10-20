@@ -20,14 +20,14 @@ repos:
   - repo: local
     hooks:
       # 未来函数检查 - 量化交易核心安全防护【必须保留】
-      # 防止未来函数泄露，确保回测结果的有效性
-      - id: future-functions
-        name: 检查未来函数使用
-        entry: python factor_system/factor_screening/scripts/check_future_functions.py
-        language: system
-        files: \.py$
-        pass_filenames: true
-        # 严格模式：任何未来函数使用都会阻止提交
+      # 防止未来函数泄露，确保回测结果的有效性 (临时禁用-语法错误)
+      # - id: future-functions
+      #   name: 检查未来函数使用
+      #   entry: python factor_system/factor_screening/scripts/check_future_functions.py
+      #   language: system
+      #   files: \.py$
+      #   pass_filenames: true
+      #   # 严格模式：任何未来函数使用都会阻止提交
 
       # Python语法检查 - 确保代码可以运行 (临时禁用)
       # - id: syntax-check

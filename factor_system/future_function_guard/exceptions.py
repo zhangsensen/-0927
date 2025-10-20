@@ -25,7 +25,7 @@ class FutureFunctionGuardError(Exception):
         message: str,
         error_code: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None
+        cause: Optional[Exception] = None,
     ):
         super().__init__(message)
         self.message = message
@@ -49,7 +49,7 @@ class FutureFunctionGuardError(Exception):
             "error_code": self.error_code,
             "message": self.message,
             "context": self.context,
-            "cause": str(self.cause) if self.cause else None
+            "cause": str(self.cause) if self.cause else None,
         }
 
 
@@ -62,7 +62,7 @@ class StaticCheckError(FutureFunctionGuardError):
         file_path: Optional[str] = None,
         line_number: Optional[int] = None,
         issue_type: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         context = kwargs.get("context", {})
         if file_path:
@@ -73,10 +73,7 @@ class StaticCheckError(FutureFunctionGuardError):
             context["issue_type"] = issue_type
 
         super().__init__(
-            message=message,
-            error_code="STATIC_CHECK_ERROR",
-            context=context,
-            **kwargs
+            message=message, error_code="STATIC_CHECK_ERROR", context=context, **kwargs
         )
 
 
@@ -91,7 +88,7 @@ class RuntimeValidationError(FutureFunctionGuardError):
         factor_id: Optional[str] = None,
         error_code: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None
+        cause: Optional[Exception] = None,
     ):
         # 构建上下文
         final_context = context or {}
@@ -109,7 +106,7 @@ class RuntimeValidationError(FutureFunctionGuardError):
             message=message,
             error_code=error_code or "RUNTIME_VALIDATION_ERROR",
             context=final_context,
-            cause=cause
+            cause=cause,
         )
 
 
@@ -121,7 +118,7 @@ class TimeSeriesSafetyError(RuntimeValidationError):
         message: str,
         violation_type: Optional[str] = None,
         timeframe: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         context = kwargs.get("context", {})
         if violation_type:
@@ -134,7 +131,7 @@ class TimeSeriesSafetyError(RuntimeValidationError):
             validation_type="time_series_safety",
             error_code="TIME_SERIES_SAFETY_ERROR",
             context=context,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -148,7 +145,7 @@ class ConfigurationError(FutureFunctionGuardError):
         config_value: Optional[Any] = None,
         error_code: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None
+        cause: Optional[Exception] = None,
     ):
         # 构建上下文
         final_context = context or {}
@@ -161,7 +158,7 @@ class ConfigurationError(FutureFunctionGuardError):
             message=message,
             error_code=error_code or "CONFIGURATION_ERROR",
             context=final_context,
-            cause=cause
+            cause=cause,
         )
 
 
@@ -175,7 +172,7 @@ class HealthMonitorError(FutureFunctionGuardError):
         metric_name: Optional[str] = None,
         threshold: Optional[float] = None,
         actual_value: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ):
         context = kwargs.get("context", {})
         if health_check_type:
@@ -191,7 +188,7 @@ class HealthMonitorError(FutureFunctionGuardError):
             message=message,
             error_code="HEALTH_MONITOR_ERROR",
             context=context,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -203,7 +200,7 @@ class CacheError(FutureFunctionGuardError):
         message: str,
         cache_key: Optional[str] = None,
         operation: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         context = kwargs.get("context", {})
         if cache_key:
@@ -212,10 +209,7 @@ class CacheError(FutureFunctionGuardError):
             context["operation"] = operation
 
         super().__init__(
-            message=message,
-            error_code="CACHE_ERROR",
-            context=context,
-            **kwargs
+            message=message, error_code="CACHE_ERROR", context=context, **kwargs
         )
 
 
@@ -228,7 +222,7 @@ class FutureFunctionDetectedError(FutureFunctionGuardError):
         function_name: Optional[str] = None,
         parameters: Optional[str] = None,
         severity: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         context = kwargs.get("context", {})
         if function_name:
@@ -242,7 +236,7 @@ class FutureFunctionDetectedError(FutureFunctionGuardError):
             message=message,
             error_code="FUTURE_FUNCTION_DETECTED",
             context=context,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -258,11 +252,7 @@ ERROR_MAPPING = {
 }
 
 
-def create_error(
-    error_type: str,
-    message: str,
-    **kwargs
-) -> FutureFunctionGuardError:
+def create_error(error_type: str, message: str, **kwargs) -> FutureFunctionGuardError:
     """
     工厂函数：根据错误类型创建相应的异常实例
 
@@ -296,5 +286,5 @@ def format_exception_for_logging(exception: Exception) -> Dict[str, Any]:
             "error_code": "UNKNOWN_ERROR",
             "message": str(exception),
             "context": {},
-            "cause": None
+            "cause": None,
         }

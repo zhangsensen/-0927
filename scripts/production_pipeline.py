@@ -73,8 +73,11 @@ class ProductionPipeline:
     def run_pool_management(self) -> bool:
         """运行分池管理（生产面板）"""
         return self.run_command(
-            ["python3", "etf_factor_engine_production/scripts/produce_full_etf_panel.py"],
-            "分池面板生产"
+            [
+                "python3",
+                "etf_factor_engine_production/scripts/produce_full_etf_panel.py",
+            ],
+            "分池面板生产",
         )
 
     def run_aggregate_metrics(self) -> bool:

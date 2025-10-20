@@ -732,4 +732,3 @@ def calculate_candlestick_pattern(
     return SHARED_CALCULATORS.calculate_candlestick_pattern(
         open_price, high, low, close, pattern_name
     )
-

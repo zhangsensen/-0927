@@ -4,11 +4,13 @@
 分析所有10个批次的结果，找出最优策略
 """
 
-import pandas as pd
-import numpy as np
 import glob
 import os
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
 
 def load_batch_results():
     """加载所有批次的结果"""
@@ -28,13 +30,13 @@ def load_batch_results():
             # 批次汇总信息
             best_result = df.iloc[0]
             batch_summary = {
-                'batch': i,
-                'total_results': len(df),
-                'best_sharpe': best_result['sharpe'],
-                'best_return': best_result['annual_return'],
-                'best_calmar': best_result['calmar'],
-                'best_top_n': best_result['top_n'],
-                'max_drawdown': best_result['max_drawdown']
+                "batch": i,
+                "total_results": len(df),
+                "best_sharpe": best_result["sharpe"],
+                "best_return": best_result["annual_return"],
+                "best_calmar": best_result["calmar"],
+                "best_top_n": best_result["top_n"],
+                "max_drawdown": best_result["max_drawdown"],
             }
             batch_summaries.append(batch_summary)
 
@@ -45,19 +47,22 @@ def load_batch_results():
 
     return all_results, batch_summaries
 
+
 def analyze_global_performance(all_results):
     """分析全局性能"""
     # 合并所有结果
     combined_df = pd.concat(all_results, ignore_index=True)
 
     print(f"\n📊 全局性能分析 (总共 {len(combined_df)} 个策略):")
-    print("="*80)
+    print("=" * 80)
 
     # 去重处理（可能存在重复策略）
     original_count = len(combined_df)
     # 根据权重、top_n等参数去重
-    feature_cols = [col for col in combined_df.columns if col.startswith('weight_')] + ['top_n']
-    combined_df = combined_df.drop_duplicates(subset=feature_cols, keep='first')
+    feature_cols = [col for col in combined_df.columns if col.startswith("weight_")] + [
+        "top_n"
+    ]
+    combined_df = combined_df.drop_duplicates(subset=feature_cols, keep="first")
     print(f"去重前: {original_count} 个策略")
     print(f"去重后: {len(combined_df)} 个策略")
 
@@ -65,8 +70,12 @@ def analyze_global_performance(all_results):
     global_best = combined_df.iloc[0]
     print(f"\n🏆 全局最优策略:")
     print(f"  夏普比率: {global_best['sharpe']:.4f}")
-    print(f"  年化收益: {global_best['annual_return']:.4f} ({global_best['annual_return']*100:.2f}%)")
-    print(f"  最大回撤: {global_best['max_drawdown']:.4f} ({global_best['max_drawdown']*100:.2f}%)")
+    print(
+        f"  年化收益: {global_best['annual_return']:.4f} ({global_best['annual_return']*100:.2f}%)"
+    )
+    print(
+        f"  最大回撤: {global_best['max_drawdown']:.4f} ({global_best['max_drawdown']*100:.2f}%)"
+    )
     print(f"  卡尔玛比率: {global_best['calmar']:.4f}")
     print(f"  胜率: {global_best['win_rate']:.4f} ({global_best['win_rate']*100:.2f}%)")
     print(f"  换手率: {global_best['turnover']:.2f}")
@@ -74,29 +83,42 @@ def analyze_global_performance(all_results):
 
     # 统计分析
     print(f"\n📈 性能统计分布:")
-    print(f"  夏普比率 - 均值: {combined_df['sharpe'].mean():.4f}, 标准差: {combined_df['sharpe'].std():.4f}")
-    print(f"  年化收益 - 均值: {combined_df['annual_return'].mean():.4f}, 标准差: {combined_df['annual_return'].std():.4f}")
-    print(f"  最大回撤 - 均值: {combined_df['max_drawdown'].mean():.4f}, 标准差: {combined_df['max_drawdown'].std():.4f}")
+    print(
+        f"  夏普比率 - 均值: {combined_df['sharpe'].mean():.4f}, 标准差: {combined_df['sharpe'].std():.4f}"
+    )
+    print(
+        f"  年化收益 - 均值: {combined_df['annual_return'].mean():.4f}, 标准差: {combined_df['annual_return'].std():.4f}"
+    )
+    print(
+        f"  最大回撤 - 均值: {combined_df['max_drawdown'].mean():.4f}, 标准差: {combined_df['max_drawdown'].std():.4f}"
+    )
 
     # Top-N分析
-    top_n_stats = combined_df.groupby('top_n').agg({
-        'sharpe': ['mean', 'std', 'max'],
-        'annual_return': ['mean', 'std', 'max'],
-        'max_drawdown': ['mean', 'std', 'min']
-    }).round(4)
+    top_n_stats = (
+        combined_df.groupby("top_n")
+        .agg(
+            {
+                "sharpe": ["mean", "std", "max"],
+                "annual_return": ["mean", "std", "max"],
+                "max_drawdown": ["mean", "std", "min"],
+            }
+        )
+        .round(4)
+    )
 
     print(f"\n🎯 Top-N性能分析:")
     print(top_n_stats)
 
     return combined_df, global_best
 
+
 def analyze_factor_importance(combined_df):
     """分析因子重要性"""
     print(f"\n🔍 因子重要性分析:")
-    print("="*60)
+    print("=" * 60)
 
     # 提取权重列
-    weight_cols = [col for col in combined_df.columns if col.startswith('weight_')]
+    weight_cols = [col for col in combined_df.columns if col.startswith("weight_")]
 
     # 计算平均权重
     avg_weights = combined_df[weight_cols].mean()
@@ -106,10 +128,11 @@ def analyze_factor_importance(combined_df):
 
     print("Top 10 重要因子 (按平均权重):")
     for i, (factor, weight) in enumerate(top_factors.items(), 1):
-        factor_name = factor.replace('weight_', '')
+        factor_name = factor.replace("weight_", "")
         print(f"  {i:2d}. {factor_name:15s}: {weight:.6f}")
 
     return avg_weights, top_factors
+
 
 def save_results(combined_df, global_best, batch_summaries, avg_weights):
     """保存分析结果"""
@@ -129,44 +152,48 @@ def save_results(combined_df, global_best, batch_summaries, avg_weights):
     print(f"💾 批次汇总已保存: strategies/results/batch_summary.csv")
 
     # 保存因子重要性
-    factor_importance = pd.DataFrame({
-        'factor': avg_weights.index,
-        'avg_weight': avg_weights.values,
-        'factor_name': [col.replace('weight_', '') for col in avg_weights.index]
-    })
-    factor_importance = factor_importance.sort_values('avg_weight', ascending=False)
+    factor_importance = pd.DataFrame(
+        {
+            "factor": avg_weights.index,
+            "avg_weight": avg_weights.values,
+            "factor_name": [col.replace("weight_", "") for col in avg_weights.index],
+        }
+    )
+    factor_importance = factor_importance.sort_values("avg_weight", ascending=False)
     factor_importance.to_csv("strategies/results/factor_importance.csv", index=False)
     print(f"💾 因子重要性已保存: strategies/results/factor_importance.csv")
 
     # 保存最优策略详情
     best_strategy_info = {
-        'sharpe': global_best['sharpe'],
-        'annual_return': global_best['annual_return'],
-        'max_drawdown': global_best['max_drawdown'],
-        'calmar': global_best['calmar'],
-        'win_rate': global_best['win_rate'],
-        'turnover': global_best['turnover'],
-        'top_n': int(global_best['top_n']),
-        'total_combinations_tested': 100000,
-        'factors_used': 35
+        "sharpe": global_best["sharpe"],
+        "annual_return": global_best["annual_return"],
+        "max_drawdown": global_best["max_drawdown"],
+        "calmar": global_best["calmar"],
+        "win_rate": global_best["win_rate"],
+        "turnover": global_best["turnover"],
+        "top_n": int(global_best["top_n"]),
+        "total_combinations_tested": 100000,
+        "factors_used": 35,
     }
 
     # 添加权重信息
-    weight_cols = [col for col in global_best.index if col.startswith('weight_')]
+    weight_cols = [col for col in global_best.index if col.startswith("weight_")]
     for col in weight_cols:
-        factor_name = col.replace('weight_', '')
-        best_strategy_info[f'weight_{factor_name}'] = global_best[col]
+        factor_name = col.replace("weight_", "")
+        best_strategy_info[f"weight_{factor_name}"] = global_best[col]
 
     # 保存最优策略
     import json
-    with open("strategies/results/best_strategy.json", 'w') as f:
+
+    with open("strategies/results/best_strategy.json", "w") as f:
         json.dump(best_strategy_info, f, indent=2)
     print(f"💾 最优策略详情已保存: strategies/results/best_strategy.json")
+
 
 def main():
     """主函数"""
     print("🚀 100,000组合向量多因子网格优化 - 汇总分析")
-    print("="*60)
+    print("=" * 60)
 
     # 加载所有批次结果
     all_results, batch_summaries = load_batch_results()
@@ -188,6 +215,7 @@ def main():
     print(f"   总共测试了 100,000 个权重组合 × 3个Top-N = 300,000 个策略")
     print(f"   最优策略夏普比率: {global_best['sharpe']:.4f}")
     print(f"   所有结果文件已保存到 strategies/results/ 目录")
+
 
 if __name__ == "__main__":
     main()

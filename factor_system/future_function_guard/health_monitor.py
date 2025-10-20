@@ -24,9 +24,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from .config import HealthMonitorConfig, MonitoringLevel, AlertThreshold
+from .config import AlertThreshold, HealthMonitorConfig, MonitoringLevel
 from .exceptions import HealthMonitorError
-from .utils import calculate_factor_statistics, create_directory_if_not_exists, FileCache
+from .utils import (
+    FileCache,
+    calculate_factor_statistics,
+    create_directory_if_not_exists,
+)
 
 
 class HealthMetrics:
@@ -73,7 +77,7 @@ class HealthMetrics:
             "factor_id": self.factor_id,
             "timestamp": self.timestamp.isoformat(),
             "metrics": self.metrics,
-            "quality_score": self.get_quality_score()
+            "quality_score": self.get_quality_score(),
         }
 
 
@@ -89,7 +93,7 @@ class HealthAlert:
         metric_name: Optional[str] = None,
         threshold: Optional[float] = None,
         actual_value: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ):
         self.alert_type = alert_type
         self.severity = severity  # high, medium, low
@@ -112,7 +116,7 @@ class HealthAlert:
             "threshold": self.threshold,
             "actual_value": self.actual_value,
             "timestamp": self.timestamp.isoformat(),
-            "context": self.context
+            "context": self.context,
         }
 
 
@@ -130,7 +134,7 @@ class HealthTrend:
 
         # 保持最大历史记录数
         if len(self.observations) > self.max_history:
-            self.observations = self.observations[-self.max_history:]
+            self.observations = self.observations[-self.max_history :]
 
     def get_trend_analysis(self) -> Dict[str, Any]:
         """获取趋势分析"""
@@ -172,7 +176,7 @@ class HealthTrend:
                 "slope": float(slope),
                 "current_value": values[-1],
                 "average_value": float(np.mean(values)),
-                "volatility": float(np.std(values))
+                "volatility": float(np.std(values)),
             }
 
         return {
@@ -182,7 +186,7 @@ class HealthTrend:
             "quality_trend": analyze_trend(quality_scores),
             "coverage_trend": analyze_trend(coverages),
             "variance_trend": analyze_trend(variances),
-            "latest_timestamp": timestamps[-1].isoformat()
+            "latest_timestamp": timestamps[-1].isoformat(),
         }
 
 
@@ -196,10 +200,9 @@ class HealthMonitor:
         self.health_trends: Dict[str, HealthTrend] = {}
         self.cache = FileCache(
             cache_dir=Path.home() / ".future_function_guard_cache" / "health_monitor",
-            config=type('obj', (object,), {
-                'ttl_hours': 24,
-                'compression_enabled': True
-            })()
+            config=type(
+                "obj", (object,), {"ttl_hours": 24, "compression_enabled": True}
+            )(),
         )
 
         # 报警阈值设置
@@ -213,7 +216,7 @@ class HealthMonitor:
                 "variance": {"low": 1e-8, "critical": 1e-10},
                 "extreme_ratio": {"low": 0.05, "critical": 0.1},
                 "correlation": {"high": 0.98, "critical": 0.99},
-                "quality_score": {"low": 60, "critical": 40}
+                "quality_score": {"low": 60, "critical": 40},
             }
         elif self.config.alert_threshold == AlertThreshold.CONSERVATIVE:
             return {
@@ -221,7 +224,7 @@ class HealthMonitor:
                 "variance": {"low": 1e-6, "critical": 1e-8},
                 "extreme_ratio": {"low": 0.01, "critical": 0.02},
                 "correlation": {"high": 0.90, "critical": 0.95},
-                "quality_score": {"low": 80, "critical": 70}
+                "quality_score": {"low": 80, "critical": 70},
             }
         else:  # MODERATE
             return {
@@ -229,14 +232,11 @@ class HealthMonitor:
                 "variance": {"low": 1e-7, "critical": 1e-9},
                 "extreme_ratio": {"low": 0.02, "critical": 0.05},
                 "correlation": {"high": 0.95, "critical": 0.97},
-                "quality_score": {"low": 70, "critical": 60}
+                "quality_score": {"low": 70, "critical": 60},
             }
 
     def check_factor_health(
-        self,
-        factor_data: pd.Series,
-        factor_id: str,
-        strict_mode: bool = False
+        self, factor_data: pd.Series, factor_id: str, strict_mode: bool = False
     ) -> HealthMetrics:
         """
         检查单个因子的健康状况
@@ -262,7 +262,7 @@ class HealthMonitor:
                     "empty_data",
                     "high",
                     f"因子{factor_id}数据为空",
-                    factor_id=factor_id
+                    factor_id=factor_id,
                 )
                 return metrics
 
@@ -306,8 +306,8 @@ class HealthMonitor:
                     if iqr > 0:
                         lower_bound = q1 - 3 * iqr
                         upper_bound = q3 + 3 * iqr
-                        extreme_outliers = (
-                            (valid_data < lower_bound) | (valid_data > upper_bound)
+                        extreme_outliers = (valid_data < lower_bound) | (
+                            valid_data > upper_bound
                         )
                         extreme_ratio = extreme_outliers.mean()
                         metrics.add_metric("extreme_ratio", extreme_ratio)
@@ -354,7 +354,7 @@ class HealthMonitor:
                 "medium",
                 f"因子{factor_id}健康检查失败: {e}",
                 factor_id=factor_id,
-                error=str(e)
+                error=str(e),
             )
 
             return metrics
@@ -363,7 +363,7 @@ class HealthMonitor:
         self,
         factor_panel: pd.DataFrame,
         factor_ids: Optional[List[str]] = None,
-        strict_mode: bool = False
+        strict_mode: bool = False,
     ) -> Dict[str, HealthMetrics]:
         """
         批量检查因子健康状况
@@ -384,7 +384,9 @@ class HealthMonitor:
         for factor_id in factor_ids:
             if factor_id in factor_panel.columns:
                 factor_data = factor_panel[factor_id]
-                results[factor_id] = self.check_factor_health(factor_data, factor_id, strict_mode)
+                results[factor_id] = self.check_factor_health(
+                    factor_data, factor_id, strict_mode
+                )
             else:
                 # 创建缺失因子的健康指标
                 metrics = HealthMetrics(factor_id)
@@ -409,7 +411,7 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="coverage",
                 threshold=threshold["critical"],
-                actual_value=coverage
+                actual_value=coverage,
             )
         elif coverage < threshold["low"]:
             self._create_alert(
@@ -419,7 +421,7 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="coverage",
                 threshold=threshold["low"],
-                actual_value=coverage
+                actual_value=coverage,
             )
 
     def _check_variance(self, factor_id: str, variance: float) -> None:
@@ -433,7 +435,7 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="variance",
                 threshold=threshold["critical"],
-                actual_value=variance
+                actual_value=variance,
             )
         elif variance < threshold["low"]:
             self._create_alert(
@@ -443,7 +445,7 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="variance",
                 threshold=threshold["low"],
-                actual_value=variance
+                actual_value=variance,
             )
 
     def _check_extreme_ratio(self, factor_id: str, extreme_ratio: float) -> None:
@@ -457,7 +459,7 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="extreme_ratio",
                 threshold=threshold["critical"],
-                actual_value=extreme_ratio
+                actual_value=extreme_ratio,
             )
         elif extreme_ratio > threshold["low"]:
             self._create_alert(
@@ -467,7 +469,7 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="extreme_ratio",
                 threshold=threshold["low"],
-                actual_value=extreme_ratio
+                actual_value=extreme_ratio,
             )
 
     def _check_distribution(self, factor_id: str, skewness: float) -> None:
@@ -479,7 +481,7 @@ class HealthMonitor:
                 f"因子{factor_id}分布偏度异常: {skewness:.2f}",
                 factor_id=factor_id,
                 metric_name="skewness",
-                actual_value=skewness
+                actual_value=skewness,
             )
 
     def _check_quality_score(self, factor_id: str, quality_score: float) -> None:
@@ -493,7 +495,7 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="quality_score",
                 threshold=threshold["critical"],
-                actual_value=quality_score
+                actual_value=quality_score,
             )
         elif quality_score < threshold["low"]:
             self._create_alert(
@@ -503,10 +505,12 @@ class HealthMonitor:
                 factor_id=factor_id,
                 metric_name="quality_score",
                 threshold=threshold["low"],
-                actual_value=quality_score
+                actual_value=quality_score,
             )
 
-    def _check_correlation_matrix(self, factor_panel: pd.DataFrame, factor_ids: List[str]) -> None:
+    def _check_correlation_matrix(
+        self, factor_panel: pd.DataFrame, factor_ids: List[str]
+    ) -> None:
         """检查因子相关性矩阵"""
         available_factors = [fid for fid in factor_ids if fid in factor_panel.columns]
         if len(available_factors) < 2:
@@ -534,7 +538,7 @@ class HealthMonitor:
                             f"因子{factor1}与{factor2}相关性过高: {corr_value:.3f}",
                             metric_name="correlation",
                             threshold=threshold["critical"],
-                            actual_value=corr_value
+                            actual_value=corr_value,
                         )
                     elif corr_value > threshold["high"]:
                         factor1 = correlation_matrix.columns[i]
@@ -546,15 +550,12 @@ class HealthMonitor:
                             f"因子{factor1}与{factor2}相关性偏高: {corr_value:.3f}",
                             metric_name="correlation",
                             threshold=threshold["high"],
-                            actual_value=corr_value
+                            actual_value=corr_value,
                         )
 
         except Exception as e:
             self._create_alert(
-                "correlation_check_error",
-                "low",
-                f"相关性检查失败: {e}",
-                error=str(e)
+                "correlation_check_error", "low", f"相关性检查失败: {e}", error=str(e)
             )
 
     def _update_health_history(self, factor_id: str, metrics: HealthMetrics) -> None:
@@ -565,11 +566,7 @@ class HealthMonitor:
         self.health_trends[factor_id].add_observation(metrics)
 
     def _create_alert(
-        self,
-        alert_type: str,
-        severity: str,
-        message: str,
-        **kwargs
+        self, alert_type: str, severity: str, message: str, **kwargs
     ) -> None:
         """创建报警"""
         alert = HealthAlert(alert_type, severity, message, **kwargs)
@@ -618,19 +615,39 @@ class HealthMonitor:
             alert_types[alert.alert_type] = alert_types.get(alert.alert_type, 0) + 1
 
         return {
-            "monitoring_level": self.config.monitoring_level.value if hasattr(self.config.monitoring_level, 'value') else self.config.monitoring_level,
-            "alert_threshold": self.config.alert_threshold.value if hasattr(self.config.alert_threshold, 'value') else self.config.alert_threshold,
+            "monitoring_level": (
+                self.config.monitoring_level.value
+                if hasattr(self.config.monitoring_level, "value")
+                else self.config.monitoring_level
+            ),
+            "alert_threshold": (
+                self.config.alert_threshold.value
+                if hasattr(self.config.alert_threshold, "value")
+                else self.config.alert_threshold
+            ),
             "total_factors_monitored": total_factors,
             "total_alerts": total_alerts,
             "alert_counts": alert_counts,
             "alert_types": alert_types,
             "average_quality_score": float(avg_quality_score),
-            "healthy_factors": len([m for m in self.health_metrics.values()
-                                  if m.metrics.get("status") == "healthy"]),
-            "unhealthy_factors": len([m for m in self.health_metrics.values()
-                                    if m.metrics.get("status") != "healthy"]),
-            "latest_check_time": max([m.timestamp for m in self.health_metrics.values()],
-                                   default=datetime.now()).isoformat()
+            "healthy_factors": len(
+                [
+                    m
+                    for m in self.health_metrics.values()
+                    if m.metrics.get("status") == "healthy"
+                ]
+            ),
+            "unhealthy_factors": len(
+                [
+                    m
+                    for m in self.health_metrics.values()
+                    if m.metrics.get("status") != "healthy"
+                ]
+            ),
+            "latest_check_time": max(
+                [m.timestamp for m in self.health_metrics.values()],
+                default=datetime.now(),
+            ).isoformat(),
         }
 
     def get_factor_health_report(self, factor_id: str) -> Dict[str, Any]:
@@ -646,8 +663,7 @@ class HealthMonitor:
 
         # 获取相关报警
         factor_alerts = [
-            alert.to_dict() for alert in self.alerts
-            if alert.factor_id == factor_id
+            alert.to_dict() for alert in self.alerts if alert.factor_id == factor_id
         ]
 
         return {
@@ -655,7 +671,7 @@ class HealthMonitor:
             "current_metrics": metrics.to_dict(),
             "trend_analysis": trend_analysis,
             "recent_alerts": factor_alerts[-10:],  # 最近10个报警
-            "alert_count": len(factor_alerts)
+            "alert_count": len(factor_alerts),
         }
 
     def generate_health_report(self, output_format: str = "text") -> str:
@@ -688,13 +704,14 @@ class HealthMonitor:
             f"- 高危: {summary['alert_counts']['high']}",
             f"- 中危: {summary['alert_counts']['medium']}",
             f"- 低危: {summary['alert_counts']['low']}",
-            ""
+            "",
         ]
 
-        if summary['alert_types']:
+        if summary["alert_types"]:
             lines.append("报警类型分布:")
-            for alert_type, count in sorted(summary['alert_types'].items(),
-                                          key=lambda x: x[1], reverse=True):
+            for alert_type, count in sorted(
+                summary["alert_types"].items(), key=lambda x: x[1], reverse=True
+            ):
                 lines.append(f"- {alert_type}: {count}")
             lines.append("")
 
@@ -703,8 +720,12 @@ class HealthMonitor:
         if recent_alerts:
             lines.append("最近报警:")
             for alert in recent_alerts:
-                severity_icon = {"high": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(alert.severity, "⚠️")
-                lines.append(f"{severity_icon} {alert.timestamp.strftime('%H:%M:%S')} - {alert.message}")
+                severity_icon = {"high": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(
+                    alert.severity, "⚠️"
+                )
+                lines.append(
+                    f"{severity_icon} {alert.timestamp.strftime('%H:%M:%S')} - {alert.message}"
+                )
         else:
             lines.append("✅ 无活跃报警")
 
@@ -726,32 +747,38 @@ class HealthMonitor:
             "### 按严重程度分布\n",
             f"- 🔴 高危: {summary['alert_counts']['high']}",
             f"- 🟡 中危: {summary['alert_counts']['medium']}",
-            f"- 🟢 低危: {summary['alert_counts']['low']}\n"
+            f"- 🟢 低危: {summary['alert_counts']['low']}\n",
         ]
 
-        if summary['alert_types']:
-            lines.extend([
-                "### 按类型分布\n",
-            ])
-            for alert_type, count in sorted(summary['alert_types'].items(),
-                                          key=lambda x: x[1], reverse=True):
+        if summary["alert_types"]:
+            lines.extend(
+                [
+                    "### 按类型分布\n",
+                ]
+            )
+            for alert_type, count in sorted(
+                summary["alert_types"].items(), key=lambda x: x[1], reverse=True
+            ):
                 lines.append(f"- **{alert_type}**: {count}")
             lines.append("")
 
         # 最近报警
         recent_alerts = self.alerts[-5:] if self.alerts else []
         if recent_alerts:
-            lines.extend([
-                "## 最近报警\n",
-            ])
+            lines.extend(
+                [
+                    "## 最近报警\n",
+                ]
+            )
             for alert in recent_alerts:
-                severity_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(alert.severity, "🟡")
-                lines.append(f"- {severity_emoji} **{alert.timestamp.strftime('%H:%M:%S')}** - {alert.message}")
+                severity_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(
+                    alert.severity, "🟡"
+                )
+                lines.append(
+                    f"- {severity_emoji} **{alert.timestamp.strftime('%H:%M:%S')}** - {alert.message}"
+                )
         else:
-            lines.extend([
-                "## 报警状态\n",
-                "✅ **无活跃报警**\n"
-            ])
+            lines.extend(["## 报警状态\n", "✅ **无活跃报警**\n"])
 
         return "\n".join(lines)
 
@@ -766,7 +793,7 @@ class HealthMonitor:
                 "monitoring_level": self.config.monitoring_level.value,
                 "alert_threshold": self.config.alert_threshold.value,
                 "coverage_threshold": self.config.coverage_threshold,
-                "variance_threshold": self.config.variance_threshold
+                "variance_threshold": self.config.variance_threshold,
             },
             "summary": self.get_health_summary(),
             "health_metrics": {
@@ -777,11 +804,11 @@ class HealthMonitor:
                 factor_id: trend.get_trend_analysis()
                 for factor_id, trend in self.health_trends.items()
             },
-            "alerts": [alert.to_dict() for alert in self.alerts]
+            "alerts": [alert.to_dict() for alert in self.alerts],
         }
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, indent=2, ensure_ascii=False, default=str)
         except Exception as e:
             raise HealthMonitorError(f"Failed to export health data: {e}")
@@ -798,8 +825,7 @@ class HealthMonitor:
             cutoff_time = datetime.now() - timedelta(days=older_than_days)
             original_count = len(self.alerts)
             self.alerts = [
-                alert for alert in self.alerts
-                if alert.timestamp > cutoff_time
+                alert for alert in self.alerts if alert.timestamp > cutoff_time
             ]
             return original_count - len(self.alerts)
 

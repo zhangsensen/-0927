@@ -4,14 +4,17 @@ Top1000策略深度分析
 分析top1000策略的权重分布、因子重要性、策略聚类等
 """
 
-import pandas as pd
-import numpy as np
 import ast
-import matplotlib.pyplot as plt
-import seaborn as sns
-from collections import Counter
 import warnings
-warnings.filterwarnings('ignore')
+from collections import Counter
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+warnings.filterwarnings("ignore")
+
 
 def load_and_parse_data():
     """加载并解析top1000策略数据"""
@@ -22,15 +25,17 @@ def load_and_parse_data():
     # 解析权重字符串为实际数值
     print("🔧 解析权重数据...")
     weights_list = []
-    for weights_str in df['weights']:
+    for weights_str in df["weights"]:
         weights = ast.literal_eval(weights_str)
         weights_list.append(list(weights))
 
     # 获取因子名称（从factors列解析）
-    factor_names = ast.literal_eval(df.iloc[0]['factors'])
+    factor_names = ast.literal_eval(df.iloc[0]["factors"])
 
     # 创建权重DataFrame
-    weights_df = pd.DataFrame(weights_list, columns=[f'weight_{i}' for i in range(len(factor_names))])
+    weights_df = pd.DataFrame(
+        weights_list, columns=[f"weight_{i}" for i in range(len(factor_names))]
+    )
 
     # 合并数据
     combined_df = pd.concat([df.reset_index(drop=True), weights_df], axis=1)
@@ -39,10 +44,11 @@ def load_and_parse_data():
 
     return combined_df, factor_names
 
+
 def analyze_performance_distribution(df):
     """分析性能分布"""
     print("\n📊 策略性能分布分析")
-    print("="*60)
+    print("=" * 60)
 
     # 基本统计
     print("夏普比率分布:")
@@ -55,57 +61,66 @@ def analyze_performance_distribution(df):
     print(f"  75%分位: {df['sharpe'].quantile(0.75):.4f}")
 
     print("\n年化收益分布:")
-    print(f"  均值: {df['annual_return'].mean():.4f} ({df['annual_return'].mean()*100:.2f}%)")
+    print(
+        f"  均值: {df['annual_return'].mean():.4f} ({df['annual_return'].mean()*100:.2f}%)"
+    )
     print(f"  标准差: {df['annual_return'].std():.4f}")
     print(f"  范围: {df['annual_return'].min():.4f} - {df['annual_return'].max():.4f}")
 
     print("\n最大回撤分布:")
-    print(f"  均值: {df['max_drawdown'].mean():.4f} ({df['max_drawdown'].mean()*100:.2f}%)")
+    print(
+        f"  均值: {df['max_drawdown'].mean():.4f} ({df['max_drawdown'].mean()*100:.2f}%)"
+    )
     print(f"  标准差: {df['max_drawdown'].std():.4f}")
 
     # Top-N分析
-    top_n_counts = df['top_n'].value_counts().sort_index()
+    top_n_counts = df["top_n"].value_counts().sort_index()
     print(f"\nTop-N分布:")
     for top_n, count in top_n_counts.items():
-        sharpe_mean = df[df['top_n'] == top_n]['sharpe'].mean()
-        return_mean = df[df['top_n'] == top_n]['annual_return'].mean()
-        print(f"  Top-{int(top_n)}: {count} 个策略, 平均夏普 {sharpe_mean:.4f}, 平均收益 {return_mean:.4f}")
+        sharpe_mean = df[df["top_n"] == top_n]["sharpe"].mean()
+        return_mean = df[df["top_n"] == top_n]["annual_return"].mean()
+        print(
+            f"  Top-{int(top_n)}: {count} 个策略, 平均夏普 {sharpe_mean:.4f}, 平均收益 {return_mean:.4f}"
+        )
 
     return df
+
 
 def analyze_factor_weights(df, factor_names):
     """分析因子权重分布"""
     print(f"\n🔍 因子权重分析")
-    print("="*60)
+    print("=" * 60)
 
     # 提取权重列
-    weight_cols = [f'weight_{i}' for i in range(len(factor_names))]
+    weight_cols = [f"weight_{i}" for i in range(len(factor_names))]
     weights_data = df[weight_cols]
 
     # 计算每个因子的统计信息
     factor_stats = []
     for i, factor_name in enumerate(factor_names):
-        weights = weights_data[f'weight_{i}']
+        weights = weights_data[f"weight_{i}"]
         stats = {
-            'factor_name': factor_name,
-            'mean_weight': weights.mean(),
-            'std_weight': weights.std(),
-            'min_weight': weights.min(),
-            'max_weight': weights.max(),
-            'zero_ratio': (weights == 0).mean(),
-            'positive_ratio': (weights > 0).mean()
+            "factor_name": factor_name,
+            "mean_weight": weights.mean(),
+            "std_weight": weights.std(),
+            "min_weight": weights.min(),
+            "max_weight": weights.max(),
+            "zero_ratio": (weights == 0).mean(),
+            "positive_ratio": (weights > 0).mean(),
         }
         factor_stats.append(stats)
 
     factor_stats_df = pd.DataFrame(factor_stats)
-    factor_stats_df = factor_stats_df.sort_values('mean_weight', ascending=False)
+    factor_stats_df = factor_stats_df.sort_values("mean_weight", ascending=False)
 
     print("Top 15 重要因子 (按平均权重):")
     for i, row in factor_stats_df.head(15).iterrows():
-        print(f"  {i+1:2d}. {row['factor_name']:20s}: "
-              f"均值={row['mean_weight']:.4f}, "
-              f"标准差={row['std_weight']:.4f}, "
-              f"非零率={1-row['zero_ratio']:.2%}")
+        print(
+            f"  {i+1:2d}. {row['factor_name']:20s}: "
+            f"均值={row['mean_weight']:.4f}, "
+            f"标准差={row['std_weight']:.4f}, "
+            f"非零率={1-row['zero_ratio']:.2%}"
+        )
 
     # 分析权重分布模式
     print(f"\n权重分布模式:")
@@ -120,25 +135,39 @@ def analyze_factor_weights(df, factor_names):
 
     return factor_stats_df, weights_data
 
+
 def identify_strategy_types(df, factor_names):
     """识别策略类型"""
     print(f"\n🎯 策略类型识别")
-    print("="*60)
+    print("=" * 60)
 
     # 提取权重列
-    weight_cols = [f'weight_{i}' for i in range(len(factor_names))]
+    weight_cols = [f"weight_{i}" for i in range(len(factor_names))]
     weights_data = df[weight_cols]
 
     # 定义因子类别
     factor_categories = {
-        'price_position': [f for f in factor_names if 'PRICE_POSITION' in f],
-        'volatility': [f for f in factor_names if 'STDDEV' in f or 'VAR' in f],
-        'momentum': [f for f in factor_names if 'MOMENTUM' in f],
-        'rsi': [f for f in factor_names if 'RSI' in f],
-        'stochastic': [f for f in factor_names if 'STOCH' in f],
-        'other': [f for f in factor_names if not any(
-            f.startswith(p) for p in ['PRICE_POSITION', 'TA_STDDEV', 'TA_VAR', 'MOMENTUM', 'TA_RSI', 'VBT_RSI', 'VBT_STOCH']
-        )]
+        "price_position": [f for f in factor_names if "PRICE_POSITION" in f],
+        "volatility": [f for f in factor_names if "STDDEV" in f or "VAR" in f],
+        "momentum": [f for f in factor_names if "MOMENTUM" in f],
+        "rsi": [f for f in factor_names if "RSI" in f],
+        "stochastic": [f for f in factor_names if "STOCH" in f],
+        "other": [
+            f
+            for f in factor_names
+            if not any(
+                f.startswith(p)
+                for p in [
+                    "PRICE_POSITION",
+                    "TA_STDDEV",
+                    "TA_VAR",
+                    "MOMENTUM",
+                    "TA_RSI",
+                    "VBT_RSI",
+                    "VBT_STOCH",
+                ]
+            )
+        ],
     }
 
     # 计算每个类别的权重
@@ -152,7 +181,7 @@ def identify_strategy_types(df, factor_names):
             for factor in factors:
                 if factor in factor_names:
                     factor_idx = factor_names.index(factor)
-                    weight_col = f'weight_{factor_idx}'
+                    weight_col = f"weight_{factor_idx}"
                     if weight_col in row:
                         category_weight += row[weight_col]
 
@@ -164,9 +193,9 @@ def identify_strategy_types(df, factor_names):
             for category in type_weights:
                 type_weights[category] = type_weights[category] / total_weight
 
-        type_weights['strategy_id'] = idx
-        type_weights['sharpe'] = row['sharpe']
-        type_weights['annual_return'] = row['annual_return']
+        type_weights["strategy_id"] = idx
+        type_weights["sharpe"] = row["sharpe"]
+        type_weights["annual_return"] = row["annual_return"]
         strategy_types.append(type_weights)
 
     strategy_df = pd.DataFrame(strategy_types)
@@ -176,34 +205,41 @@ def identify_strategy_types(df, factor_names):
     for category in factor_categories.keys():
         if category in strategy_df.columns:
             avg_weight = strategy_df[category].mean()
-            best_sharpe = strategy_df.loc[strategy_df[category].idxmax()]['sharpe']
-            print(f"  {category:15s}: 平均权重 {avg_weight:.3f}, 最高夏普 {best_sharpe:.4f}")
+            best_sharpe = strategy_df.loc[strategy_df[category].idxmax()]["sharpe"]
+            print(
+                f"  {category:15s}: 平均权重 {avg_weight:.3f}, 最高夏普 {best_sharpe:.4f}"
+            )
 
     return strategy_df, factor_categories
+
 
 def analyze_top_performers(df, factor_names, n=50):
     """分析头部表现者"""
     print(f"\n🏆 Top {n} 策略深度分析")
-    print("="*60)
+    print("=" * 60)
 
     top_strategies = df.head(n)
 
     print(f"Top {n} 策略性能统计:")
-    print(f"  夏普比率: 均值={top_strategies['sharpe'].mean():.4f}, "
-          f"范围=[{top_strategies['sharpe'].min():.4f}, {top_strategies['sharpe'].max():.4f}]")
-    print(f"  年化收益: 均值={top_strategies['annual_return'].mean():.4f}, "
-          f"范围=[{top_strategies['annual_return'].min():.4f}, {top_strategies['annual_return'].max():.4f}]")
+    print(
+        f"  夏普比率: 均值={top_strategies['sharpe'].mean():.4f}, "
+        f"范围=[{top_strategies['sharpe'].min():.4f}, {top_strategies['sharpe'].max():.4f}]"
+    )
+    print(
+        f"  年化收益: 均值={top_strategies['annual_return'].mean():.4f}, "
+        f"范围=[{top_strategies['annual_return'].min():.4f}, {top_strategies['annual_return'].max():.4f}]"
+    )
     print(f"  最大回撤: 均值={top_strategies['max_drawdown'].mean():.4f}")
     print(f"  换手率: 均值={top_strategies['turnover'].mean():.2f}")
 
     # 分析Top策略的因子权重
-    weight_cols = [f'weight_{i}' for i in range(len(factor_names))]
+    weight_cols = [f"weight_{i}" for i in range(len(factor_names))]
     top_weights = top_strategies[weight_cols]
 
     print(f"\nTop {n} 策略因子权重 (前15个):")
     top_factor_weights = top_weights.mean().sort_values(ascending=False).head(15)
     for i, (col, weight) in enumerate(top_factor_weights.items()):
-        factor_idx = int(col.split('_')[1])
+        factor_idx = int(col.split("_")[1])
         factor_name = factor_names[factor_idx]
         print(f"  {i+1:2d}. {factor_name:20s}: {weight:.5f}")
 
@@ -215,10 +251,11 @@ def analyze_top_performers(df, factor_names, n=50):
 
     return top_strategies
 
+
 def generate_strategy_insights(df, factor_names, factor_stats_df):
     """生成策略洞察"""
     print(f"\n💡 策略洞察与建议")
-    print("="*60)
+    print("=" * 60)
 
     # 1. 因子重要性洞察
     print("1. 因子重要性洞察:")
@@ -227,7 +264,7 @@ def generate_strategy_insights(df, factor_names, factor_stats_df):
     print(f"   - 次要因子: {', '.join(top_factors['factor_name'].iloc[5:10].tolist())}")
 
     # 2. 权重分配模式
-    weight_cols = [f'weight_{i}' for i in range(len(factor_names))]
+    weight_cols = [f"weight_{i}" for i in range(len(factor_names))]
     weights_data = df[weight_cols]
 
     # 计算权重集中度
@@ -236,7 +273,7 @@ def generate_strategy_insights(df, factor_names, factor_stats_df):
         weights = row[weight_cols].values
         weights = weights[weights > 0]  # 只考虑非零权重
         if len(weights) > 0:
-            concentration = (weights ** 2).sum() / (weights.sum() ** 2)  # HHI指数
+            concentration = (weights**2).sum() / (weights.sum() ** 2)  # HHI指数
             weight_concentration.append(concentration)
 
     avg_concentration = np.mean(weight_concentration)
@@ -251,17 +288,18 @@ def generate_strategy_insights(df, factor_names, factor_stats_df):
 
     # 3. 性能与因子数量关系
     non_zero_counts = (weights_data > 0).sum(axis=1)
-    df['factor_count'] = non_zero_counts
+    df["factor_count"] = non_zero_counts
 
-    performance_by_factor_count = df.groupby('factor_count').agg({
-        'sharpe': ['mean', 'std', 'count'],
-        'annual_return': 'mean'
-    }).round(4)
+    performance_by_factor_count = (
+        df.groupby("factor_count")
+        .agg({"sharpe": ["mean", "std", "count"], "annual_return": "mean"})
+        .round(4)
+    )
 
     print(f"\n3. 因子数量与性能关系:")
     print("   使用的因子数量越多，性能:")
-    best_factor_count = performance_by_factor_count['sharpe']['mean'].idxmax()
-    best_sharpe = performance_by_factor_count['sharpe']['mean'].max()
+    best_factor_count = performance_by_factor_count["sharpe"]["mean"].idxmax()
+    best_sharpe = performance_by_factor_count["sharpe"]["mean"].max()
     print(f"   - 最佳因子数量: {best_factor_count} 个 (平均夏普 {best_sharpe:.4f})")
 
     # 4. 风险收益特征
@@ -277,36 +315,41 @@ def generate_strategy_insights(df, factor_names, factor_stats_df):
     print(f"   - Top-N设置: 8个标的组合表现最佳")
     print(f"   - 风险控制: 关注最大回撤，建议设置止损线在20%左右")
 
+
 def save_analysis_results(df, factor_names, factor_stats_df):
     """保存分析结果"""
     print(f"\n💾 保存分析结果...")
 
     # 保存详细的因子统计
-    factor_stats_df.to_csv("strategies/results/factor_detailed_analysis.csv", index=False)
+    factor_stats_df.to_csv(
+        "strategies/results/factor_detailed_analysis.csv", index=False
+    )
 
     # 保存策略洞察摘要
     insights = {
-        'total_strategies': len(df),
-        'factor_count': len(factor_names),
-        'avg_sharpe': df['sharpe'].mean(),
-        'best_sharpe': df['sharpe'].max(),
-        'avg_return': df['annual_return'].mean(),
-        'avg_drawdown': df['max_drawdown'].mean(),
-        'optimal_top_n': df.groupby('top_n')['sharpe'].mean().idxmax(),
-        'top_factors': factor_stats_df.head(10)['factor_name'].tolist()
+        "total_strategies": len(df),
+        "factor_count": len(factor_names),
+        "avg_sharpe": df["sharpe"].mean(),
+        "best_sharpe": df["sharpe"].max(),
+        "avg_return": df["annual_return"].mean(),
+        "avg_drawdown": df["max_drawdown"].mean(),
+        "optimal_top_n": df.groupby("top_n")["sharpe"].mean().idxmax(),
+        "top_factors": factor_stats_df.head(10)["factor_name"].tolist(),
     }
 
     import json
-    with open("strategies/results/strategy_insights.json", 'w') as f:
+
+    with open("strategies/results/strategy_insights.json", "w") as f:
         json.dump(insights, f, indent=2, ensure_ascii=False)
 
     print(f"   - 因子详细分析: strategies/results/factor_detailed_analysis.csv")
     print(f"   - 策略洞察摘要: strategies/results/strategy_insights.json")
 
+
 def main():
     """主函数"""
     print("🚀 Top1000策略深度分析")
-    print("="*60)
+    print("=" * 60)
 
     # 加载数据
     df, factor_names = load_and_parse_data()
@@ -332,6 +375,7 @@ def main():
     print(f"\n✅ Top1000策略分析完成!")
     print(f"   基于 {len(df)} 个策略和 {len(factor_names)} 个因子的深度分析")
     print(f"   为实际策略构建提供了数据驱动的指导")
+
 
 if __name__ == "__main__":
     main()

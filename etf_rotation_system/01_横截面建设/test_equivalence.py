@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """功能等价性测试 - 验证重构版本与原版本的一致性"""
+import json
+import tempfile
+from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import tempfile
-import json
-from datetime import datetime
+
 
 def create_test_data():
     """创建测试数据"""
     np.random.seed(42)  # 固定随机种子确保可重现
 
     # 创建测试价格数据
-    dates = pd.date_range('2024-01-01', '2024-02-20', freq='D')
-    symbols = ['TEST001', 'TEST002']
+    dates = pd.date_range("2024-01-01", "2024-02-20", freq="D")
+    symbols = ["TEST001", "TEST002"]
 
     data_list = []
     for symbol in symbols:
@@ -29,19 +31,22 @@ def create_test_data():
             volume = int(1000000 + np.random.randn() * 100000)
             amount = volume * close * (1 + np.random.randn() * 0.01)
 
-            data_list.append({
-                'trade_date': date.strftime('%Y%m%d'),
-                'symbol': symbol,
-                'open': round(open_price, 2),
-                'high': round(high, 2),
-                'low': round(low, 2),
-                'close': round(close, 2),
-                'volume': volume,
-                'amount': round(amount, 2)
-            })
+            data_list.append(
+                {
+                    "trade_date": date.strftime("%Y%m%d"),
+                    "symbol": symbol,
+                    "open": round(open_price, 2),
+                    "high": round(high, 2),
+                    "low": round(low, 2),
+                    "close": round(close, 2),
+                    "volume": volume,
+                    "amount": round(amount, 2),
+                }
+            )
 
     df = pd.DataFrame(data_list)
     return df
+
 
 def save_test_data(df, data_dir):
     """保存测试数据"""
@@ -49,15 +54,16 @@ def save_test_data(df, data_dir):
     data_dir.mkdir(parents=True, exist_ok=True)
 
     # 按标的分别保存
-    for symbol in df['symbol'].unique():
-        symbol_data = df[df['symbol'] == symbol].copy()
-        symbol_data = symbol_data.drop('symbol', axis=1)
+    for symbol in df["symbol"].unique():
+        symbol_data = df[df["symbol"] == symbol].copy()
+        symbol_data = symbol_data.drop("symbol", axis=1)
 
         filename = f"{symbol}_daily_20240101_20240220.parquet"
         filepath = data_dir / filename
         symbol_data.to_parquet(filepath, index=False)
 
     return data_dir
+
 
 def test_original_version(data_dir, output_dir):
     """测试原版本"""
@@ -74,7 +80,9 @@ def test_original_version(data_dir, output_dir):
         price_df = original_module.load_price_data(Path(data_dir))
 
         # 计算因子
-        panel = original_module.calculate_factors_parallel(price_df, config, max_workers=1)
+        panel = original_module.calculate_factors_parallel(
+            price_df, config, max_workers=1
+        )
 
         # 保存结果
         panel_file, meta_file = original_module.save_results(panel, Path(output_dir))
@@ -86,6 +94,7 @@ def test_original_version(data_dir, output_dir):
         print(f"❌ 原版本失败: {e}")
         return None, None
 
+
 def test_refactored_version(data_dir, output_dir):
     """测试重构版本"""
     print("🔍 测试重构版本...")
@@ -95,7 +104,7 @@ def test_refactored_version(data_dir, output_dir):
         import generate_panel_refactored as refactored_module
 
         # 加载配置
-        config = refactored_module.load_config('config/factor_panel_config.yaml')
+        config = refactored_module.load_config("config/factor_panel_config.yaml")
 
         # 加载测试数据
         price_df = refactored_module.load_price_data(Path(data_dir), config)
@@ -104,7 +113,9 @@ def test_refactored_version(data_dir, output_dir):
         panel = refactored_module.calculate_factors_parallel(price_df, config)
 
         # 保存结果
-        panel_file, meta_file = refactored_module.save_results(panel, Path(output_dir), config.output)
+        panel_file, meta_file = refactored_module.save_results(
+            panel, Path(output_dir), config.output
+        )
 
         print(f"✅ 重构版本完成，因子数: {len(panel.columns)}")
         return panel, meta_file
@@ -112,6 +123,7 @@ def test_refactored_version(data_dir, output_dir):
     except Exception as e:
         print(f"❌ 重构版本失败: {e}")
         return None, None
+
 
 def compare_results(original_panel, refactored_panel):
     """比较两个版本的结果"""
@@ -162,29 +174,35 @@ def compare_results(original_panel, refactored_panel):
                 mean_diff = diff.mean()
 
                 if max_diff > 1e-10:  # 设置容忍度
-                    differences.append({
-                        'factor': factor,
-                        'max_diff': max_diff,
-                        'mean_diff': mean_diff,
-                        'count': len(common_index)
-                    })
+                    differences.append(
+                        {
+                            "factor": factor,
+                            "max_diff": max_diff,
+                            "mean_diff": mean_diff,
+                            "count": len(common_index),
+                        }
+                    )
 
         if differences:
             print(f"\\n⚠️ 发现数值差异:")
             for diff_info in differences[:5]:  # 只显示前5个
-                print(f"  {diff_info['factor']}: max_diff={diff_info['max_diff']:.2e}, mean_diff={diff_info['mean_diff']:.2e}")
+                print(
+                    f"  {diff_info['factor']}: max_diff={diff_info['max_diff']:.2e}, mean_diff={diff_info['mean_diff']:.2e}"
+                )
         else:
             print("✅ 所有共同因子数值一致")
 
     # 评估结果
-    similarity_score = len(common_factors) / max(len(original_factors), len(refactored_factors))
+    similarity_score = len(common_factors) / max(
+        len(original_factors), len(refactored_factors)
+    )
     print(f"\\n📈 相似度评分: {similarity_score:.2%}")
 
     # 判断是否通过
     passed = (
-        len(differences) == 0 and  # 无数值差异
-        len(missing_in_refactored) == 0 and  # 无缺失因子
-        similarity_score >= 0.95  # 相似度>=95%
+        len(differences) == 0  # 无数值差异
+        and len(missing_in_refactored) == 0  # 无缺失因子
+        and similarity_score >= 0.95  # 相似度>=95%
     )
 
     if passed:
@@ -194,13 +212,14 @@ def compare_results(original_panel, refactored_panel):
 
     return passed
 
+
 def test_config_influence():
     """测试配置变化的影响"""
     print("🔧 测试配置影响...")
 
     try:
-        from config.config_classes import FactorPanelConfig
         import generate_panel_refactored as refactored_module
+        from config.config_classes import FactorPanelConfig
 
         # 创建自定义配置
         custom_config = FactorPanelConfig()
@@ -218,10 +237,11 @@ def test_config_influence():
         print(f"❌ 配置测试失败: {e}")
         return False
 
+
 def main():
     """主测试函数"""
     print("🚀 功能等价性测试开始")
-    print("="*60)
+    print("=" * 60)
 
     # 创建临时目录
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -237,23 +257,25 @@ def main():
         print(f"✅ 测试数据已创建: {len(test_df)} 条记录")
 
         # 测试原版本
-        print("\\n" + "="*60)
+        print("\\n" + "=" * 60)
         original_panel, original_meta = test_original_version(data_dir, original_output)
 
         # 测试重构版本
-        print("\\n" + "="*60)
-        refactored_panel, refactored_meta = test_refactored_version(data_dir, refactored_output)
+        print("\\n" + "=" * 60)
+        refactored_panel, refactored_meta = test_refactored_version(
+            data_dir, refactored_output
+        )
 
         # 比较结果
-        print("\\n" + "="*60)
+        print("\\n" + "=" * 60)
         equivalence_passed = compare_results(original_panel, refactored_panel)
 
         # 测试配置影响
-        print("\\n" + "="*60)
+        print("\\n" + "=" * 60)
         config_passed = test_config_influence()
 
         # 总结
-        print("\\n" + "="*60)
+        print("\\n" + "=" * 60)
         print("📋 测试总结:")
         print(f"  功能等价性: {'✅ 通过' if equivalence_passed else '❌ 失败'}")
         print(f"  配置功能: {'✅ 通过' if config_passed else '❌ 失败'}")
@@ -263,6 +285,7 @@ def main():
 
         return overall_passed
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     success = main()
     exit(0 if success else 1)

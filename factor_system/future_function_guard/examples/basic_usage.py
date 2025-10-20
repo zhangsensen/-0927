@@ -5,21 +5,23 @@ FutureFunctionGuard 基础使用示例
 演示基本的装饰器、函数调用和上下文管理器用法
 """
 
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
 
 # 导入FutureFunctionGuard
 from factor_system.future_function_guard import (
-    future_safe,
-    safe_research,
-    safe_production,
     create_guard,
+    future_safe,
     quick_check,
-    validate_factors
+    safe_production,
+    safe_research,
+    validate_factors,
 )
 
 # ==================== 示例数据准备 ====================
+
 
 def create_sample_data():
     """创建示例数据"""
@@ -33,7 +35,9 @@ def create_sample_data():
 
     return price_data
 
+
 # ==================== 装饰器示例 ====================
+
 
 @future_safe()
 def calculate_simple_moving_average(data, window=20):
@@ -41,6 +45,7 @@ def calculate_simple_moving_average(data, window=20):
     计算简单移动平均线 - 基础装饰器示例
     """
     return data.rolling(window).mean()
+
 
 @safe_research()
 def calculate_rsi(data, periods=14):
@@ -54,6 +59,7 @@ def calculate_rsi(data, periods=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
+
 @safe_production()
 def calculate_bollinger_bands(data, window=20, num_std=2):
     """
@@ -63,14 +69,18 @@ def calculate_bollinger_bands(data, window=20, num_std=2):
     std = data.rolling(window).std()
     upper_band = sma + (std * num_std)
     lower_band = sma - (std * num_std)
-    return pd.DataFrame({
-        'sma': sma,
-        'upper': upper_band,
-        'lower': lower_band,
-        'bandwidth': (upper_band - lower_band) / sma
-    })
+    return pd.DataFrame(
+        {
+            "sma": sma,
+            "upper": upper_band,
+            "lower": lower_band,
+            "bandwidth": (upper_band - lower_band) / sma,
+        }
+    )
+
 
 # ==================== 函数调用示例 ====================
+
 
 def demonstrate_function_calls():
     """演示函数调用模式的防护"""
@@ -93,11 +103,9 @@ def demonstrate_function_calls():
 
     # 2. 使用便捷函数验证因子
     print("\n2. 便捷验证函数:")
-    factor_panel = pd.DataFrame({
-        'MA_20': ma_20,
-        'RSI_14': rsi_14,
-        'BB_Width': bb_20['bandwidth']
-    })
+    factor_panel = pd.DataFrame(
+        {"MA_20": ma_20, "RSI_14": rsi_14, "BB_Width": bb_20["bandwidth"]}
+    )
 
     # 移除NaN值以便验证
     clean_panel = factor_panel.dropna()
@@ -105,16 +113,16 @@ def demonstrate_function_calls():
 
     # 验证因子数据
     validation_result = validate_factors(
-        clean_panel,
-        factor_ids=['MA_20', 'RSI_14', 'BB_Width'],
-        timeframe="daily"
+        clean_panel, factor_ids=["MA_20", "RSI_14", "BB_Width"], timeframe="daily"
     )
 
     print(f"✅ 因子验证状态: {validation_result['is_valid']}")
-    if validation_result['warnings']:
+    if validation_result["warnings"]:
         print(f"⚠️  警告: {validation_result['warnings']}")
 
+
 # ==================== 上下文管理器示例 ====================
+
 
 def demonstrate_context_manager():
     """演示上下文管理器的使用"""
@@ -144,7 +152,9 @@ def demonstrate_context_manager():
 
         print("退出保护上下文")
 
+
 # ==================== 综合检查示例 ====================
+
 
 def demonstrate_comprehensive_check():
     """演示综合安全检查"""
@@ -155,12 +165,14 @@ def demonstrate_comprehensive_check():
 
     # 创建测试数据
     price_data = create_sample_data()
-    factor_panel = pd.DataFrame({
-        'MA_10': price_data.rolling(10).mean(),
-        'MA_30': price_data.rolling(30).mean(),
-        'Volatility': price_data.pct_change().rolling(20).std(),
-        'Momentum': price_data.pct_change(20)
-    })
+    factor_panel = pd.DataFrame(
+        {
+            "MA_10": price_data.rolling(10).mean(),
+            "MA_30": price_data.rolling(30).mean(),
+            "Volatility": price_data.pct_change().rolling(20).std(),
+            "Momentum": price_data.pct_change(20),
+        }
+    )
 
     print(f"创建了 {factor_panel.shape[1]} 个因子，{factor_panel.shape[0]} 个时间点")
 
@@ -169,10 +181,7 @@ def demonstrate_comprehensive_check():
     result = guard.comprehensive_security_check(
         # 这里可以添加代码文件路径进行静态检查
         # code_targets=["./examples/"],
-        data_targets={
-            "factor_panel": factor_panel.dropna(),
-            "price_data": price_data
-        }
+        data_targets={"factor_panel": factor_panel.dropna(), "price_data": price_data}
     )
 
     print(f"✅ 综合检查完成")
@@ -180,11 +189,17 @@ def demonstrate_comprehensive_check():
     print(f"检查耗时: {result['total_time']:.3f}秒")
     print(f"组件检查: {', '.join(result['check_components'])}")
 
-    if result.get('report'):
+    if result.get("report"):
         print("\n检查报告摘要:")
-        print(result['report'][:500] + "..." if len(result['report']) > 500 else result['report'])
+        print(
+            result["report"][:500] + "..."
+            if len(result["report"]) > 500
+            else result["report"]
+        )
+
 
 # ==================== 错误处理示例 ====================
+
 
 def demonstrate_error_handling():
     """演示错误处理和报警"""
@@ -201,9 +216,7 @@ def demonstrate_error_handling():
 
     try:
         result = guard.validate_factor_calculation(
-            short_data,
-            factor_id="Short_Factor",
-            timeframe="daily"
+            short_data, factor_id="Short_Factor", timeframe="daily"
         )
         print(f"验证结果: {result['is_valid']}")
         print(f"消息: {result['message']}")
@@ -228,14 +241,18 @@ def demonstrate_error_handling():
         for alert in guard.health_monitor.alerts[-3:]:
             print(f"  - {alert.severity}: {alert.message}")
 
+
 # ==================== 配置自定义示例 ====================
+
 
 def demonstrate_custom_config():
     """演示自定义配置"""
     print("\n=== 自定义配置演示 ===")
 
     from factor_system.future_function_guard import (
-        GuardConfig, RuntimeValidationConfig, StrictMode
+        GuardConfig,
+        RuntimeValidationConfig,
+        StrictMode,
     )
 
     # 创建自定义配置
@@ -244,10 +261,10 @@ def demonstrate_custom_config():
         strict_mode=StrictMode.WARN_ONLY,
         runtime_validation=RuntimeValidationConfig(
             correlation_threshold=0.98,  # 更宽松的相关性阈值
-            coverage_threshold=0.85,       # 更低的覆盖率要求
+            coverage_threshold=0.85,  # 更低的覆盖率要求
             time_series_safety=True,
-            statistical_checks=True
-        )
+            statistical_checks=True,
+        ),
     )
 
     # 使用自定义配置创建防护组件
@@ -264,14 +281,14 @@ def demonstrate_custom_config():
     factor_data = price_data.rolling(20).mean()
 
     result = custom_guard.validate_factor_calculation(
-        factor_data,
-        factor_id="Custom_Test_Factor",
-        timeframe="daily"
+        factor_data, factor_id="Custom_Test_Factor", timeframe="daily"
     )
 
     print(f"✅ 自定义配置测试: {result['is_valid']}")
 
+
 # ==================== 性能监控示例 ====================
+
 
 def demonstrate_performance_monitoring():
     """演示性能监控功能"""
@@ -305,12 +322,14 @@ def demonstrate_performance_monitoring():
     print(f"  - 运行时间: {stats['uptime_human']}")
 
     # 缓存信息
-    cache_info = stats['cache_info']
+    cache_info = stats["cache_info"]
     print(f"\n缓存信息:")
     print(f"  - 静态检查缓存: {cache_info['static_check']['file_count']} 个文件")
     print(f"  - 健康监控缓存: {cache_info['health_monitor']['file_count']} 个文件")
 
+
 # ==================== 主函数 ====================
+
 
 def main():
     """主函数 - 运行所有示例"""
@@ -337,7 +356,9 @@ def main():
     except Exception as e:
         print(f"\n❌ 示例运行出错: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()

@@ -4,15 +4,16 @@
 import sys
 from pathlib import Path
 
-print("="*80)
+print("=" * 80)
 print("ETF轮动系统 - 完整流程测试")
-print("="*80)
+print("=" * 80)
 
 # 测试1：横截面面板
 print("\n📊 测试1：横截面面板")
 try:
-    import pandas as pd
     import glob
+
+    import pandas as pd
 
     # 自动查找最新的面板文件
     panel_dirs = glob.glob("data/results/panels/panel_*")
@@ -26,7 +27,9 @@ try:
     print(f"✅ 面板形状：{panel.shape}")
     print(f"✅ 因子数量：{len(panel.columns)}")
     print(f"✅ ETF数量：{len(panel.index.get_level_values('symbol').unique())}")
-    print(f"✅ 日期范围：{panel.index.get_level_values('date').min()} ~ {panel.index.get_level_values('date').max()}")
+    print(
+        f"✅ 日期范围：{panel.index.get_level_values('date').min()} ~ {panel.index.get_level_values('date').max()}"
+    )
 except Exception as e:
     print(f"❌ 面板加载失败：{e}")
     sys.exit(1)
@@ -44,15 +47,17 @@ try:
     screening_df = pd.read_csv(screening_csv)
     print(f"✅ 使用筛选结果：{screening_csv}")
     print(f"✅ 通过筛选：{len(screening_df)}个因子")
-    
+
     # 分层统计
-    core = screening_df[screening_df['ic_mean'].abs() >= 0.02]
-    supplement = screening_df[(screening_df['ic_mean'].abs() >= 0.01) & (screening_df['ic_mean'].abs() < 0.02)]
+    core = screening_df[screening_df["ic_mean"].abs() >= 0.02]
+    supplement = screening_df[
+        (screening_df["ic_mean"].abs() >= 0.01) & (screening_df["ic_mean"].abs() < 0.02)
+    ]
     print(f"   🟢 核心因子：{len(core)}个")
     print(f"   🟡 补充因子：{len(supplement)}个")
-    
+
     # 验证因子存在
-    factors = screening_df['factor'].tolist()
+    factors = screening_df["factor"].tolist()
     missing = [f for f in factors if f not in panel.columns]
     if missing:
         print(f"❌ 缺失因子：{missing}")
@@ -66,7 +71,11 @@ except Exception as e:
 print("\n🚀 测试3：回测引擎")
 try:
     sys.path.insert(0, str(Path.cwd() / "03_vbt回测"))
-    from backtest_engine_full import load_top_factors, load_price_data, calculate_composite_score
+    from backtest_engine_full import (
+        calculate_composite_score,
+        load_price_data,
+        load_top_factors,
+    )
 
     # 测试load_top_factors（修复后应该能读取'factor'列）
     top_factors = load_top_factors(screening_csv, top_k=5)
@@ -83,9 +92,9 @@ try:
         print(f"⚠️ 价格目录不存在，跳过：{price_dir}")
 
     # 测试复合得分计算
-    weights = {f: 1.0/len(top_factors) for f in top_factors}
+    weights = {f: 1.0 / len(top_factors) for f in top_factors}
     try:
-        scores = calculate_composite_score(panel, top_factors, weights, method='zscore')
+        scores = calculate_composite_score(panel, top_factors, weights, method="zscore")
         print(f"✅ 复合得分计算：{scores.shape}")
     except Exception as e:
         print(f"⚠️ 得分计算失败（可能缺少完整数据）：{e}")
@@ -93,6 +102,7 @@ try:
 except Exception as e:
     print(f"❌ 回测引擎测试失败：{e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -111,9 +121,9 @@ print(f"✅ 面板文件：{panel_path}")
 print(f"✅ 筛选文件：{screening_csv}")
 print(f"✅ 统一目录：etf_rotation_system/data/results/")
 
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("🎉 完整流程测试通过！")
-print("="*80)
+print("=" * 80)
 print("\n📋 下一步：")
 print("1. 运行回测：python 03_vbt回测/backtest_engine_full.py")
 print("2. 查看结果：etf_rotation_system/03_vbt回测/results/")
