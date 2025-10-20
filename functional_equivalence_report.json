@@ -1,0 +1,140 @@
+{
+  "summary": {
+    "total_tests": 6,
+    "passed_tests": 4,
+    "failed_tests": 2,
+    "critical_failures": 2,
+    "success_rate": 0.6666666666666666,
+    "overall_success": false
+  },
+  "test_results": [
+    {
+      "test_name": "基础因子计算功能",
+      "success": false,
+      "duration": 0.010045051574707031,
+      "details": {
+        "success": false,
+        "message": "基础因子计算测试失败: name 'OutputConfig' is not defined",
+        "error_type": "NameError"
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "参数提取完整性",
+      "success": false,
+      "duration": 0.0025429725646972656,
+      "details": {
+        "success": false,
+        "message": "参数提取完整性测试失败: attribute name must be string, not 'int'",
+        "error_type": "TypeError"
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "配置参数影响",
+      "success": true,
+      "duration": 1.71661376953125e-05,
+      "details": {
+        "success": true,
+        "message": "配置参数影响测试: 基础配置 [20, 63, 126, 252] vs 修改配置 [5, 10, 15]",
+        "base_momentum": [
+          20,
+          63,
+          126,
+          252
+        ],
+        "modified_momentum": [
+          5,
+          10,
+          15
+        ],
+        "configs_different": true
+      },
+      "critical": false,
+      "error": null
+    },
+    {
+      "test_name": "因子开关功能",
+      "success": true,
+      "duration": 6.9141387939453125e-06,
+      "details": {
+        "success": true,
+        "message": "因子开关测试: 默认启用 5 个，修改后启用 3 个",
+        "default_enabled": 5,
+        "modified_enabled": 3,
+        "switches_working": true
+      },
+      "critical": false,
+      "error": null
+    },
+    {
+      "test_name": "错误恢复能力",
+      "success": true,
+      "duration": 9.775161743164062e-06,
+      "details": {
+        "success": true,
+        "message": "错误恢复测试: 2/2 通过",
+        "error_tests": [
+          {
+            "test": "无效数据目录",
+            "result": "handled",
+            "success": true
+          },
+          {
+            "test": "无效参数值",
+            "result": "correctly_rejected",
+            "success": true
+          }
+        ],
+        "robustness_rate": 1.0
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "数据一致性检查",
+      "success": true,
+      "duration": 0.016922712326049805,
+      "details": {
+        "success": true,
+        "message": "数据一致性检查: 3/3 文件质量良好",
+        "consistency_checks": [
+          {
+            "file": "512100_daily_20240101_20240331.parquet",
+            "missing_columns": [],
+            "has_nan": false,
+            "has_negative_price": false,
+            "has_negative_volume": false,
+            "data_quality": "good"
+          },
+          {
+            "file": "159919_daily_20240101_20240331.parquet",
+            "missing_columns": [],
+            "has_nan": false,
+            "has_negative_price": false,
+            "has_negative_volume": false,
+            "data_quality": "good"
+          },
+          {
+            "file": "510300_daily_20240101_20240331.parquet",
+            "missing_columns": [],
+            "has_nan": false,
+            "has_negative_price": false,
+            "has_negative_volume": false,
+            "data_quality": "good"
+          }
+        ],
+        "data_quality_rate": 1.0
+      },
+      "critical": true,
+      "error": null
+    }
+  ],
+  "recommendations": [
+    "🚨 存在关键功能问题",
+    "   - 修复: 基础因子计算功能",
+    "   - 修复: 参数提取完整性"
+  ]
+}

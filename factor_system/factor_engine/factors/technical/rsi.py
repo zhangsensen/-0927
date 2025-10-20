@@ -54,3 +54,4 @@ class RSI(BaseFactor):
         rsi = SHARED_CALCULATORS.calculate_rsi(close, period=self.period)
 
         return rsi
+

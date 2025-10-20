@@ -73,20 +73,15 @@ class ProductionPipeline:
     def run_pool_management(self) -> bool:
         """运行分池管理（生产面板）"""
         return self.run_command(
-            ["python3", "scripts/pool_management.py"], "分池面板生产"
+            ["python3", "etf_factor_engine_production/scripts/produce_full_etf_panel.py"],
+            "分池面板生产"
         )
 
     def run_aggregate_metrics(self) -> bool:
         """运行指标汇总"""
-        return self.run_command(
-            [
-                "python3",
-                "scripts/aggregate_pool_metrics.py",
-                "--base-dir",
-                str(self.base_dir),
-            ],
-            "分池指标汇总",
-        )
+        # 注意：aggregate_pool_metrics.py 已废弃，功能已集成到新架构
+        logger.info("⚠️  指标汇总功能已集成到新架构，此步骤已跳过")
+        return True
 
     def run_ci_checks(self) -> bool:
         """运行 CI 检查（所有池）"""

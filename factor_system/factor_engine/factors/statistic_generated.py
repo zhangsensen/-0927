@@ -35,8 +35,8 @@ class Momentum1(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
-            result = data["close"] / data["close"].shift(10) - 1
+            # 动量指标 - 修复：应该用shift(1)
+            result = data["close"] / data["close"].shift(1) - 1
             return result.rename("Momentum1")
 
         except Exception as e:
@@ -63,8 +63,8 @@ class Momentum3(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
-            result = data["close"] / data["close"].shift(10) - 1
+            # 动量指标 - 修复：应该用shift(3)
+            result = data["close"] / data["close"].shift(3) - 1
             return result.rename("Momentum3")
 
         except Exception as e:
@@ -91,8 +91,8 @@ class Momentum5(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
-            result = data["close"] / data["close"].shift(10) - 1
+            # 动量指标 - 修复：应该用shift(5)，不是shift(10)
+            result = data["close"] / data["close"].shift(5) - 1
             return result.rename("Momentum5")
 
         except Exception as e:
@@ -119,8 +119,8 @@ class Momentum8(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
-            result = data["close"] / data["close"].shift(10) - 1
+            # 动量指标 - 修复：应该用shift(8)
+            result = data["close"] / data["close"].shift(8) - 1
             return result.rename("Momentum8")
 
         except Exception as e:
@@ -147,7 +147,7 @@ class Momentum10(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
+            # 动量指标 - 正确：shift(10)与名称一致
             result = data["close"] / data["close"].shift(10) - 1
             return result.rename("Momentum10")
 
@@ -175,8 +175,8 @@ class Momentum12(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
-            result = data["close"] / data["close"].shift(10) - 1
+            # 动量指标 - 修复：应该用shift(12)
+            result = data["close"] / data["close"].shift(12) - 1
             return result.rename("Momentum12")
 
         except Exception as e:
@@ -203,8 +203,8 @@ class Momentum15(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
-            result = data["close"] / data["close"].shift(10) - 1
+            # 动量指标 - 修复：应该用shift(15)
+            result = data["close"] / data["close"].shift(15) - 1
             return result.rename("Momentum15")
 
         except Exception as e:
@@ -231,8 +231,8 @@ class Momentum20(BaseFactor):
     def calculate(self, data: pd.DataFrame) -> pd.Series:
         """计算因子值 - 使用SHARED_CALCULATORS确保一致性"""
         try:
-            # 动量指标
-            result = data["close"] / data["close"].shift(10) - 1
+            # 动量指标 - 修复：应该用shift(20)
+            result = data["close"] / data["close"].shift(20) - 1
             return result.rename("Momentum20")
 
         except Exception as e:

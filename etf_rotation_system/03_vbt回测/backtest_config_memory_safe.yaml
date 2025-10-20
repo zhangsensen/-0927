@@ -1,0 +1,71 @@
+# ETF轮动VBT回测配置文件
+# 5千组合快速测试 - 确保内存安全
+
+# === 数据路径配置 ===
+data_paths:
+  panel_file: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251020_162504/panel.parquet"
+  price_dir: "/Users/zhangshenshen/深度量化0927/raw/ETF/daily"
+  screening_file: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251020_104628/passed_factors.csv"
+  output_dir: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/backtest"
+
+# === 因子配置 ===
+factor_config:
+  top_k: 8                     # 使用筛选出的前8个因子
+  factors: ['PRICE_POSITION_60D', 'MOM_ACCEL', 'VOLATILITY_120D', 'VOL_VOLATILITY_20', 'VOLUME_PRICE_TREND', 'RSI_6', 'INTRADAY_POSITION', 'INTRA_DAY_RANGE']  # 指定8个有效因子
+
+# === 回测参数配置 ===
+backtest_config:
+  top_n_list: [3, 5, 8]        # Top-N候选列表
+  rebalance_freq: 20           # 调仓频率（交易日）
+  fees: 0.001                  # 交易费用率
+  init_cash: 1000000          # 初始资金
+
+# === 权重网格配置 ===
+weight_grid:
+  # 权重网格点 - 5千组合测试 (大范围搜索)
+  grid_points: [0.0, 0.2, 0.4, 0.6, 0.8]  # 5^8 = 39万组合，过滤后约5千
+  weight_sum_range: [0.8, 1.2]               # 权重和的有效范围
+  max_combinations: 5000                     # 5千组合 (大范围搜索)
+
+# === 复合因子计算配置 ===
+composite_config:
+  standardization_method: "zscore"    # 标准化方法: "zscore" 或 "rank"
+  enable_score_cache: true           # 是否启用得分缓存（提高性能）
+
+# === 性能优化配置 ===
+performance_config:
+  # 线程配置（保守设置）
+  omp_num_threads: 2
+  veclib_maximum_threads: 2
+  mkl_num_threads: 2
+
+  # 批处理配置
+  batch_size: 500                 # 小批处理
+  enable_progress_bar: true        # 显示进度条
+
+# === 输出配置 ===
+output_config:
+  save_top_results: 100           # 保存前100个结果 (优化性能)
+  save_best_config: true          # 保存最优配置
+  save_detailed_results: true     # 保存详细结果
+
+  # 结果文件命名
+  results_prefix: "log_test_results"
+  best_config_prefix: "log_test_best"
+
+# === 内存配置 ===
+memory_config:
+  enable_gc: true               # 启用垃圾回收
+  checkpoint_interval: 1000     # 每1千组合保存一次
+  max_memory_usage_gb: 12       # 最大内存使用限制 (保守)
+
+# === 调试和日志配置 ===
+debug_config:
+  verbose: true                 # 详细输出模式 - 监控内存使用
+  log_errors: true              # 记录错误日志
+  save_intermediate: false      # 保存中间结果
+  # 日志输出配置
+  log_to_file: true             # 启用文件日志
+  log_dir: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/backtest"  # 日志目录
+  log_prefix: "backtest_log"    # 日志文件前缀
+  console_output: true          # 同时输出到控制台

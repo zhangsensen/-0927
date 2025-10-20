@@ -1,0 +1,315 @@
+{
+  "summary": {
+    "total_tests": 9,
+    "passed_tests": 8,
+    "failed_tests": 1,
+    "critical_failures": 1,
+    "success_rate": 0.8888888888888888,
+    "overall_success": false
+  },
+  "test_results": [
+    {
+      "test_name": "配置文件存在性检查",
+      "success": true,
+      "duration": 1.3113021850585938e-05,
+      "details": {
+        "success": true,
+        "message": "配置文件存在且非空",
+        "file_size": 3998,
+        "file_path": "etf_rotation_system/01_横截面建设/config/factor_panel_config.yaml"
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "YAML语法验证",
+      "success": true,
+      "duration": 0.002857208251953125,
+      "details": {
+        "success": true,
+        "message": "YAML语法正确",
+        "top_level_keys": [
+          "trading",
+          "factor_windows",
+          "thresholds",
+          "paths",
+          "processing",
+          "factor_enable",
+          "data_processing",
+          "output",
+          "logging"
+        ],
+        "config_type": "dict"
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "配置类导入测试",
+      "success": true,
+      "duration": 3.0994415283203125e-06,
+      "details": {
+        "success": true,
+        "message": "可用类: 5, 缺失类: 0",
+        "available_classes": [
+          "FactorPanelConfig",
+          "TradingConfig",
+          "FactorWindowsConfig",
+          "ThresholdsConfig",
+          "ProcessingConfig"
+        ],
+        "missing_classes": []
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "配置加载功能",
+      "success": true,
+      "duration": 0.0025022029876708984,
+      "details": {
+        "success": true,
+        "message": "加载成功，验证通过: True",
+        "loaded_sections": [
+          "trading",
+          "factor_windows",
+          "thresholds",
+          "paths",
+          "processing",
+          "factor_enable",
+          "data_processing",
+          "output",
+          "logging"
+        ],
+        "missing_sections": [],
+        "validation_passed": true
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "参数验证测试",
+      "success": true,
+      "duration": 3.504753112792969e-05,
+      "details": {
+        "success": true,
+        "message": "参数验证测试: 5/5 通过",
+        "test_results": [
+          {
+            "test_name": "正常配置",
+            "passed": true,
+            "expected": true,
+            "actual": true,
+            "correct": true
+          },
+          {
+            "test_name": "负数交易日",
+            "passed": true,
+            "expected": false,
+            "actual": false,
+            "error": "days_per_year must be positive",
+            "correct": true
+          },
+          {
+            "test_name": "零值epsilon",
+            "passed": true,
+            "expected": false,
+            "actual": false,
+            "error": "epsilon_small must be positive",
+            "correct": true
+          },
+          {
+            "test_name": "负数窗口",
+            "passed": true,
+            "expected": false,
+            "actual": false,
+            "error": "Window size must be positive: -20",
+            "correct": true
+          },
+          {
+            "test_name": "无效日志级别",
+            "passed": true,
+            "expected": false,
+            "actual": false,
+            "error": "Invalid log level: INVALID",
+            "correct": true
+          }
+        ],
+        "pass_rate": 1.0
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "默认值检查",
+      "success": true,
+      "duration": 1.4066696166992188e-05,
+      "details": {
+        "success": true,
+        "message": "默认值检查: 7/7 正确",
+        "default_checks": [
+          {
+            "key_path": "trading.days_per_year",
+            "expected": 252,
+            "actual": 252,
+            "correct": true
+          },
+          {
+            "key_path": "trading.epsilon_small",
+            "expected": 1e-10,
+            "actual": 1e-10,
+            "correct": true
+          },
+          {
+            "key_path": "trading.min_periods",
+            "expected": 1,
+            "actual": 1,
+            "correct": true
+          },
+          {
+            "key_path": "factor_windows.momentum",
+            "expected": [
+              20,
+              63,
+              126,
+              252
+            ],
+            "actual": [
+              20,
+              63,
+              126,
+              252
+            ],
+            "correct": true
+          },
+          {
+            "key_path": "factor_windows.atr_period",
+            "expected": 14,
+            "actual": 14,
+            "correct": true
+          },
+          {
+            "key_path": "processing.max_workers",
+            "expected": 4,
+            "actual": 4,
+            "correct": true
+          },
+          {
+            "key_path": "logging.level",
+            "expected": "INFO",
+            "actual": "INFO",
+            "correct": true
+          }
+        ],
+        "pass_rate": 1.0
+      },
+      "critical": false,
+      "error": null
+    },
+    {
+      "test_name": "配置修改影响",
+      "success": true,
+      "duration": 0.0025081634521484375,
+      "details": {
+        "success": true,
+        "message": "配置修改测试: 动量窗口从 [20, 63, 126, 252] 改为 [5, 10, 15]",
+        "original_momentum": [
+          20,
+          63,
+          126,
+          252
+        ],
+        "modified_momentum": [
+          5,
+          10,
+          15
+        ],
+        "expected_momentum": [
+          5,
+          10,
+          15
+        ],
+        "change_detected": true,
+        "value_correct": true
+      },
+      "critical": false,
+      "error": null
+    },
+    {
+      "test_name": "错误处理机制",
+      "success": false,
+      "duration": 5.1021575927734375e-05,
+      "details": {
+        "success": false,
+        "message": "错误处理测试: 2/3 通过",
+        "error_results": [
+          {
+            "test_name": "不存在的配置文件",
+            "passed": true,
+            "message": "正确处理错误情况"
+          },
+          {
+            "test_name": "无效YAML文件",
+            "passed": false,
+            "message": "应该抛出异常但没有"
+          },
+          {
+            "test_name": "类型错误配置",
+            "passed": true,
+            "message": "正确抛出异常: TypeError"
+          }
+        ],
+        "pass_rate": 0.6666666666666666
+      },
+      "critical": true,
+      "error": null
+    },
+    {
+      "test_name": "向后兼容性",
+      "success": true,
+      "duration": 0.0024368762969970703,
+      "details": {
+        "success": true,
+        "message": "向后兼容性测试",
+        "has_expected_keys": true,
+        "has_factor_keys": true,
+        "legacy_structure": {
+          "factor_generation": {
+            "momentum_periods": [
+              20,
+              63,
+              126,
+              252
+            ],
+            "volatility_windows": [
+              20,
+              60,
+              120
+            ],
+            "rsi_windows": [
+              6,
+              14,
+              24
+            ],
+            "price_position_windows": [
+              20,
+              60,
+              120
+            ],
+            "volume_ratio_windows": [
+              5,
+              20,
+              60
+            ]
+          }
+        }
+      },
+      "critical": false,
+      "error": null
+    }
+  ],
+  "recommendations": [
+    "🚨 存在关键失败，需要立即修复",
+    "   - 修复: 错误处理机制"
+  ]
+}

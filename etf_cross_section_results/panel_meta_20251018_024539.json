@@ -1,0 +1,31 @@
+{
+  "timestamp": "20251018_024539",
+  "etf_count": 43,
+  "factor_count": 18,
+  "data_points": 56575,
+  "coverage_rate": 0.8395050817498895,
+  "factors": [
+    "MOMENTUM_20D",
+    "MOMENTUM_63D",
+    "MOMENTUM_126D",
+    "MOMENTUM_252D",
+    "VOLATILITY_20D",
+    "VOLATILITY_60D",
+    "VOLATILITY_120D",
+    "DRAWDOWN_63D",
+    "DRAWDOWN_126D",
+    "MOM_ACCEL",
+    "RSI_6",
+    "RSI_14",
+    "RSI_24",
+    "PRICE_POSITION_20D",
+    "PRICE_POSITION_60D",
+    "PRICE_POSITION_120D",
+    "VOLUME_RATIO_20D",
+    "VOLUME_RATIO_60D"
+  ],
+  "date_range": {
+    "start": "2020-01-02",
+    "end": "2025-10-14"
+  }
+}

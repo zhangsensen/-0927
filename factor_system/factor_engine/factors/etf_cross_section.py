@@ -542,21 +542,21 @@ class ETFCrossSectionFactors:
         if composite_df.empty:
             logger.warning("ETF横截面因子计算返回空结果")
             # 返回空但格式正确的DataFrame
-            return pd.DataFrame(columns=['etf_code', 'date'])
-        
+            return pd.DataFrame(columns=["etf_code", "date"])
+
         # 验证必需的列存在
-        required_cols = ['etf_code', 'date']
+        required_cols = ["etf_code", "date"]
         missing_cols = [col for col in required_cols if col not in composite_df.columns]
         if missing_cols:
             logger.error(f"返回结果缺少必需列: {missing_cols}")
             logger.error(f"实际列名: {list(composite_df.columns)}")
             # 添加缺失的列
             for col in missing_cols:
-                if col == 'etf_code':
-                    composite_df[col] = 'UNKNOWN'  # 临时填充
-                elif col == 'date':
+                if col == "etf_code":
+                    composite_df[col] = "UNKNOWN"  # 临时填充
+                elif col == "date":
                     composite_df[col] = pd.NaT  # 临时填充
-        
+
         logger.info(
             f"ETF横截面因子计算完成: {len(composite_df)} 条记录，{composite_df['etf_code'].nunique()} 只ETF"
         )

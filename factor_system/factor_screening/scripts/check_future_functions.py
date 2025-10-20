@@ -50,7 +50,7 @@ class FutureFunctionChecker(ast.NodeVisitor):
                                     "line": node.lineno,
                                     "type": "negative_shift",
                                     "code": "function_call",
-                                    "message": f"发现未来函数: shift({node.args[0].operand.value})",
+                                    "message": f"发现未来函数: shift({node.args[0].value})",
                                 }
                             )
 

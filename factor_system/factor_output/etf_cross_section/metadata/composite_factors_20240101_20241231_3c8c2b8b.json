@@ -1,0 +1,34 @@
+{
+  "etf_count": 4,
+  "etf_list": [
+    "510300.SH",
+    "159919.SZ",
+    "512100.SH",
+    "588880.SH"
+  ],
+  "start_date": "20240101",
+  "end_date": "20241231",
+  "record_count": 442,
+  "factor_columns": [
+    "etf_code",
+    "date",
+    "avg_volume_21d",
+    "avg_amount_21d",
+    "volume_stability",
+    "turnover_rate",
+    "liquidity_score",
+    "rsi_14",
+    "macd",
+    "macd_signal",
+    "macd_histogram",
+    "bb_position",
+    "williams_r",
+    "cci_14",
+    "vpt",
+    "technical_score",
+    "technical_score_normalized",
+    "composite_score"
+  ],
+  "created_at": "2025-10-18T00:01:10.342349",
+  "data_hash": "3c8c2b8be5fcd6344b8d42713dc4b1f3"
+}
