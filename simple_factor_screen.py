@@ -74,9 +74,9 @@ def main():
     price_pivot = price_df.pivot(index="date", columns="symbol", values="close")
     print(f"   价格数据形状: {price_pivot.shape}")
 
-    # 计算未来收益
+    # 计算未来收益（修复lookahead bias）
     print("🔁 计算未来收益...")
-    future_returns = price_pivot.pct_change(periods=5).shift(-5)
+    future_returns = price_pivot.pct_change(periods=5)
 
     # 分析因子
     print("📊 分析因子表现...")

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """配置类定义 - 类型安全的配置管理"""
+import os
 from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -9,6 +10,21 @@ from typing import Dict, List, Optional
 import yaml
 
 logger = getLogger(__name__)
+
+
+def get_project_root() -> Path:
+    """获取项目根目录（深度量化0927）"""
+    current = Path(__file__).resolve().parent.parent  # 从 config/ 向上
+    # 向上找到包含 raw/ 的目录
+    while current.parent != current:
+        if (current / "raw").exists() or (current.parent / "raw").exists():
+            if (current / "raw").exists():
+                return current
+            else:
+                return current.parent
+        current = current.parent
+    # 兜底：使用环境变量或当前工作目录
+    return Path(os.getenv("PROJECT_ROOT", Path.cwd()))
 
 
 @dataclass
@@ -101,9 +117,17 @@ class PathsConfig:
     config_file: str = "config/etf_config.yaml"
 
     def __post_init__(self):
-        """验证路径配置"""
-        # 路径将在使用时进行具体验证
-        pass
+        """验证并解析路径为绝对路径"""
+        project_root = get_project_root()
+
+        # 将相对路径解析为绝对路径
+        data_path = Path(self.data_dir)
+        if not data_path.is_absolute():
+            self.data_dir = str((project_root / data_path).resolve())
+
+        output_path = Path(self.output_dir)
+        if not output_path.is_absolute():
+            self.output_dir = str((project_root / output_path).resolve())
 
 
 @dataclass

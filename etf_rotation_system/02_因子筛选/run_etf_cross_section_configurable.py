@@ -77,12 +77,11 @@ class ETFCrossSectionScreener:
             print(f"\n🔬 多周期IC分析: {self.config.analysis.ic_periods}")
 
         # 预计算所有周期的未来收益（向量化）
+        # 注意：不使用shift(-period)以避免向前看偏差
         fwd_rets = {}
         for period in self.config.analysis.ic_periods:
-            fwd_rets[period] = (
-                price_df.groupby(level="symbol")["close"]
-                .pct_change(period)
-                .shift(-period)
+            fwd_rets[period] = price_df.groupby(level="symbol")["close"].pct_change(
+                period
             )
 
         results = []
@@ -269,7 +268,7 @@ class ETFCrossSectionScreener:
             return labels["research"]
 
     def screen_factors(self, ic_df: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
-        """因子筛选 - 完全配置驱动"""
+        """因子筛选 - 完全配置驱动 + 强制保留逻辑"""
         config = self.config.screening
 
         if self.config.progress_reporting:
@@ -280,24 +279,40 @@ class ETFCrossSectionScreener:
             print(f"  覆盖率 >= {config.min_coverage}")
             print(f"  最大相关性 = {config.max_correlation}")
             print(f"  FDR校正 = {'启用' if config.use_fdr else '禁用'}")
+            if config.force_include_factors:
+                print(f"  🔒 强制保留: {config.force_include_factors}")
+            if config.max_factors < 50:
+                print(f"  📊 最大因子数: {config.max_factors}")
 
-        # 第1步：基础筛选
-        mask = (
-            (ic_df["ic_mean"].abs() >= config.min_ic)
-            & (ic_df["ic_ir"].abs() >= config.min_ir)
-            & (ic_df["p_value"] <= config.max_pvalue)
-            & (ic_df["coverage"] >= config.min_coverage)
+        # 🔒 第0步：分离强制保留因子
+        force_include = (
+            config.force_include_factors if config.force_include_factors else []
         )
-        passed = ic_df[mask].copy()
+        mandatory_mask = ic_df["factor"].isin(force_include)
+        mandatory_df = ic_df[mandatory_mask].copy()
+        other_df = ic_df[~mandatory_mask].copy()
+
+        if self.config.progress_reporting and len(mandatory_df) > 0:
+            print(f"\n🔒 强制保留: {len(mandatory_df)} 因子")
+            for _, row in mandatory_df.iterrows():
+                print(
+                    f"  ✓ {row['factor']:30s} IC={row['ic_mean']:+.4f} IR={row['ic_ir']:+.4f}"
+                )
+
+        # 第1步：基础筛选（仅对非强制因子）
+        mask = (
+            (other_df["ic_mean"].abs() >= config.min_ic)
+            & (other_df["ic_ir"].abs() >= config.min_ir)
+            & (other_df["p_value"] <= config.max_pvalue)
+            & (other_df["coverage"] >= config.min_coverage)
+        )
+        passed = other_df[mask].copy()
 
         if self.config.progress_reporting:
-            print(f"\n✅ 基础筛选: {len(passed)}/{len(ic_df)} 因子")
+            print(f"\n✅ 基础筛选: {len(passed)}/{len(other_df)} 因子")
 
-        if len(passed) == 0:
-            return passed
-
-        # 第2步：FDR校正
-        if config.use_fdr:
+        # 第2步：FDR校正（仅对非强制因子）
+        if config.use_fdr and len(passed) > 0:
             passed_fdr = self.apply_fdr_correction(passed)
             if self.config.progress_reporting:
                 print(f"✅ FDR校正: {len(passed_fdr)}/{len(passed)} 因子")
@@ -308,21 +323,112 @@ class ETFCrossSectionScreener:
         else:
             passed_fdr = passed
 
-        # 第3步：去重
-        passed_final = self.remove_correlated_factors(passed_fdr, panel)
-        if self.config.progress_reporting:
-            print(f"✅ 去重后: {len(passed_final)}/{len(passed_fdr)} 因子")
+        # 🔗 第3步：合并强制因子和筛选通过因子
+        combined_df = pd.concat([mandatory_df, passed_fdr], ignore_index=True)
 
-        # 第4步：分层评级
+        if len(combined_df) == 0:
+            return combined_df
+
+        # 第4步：去重（强制因子参与，但优先保留）
+        passed_final = self._remove_correlated_with_priority(
+            combined_df, panel, force_include
+        )
         if self.config.progress_reporting:
-            print(f"\n📊 因子分层评级:")
+            print(f"✅ 去重后: {len(passed_final)}/{len(combined_df)} 因子")
+
+        # 📊 第5步：限制最大因子数（基于priority_metric排序）
+        if config.max_factors < len(passed_final):
+            if self.config.progress_reporting:
+                print(f"\n⚠️ 因子数超限: {len(passed_final)} > {config.max_factors}")
+
+            # 分离强制和非强制
+            final_mandatory = passed_final[passed_final["factor"].isin(force_include)]
+            final_optional = passed_final[~passed_final["factor"].isin(force_include)]
+
+            # 按优先级排序非强制因子
+            if config.priority_metric == "ic_ir":
+                final_optional = final_optional.sort_values(
+                    "ic_ir", ascending=False, key=abs
+                )
+            elif config.priority_metric == "ic_mean":
+                final_optional = final_optional.sort_values(
+                    "ic_mean", ascending=False, key=abs
+                )
+            elif config.priority_metric == "combined":
+                final_optional["combined_score"] = (
+                    final_optional["ic_mean"].abs() * 0.5
+                    + final_optional["ic_ir"].abs() * 0.5
+                )
+                final_optional = final_optional.sort_values(
+                    "combined_score", ascending=False
+                )
+
+            # 保留top因子
+            n_optional = max(0, config.max_factors - len(final_mandatory))
+            final_optional = final_optional.head(n_optional)
+            passed_final = pd.concat(
+                [final_mandatory, final_optional], ignore_index=True
+            )
+
+            if self.config.progress_reporting:
+                print(
+                    f"✂️ 截断为: {len(passed_final)} 因子 (强制{len(final_mandatory)} + Top{len(final_optional)})"
+                )
+
+        # 第6步：分层评级
+        if self.config.progress_reporting:
+            print(f"\n📊 最终因子分层评级:")
             for _, row in passed_final.iterrows():
                 tier = self._get_factor_tier(row["ic_mean"], row["ic_ir"])
+                force_mark = "🔒" if row["factor"] in force_include else "  "
                 print(
-                    f"  {tier} {row['factor']:30s} IC={row['ic_mean']:+.4f} IR={row['ic_ir']:+.4f}"
+                    f"  {force_mark}{tier} {row['factor']:30s} IC={row['ic_mean']:+.4f} IR={row['ic_ir']:+.4f}"
                 )
 
         return passed_final
+
+    def _remove_correlated_with_priority(
+        self, ic_df: pd.DataFrame, panel: pd.DataFrame, priority_factors: List[str]
+    ) -> pd.DataFrame:
+        """去重逻辑 - 优先保留强制因子"""
+        config = self.config.screening
+        factors = ic_df["factor"].tolist()
+
+        if len(factors) <= 1:
+            return ic_df
+
+        # 构建相关性矩阵（直接从panel提取因子列）
+        factor_data = panel[factors]
+        corr_matrix = factor_data.corr(
+            method=self.config.analysis.correlation_method,
+            min_periods=self.config.analysis.correlation_min_periods,
+        ).abs()
+
+        # 贪心去重，优先保留强制因子
+        to_remove = set()
+        for i, f1 in enumerate(factors):
+            if f1 in to_remove:
+                continue
+            for f2 in factors[i + 1 :]:
+                if f2 in to_remove:
+                    continue
+
+                if corr_matrix.loc[f1, f2] > config.max_correlation:
+                    # 优先保留强制因子
+                    if f1 in priority_factors and f2 not in priority_factors:
+                        to_remove.add(f2)
+                    elif f2 in priority_factors and f1 not in priority_factors:
+                        to_remove.add(f1)
+                        break  # f1已被移除，跳出内层循环
+                    else:
+                        # 都是强制或都不是强制，按IC_IR决定
+                        ir1 = ic_df[ic_df["factor"] == f1]["ic_ir"].values[0]
+                        ir2 = ic_df[ic_df["factor"] == f2]["ic_ir"].values[0]
+                        to_remove.add(f2 if abs(ir1) >= abs(ir2) else f1)
+                        if f1 in to_remove:
+                            break
+
+        return ic_df[~ic_df["factor"].isin(to_remove)].copy()
 
     def _save_results(self, ic_df: pd.DataFrame, passed_factors: pd.DataFrame) -> Path:
         """保存结果 - 配置驱动"""

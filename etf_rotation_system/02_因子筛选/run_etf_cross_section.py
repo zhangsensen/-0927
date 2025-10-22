@@ -30,11 +30,10 @@ def calculate_multi_period_ic(
     price_df = price_df.set_index(["symbol", "date"]).sort_index()
 
     # 预计算所有周期的未来收益（向量化）
+    # 注意：不使用shift(-period)以避免向前看偏差
     fwd_rets = {}
     for period in periods:
-        fwd_rets[period] = (
-            price_df.groupby(level="symbol")["close"].pct_change(period).shift(-period)
-        )
+        fwd_rets[period] = price_df.groupby(level="symbol")["close"].pct_change(period)
 
     results = []
 
@@ -268,7 +267,7 @@ def main():
     parser.add_argument("--price-dir", required=True, help="价格数据目录")
     parser.add_argument(
         "--output-dir",
-        default="etf_rotation_system/data/results/screening",
+        default="/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening",
         help="输出目录",
     )
     parser.add_argument("--future-periods", type=int, default=20, help="未来收益期")

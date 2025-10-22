@@ -431,6 +431,196 @@ def calculate_factors_single(
             raise
 
 
+def calculate_relative_rotation_factors(
+    panel: pd.DataFrame, price_df: pd.DataFrame, benchmark_symbol: str = "510300.SH"
+) -> pd.DataFrame:
+    """
+    计算横截面相对轮动因子 - ETF轮动策略的核心
+
+    相对轮动因子关注ETF之间的相对强弱,而非绝对表现
+    这才是横截面策略的本质:识别相对优异的资产并动态轮动
+
+    Args:
+        panel: 已计算的因子面板 (symbol, date) MultiIndex
+        price_df: 原始价格数据
+        benchmark_symbol: 基准标的(默认沪深300)
+
+    Returns:
+        包含相对轮动因子的面板
+    """
+    logger.info("计算横截面相对轮动因子...")
+
+    # 重置索引以便操作
+    panel_reset = panel.reset_index()
+
+    # 获取所有日期和标的
+    all_dates = sorted(panel_reset["date"].unique())
+    all_symbols = sorted(panel_reset["symbol"].unique())
+
+    if len(all_dates) < 60:
+        logger.warning("数据不足60天,跳过相对轮动因子")
+        return panel
+
+    # 准备基准收益率
+    benchmark_data = price_df[price_df["symbol"] == benchmark_symbol].sort_values(
+        "date"
+    )
+    if benchmark_data.empty:
+        # 使用等权平均作为基准
+        logger.info(f"基准{benchmark_symbol}不存在,使用等权平均")
+        benchmark_returns = {}
+        for date in all_dates:
+            date_data = price_df[price_df["date"] == date]
+            if len(date_data) > 1:
+                mean_ret = (
+                    date_data.groupby("symbol")["close"].last().pct_change().mean()
+                )
+                benchmark_returns[date] = mean_ret if not pd.isna(mean_ret) else 0
+    else:
+        benchmark_rets = benchmark_data["close"].pct_change()
+        benchmark_returns = dict(zip(benchmark_data["date"], benchmark_rets))
+
+    # 为每个标的计算相对轮动因子
+    rotation_factors = []
+
+    for symbol in all_symbols:
+        symbol_data = price_df[price_df["symbol"] == symbol].sort_values("date")
+        if len(symbol_data) < 60:
+            continue
+
+        symbol_data = symbol_data.reset_index(drop=True)
+        closes = symbol_data["close"].values
+        dates = symbol_data["date"].values
+        returns = np.zeros(len(closes))
+        returns[1:] = (closes[1:] / closes[:-1]) - 1
+
+        # 1. 相对动量20日/60日
+        rel_mom_20 = np.zeros(len(closes))
+        rel_mom_60 = np.zeros(len(closes))
+
+        for i in range(20, len(closes)):
+            etf_ret_20 = (closes[i] / closes[i - 20]) - 1
+            bench_ret_20 = sum(
+                [
+                    benchmark_returns.get(d, 0)
+                    for d in dates[i - 20 : i + 1]
+                    if d in benchmark_returns
+                ]
+            )
+            rel_mom_20[i] = etf_ret_20 - bench_ret_20
+
+        for i in range(60, len(closes)):
+            etf_ret_60 = (closes[i] / closes[i - 60]) - 1
+            bench_ret_60 = sum(
+                [
+                    benchmark_returns.get(d, 0)
+                    for d in dates[i - 60 : i + 1]
+                    if d in benchmark_returns
+                ]
+            )
+            rel_mom_60[i] = etf_ret_60 - bench_ret_60
+
+        # 2. 横截面排名 (简化版 - 使用20日动量直接计算)
+        # 注：完整横截面排名需要所有ETF数据，此处简化为相对动量的归一化
+        cs_rank = np.zeros(len(closes))
+        cs_rank_change = np.zeros(len(closes))
+
+        # 使用相对动量作为排名代理（避免嵌套循环）
+        for i in range(20, len(closes)):
+            # 使用20日相对动量作为排名指标
+            if i >= 60:
+                # 计算60日窗口内的排名百分位（相对自己的历史）
+                recent_mom = rel_mom_20[i - 60 : i + 1]
+                if len(recent_mom) > 0:
+                    sorted_mom = np.sort(recent_mom)
+                    rank = np.searchsorted(sorted_mom, rel_mom_20[i])
+                    cs_rank[i] = rank / len(sorted_mom) if len(sorted_mom) > 0 else 0.5
+
+            # 排名变化
+            if i >= 25:
+                cs_rank_change[i] = cs_rank[i] - cs_rank[i - 5]
+
+        # 3. 波动率调整超额收益
+        vol_adj_excess = np.zeros(len(closes))
+        for i in range(60, len(closes)):
+            excess = rel_mom_60[i]
+            vol = np.std(returns[i - 60 : i]) * np.sqrt(252)
+            vol_adj_excess[i] = excess / vol if vol > 0 else 0
+
+        # 4. 相对强度偏离(均值回归信号)
+        rs_deviation = np.zeros(len(closes))
+        for i in range(60, len(closes)):
+            # 相对强度 = ETF收益 / 基准收益
+            recent_rs = []
+            for j in range(max(0, i - 60), i):
+                etf_r = returns[j]
+                bench_r = benchmark_returns.get(dates[j], 0)
+                if bench_r != 0:
+                    recent_rs.append(etf_r / bench_r)
+
+            if len(recent_rs) > 10:
+                mean_rs = np.mean(recent_rs)
+                std_rs = np.std(recent_rs)
+                current_rs = returns[i] / benchmark_returns.get(dates[i], 1e-9)
+                rs_deviation[i] = (current_rs - mean_rs) / std_rs if std_rs > 0 else 0
+
+        # 保存因子
+        for i, date in enumerate(dates):
+            if i >= 60:
+                rotation_factors.append(
+                    {
+                        "symbol": symbol,
+                        "date": date,
+                        "RELATIVE_MOMENTUM_20D": rel_mom_20[i],
+                        "RELATIVE_MOMENTUM_60D": rel_mom_60[i],
+                        "CS_RANK_PERCENTILE": cs_rank[i],
+                        "CS_RANK_CHANGE_5D": cs_rank_change[i],
+                        "VOL_ADJUSTED_EXCESS": vol_adj_excess[i],
+                        "RS_DEVIATION": rs_deviation[i],
+                    }
+                )
+
+    if not rotation_factors:
+        logger.warning("相对轮动因子计算失败,返回原面板")
+        return panel
+
+    # 转为DataFrame并计算综合轮动得分
+    rotation_df = pd.DataFrame(rotation_factors)
+
+    # Z-score标准化
+    for col in [
+        "RELATIVE_MOMENTUM_20D",
+        "RELATIVE_MOMENTUM_60D",
+        "CS_RANK_CHANGE_5D",
+        "VOL_ADJUSTED_EXCESS",
+        "RS_DEVIATION",
+    ]:
+        if col in rotation_df.columns:
+            mean_val = rotation_df[col].mean()
+            std_val = rotation_df[col].std()
+            if std_val > 1e-9:
+                rotation_df[f"{col}_ZSCORE"] = (rotation_df[col] - mean_val) / std_val
+            else:
+                rotation_df[f"{col}_ZSCORE"] = 0.0
+
+    # 综合轮动得分 = 加权Z-score
+    # 相对动量60% + 排名变化20% + 波动率调整10% + RS偏离10%
+    rotation_df["ROTATION_SCORE"] = (
+        0.30 * rotation_df["RELATIVE_MOMENTUM_20D_ZSCORE"]
+        + 0.30 * rotation_df["RELATIVE_MOMENTUM_60D_ZSCORE"]
+        + 0.20 * rotation_df["CS_RANK_CHANGE_5D_ZSCORE"]
+        + 0.10 * rotation_df["VOL_ADJUSTED_EXCESS_ZSCORE"]
+        + 0.10 * rotation_df["RS_DEVIATION_ZSCORE"]
+    )
+
+    # 合并到原面板
+    rotation_df = rotation_df.set_index(["symbol", "date"])
+    panel_merged = panel.join(rotation_df, how="left")
+
+    logger.info(f"✅ 相对轮动因子计算完成: 新增 {len(rotation_df.columns)} 个因子")
+    return panel_merged
+
+
 def calculate_factors_parallel(
     price_df: pd.DataFrame, config: FactorPanelConfig
 ) -> pd.DataFrame:
@@ -482,6 +672,9 @@ def calculate_factors_parallel(
 
     panel = pd.concat(factors_list, ignore_index=True)
     panel = panel.set_index(["symbol", "date"]).sort_index()
+
+    # 🔥 新增：计算横截面相对轮动因子（ETF轮动策略的核心）
+    panel = calculate_relative_rotation_factors(panel, price_df)
 
     return panel
 

@@ -2,11 +2,27 @@
 # -*- coding: utf-8 -*-
 """ETF横截面因子筛选配置系统 - Linus工程风格"""
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+
+
+def get_project_root() -> Path:
+    """获取项目根目录（深度量化0927）"""
+    current = Path(__file__).resolve().parent
+    # 从 02_因子筛选 向上找到包含 raw/ 的目录
+    while current.parent != current:
+        if (current / "raw").exists() or (current.parent / "raw").exists():
+            if (current / "raw").exists():
+                return current
+            else:
+                return current.parent
+        current = current.parent
+    # 兜底：使用环境变量或当前工作目录
+    return Path(os.getenv("PROJECT_ROOT", Path.cwd()))
 
 
 @dataclass
@@ -20,11 +36,18 @@ class DataSourceConfig:
     symbol_extract_method: str = "stem_split"  # stem_split, regex, custom
 
     def __post_init__(self):
-        # 确保路径存在
+        # 转换为Path对象
         if isinstance(self.price_dir, str):
             self.price_dir = Path(self.price_dir)
         if isinstance(self.panel_file, str):
             self.panel_file = Path(self.panel_file)
+
+        # 若为相对路径，解析为项目根的绝对路径
+        project_root = get_project_root()
+        if not self.price_dir.is_absolute():
+            self.price_dir = (project_root / self.price_dir).resolve()
+        if not self.panel_file.is_absolute():
+            self.panel_file = (project_root / self.panel_file).resolve()
 
 
 @dataclass
@@ -64,6 +87,11 @@ class ScreeningConfig:
     # FDR校正
     use_fdr: bool = True  # 是否启用FDR
     fdr_alpha: float = 0.2  # FDR显著性水平
+
+    # 🎯 强制保留因子（新增）
+    force_include_factors: List[str] = field(default_factory=list)  # 强制保留的因子名单
+    max_factors: int = 50  # 最大保留因子数（默认无限制）
+    priority_metric: str = "ic_ir"  # 优先级排序方式: ic_ir, ic_mean, combined
 
     # 分层评级阈值
     tier_thresholds: Dict[str, Dict[str, float]] = field(
@@ -110,6 +138,11 @@ class OutputConfig:
     def __post_init__(self):
         if isinstance(self.output_dir, str):
             self.output_dir = Path(self.output_dir)
+
+        # 若为相对路径，解析为项目根的绝对路径
+        project_root = get_project_root()
+        if not self.output_dir.is_absolute():
+            self.output_dir = (project_root / self.output_dir).resolve()
 
 
 @dataclass
@@ -200,18 +233,39 @@ class ETFCrossSectionConfig:
             )
 
 
+def get_latest_panel_file() -> Path:
+    """获取最新生成的panel文件，若不存在则返回默认路径"""
+    project_root = get_project_root()
+    panels_dir = project_root / "etf_rotation_system/data/results/panels"
+
+    if panels_dir.exists():
+        # 找到最新的 panel 目录
+        panel_dirs = sorted(
+            [d for d in panels_dir.iterdir() if d.is_dir()],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True,
+        )
+        if panel_dirs:
+            latest_panel = panel_dirs[0] / "panel.parquet"
+            if latest_panel.exists():
+                return latest_panel
+
+    # 兜底：返回默认位置
+    return project_root / "etf_rotation_system/data/factor_panel.parquet"
+
+
 # 预定义配置模板
 ETF_STANDARD_CONFIG = ETFCrossSectionConfig(
     data_source=DataSourceConfig(
         price_dir=Path("raw/ETF/daily"),
-        panel_file=Path("etf_rotation_system/data/factor_panel.parquet"),
+        panel_file=get_latest_panel_file(),
     )
 )
 
 ETF_STRICT_CONFIG = ETFCrossSectionConfig(
     data_source=DataSourceConfig(
         price_dir=Path("raw/ETF/daily"),
-        panel_file=Path("etf_rotation_system/data/factor_panel.parquet"),
+        panel_file=get_latest_panel_file(),
     ),
     screening=ScreeningConfig(
         min_ic=0.008,  # 更严格的IC要求
@@ -225,7 +279,7 @@ ETF_STRICT_CONFIG = ETFCrossSectionConfig(
 ETF_RELAXED_CONFIG = ETFCrossSectionConfig(
     data_source=DataSourceConfig(
         price_dir=Path("raw/ETF/daily"),
-        panel_file=Path("etf_rotation_system/data/factor_panel.parquet"),
+        panel_file=get_latest_panel_file(),
     ),
     screening=ScreeningConfig(
         min_ic=0.003,  # 更宽松的IC要求
