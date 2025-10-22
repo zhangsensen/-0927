@@ -1,0 +1,76 @@
+# 优化的ETF因子筛选配置 - 针对48因子→8-12因子
+# 目标：严格筛选 + 强制保留轮动因子
+
+data_source:
+  price_dir: "raw/ETF/daily"
+  panel_file: "etf_rotation_system/data/results/panels/panel_20251022_013039/panel.parquet"
+  price_columns: ["trade_date", "close"]
+  file_pattern: "*.parquet"
+  symbol_extract_method: "stem_split"
+
+analysis:
+  ic_periods: [1, 5, 10, 20]
+  min_observations: 30
+  min_ranking_samples: 5
+  min_ic_observations: 20
+  correlation_method: "spearman"
+  correlation_min_periods: 30
+  epsilon_small: 1.0e-08
+  stability_split_ratio: 0.5
+
+screening:
+  # 🔥 严格筛选标准 - 从48个因子筛选到8-12个
+  min_ic: 0.015              # 提高到1.5% (原0.5%)
+  min_ir: 0.12               # 提高到0.12 (原0.05)
+  max_pvalue: 0.10           # 降低到0.10 (原0.20)
+  min_coverage: 0.75         # 提高到75% (原70%)
+  
+  # 更严格的去重
+  max_correlation: 0.55      # 降低到0.55 (原0.70)
+  
+  # FDR校正
+  use_fdr: true
+  fdr_alpha: 0.15            # 降低到0.15 (原0.20)
+  
+  # 分层评级 - 更高标准
+  tier_thresholds:
+    core:
+      ic: 0.025              # 2.5% (原2%)
+      ir: 0.15               # 0.15 (原0.1)
+    supplement:
+      ic: 0.015              # 1.5% (原1%)
+      ir: 0.10               # 0.10 (原0.07)
+    research:
+      ic: 0.0
+      ir: 0.0
+  
+  tier_labels:
+    core: "🟢 核心"
+    supplement: "🟡 补充"
+    research: "🔵 研究"
+  
+  # 🎯 强制保留因子清单（已移除，使用自然筛选）
+  force_include_factors: []  # 清空，让IC/IR数据决定
+  
+  # 📊 最大保留因子数（放宽限制）
+  max_factors: 15            # 最多保留15个因子，让数据决定最优数量
+  
+  # 优先级排序方式（新增）
+  priority_metric: "ic_ir"   # 按IC_IR排序: ic_ir, ic_mean, combined
+
+output:
+  output_dir: "etf_rotation_system/data/results/screening"
+  use_timestamp_subdir: true
+  timestamp_format: "%Y%m%d_%H%M%S"
+  subdir_prefix: "screening_"
+  files:
+    ic_analysis: "ic_analysis.csv"
+    passed_factors: "passed_factors.csv"
+    screening_report: "screening_report.txt"
+  include_factor_details: true
+  include_summary_statistics: true
+  encoding: "utf-8"
+
+# 系统配置
+debug_mode: false
+progress_reporting: true

@@ -8,6 +8,12 @@ This is a **professional-grade quantitative trading development environment** wi
 
 **Core Philosophy**: Linus Torvalds engineering principles - eliminate special cases, practical solutions, clean code that works in real markets.
 
+**Latest Update (2025-10-22)**: 
+- ✅ Project cleanup完成 - 删除孤立脚本、冗余报告
+- ✅ 配置文件统一到 `etf_rotation_system/config/`
+- ✅ 创建 `ConfigManager` 统一配置加载
+- ✅ 验证生产流程正常 (Sharpe=0.65)
+
 ## Key Commands
 
 ### Environment Setup

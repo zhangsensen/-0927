@@ -1,0 +1,154 @@
+# ETF因子面板生成配置文件
+# 替代代码中的所有硬编码值
+
+# ========== 交易参数 ==========
+trading:
+  days_per_year: 252          # 年化交易日数 (Line 126)
+  epsilon_small: 1.0e-10      # 小数值避免除零 (Line 144, 152, 158, 176, 212, 232)
+  min_periods: 1              # 滚动窗口最小值 (Line 126, 130, 141, 150, 157)
+
+# ========== 因子时间窗口 ==========
+factor_windows:
+  # 动量因子
+  momentum:
+    - 20   # 短期动量
+    - 63   # 季度动量 (Line 135)
+    - 126  # 半年动量
+    - 252  # 年度动量 (Line 136)
+
+  # 波动率因子
+  volatility:
+    - 20   # 短期波动
+    - 60   # 中期波动
+    - 120  # 长期波动
+
+  # 回撤因子
+  drawdown:
+    - 63   # 季度回撤 (Line 129)
+    - 126  # 半年回撤 (Line 129)
+
+  # RSI因子
+  rsi:
+    - 6    # 超短期RSI
+    - 14   # 标准RSI
+    - 24   # 长期RSI
+
+  # 价格位置因子
+  price_position:
+    - 20   # 短期位置
+    - 60   # 中期位置
+    - 120  # 长期位置
+
+  # 成交量比率因子
+  volume_ratio:
+    - 5    # 短期量比 (Line 207)
+    - 20   # 中期量比
+    - 60   # 长期量比
+
+  # 技术指标特定窗口
+  atr_period: 14              # ATR周期 (Line 171)
+  vpt_trend_window: 20        # 量价趋势窗口 (Line 203)
+  vol_volatility_window: 20   # 成交量波动窗口 (Line 211-212)
+  amount_surge_short: 5       # 成交额突增短期窗口 (Line 235)
+  amount_surge_long: 20       # 成交额突增长期窗口 (Line 236)
+  vol_ratio_window: 20        # 成交量比率基准窗口 (Line 254)
+  intraday_position_window: 5 # 日内位置平滑窗口 (Line 248)
+  price_volume_div_window: 5  # 量价背离平滑窗口 (Line 242)
+
+# ========== 阈值参数 ==========
+thresholds:
+  large_order_volume_ratio: 1.2  # 大单流入成交量比率阈值 (Line 255)
+  doji_body_threshold: null      # 十字星身体阈值 (当前使用epsilon)
+  hammer_lower_shadow_ratio: 2.0 # 锤子线下影线倍数 (Line 192)
+  hammer_upper_shadow_ratio: 1.0 # 锤子线上影线倍数 (Line 192)
+
+# ========== 路径配置 ==========
+paths:
+  data_dir: "/Users/zhangshenshen/深度量化0927/raw/ETF/daily"                           # 数据目录
+  output_dir: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels" # 输出目录
+  config_file: "config/etf_config.yaml"               # 默认配置文件
+
+# ========== 并行处理配置 ==========
+processing:
+  max_workers: 4               # 默认并行进程数 (Line 268, 407)
+  continue_on_symbol_error: true # 单个标的失败时继续处理
+  max_failure_rate: 0.1        # 最大失败率容忍
+
+# ========== 因子开关 ==========
+factor_enable:
+  # 原有18个因子
+  momentum: true
+  volatility: true
+  drawdown: true
+  momentum_acceleration: true
+  rsi: true
+  price_position: true
+  volume_ratio: true
+
+  # 新增技术因子
+  overnight_return: true
+  atr: true
+  doji_pattern: true
+  intraday_range: true
+  bullish_engulfing: true
+  hammer_pattern: true
+  price_impact: true
+  volume_price_trend: true
+  vol_ma_ratio_5: true
+  vol_volatility_20: true
+  true_range: true
+  buy_pressure: true
+
+  # 资金流因子
+  vwap_deviation: true
+  amount_surge_5d: true
+  price_volume_div: true
+  intraday_position: true
+  large_order_signal: true
+
+# ========== 数据处理配置 ==========
+data_processing:
+  required_columns:
+    - "date"
+    - "open"
+    - "high"
+    - "low"
+    - "close"
+    - "volume"
+    - "symbol"
+
+  optional_columns:
+    - "amount"  # 资金流数据
+
+  volume_column_alias: "vol"  # 成交量列别名 (Line 73-74)
+
+  fallback_estimation: true   # 当缺少amount时使用估算 (Line 228)
+
+# ========== 输出配置 ==========
+output:
+  save_execution_log: true    # 保存执行日志
+  save_metadata: true         # 保存元数据
+  timestamp_subdirectory: true # 使用时间戳子目录
+
+# ========== 日志配置 ==========
+logging:
+  level: "INFO"               # 日志级别
+  format: "%(asctime)s [%(levelname)s] %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+# ========== 字符串和显示配置 ==========
+display:
+  log_separator_length: 80    # 日志分隔符长度 (Line 374, 376)
+  progress_bar_desc: "计算因子" # 进度条描述 (Line 286)
+  factor_list_start: 1       # 因子列表起始编号 (Line 359)
+  json_indent: 2             # JSON文件缩进 (Line 337)
+  coverage_format: ".2%"     # 覆盖率显示格式 (Line 345, 356)
+
+# ========== 计算常量 ==========
+constants:
+  rsi_multiplier: 100         # RSI计算乘数 (Line 145)
+  concat_axis: 1             # DataFrame连接轴 (Line 170)
+  astype_float: "float"      # 类型转换 (Line 186, 192, 255)
+  shift_days: 1              # 位移天数 (Line 163, 168, 169, 182, 183, 185, 186, 201, 202)
+  concat_max_axis: 1         # max()轴参数 (Line 170)
+  sign_multiplier: 1         # np.sign乘数 (Line 242)
