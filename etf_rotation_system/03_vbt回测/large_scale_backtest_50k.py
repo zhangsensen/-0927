@@ -108,7 +108,7 @@ config = ParallelBacktestConfig(
     factors=[],  # 空则自动从筛选结果加载（screening_20251022_014652/passed_factors.csv）
     # 回测参数
     # 🔧 修正：聚焦持仓5-10只，避免持仓2只的过拟合板块押注
-    top_n_list=[5, 8, 10],  # 修改为5/8/10只，剔除2只
+    top_n_list=[2, 3, 4, 5, 6, 7],  # 从YAML配置读取
     rebalance_freq=20,
     # === Phase 1 改进 ===
     # A3: A股精细成本模型

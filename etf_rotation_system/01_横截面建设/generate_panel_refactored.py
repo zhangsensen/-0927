@@ -421,6 +421,365 @@ def calculate_factors_single(
                 .values
             )
 
+        # ========== 新增：流动性因子 ==========
+
+        # 25. Amihud非流动性指标
+        if config.factor_enable.illiquidity and s_amount is not None:
+            ret_abs = s_close.pct_change().abs()
+            illiq = ret_abs / (s_amount + config.trading.epsilon_small)
+            factors["ILLIQUIDITY_20D"] = (
+                illiq.rolling(
+                    config.factor_windows.illiquidity_window,
+                    min_periods=config.trading.min_periods,
+                )
+                .mean()
+                .values
+            )
+
+        # 26. 相对换手率
+        if config.factor_enable.turnover_ratio:
+            turnover = s_vol / (
+                s_vol.rolling(252, min_periods=60).mean() + config.trading.epsilon_small
+            )
+            turnover_ma = turnover.rolling(
+                config.factor_windows.turnover_ma_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            factors["TURNOVER_MA_RATIO"] = (
+                turnover / (turnover_ma + config.trading.epsilon_small)
+            ).values
+
+        # 27. 成交额变化率
+        if config.factor_enable.amount_change_rate and s_amount is not None:
+            amount_change = (
+                s_amount - s_amount.shift(config.factor_windows.amount_change_window)
+            ) / (
+                s_amount.shift(config.factor_windows.amount_change_window)
+                + config.trading.epsilon_small
+            )
+            factors["AMOUNT_CHANGE_RATE"] = amount_change.values
+
+        # ========== 新增：微观结构因子 ==========
+
+        # 28. 振幅因子
+        if config.factor_enable.amplitude:
+            amplitude = (s_high - s_low) / (s_close + config.trading.epsilon_small)
+            factors["AMPLITUDE_20D"] = (
+                amplitude.rolling(
+                    config.factor_windows.amplitude_window,
+                    min_periods=config.trading.min_periods,
+                )
+                .mean()
+                .values
+            )
+
+        # 29. 上下影线比率
+        if config.factor_enable.shadow_ratio:
+            upper_shadow = s_high - pd.concat([s_open, s_close], axis=1).max(axis=1)
+            lower_shadow = pd.concat([s_open, s_close], axis=1).min(axis=1) - s_low
+            shadow_ratio = upper_shadow / (lower_shadow + config.trading.epsilon_small)
+            factors["SHADOW_RATIO"] = shadow_ratio.values
+
+        # 30. 涨跌天数比率
+        if config.factor_enable.up_down_days_ratio:
+            up_days = (s_close > s_close.shift(1)).astype(float)
+            up_ratio = up_days.rolling(
+                config.factor_windows.up_down_days_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            factors["UP_DOWN_DAYS_RATIO"] = up_ratio.values
+
+        # ========== 新增：趋势强度因子 ==========
+
+        # 31. 线性回归斜率
+        if config.factor_enable.linear_slope:
+
+            def calc_slope(window_data):
+                if len(window_data) < 2:
+                    return np.nan
+                x = np.arange(len(window_data))
+                try:
+                    slope = np.polyfit(x, window_data, 1)[0]
+                    return slope / (window_data[-1] + config.trading.epsilon_small)
+                except:
+                    return np.nan
+
+            slope = s_close.rolling(
+                config.factor_windows.linear_slope_window,
+                min_periods=config.trading.min_periods,
+            ).apply(calc_slope, raw=True)
+            factors["LINEAR_SLOPE_20D"] = slope.values
+
+        # 32. 距离年度新高
+        if config.factor_enable.distance_to_high:
+            roll_max = s_close.rolling(
+                config.factor_windows.distance_to_high_window, min_periods=60
+            ).max()
+            distance = s_close / (roll_max + config.trading.epsilon_small) - 1
+            factors["DISTANCE_TO_52W_HIGH"] = distance.values
+
+        # ========== 新增：相对强弱因子 ==========
+
+        # 33. 相对强度（这里用自身历史作为基准）
+        if config.factor_enable.relative_strength_vs_index:
+            ret_20d = (
+                s_close / s_close.shift(config.factor_windows.relative_strength_window)
+                - 1
+            )
+            ret_ma = ret_20d.rolling(60, min_periods=20).mean()
+            factors["RELATIVE_STRENGTH_20D"] = (ret_20d - ret_ma).values
+
+        # 34. 相对振幅
+        if config.factor_enable.relative_amplitude:
+            amplitude = (s_high - s_low) / (s_close + config.trading.epsilon_small)
+            amp_ma = amplitude.rolling(60, min_periods=20).mean()
+            factors["RELATIVE_AMPLITUDE"] = (
+                amplitude / (amp_ma + config.trading.epsilon_small)
+            ).values
+
+        # ========== 新增：质量因子 ==========
+
+        # 35. 收益质量
+        if config.factor_enable.return_quality:
+            ret = s_close.pct_change()
+            ret_mean = ret.rolling(
+                config.factor_windows.return_quality_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            ret_std = ret.rolling(
+                config.factor_windows.return_quality_window,
+                min_periods=config.trading.min_periods,
+            ).std()
+            factors["RETURN_QUALITY"] = (
+                ret_mean / (ret_std + config.trading.epsilon_small)
+            ).values
+
+        # 36. 夏普比率
+        if config.factor_enable.sharpe_ratio:
+            ret = s_close.pct_change()
+            ret_mean = ret.rolling(
+                config.factor_windows.sharpe_ratio_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            ret_std = ret.rolling(
+                config.factor_windows.sharpe_ratio_window,
+                min_periods=config.trading.min_periods,
+            ).std()
+            sharpe = (
+                ret_mean
+                / (ret_std + config.trading.epsilon_small)
+                * np.sqrt(config.trading.days_per_year)
+            )
+            factors["SHARPE_RATIO_60D"] = sharpe.values
+
+        # 37. 回撤恢复速度
+        if config.factor_enable.drawdown_recovery_speed:
+            rolling_max = s_close.rolling(
+                config.factor_windows.drawdown_recovery_window,
+                min_periods=config.trading.min_periods,
+            ).max()
+            dd = (s_close - rolling_max) / (rolling_max + config.trading.epsilon_small)
+            # 计算距离最高点的天数（简化版）
+            is_new_high = (s_close >= rolling_max).astype(float)
+            days_since_high = (
+                (~is_new_high.astype(bool)).groupby(is_new_high.cumsum()).cumsum()
+            )
+            recovery_speed = 1.0 / (days_since_high + 1.0)
+            factors["DRAWDOWN_RECOVERY_SPEED"] = recovery_speed.values
+
+        # ========== 新增：经典技术指标（学术验证有效）==========
+
+        # 38. MACD指标 (12,26,9) - 简化版：只保留HIST柱状图
+        if config.factor_enable.macd:
+            ema_fast = s_close.ewm(
+                span=config.factor_windows.macd_fast, adjust=False
+            ).mean()
+            ema_slow = s_close.ewm(
+                span=config.factor_windows.macd_slow, adjust=False
+            ).mean()
+            macd_diff = ema_fast - ema_slow
+            macd_signal = macd_diff.ewm(
+                span=config.factor_windows.macd_signal, adjust=False
+            ).mean()
+            macd_hist = macd_diff - macd_signal
+
+            # 简化版：只输出HIST，删除DIFF和SIGNAL
+            factors["MACD_HIST"] = macd_hist.values
+
+        # 39. KDJ指标 (9,3,3)
+        if config.factor_enable.kdj:
+            low_n = s_low.rolling(
+                config.factor_windows.kdj_n, min_periods=config.trading.min_periods
+            ).min()
+            high_n = s_high.rolling(
+                config.factor_windows.kdj_n, min_periods=config.trading.min_periods
+            ).max()
+            rsv = (
+                (s_close - low_n)
+                / (high_n - low_n + config.trading.epsilon_small)
+                * 100
+            )
+
+            # K值：RSV的M1日移动平均
+            k_values = rsv.ewm(span=config.factor_windows.kdj_m1, adjust=False).mean()
+            # D值：K值的M2日移动平均
+            d_values = k_values.ewm(
+                span=config.factor_windows.kdj_m2, adjust=False
+            ).mean()
+            # J值：3K - 2D
+            j_values = 3 * k_values - 2 * d_values
+
+            factors["KDJ_K"] = k_values.values
+            factors["KDJ_D"] = d_values.values
+            factors["KDJ_J"] = j_values.values
+
+        # 40. 布林带指标 (20,2) - 简化版：只保留WIDTH宽度
+        if config.factor_enable.bollinger_bands:
+            boll_mid = s_close.rolling(
+                config.factor_windows.boll_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            boll_std = s_close.rolling(
+                config.factor_windows.boll_window,
+                min_periods=config.trading.min_periods,
+            ).std()
+            boll_upper = boll_mid + config.factor_windows.boll_std * boll_std
+            boll_lower = boll_mid - config.factor_windows.boll_std * boll_std
+
+            # 简化版：只输出WIDTH宽度，删除POSITION位置
+            boll_width = (boll_upper - boll_lower) / (
+                boll_mid + config.trading.epsilon_small
+            )
+            factors["BOLL_WIDTH"] = boll_width.values
+
+        # 41. 乖离率 (5,20,60)
+        if config.factor_enable.bias:
+            for window in config.factor_windows.bias_windows:
+                ma = s_close.rolling(
+                    window, min_periods=config.trading.min_periods
+                ).mean()
+                bias = (s_close - ma) / (ma + config.trading.epsilon_small) * 100
+                factors[f"BIAS_{window}D"] = bias.values
+
+        # 42. 威廉指标 WR (14)
+        if config.factor_enable.williams_r:
+            high_n = s_high.rolling(
+                config.factor_windows.wr_window, min_periods=config.trading.min_periods
+            ).max()
+            low_n = s_low.rolling(
+                config.factor_windows.wr_window, min_periods=config.trading.min_periods
+            ).min()
+            wr = (
+                (high_n - s_close)
+                / (high_n - low_n + config.trading.epsilon_small)
+                * (-100)
+            )
+            factors["WR_14"] = wr.values
+
+            # 43. OBV能量潮
+        if config.factor_enable.obv and s_vol is not None:
+            # OBV计算：价格上涨时累加成交量,下跌时累减
+            price_change = s_close.diff()
+            obv = (s_vol * np.sign(price_change)).cumsum()
+            # OBV的移动平均变化率
+            obv_ma = obv.rolling(
+                config.factor_windows.obv_ma_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            obv_change = obv / (obv_ma + config.trading.epsilon_small) - 1
+            factors["OBV_CHANGE"] = obv_change.values
+
+        # ========== 新增：5个简单ETF因子 ==========
+
+        # 44. 趋势一致性
+        if config.factor_enable.trend_consistency:
+            # 价格高于均线的比例，反映趋势稳定性
+            ma = s_close.rolling(
+                config.factor_windows.trend_consistency_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            above_ma = (s_close > ma).astype(float)
+            trend_consistency = above_ma.rolling(
+                config.factor_windows.trend_consistency_window,
+                min_periods=config.trading.min_periods,
+            ).mean()
+            factors["TREND_CONSISTENCY"] = trend_consistency.values
+
+        # 45. 极端收益频率
+        if config.factor_enable.extreme_return_freq:
+            # 统计超过N倍标准差的收益率出现次数
+            returns = s_close.pct_change()
+            ret_std = returns.rolling(
+                config.factor_windows.extreme_return_window,
+                min_periods=config.trading.min_periods,
+            ).std()
+            threshold = config.factor_windows.extreme_return_threshold * ret_std
+            extreme_returns = (returns.abs() > threshold).astype(float)
+            extreme_freq = extreme_returns.rolling(
+                config.factor_windows.extreme_return_window,
+                min_periods=config.trading.min_periods,
+            ).sum()
+            factors["EXTREME_RETURN_FREQ"] = extreme_freq.values
+
+        # 46. 连续上涨天数
+        if config.factor_enable.consecutive_up_days:
+            # 计算连续上涨天数（正值为上涨，负值为下跌）
+            returns = s_close.pct_change()
+            up_days = (returns > 0).astype(int)
+            down_days = (returns < 0).astype(int)
+
+            # 计算连续序列
+            consecutive = pd.Series(0, index=s_close.index)
+            streak = 0
+            for i in range(len(returns)):
+                if pd.isna(returns.iloc[i]):
+                    consecutive.iloc[i] = 0
+                elif returns.iloc[i] > 0:
+                    streak = streak + 1 if streak > 0 else 1
+                    consecutive.iloc[i] = streak
+                elif returns.iloc[i] < 0:
+                    streak = streak - 1 if streak < 0 else -1
+                    consecutive.iloc[i] = streak
+                else:
+                    streak = 0
+                    consecutive.iloc[i] = 0
+
+            factors["CONSECUTIVE_UP_DAYS"] = consecutive.values
+
+        # 47. 量价背离强度
+        if config.factor_enable.volume_price_divergence and s_vol is not None:
+            # 计算价格变化与成交量变化的相关性（负相关表示背离）
+            price_change = s_close.pct_change()
+            vol_change = s_vol.pct_change()
+
+            # 滚动相关性
+            corr = price_change.rolling(
+                config.factor_windows.volume_price_corr_window,
+                min_periods=config.trading.min_periods,
+            ).corr(vol_change)
+
+            # 负相关表示背离（乘以-1使背离为正值）
+            divergence = -corr
+            factors["VOLUME_PRICE_DIVERGENCE"] = divergence.values
+
+        # 48. 波动率突变
+        if config.factor_enable.volatility_regime_shift:
+            # 短期波动率与长期波动率之比，反映波动率状态突变
+            returns = s_close.pct_change()
+
+            vol_short = returns.rolling(
+                config.factor_windows.volatility_short_window,
+                min_periods=config.trading.min_periods,
+            ).std()
+
+            vol_long = returns.rolling(
+                config.factor_windows.volatility_long_window,
+                min_periods=config.trading.min_periods,
+            ).std()
+
+            regime_shift = vol_short / (vol_long + config.trading.epsilon_small)
+            factors["VOLATILITY_REGIME_SHIFT"] = regime_shift.values
+
         return factors
 
     except Exception as e:
@@ -549,20 +908,26 @@ def calculate_relative_rotation_factors(
 
         # 4. 相对强度偏离(均值回归信号)
         rs_deviation = np.zeros(len(closes))
+        epsilon = 1e-9  # 防止除零的最小值
         for i in range(60, len(closes)):
             # 相对强度 = ETF收益 / 基准收益
             recent_rs = []
             for j in range(max(0, i - 60), i):
                 etf_r = returns[j]
-                bench_r = benchmark_returns.get(dates[j], 0)
-                if bench_r != 0:
+                bench_r = benchmark_returns.get(dates[j], epsilon)
+                # 使用epsilon保护，避免除以过小的值
+                if abs(bench_r) > epsilon:
                     recent_rs.append(etf_r / bench_r)
 
             if len(recent_rs) > 10:
                 mean_rs = np.mean(recent_rs)
                 std_rs = np.std(recent_rs)
-                current_rs = returns[i] / benchmark_returns.get(dates[i], 1e-9)
-                rs_deviation[i] = (current_rs - mean_rs) / std_rs if std_rs > 0 else 0
+                current_rs = returns[i] / max(
+                    abs(benchmark_returns.get(dates[i], epsilon)), epsilon
+                )
+                rs_deviation[i] = (
+                    (current_rs - mean_rs) / std_rs if std_rs > epsilon else 0
+                )
 
         # 保存因子
         for i, date in enumerate(dates):

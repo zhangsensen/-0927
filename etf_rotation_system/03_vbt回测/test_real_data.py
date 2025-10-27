@@ -110,8 +110,8 @@ config = ParallelBacktestConfig(
     # 因子配置
     top_k=8,  # Baseline 8个因子（已验证最优）
     factors=[],  # 空则自动从筛选结果加载
-    # 回测参数
-    top_n_list=[3, 5, 8],  # 测试3个top_n值
+    # 回测参数 - 应从parallel_backtest_config.yaml读取
+    top_n_list=[2, 3, 4, 5, 6, 7],  # 测试多个top_n值（与config.yaml保持一致）
     rebalance_freq=20,
     # === Phase 1 改进 ===
     # A3: A股精细成本模型

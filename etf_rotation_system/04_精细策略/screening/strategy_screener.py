@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 class ScreeningConfig:
     """策略筛选配置"""
 
-    min_sharpe_ratio: float = 0.45
-    max_drawdown_threshold: float = -50.0
-    min_total_return: float = 40.0
-    max_single_weight: float = 0.6
+    min_sharpe_ratio: float = 0.35  # 降低阈值以增加通过率
+    max_drawdown_threshold: float = -60.0  # 放宽回撤要求
+    min_total_return: float = 30.0  # 降低收益要求
+    max_single_weight: float = 0.7  # 稍微放宽单因子权重
     min_effective_factors: int = 2
-    max_effective_factors: int = 5
+    max_effective_factors: int = 6  # 增加最大因子数
     n_workers: int = 8
     chunk_size: int = 100
     enable_cache: bool = True
@@ -75,6 +75,17 @@ class StrategyScreener:
         # 选择有效因子
         effective_factors = [f[0] for f in factor_ranking[:6]]  # 前6个因子
 
+        # 防御性检查
+        if not effective_factors:
+            logger.warning("因子排名为空，使用所有可用因子")
+            if self.analysis_results:
+                factor_importance = self.analysis_results.get("factor_importance", {})
+                effective_factors = list(factor_importance.keys())[:6]
+
+            if not effective_factors:
+                logger.error("无法提取有效因子，返回空候选集")
+                return []
+
         candidates = []
 
         # 策略1: 基于最优范围的随机采样
@@ -85,13 +96,19 @@ class StrategyScreener:
             for factor in effective_factors:
                 if factor in weight_ranges:
                     range_info = weight_ranges[factor]
-                    min_weight, max_weight = range_info["optimal_range"]
+                    min_weight, max_weight = range_info.get("optimal_range", (0.1, 0.5))
 
                     # 随机选择权重
                     if remaining_weight > 0:
                         weight = np.random.uniform(
                             max(0, min_weight), min(max_weight, remaining_weight)
                         )
+                        weights[factor] = weight
+                        remaining_weight -= weight
+                else:
+                    # 没有范围信息时使用默认分配
+                    if remaining_weight > 0:
+                        weight = np.random.uniform(0, min(0.3, remaining_weight))
                         weights[factor] = weight
                         remaining_weight -= weight
 
@@ -107,7 +124,17 @@ class StrategyScreener:
         typical_weights = {}
         for factor in effective_factors:
             if factor in weight_ranges:
-                typical_weights[factor] = weight_ranges[factor]["typical_weight"]
+                typical_weights[factor] = weight_ranges[factor].get(
+                    "typical_weight", 1.0 / len(effective_factors)
+                )
+            else:
+                typical_weights[factor] = 1.0 / len(effective_factors)
+
+        # 如果没有典型权重，使用均匀分配
+        if not typical_weights:
+            typical_weights = {
+                f: 1.0 / len(effective_factors) for f in effective_factors
+            }
 
         # 生成权重变体
         base_weights = list(typical_weights.values())

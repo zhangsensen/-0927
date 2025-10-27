@@ -37,8 +37,9 @@ class ParallelBacktestConfig:
     factors: List[str] = field(default_factory=list)
 
     # === 回测参数配置 ===
-    top_n_list: List[int] = field(default_factory=lambda: [3, 5, 8, 10])
-    rebalance_freq: int = 20
+    # 注意：top_n_list 应从 YAML 配置读取，此处不设置默认值（在_dict_to_config中处理）
+    top_n_list: List[int] = field(default_factory=lambda: [])
+    rebalance_freq_list: list = field(default_factory=lambda: [5, 10, 20])
     fees: float = 0.003  # A股 ETF: 佣金0.2% + 印花税0.1% = 0.3% 往返
     init_cash: float = 1000000
 
@@ -102,17 +103,17 @@ class ParallelBacktestConfig:
     current_preset: Optional[str] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class FastConfig:
     """零开销配置类 - 编译时常量，消除运行时解析开销"""
 
     # === 数据路径配置 ===
     panel_file: str = (
-        "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251020_162504/panel.parquet"
+        "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251022_155341/panel.parquet"
     )
     price_dir: str = "/Users/zhangshenshen/深度量化0927/raw/ETF/daily"
     screening_file: str = (
-        "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251020_104628/passed_factors.csv"
+        "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251022_155407/passed_factors.csv"
     )
     output_dir: str = (
         "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/backtest"
@@ -126,8 +127,32 @@ class FastConfig:
 
     # === 因子配置 ===
     top_k: int = 8
-    factors: List[str] = field(
-        default_factory=lambda: [
+    factors: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.factors = self._load_passed_factors(self.screening_file)
+
+    @staticmethod
+    def _load_passed_factors(screening_file: str) -> list:
+        import os
+
+        import pandas as pd
+
+        if screening_file and os.path.exists(screening_file):
+            try:
+                df = pd.read_csv(screening_file)
+                factors = df.iloc[:, 0].dropna().tolist()
+                # 去除标题行（如有）
+                if factors and factors[0].lower().startswith("factor"):
+                    factors = factors[1:]
+                if len(factors) > 0:
+                    print(f"[INFO] 自动加载筛选因子: {factors}")
+                    return factors
+            except Exception as e:
+                print(f"[WARN] 读取筛选因子失败: {e}")
+        # 兜底：返回默认因子列表
+        print("[WARN] 筛选结果文件缺失或异常，回退到默认因子列表")
+        return [
             "PRICE_POSITION_60D",
             "MOM_ACCEL",
             "VOLATILITY_120D",
@@ -137,11 +162,11 @@ class FastConfig:
             "INTRADAY_POSITION",
             "INTRA_DAY_RANGE",
         ]
-    )
 
     # === 回测参数配置 ===
-    top_n_list: List[int] = field(default_factory=lambda: [3, 5, 8])
-    rebalance_freq: int = 20
+    # 注意：top_n_list 应从 YAML 配置读取，此处不设置默认值（保持为空）
+    top_n_list: List[int] = field(default_factory=lambda: [])
+    rebalance_freq_list: list = field(default_factory=lambda: [5, 10, 20])
     fees: float = 0.003  # A股 ETF: 0.3% 往返手续费
     init_cash: float = 1000000
 
@@ -193,6 +218,13 @@ class FastConfig:
     periods_per_year: int = 252
     min_sharpe_ratio: float = 0.5
     max_drawdown_threshold: float = -30
+
+    # === 权重优化配置 ===
+    weight_grid_points: List[float] = field(
+        default_factory=lambda: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    )
+    weight_sum_range: List[float] = field(default_factory=lambda: [0.8, 1.2])
+    max_combinations: int = 10000
 
     # === 场景预设名称 ===
     current_preset: Optional[str] = None
@@ -318,9 +350,9 @@ class ParallelConfigLoader:
             # 因子配置
             top_k=factor_config.get("top_k", 10),
             factors=factor_config.get("factors", []),
-            # 回测参数
-            top_n_list=backtest_config.get("top_n_list", [3, 5, 8, 10]),
-            rebalance_freq=backtest_config.get("rebalance_freq", 20),
+            # 回测参数 - top_n_list 必须从 YAML 配置提供，不使用硬编码默认值
+            top_n_list=backtest_config.get("top_n_list", []),
+            rebalance_freq_list=backtest_config.get("rebalance_freq_list", [5, 10, 20]),
             fees=self._safe_float_convert(backtest_config.get("fees", 0.001)),
             init_cash=self._safe_float_convert(
                 backtest_config.get("init_cash", 1000000)
@@ -544,9 +576,9 @@ def create_default_parallel_config(output_path: str) -> None:
     """创建默认的并行配置文件"""
     default_config = {
         "data_paths": {
-            "panel_file": "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251020_162504/panel.parquet",
+            "panel_file": "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251022_155341/panel.parquet",
             "price_dir": "/Users/zhangshenshen/深度量化0927/raw/ETF/daily",
-            "screening_file": "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251020_104628/passed_factors.csv",
+            "screening_file": "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251022_155407/passed_factors.csv",
             "output_dir": "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/backtest",
         },
         "parallel_config": {
@@ -569,7 +601,7 @@ def create_default_parallel_config(output_path: str) -> None:
             ],
         },
         "backtest_config": {
-            "top_n_list": [3, 5, 8],
+            "top_n_list": [2, 3, 4, 5, 6, 7],  # 从YAML读取配置，默认为示例值
             "rebalance_freq": 20,
             "fees": 0.001,
             "init_cash": 1000000,
@@ -633,7 +665,9 @@ def create_default_parallel_config(output_path: str) -> None:
                     "max_combinations": 50000,
                     "weight_sum_range": [0.7, 1.3],
                 },
-                "backtest_config": {"top_n_list": [3, 5, 8]},
+                "backtest_config": {
+                    "top_n_list": [2, 3, 4, 5, 6, 7]
+                },  # 覆盖默认预设的Top-N范围
             },
         },
         "current_preset": None,
@@ -655,14 +689,35 @@ def load_fast_config() -> FastConfig:
 
 
 def load_fast_config_from_args(args) -> FastConfig:
-    """从命令行参数加载快速配置（保持接口兼容性）
+    """从命令行参数加载快速配置
 
     Args:
         args: 命令行参数对象
 
     Returns:
-        FastConfig: 预编译的配置对象
+        FastConfig: 从YAML配置文件加载的配置对象或默认配置
     """
-    # 暂时忽略命令行参数，直接返回默认快速配置
-    # 在实际使用中，可以根据需要选择不同的预设配置
-    return FastConfig()
+    # 获取配置文件路径
+    config_path = getattr(args, "config_file", None) or "parallel_backtest_config.yaml"
+
+    # 尝试从YAML文件加载配置
+    loader = ParallelConfigLoader(config_path)
+    preset_name = getattr(args, "preset", None)
+
+    try:
+        parallel_config = loader.load_config(preset_name=preset_name)
+        # 将ParallelBacktestConfig转换为FastConfig，确保top_n_list被正确加载
+        fast_config = FastConfig()
+        fast_config.top_n_list = parallel_config.top_n_list
+        fast_config.rebalance_freq_list = parallel_config.rebalance_freq_list
+        fast_config.panel_file = parallel_config.panel_file
+        fast_config.price_dir = parallel_config.price_dir
+        fast_config.screening_file = parallel_config.screening_file
+        fast_config.output_dir = parallel_config.output_dir
+        fast_config.n_workers = parallel_config.n_workers
+        fast_config.fees = parallel_config.fees
+        fast_config.init_cash = parallel_config.init_cash
+        return fast_config
+    except Exception as e:
+        print(f"[WARNING] 加载配置文件失败: {e}，使用默认配置")
+        return FastConfig()

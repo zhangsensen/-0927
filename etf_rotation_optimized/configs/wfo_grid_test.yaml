@@ -1,0 +1,6 @@
+# 测试用参数网格 - 只有2个实验用于快速验证
+test_quick:
+  is_period: [252]
+  oos_period: [60]
+  step_size: [20]
+  target_factor_count: [5, 8]  # 只测试2个因子数

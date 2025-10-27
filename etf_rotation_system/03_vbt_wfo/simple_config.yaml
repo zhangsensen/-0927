@@ -1,0 +1,59 @@
+backtest_config:
+  fees: 0.003
+  init_cash: 1000000
+  periods_per_year: 252
+  rebalance_freq_list:
+  - 5
+  - 10
+  - 20
+  run_is: true
+  run_oos: true
+  save_top_n: 300
+  top_n_list:
+  - 3
+  - 5
+  - 8
+  - 9
+  weight_grid:
+    grid_points:
+    - 0.0
+    - 0.1
+    - 0.2
+    - 0.3
+    - 0.4
+    - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+    - 0.9
+    - 1.0
+    max_combinations: 10000
+    weight_sum_range:
+    - 0.8
+    - 1.2
+data_paths:
+  output_dir: /Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/vbtwfo
+  panel_file: /Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251024_214306/panel.parquet
+  price_dir: /Users/zhangshenshen/深度量化0927/raw/ETF/daily
+  screening_file: /Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251024_214324/passed_factors.csv
+factor_config:
+  min_ic: 0.01
+  min_ir: 0.05
+  top_k: 9
+parallel_config:
+  chunk_size: 100
+  enable_cache: true
+  log_level: INFO
+  n_workers: 6
+signal_detection:
+  enable: false
+  lookback_days: 60
+  threshold: 0.5
+wfo_config:
+  enable: true
+  max_overfit_ratio: 1.5
+  min_oos_sharpe: 0.3
+  min_periods: 3
+  step_months: 3
+  test_months: 3
+  train_months: 12

@@ -1,0 +1,163 @@
+# 因子选择约束配置 | Factor Selection Constraints Configuration
+#
+# 约束分类:
+#   1. 家族配额 (Family Quota): 同一类型因子的最大数量限制
+#   2. 互斥对 (Mutual Exclusivity): 不能同时选中的因子对
+#   3. 相关性去冗余 (Correlation Deduplication): 相关系数>阈值则至多选其一
+#   4. 最小IC约束 (Minimum IC): 因子必须满足的最小IC值
+#   5. 必选因子 (Required Factors): 必须被选中的因子
+#
+# 作用: 在 WFO IS 阶段应用这些约束，从筛选候选中选择满足条件的最优子集
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 家族配额: 按因子类型分类，限制每类的最大选中数量
+family_quota:
+  
+  # 动量类 (Momentum/Trend-following)
+  momentum:
+    factors: ['MOM_20D', 'SLOPE_20D']
+    max_count: 1
+    description: "动量类因子最多选 1 个 (避免同向冗余)"
+  
+  # 波动率类 (Volatility)
+  volatility:
+    factors: ['RET_VOL_20D', 'VOL_RATIO_20D', 'VOL_RATIO_60D']
+    max_count: 2
+    description: "波动率类因子最多选 2 个 (覆盖不同周期)"
+  
+  # 风险调整类 (Risk-adjusted)
+  risk_adjusted:
+    factors: ['MAX_DD_60D']
+    max_count: 1
+    description: "风险调整类因子最多选 1 个"
+  
+  # 价格特征类 (Price Features)
+  price_features:
+    factors: ['PRICE_POSITION_20D', 'PRICE_POSITION_120D']
+    max_count: 1
+    description: "价格特征类最多选 1 个 (长短周期择一)"
+  
+  # 相关性类 (Correlation)
+  correlation:
+    factors: ['PV_CORR_20D']
+    max_count: 1
+    description: "相关性类因子最多选 1 个"
+  
+  # 技术指标类 (Technical Indicators)
+  technical:
+    factors: ['RSI_14']
+    max_count: 1
+    description: "技术指标类最多选 1 个"
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 互斥对: 这些因子不能同时被选中
+mutual_exclusivity:
+  
+  - pair: ['PRICE_POSITION_20D', 'PRICE_POSITION_120D']
+    reason: "不同周期的价格位置指标功能重叠，选择周期最相关的一个"
+    severity: "hard"  # hard: 严格禁止, soft: 警告但允许
+  
+  - pair: ['MOM_20D', 'SLOPE_20D']
+    reason: "动量和斜率反映相同的趋势特征，选择IC最高的一个"
+    severity: "hard"
+  
+  - pair: ['VOL_RATIO_20D', 'VOL_RATIO_60D']
+    reason: "不同周期的波动率比，若两者IC都高则选择回测表现更好的"
+    severity: "soft"
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 相关性去冗余: 若两个因子相关系数过高，则至多保留其一
+correlation_deduplication:
+  
+  # 对因子对计算相关性，若超过阈值则触发去冗余
+  threshold: 0.8
+  
+  strategy: "keep_higher_ic"  # keep_higher_ic: 保留IC更高的
+                              # keep_longer_period: 保留更长周期的
+                              # keep_first: 按顺序保留第一个
+  
+  description: |
+    当两个因子的相关系数 > 0.8 时:
+    1. 计算两个因子各自的平均IC
+    2. 保留IC更高的因子
+    3. 排除另一个因子
+    
+    目的: 避免因子空间中的冗余方向，保持因子组合的独立性
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 最小IC约束: 候选因子必须满足的最小IC要求
+minimum_ic:
+  
+  global_minimum: 0.02
+  description: |
+    全局最小IC要求: 0.02
+    
+    因子筛选逻辑:
+    1. 首先按 IC > global_minimum 过滤候选因子
+    2. 再应用家族配额、互斥对等约束
+    3. 最后从满足条件的候选中按IC排序选择
+    
+    注: 该阈值可在 WFO 配置中覆盖 (是下界)
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 必选因子: 无论如何都要被选中的因子
+required_factors: []
+
+description: |
+  当前无必选因子配置。可根据策略需要添加。
+  
+  示例 (若需要):
+    required_factors:
+      - 'MOM_20D'        # 必选: 动量因子
+      - 'RET_VOL_20D'    # 必选: 波动率因子
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 约束应用场景
+application:
+  
+  # 应用于WFO的IS阶段
+  apply_in_is_stage: true
+  
+  # 是否允许约束导致 "无法选出任何因子" 的情况
+  allow_empty_result: false
+  
+  # 空结果时的应变策略
+  empty_result_strategy: "fallback_to_top_ic"
+  # 可选值:
+  #   - "fallback_to_top_ic": 忽略部分约束，保留IC最高的因子
+  #   - "relax_thresholds": 放宽相关性等阈值
+  #   - "error": 抛出异常
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 约束验证与报告
+validation:
+  
+  # 是否验证配置的一致性
+  validate_config: true
+  
+  # 是否生成详细的约束应用报告
+  generate_report: true
+  
+  report_include:
+    - "candidate_factors"      # 候选因子列表
+    - "applied_constraints"    # 应用的约束
+    - "constraint_impacts"     # 各约束的影响
+    - "final_selection"        # 最终选择
+    - "selection_reasons"      # 选择原因
+
+# ═══════════════════════════════════════════════════════════════════════════
+
+metadata:
+  version: "1.0"
+  created_date: "2025-10-26"
+  last_modified: "2025-10-26"
+  description: "ETF 轮动因子筛选系统 Step 5 约束配置"
+  total_factors: 10
+  total_constraints: 5

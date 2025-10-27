@@ -12,48 +12,64 @@ factor_windows:
   # 动量因子
   momentum:
     - 20   # 短期动量
-    - 63   # 季度动量 (Line 135)
-    - 126  # 半年动量
-    - 252  # 年度动量 (Line 136)
+  # === 简化版窗口配置 ===
+  # 动量：只保留63D和252D
+  momentum:
+    - 63   # 季度动量
+    - 252  # 年度动量
 
-  # 波动率因子
+  # 波动率：只保留120D
   volatility:
-    - 20   # 短期波动
-    - 60   # 中期波动
     - 120  # 长期波动
 
-  # 回撤因子
+  # 回撤：只保留126D
   drawdown:
-    - 63   # 季度回撤 (Line 129)
-    - 126  # 半年回撤 (Line 129)
+    - 126  # 半年回撤
 
-  # RSI因子
+  # RSI：只保留14D
   rsi:
-    - 6    # 超短期RSI
     - 14   # 标准RSI
-    - 24   # 长期RSI
 
-  # 价格位置因子
+  # 价格位置：只保留60D
   price_position:
-    - 20   # 短期位置
     - 60   # 中期位置
-    - 120  # 长期位置
 
-  # 成交量比率因子
+  # 成交量比率：只保留20D
   volume_ratio:
-    - 5    # 短期量比 (Line 207)
     - 20   # 中期量比
-    - 60   # 长期量比
 
   # 技术指标特定窗口
-  atr_period: 14              # ATR周期 (Line 171)
-  vpt_trend_window: 20        # 量价趋势窗口 (Line 203)
-  vol_volatility_window: 20   # 成交量波动窗口 (Line 211-212)
-  amount_surge_short: 5       # 成交额突增短期窗口 (Line 235)
-  amount_surge_long: 20       # 成交额突增长期窗口 (Line 236)
-  vol_ratio_window: 20        # 成交量比率基准窗口 (Line 254)
-  intraday_position_window: 5 # 日内位置平滑窗口 (Line 248)
-  price_volume_div_window: 5  # 量价背离平滑窗口 (Line 242)
+  atr_period: 14              # ATR周期
+  vpt_trend_window: 20        # 量价趋势窗口
+  vol_volatility_window: 20   # 成交量波动窗口
+  amount_surge_short: 5       # 成交额突增短期窗口
+  amount_surge_long: 20       # 成交额突增长期窗口
+  intraday_position_window: 5 # 日内位置平滑窗口
+  
+  # 保留因子窗口
+  amplitude_window: 20        # 振幅窗口
+  up_down_days_window: 20     # 涨跌天数窗口
+  linear_slope_window: 20     # 线性回归窗口
+  distance_to_high_window: 252 # 新高距离窗口（年）
+  relative_strength_window: 20 # 相对强度窗口
+  turnover_ma_window: 60      # 换手率均值窗口
+  drawdown_recovery_window: 120 # 回撤恢复窗口
+  
+  # 技术指标窗口（简化）
+  macd_fast: 12               # MACD快线周期
+  macd_slow: 26               # MACD慢线周期
+  macd_signal: 9              # MACD信号线周期
+  boll_window: 20             # 布林带周期
+  boll_std: 2.0               # 布林带标准差倍数
+  wr_window: 14               # 威廉指标周期
+  
+  # 新增5个简单因子窗口
+  trend_consistency_window: 20      # 趋势一致性窗口
+  extreme_return_window: 60         # 极端收益统计窗口
+  extreme_return_threshold: 2.0     # 极端收益阈值（几倍标准差）
+  volume_price_corr_window: 20      # 量价相关性窗口
+  volatility_short_window: 20       # 短期波动率窗口
+  volatility_long_window: 60        # 长期波动率窗口
 
 # ========== 阈值参数 ==========
 thresholds:
@@ -75,36 +91,83 @@ processing:
   max_failure_rate: 0.1        # 最大失败率容忍
 
 # ========== 因子开关 ==========
+# 🎯 混合策略因子体系: 25个核心因子 (删除16个冗余)
+# 战略层(月度): 用252D/120D/60D长周期因子 (IC高,换手低)
+# 战术层(周度): 用20D/14D短周期因子 (灵敏,适配频繁调仓)
 factor_enable:
-  # 原有18个因子
-  momentum: true
-  volatility: true
-  drawdown: true
-  momentum_acceleration: true
-  rsi: true
-  price_position: true
-  volume_ratio: true
-
-  # 新增技术因子
-  overnight_return: true
-  atr: true
-  doji_pattern: true
-  intraday_range: true
-  bullish_engulfing: true
-  hammer_pattern: true
-  price_impact: true
-  volume_price_trend: true
-  vol_ma_ratio_5: true
-  vol_volatility_20: true
-  true_range: true
-  buy_pressure: true
-
-  # 资金流因子
-  vwap_deviation: true
-  amount_surge_5d: true
-  price_volume_div: true
-  intraday_position: true
-  large_order_signal: true
+  # === 战略层因子 (长周期,月度调仓) ===
+  momentum: true               # MOMENTUM_63D/252D (战略动量)
+  distance_to_high: true       # DISTANCE_TO_52W_HIGH (长期趋势)
+  price_position: true         # PRICE_POSITION_60D (中期位置)
+  volatility: true             # VOLATILITY_120D (长期风险)
+  drawdown: true               # DRAWDOWN_126D (质量控制)
+  
+  # === 战术层因子 (短周期,周度调仓) ===
+  momentum_acceleration: true  # MOM_ACCEL (动量加速,20D)
+  williams_r: true             # WR_14 (超买超卖)
+  rsi: true                    # RSI_14 (技术指标)
+  volatility_regime_shift: true  # 波动率突变 (20D/60D)
+  vol_volatility_20: true      # VOL_VOLATILITY_20 (量能波动)
+  
+  # === 辅助因子 (通用) ===
+  drawdown_recovery_speed: true  # 回撤恢复速度
+  linear_slope: true           # LINEAR_SLOPE_20D
+  relative_strength_vs_index: true  # RELATIVE_STRENGTH_20D
+  up_down_days_ratio: true     # UP_DOWN_DAYS_RATIO
+  atr: true                    # ATR_14
+  amplitude: true              # AMPLITUDE_20D
+  volume_ratio: true           # VOLUME_RATIO_20D
+  volume_price_trend: true     # VOLUME_PRICE_TREND
+  trend_consistency: true      # 趋势一致性
+  extreme_return_freq: true    # 极端收益频率
+  volume_price_divergence: true  # 量价背离
+  intraday_position: true      # 日内位置
+  
+  # ❌ Linus清理: 删除16个冗余/低效因子 ❌
+  # zscore重复(5个) - IC完全相同,纯技债
+  # relative_momentum_20d_zscore: false  # 在横截面生成,这里不控制
+  # relative_momentum_60d_zscore: false
+  # cs_rank_change_5d_zscore: false
+  # vol_adjusted_excess_zscore: false
+  # rs_deviation_zscore: false
+  
+  # 低效动量(5个) - IC<0.01
+  consecutive_up_days: false   # IC=0.003,几乎无效
+  # cs_rank_change_5d: false   # 横截面因子
+  # relative_momentum_60d: false
+  # vol_adjusted_excess: false
+  # rotation_score: false
+  
+  # 低效技术指标(3个) - IC<0.01或负贡献
+  macd: false                  # MACD_HIST IC=0.008,太弱
+  bollinger_bands: false       # BOLL_WIDTH IC=-0.005,负贡献
+  amount_surge_5d: false       # IC=0.002,几乎无效
+  
+  # ETF不适用(3个) - 负贡献
+  overnight_return: false      # IC=-0.012,负贡献
+  turnover_ratio: false        # IC=-0.004,负贡献
+  
+  # 其他删除
+  kdj: false
+  bias: false
+  doji_pattern: false
+  bullish_engulfing: false
+  hammer_pattern: false
+  illiquidity: false
+  price_impact: false
+  large_order_signal: false
+  intraday_range: false
+  true_range: false
+  vol_ma_ratio_5: false
+  buy_pressure: false
+  vwap_deviation: false
+  price_volume_div: false
+  amount_change_rate: false
+  shadow_ratio: false
+  relative_amplitude: false
+  return_quality: false
+  sharpe_ratio: false
+  obv: false
 
 # ========== 数据处理配置 ==========
 data_processing:

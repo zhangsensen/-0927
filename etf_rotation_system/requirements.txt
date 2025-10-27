@@ -1,0 +1,34 @@
+# ETF轮动量化交易系统 - 依赖管理
+# Python 3.11+
+
+# 核心数据处理
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# 量化回测
+vectorbt>=0.26.0
+
+# 技术指标
+ta-lib>=0.4.26
+
+# 配置管理
+PyYAML>=6.0
+
+# 并行计算
+tqdm>=4.65.0
+
+# 数据存储
+pyarrow>=12.0.0
+fastparquet>=2023.4.0
+
+# 统计分析
+statsmodels>=0.14.0
+scikit-learn>=1.3.0
+
+# 可选：可视化
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# 可选：性能优化
+numba>=0.57.0

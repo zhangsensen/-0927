@@ -36,9 +36,17 @@ class ETFResultsAnalyzer:
     def load_results(self) -> bool:
         """加载VBT回测结果"""
         try:
-            # 查找结果文件
-            results_csv = self.results_path / "results.csv"
-            best_config_json = self.results_path / "best_config.json"
+            # 智能判断传入的是文件还是目录
+            if self.results_path.is_file() and self.results_path.name == "results.csv":
+                # 如果传入的是文件，获取其目录
+                results_dir = self.results_path.parent
+                results_csv = self.results_path
+            else:
+                # 如果传入的是目录，查找结果文件
+                results_dir = self.results_path
+                results_csv = results_dir / "results.csv"
+
+            best_config_json = results_dir / "best_config.json"
 
             if not results_csv.exists():
                 logger.error(f"未找到结果文件: {results_csv}")

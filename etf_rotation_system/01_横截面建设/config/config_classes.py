@@ -49,11 +49,18 @@ class TradingConfig:
 class FactorWindowsConfig:
     """因子时间窗口配置"""
 
+    # 🔧 修复:扩展窗口参数以包含短中长期窗口,提升因子质量
+    # 动量类窗口:扩展为20D(短期),63D(季度),126D(半年),252D(年度)
     momentum: List[int] = field(default_factory=lambda: [20, 63, 126, 252])
+    # 波动率:扩展为20D(短期),60D(季度),120D(半年)
     volatility: List[int] = field(default_factory=lambda: [20, 60, 120])
+    # 回撤:扩展为63D(季度),126D(半年)
     drawdown: List[int] = field(default_factory=lambda: [63, 126])
-    rsi: List[int] = field(default_factory=lambda: [6, 14, 24])
+    # RSI:保持14D(经典周期)
+    rsi: List[int] = field(default_factory=lambda: [14])
+    # 价格位置:扩展为20D(月度),60D(季度),120D(半年)
     price_position: List[int] = field(default_factory=lambda: [20, 60, 120])
+    # 成交量比率:扩展为5D(周度),20D(月度),60D(季度)
     volume_ratio: List[int] = field(default_factory=lambda: [5, 20, 60])
 
     # 技术指标特定窗口
@@ -66,6 +73,44 @@ class FactorWindowsConfig:
     intraday_position_window: int = 5
     price_volume_div_window: int = 5
 
+    # 保留的因子窗口参数
+    amplitude_window: int = 20
+    up_down_days_window: int = 20
+    linear_slope_window: int = 20
+    distance_to_high_window: int = 252
+    relative_strength_window: int = 20
+    turnover_ma_window: int = 60
+    drawdown_recovery_window: int = 120
+
+    # 经典技术指标窗口参数
+    macd_fast: int = 12  # MACD快线
+    macd_slow: int = 26  # MACD慢线
+    macd_signal: int = 9  # MACD信号线
+    kdj_n: int = 9  # KDJ的N值(RSV周期)
+    kdj_m1: int = 3  # KDJ的M1值(K值平滑)
+    kdj_m2: int = 3  # KDJ的M2值(D值平滑)
+    boll_window: int = 20  # 布林带周期
+    boll_std: float = 2.0  # 布林带标准差倍数
+    wr_window: int = 14  # 威廉指标周期
+    obv_ma_window: int = 20  # OBV移动平均周期
+
+    # 新增流动性和质量因子窗口
+    illiquidity_window: int = 20  # Amihud非流动性指标窗口
+    amount_change_window: int = 20  # 成交额变化率窗口
+    return_quality_window: int = 60  # 收益质量窗口
+    sharpe_ratio_window: int = 60  # 夏普比率窗口
+
+    # 新增5个简单ETF因子窗口参数
+    trend_consistency_window: int = 20  # 趋势一致性窗口
+    extreme_return_window: int = 60  # 极端收益统计窗口
+    extreme_return_threshold: float = 2.0  # 极端收益阈值（几倍标准差）
+    volume_price_corr_window: int = 20  # 量价相关性窗口
+    volatility_short_window: int = 20  # 短期波动率窗口
+    volatility_long_window: int = 60  # 长期波动率窗口
+
+    # 乖离率窗口
+    bias_windows: List[int] = field(default_factory=lambda: [5, 20, 60])  # 乖离率周期
+
     def __post_init__(self):
         """验证窗口参数"""
         # 验证所有窗口都是正整数
@@ -76,6 +121,7 @@ class FactorWindowsConfig:
             + self.rsi
             + self.price_position
             + self.volume_ratio
+            + self.bias_windows
         )
 
         for window in all_windows:
@@ -87,6 +133,8 @@ class FactorWindowsConfig:
             raise ValueError("atr_period must be positive")
         if self.amount_surge_short >= self.amount_surge_long:
             raise ValueError("amount_surge_short must be less than amount_surge_long")
+        if self.macd_fast >= self.macd_slow:
+            raise ValueError("macd_fast must be less than macd_slow")
 
 
 @dataclass
@@ -179,6 +227,44 @@ class FactorEnableConfig:
     price_volume_div: bool = True
     intraday_position: bool = True
     large_order_signal: bool = True
+
+    # 流动性因子
+    illiquidity: bool = True
+    turnover_ratio: bool = True
+    amount_change_rate: bool = True
+
+    # 微观结构因子
+    amplitude: bool = True
+    shadow_ratio: bool = True
+    up_down_days_ratio: bool = True
+
+    # 趋势强度因子
+    linear_slope: bool = True
+    distance_to_high: bool = True
+
+    # 相对强弱因子
+    relative_strength_vs_index: bool = True
+    relative_amplitude: bool = True
+
+    # 质量因子
+    return_quality: bool = True
+    sharpe_ratio: bool = True
+    drawdown_recovery_speed: bool = True
+
+    # 经典技术指标（学术验证）
+    macd: bool = True  # MACD指标
+    kdj: bool = True  # KDJ随机指标
+    bollinger_bands: bool = True  # 布林带
+    bias: bool = True  # 乖离率
+    williams_r: bool = True  # 威廉指标
+    obv: bool = True  # 能量潮
+
+    # 新增5个简单ETF因子
+    trend_consistency: bool = True  # 趋势一致性
+    extreme_return_freq: bool = True  # 极端收益频率
+    consecutive_up_days: bool = True  # 连续上涨天数
+    volume_price_divergence: bool = True  # 量价背离强度
+    volatility_regime_shift: bool = True  # 波动率突变
 
 
 @dataclass

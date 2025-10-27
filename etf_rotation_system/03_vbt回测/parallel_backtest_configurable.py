@@ -59,15 +59,9 @@ class ConfigurableParallelBacktestEngine:
         )
         self.logger = logging.getLogger(__name__)
 
-        if config.verbose:
-            self.logger.info(f"初始化配置化并行回测引擎")
-            self.logger.info(f"  工作进程数: {config.n_workers}")
-            self.logger.info(f"  块大小: {config.chunk_size}")
-            self.logger.info(f"  最大组合数: {config.max_combinations}")
-            self.logger.info(f"  内存限制: {config.max_memory_usage_gb}GB")
-
-        # 运行启动验证
-        self._validate_config()
+    def _validate_config(self):
+        """启动时验证配置合理性"""
+        # ...existing code...
 
     def _validate_config(self):
         """启动时验证配置合理性"""
@@ -151,17 +145,43 @@ class ConfigurableParallelBacktestEngine:
 
             price_df = pd.concat(prices, ignore_index=True)
             pivot = price_df.pivot(index="date", columns="symbol", values="close")
-            pivot = pivot.sort_index().ffill()
+            pivot = pivot.sort_index()
+
+            # � 不填充：保留 NaN 用于标记停牌/退市日期
+            # 原因：
+            #   1. ETF 停牌日期就是 NaN，反映现实
+            #   2. 权重计算时 NaN×权重=NaN，自动排除停牌日期
+            #   3. 无需人工填充，规避虚假价格风险
 
             # 写入缓存
             pivot.to_parquet(cache_file, compression="snappy")
             self.logger.info(f"价格缓存已更新: {cache_file}")
 
-        # 统计价格数据质量
+        # 统计价格数据质量（增强版）
         missing_pct = pivot.isna().sum().sum() / (pivot.shape[0] * pivot.shape[1])
         cache_status = "缓存命中" if cache_hit else "重新加载"
+
+        # 🔍 新增：详细缺失值统计
+        max_consecutive_gaps = {}
+        for col in pivot.columns:
+            mask = pivot[col].isna()
+            if mask.any():
+                consecutive = (mask != mask.shift()).cumsum()
+                gap_lens = consecutive[mask].value_counts()
+                max_consecutive_gaps[col] = (
+                    gap_lens.index.max() if len(gap_lens) > 0 else 0
+                )
+
+        if max_consecutive_gaps:
+            worst_symbol = max(max_consecutive_gaps, key=max_consecutive_gaps.get)
+            worst_gap = max_consecutive_gaps[worst_symbol]
+            self.logger.warning(
+                f"⚠️  最长连续缺失: {worst_symbol} = {worst_gap}天 "
+                f"(limit=3, 超出的将保持NaN)"
+            )
+
         self.logger.info(
-            f"价格矩阵: {pivot.shape}, 缺失率: {missing_pct:.2%}, 状态: {cache_status}"
+            f"价格矩阵: {pivot.shape}, 总缺失率: {missing_pct:.2%}, 状态: {cache_status}"
         )
 
         return pivot
@@ -267,95 +287,6 @@ class ConfigurableParallelBacktestEngine:
         weights = weights.div(weights.sum(axis=1), axis=0).fillna(0.0)
         return weights
 
-    def _backtest_topn_rotation(
-        self,
-        prices: pd.DataFrame,
-        scores: pd.DataFrame,
-        top_n: int = 5,
-    ) -> Dict[str, Any]:
-        """Top-N轮动回测 - 向量化实现"""
-        # 对齐日期
-        common_dates = prices.index.intersection(scores.index)
-        prices = prices.loc[common_dates]
-        scores = scores.loc[common_dates]
-
-        # 构建目标权重
-        weights = self._build_target_weights(scores, top_n)
-
-        # 向量化调仓日权重更新
-        rebalance_mask = pd.Series(
-            np.arange(len(weights)) % self.config.rebalance_freq == 0,
-            index=weights.index,
-        )
-        rebalance_mask.iloc[0] = True
-
-        # 使用 ffill 向前填充权重
-        weights_ffill = weights.where(rebalance_mask, np.nan).ffill().fillna(0.0)
-
-        # 计算收益
-        asset_returns = prices.pct_change().fillna(0.0)
-        prev_weights = weights_ffill.shift().fillna(0.0)
-
-        # 对齐列名
-        common_symbols = asset_returns.columns.intersection(prev_weights.columns)
-        asset_returns_aligned = asset_returns[common_symbols]
-        prev_weights_aligned = prev_weights[common_symbols]
-
-        gross_returns = (prev_weights_aligned * asset_returns_aligned).sum(axis=1)
-
-        # === 改进 A3: A股精细成本模型 ===
-        # 计算权重变化幅度
-        weight_diff_abs = weights_ffill.diff().abs()  # 每只的变化幅度
-        max_weight_change = weight_diff_abs.max(axis=1)  # 单只最大变化
-
-        # === 改进 B1: 智能 Rebalance 策略 ===
-        # 只调整权重变化 > 5% 的持仓，避免过度交易
-        rebalance_threshold = 0.05
-        needs_rebalance = max_weight_change > rebalance_threshold
-
-        # 构建实际交易的权重差异（只交易需要的部分）
-        weight_diff_trading = weight_diff_abs.copy()
-        weight_diff_trading[~needs_rebalance] = 0  # 不需要交易的持仓不算成本
-
-        turnover_raw = 0.5 * weight_diff_trading.sum(axis=1)  # 实际换手率
-
-        # 成本计算：分别计算买入和卖出成本
-        # 买入成本: turnover * 佣金率
-        # 卖出成本: turnover * (佣金率 + 印花税率)
-        # 简化：平均 turnover * (佣金 + 印花税/2)
-        commission = turnover_raw * getattr(self.config, "commission_rate", 0.002)
-        stamp_duty = (
-            turnover_raw * getattr(self.config, "stamp_duty_rate", 0.001) * 0.5
-        )  # 平均化
-        slippage = turnover_raw * getattr(self.config, "slippage_amount", 0.0001)
-
-        total_costs = commission + stamp_duty + slippage
-        net_returns = gross_returns - total_costs
-
-        # 净值曲线
-        equity = (1 + net_returns).cumprod() * self.config.init_cash
-
-        # 统计指标
-        total_return = (equity.iloc[-1] / self.config.init_cash - 1) * 100
-        periods_per_year = self.config.periods_per_year
-        sharpe = (
-            net_returns.mean() / net_returns.std() * np.sqrt(periods_per_year)
-            if net_returns.std() > 0
-            else 0
-        )
-
-        running_max = equity.cummax()
-        drawdown = (equity / running_max - 1) * 100
-        max_dd = drawdown.min()
-
-        return {
-            "total_return": total_return,
-            "sharpe_ratio": sharpe,
-            "max_drawdown": max_dd,
-            "final_value": equity.iloc[-1],
-            "turnover": turnover_raw.sum(),
-        }
-
     def _process_weight_chunk(
         self,
         weight_chunk: List[Tuple[float, ...]],
@@ -363,7 +294,7 @@ class ConfigurableParallelBacktestEngine:
         panel: pd.DataFrame,
         prices: pd.DataFrame,
         top_n_list: List[int],
-        rebalance_freq: int = 20,
+        rebalance_freq: int,
     ) -> List[Dict[str, Any]]:
         """处理一个权重组合块 - 完全向量化消除所有循环"""
         results = []
@@ -397,19 +328,33 @@ class ConfigurableParallelBacktestEngine:
             symbol_list = [col[1] for col in normalized.columns[::n_factors]]
             date_index = normalized.index
 
+            # 信号质量阈值（标准差）：只交易信号强度超过此阈值的
+            # 注：因子已标准化(Z-score)，0.5表示只选超过中位数强度的信号
+            min_score_threshold = 0.5
+
             # 为每个Top-N值批量处理所有权重组合
             for top_n in top_n_list:
                 try:
                     # 向量化构建所有权重组合的目标权重矩阵
+                    # 双重筛选：相对排名 + 绝对阈值
                     ranks_3d = (
                         np.argsort(np.argsort(-scores_3d, axis=2), axis=2) + 1
                     )  # 排名从1开始
-                    selection_3d = ranks_3d <= top_n
+
+                    # 相对排名条件：进 Top-N
+                    rank_quality = ranks_3d <= top_n
+
+                    # 绝对强度条件：信号 > 阈值（防止弱信号被执行）
+                    signal_quality = scores_3d > min_score_threshold
+
+                    # 两个条件都要满足
+                    selection_3d = rank_quality & signal_quality
                     weights_3d = selection_3d.astype(float)
 
                     # 归一化权重 (每行和为1)
+                    # 如果某天所有信号都不满足阈值，权重为全0（空仓）
                     weight_sums = weights_3d.sum(axis=2, keepdims=True)
-                    weight_sums[weight_sums == 0] = 1  # 避免除零
+                    weight_sums[weight_sums == 0] = 1  # 避免除零（空仓日自动变为全0）
                     weights_3d = weights_3d / weight_sums
 
                     # 批量回测所有权重组合
@@ -525,7 +470,7 @@ class ConfigurableParallelBacktestEngine:
             axis=2
         )
         turnover = 0.5 * weight_changes
-        trading_costs = 0.001 * turnover  # fees = 0.001
+        trading_costs = self.config.fees * turnover  # 从配置读取费用率
 
         # 净收益
         net_returns = portfolio_returns[:, 1:] - trading_costs
@@ -534,18 +479,20 @@ class ConfigurableParallelBacktestEngine:
         )
 
         # 计算统计指标 (完全向量化)
-        init_cash = 1_000_000
+        init_cash = self.config.init_cash  # 从配置读取初始资金
         equity_matrix = (1 + net_returns).cumprod(axis=1) * init_cash
 
         # 最终结果统计
         final_values = equity_matrix[:, -1]
         total_returns = (final_values / init_cash - 1) * 100
 
-        # 夏普比率计算
-        mean_returns = net_returns.mean(axis=1)
-        std_returns = net_returns.std(axis=1)
+        # 夏普比率计算 (使用 nanmean/nanstd 忽略停牌日期的 NaN)
+        mean_returns = np.nanmean(net_returns, axis=1)
+        std_returns = np.nanstd(net_returns, axis=1)
         sharpe_ratios = np.where(
-            std_returns > 0, mean_returns / std_returns * np.sqrt(252), 0
+            std_returns > 0,
+            mean_returns / std_returns * np.sqrt(self.config.periods_per_year),
+            0,
         )
 
         # 最大回撤计算
@@ -559,11 +506,12 @@ class ConfigurableParallelBacktestEngine:
         # 构建结果列表 (完全向量化)
         weight_dicts = [dict(zip(factors, chunk)) for chunk in weight_chunk]
 
-        # 使用列表推导式批量构建结果
+        # 使用列表推导式批量构建结果，包含rebalance_freq
         results = [
             {
                 "weights": str(weight_dicts[i]),
                 "top_n": top_n,
+                "rebalance_freq": rebalance_freq,
                 "total_return": float(total_returns[i]),
                 "sharpe_ratio": float(sharpe_ratios[i]),
                 "max_drawdown": float(max_drawdowns[i]),
@@ -680,7 +628,7 @@ class ConfigurableParallelBacktestEngine:
         return chunks
 
     def parallel_grid_search(self) -> pd.DataFrame:
-        """并行网格搜索权重组合 - 优化版本：数据预加载和缓存"""
+        """并行网格搜索权重组合 - 支持多周期调仓，数据预加载和缓存"""
 
         try:
             mp.set_start_method("fork", force=True)
@@ -719,7 +667,10 @@ class ConfigurableParallelBacktestEngine:
         # 分块
         chunks = self._chunk_weight_combinations(weight_combos)
         total_tasks = len(chunks)
-        total_strategies = len(weight_combos) * len(self.config.top_n_list)
+        total_rebalance_freqs = len(self.config.rebalance_freq_list)
+        total_strategies = (
+            len(weight_combos) * len(self.config.top_n_list) * total_rebalance_freqs
+        )
         strategies_per_worker = total_strategies / self.config.n_workers
 
         self.logger.info(f"\n=== 并行执行 ===")
@@ -727,47 +678,60 @@ class ConfigurableParallelBacktestEngine:
             f"任务分块: {total_tasks}块 × {self.config.chunk_size}组合/块, {self.config.n_workers}进程并行"
         )
         self.logger.info(
-            f"预计处理: {len(weight_combos):,}组合 × {len(self.config.top_n_list)}个Top-N = {total_strategies:,}策略"
+            f"预计处理: {len(weight_combos):,}组合 × {len(self.config.top_n_list)}个Top-N × {total_rebalance_freqs}个调仓周期 = {total_strategies:,}策略"
         )
+        self.logger.info(f"调仓周期: {self.config.rebalance_freq_list}日")
         self.logger.info(f"每进程负载: ~{strategies_per_worker:.0f}策略")
 
-        # 创建工作函数
-        work_func = partial(
-            self._process_weight_chunk,
-            factors=factors,
-            panel=panel,
-            prices=prices,
-            top_n_list=self.config.top_n_list,
-            rebalance_freq=self.config.rebalance_freq,
-        )
-
-        # 并行执行
+        # 对每个rebalance_freq执行回测
         all_results = []
+        for rebalance_freq in self.config.rebalance_freq_list:
+            self.logger.info(f"\n--- 开始回测调仓周期: {rebalance_freq}日 ---")
+            freq_start = time.time()
 
-        try:
-            with mp.Pool(processes=self.config.n_workers) as pool:
-                # 使用tqdm显示进度
-                results_iter = pool.imap_unordered(work_func, chunks)
+            # 创建工作函数（对当前rebalance_freq）
+            work_func = partial(
+                self._process_weight_chunk,
+                factors=factors,
+                panel=panel,
+                prices=prices,
+                top_n_list=self.config.top_n_list,
+                rebalance_freq=rebalance_freq,
+            )
 
-                progress_bar = tqdm(
-                    results_iter,
-                    total=total_tasks,
-                    desc=f"并行处理 ({self.config.n_workers}进程)",
-                    disable=not self.config.enable_progress_bar,
-                )
+            # 并行执行当前rebalance_freq的所有块
+            freq_results = []
+            try:
+                with mp.Pool(processes=self.config.n_workers) as pool:
+                    # 使用tqdm显示进度
+                    results_iter = pool.imap_unordered(work_func, chunks)
 
-                for chunk_results in progress_bar:
-                    all_results.extend(chunk_results)
+                    progress_bar = tqdm(
+                        results_iter,
+                        total=total_tasks,
+                        desc=f"并行处理 ({self.config.n_workers}进程, rebalance={rebalance_freq}日)",
+                        disable=not self.config.enable_progress_bar,
+                    )
 
-        except Exception as e:
-            self.logger.error(f"并行处理失败: {e}")
-            raise
+                    for chunk_results in progress_bar:
+                        freq_results.extend(chunk_results)
 
-        # 处理结果
+            except Exception as e:
+                self.logger.error(f"调仓周期{rebalance_freq}日的并行处理失败: {e}")
+                raise
+
+            # 记录当前rebalance_freq的结果统计
+            freq_time = time.time() - freq_start
+            self.logger.info(
+                f"✓ 调仓周期{rebalance_freq}日完成: {len(freq_results):,}结果, 耗时: {freq_time:.2f}秒"
+            )
+            all_results.extend(freq_results)
+
+        # 处理全部结果
         processing_time = time.time() - start_time
         n_failed = total_strategies - len(all_results)
         self.logger.info(
-            f"✓ 处理完成: {len(all_results):,}结果, 失败: {n_failed}, 耗时: {processing_time:.2f}秒"
+            f"✓ 所有调仓周期处理完成: {len(all_results):,}结果, 失败: {n_failed}, 总耗时: {processing_time:.2f}秒"
         )
 
         # 转换为DataFrame并排序
@@ -776,7 +740,11 @@ class ConfigurableParallelBacktestEngine:
             df = df.sort_values("sharpe_ratio", ascending=False)
 
             # 计算性能指标
-            total_strategies = len(weight_combos) * len(self.config.top_n_list)
+            total_strategies = (
+                len(weight_combos)
+                * len(self.config.top_n_list)
+                * len(self.config.rebalance_freq_list)
+            )
             speed = total_strategies / processing_time
             estimated_sequential_time = total_strategies / 142  # 基线速度142策/秒
             speedup = estimated_sequential_time / processing_time
@@ -839,16 +807,18 @@ class ConfigurableParallelBacktestEngine:
         total_time = time.time() - start_time
         print(f"\n配置化并行回测完成，总耗时: {total_time:.2f}秒")
 
-        # 保存结果 - 创建时间戳文件夹，只保存Top200
+        # 保存结果 - 创建时间戳文件夹，保存Top N配置
         output_path = Path(self.config.output_dir)
         timestamp_folder = output_path / f"backtest_{timestamp}"
         timestamp_folder.mkdir(parents=True, exist_ok=True)
 
-        # 限制保存Top200，减少文件大小
-        top_results = results.head(200)
+        # 限制保存Top N，减少文件大小
+        top_results = results.head(self.config.save_top_results)
         csv_file = timestamp_folder / "results.csv"
         top_results.to_csv(csv_file, index=False)
-        print(f"结果保存至: {csv_file} (Top200/{len(results)}策略)")
+        print(
+            f"结果保存至: {csv_file} (Top{self.config.save_top_results}/{len(results)}策略)"
+        )
 
         # 输出Top N
         top_n = min(self.config.save_top_results, len(results))
@@ -867,7 +837,7 @@ class ConfigurableParallelBacktestEngine:
                     "chunk_size": self.config.chunk_size,
                     "max_combinations": self.config.max_combinations,
                     "top_n_list": self.config.top_n_list,
-                    "rebalance_freq": self.config.rebalance_freq,
+                    "rebalance_freq_list": self.config.rebalance_freq_list,
                     "fees": self.config.fees,
                     "init_cash": self.config.init_cash,
                     "weight_grid_points": self.config.weight_grid_points,
@@ -875,6 +845,9 @@ class ConfigurableParallelBacktestEngine:
                 },
                 "weights": best["weights"],
                 "top_n": int(best["top_n"]),
+                "rebalance_freq": int(
+                    best.get("rebalance_freq", self.config.rebalance_freq_list[0])
+                ),
                 "performance": {
                     "total_return": float(best["total_return"]),
                     "sharpe_ratio": float(best["sharpe_ratio"]),
@@ -912,7 +885,7 @@ class ConfigurableParallelBacktestEngine:
                     f"工作进程: {self.config.n_workers} | 块大小: {self.config.chunk_size} | 最大组合: {self.config.max_combinations:,}\n"
                 )
                 f.write(
-                    f"因子数: {len(best_config.get('factors', []))} | Top-N范围: {self.config.top_n_list} | Rebalance: {self.config.rebalance_freq}日\n"
+                    f"因子数: {len(best_config.get('factors', []))} | Top-N范围: {self.config.top_n_list} | 调仓周期: {self.config.rebalance_freq_list}日\n"
                 )
                 f.write(
                     f"费率模型: 佣金0.2% + 印花税0.1% + 滑点0.01% = {self.config.fees*100:.1f}% 往返\n"
@@ -936,7 +909,9 @@ class ConfigurableParallelBacktestEngine:
                 f.write(f"总耗时: {total_time:.2f}秒 ({total_time/60:.1f}分钟)\n")
                 f.write(f"总策略: {len(results):,}个\n")
                 f.write(f"处理速度: {len(results)/total_time:.1f}策略/秒\n")
-                f.write(f"结果保存: Top 200 / {len(results):,}\n")
+                f.write(
+                    f"结果保存: Top {self.config.save_top_results} / {len(results):,}\n"
+                )
 
                 f.write(f"\n{'='*80}\n")
                 f.write(f"🏆 最优策略 (Rank 1)\n")

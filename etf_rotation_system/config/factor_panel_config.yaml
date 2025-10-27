@@ -54,6 +54,37 @@ factor_windows:
   vol_ratio_window: 20        # 成交量比率基准窗口 (Line 254)
   intraday_position_window: 5 # 日内位置平滑窗口 (Line 248)
   price_volume_div_window: 5  # 量价背离平滑窗口 (Line 242)
+  
+  # 新增流动性和微观结构因子窗口
+  illiquidity_window: 20      # Amihud非流动性指标窗口
+  turnover_ma_window: 60      # 相对换手率移动平均窗口
+  amount_change_window: 20    # 成交额变化率窗口
+  return_quality_window: 60   # 收益质量窗口
+  sharpe_ratio_window: 60     # 夏普比率窗口
+  
+  # 经典技术指标窗口参数
+  macd_fast: 12               # MACD快线
+  macd_slow: 26               # MACD慢线
+  macd_signal: 9              # MACD信号线
+  kdj_n: 9                    # KDJ的N值(RSV周期)
+  kdj_m1: 3                   # KDJ的M1值(K值平滑)
+  kdj_m2: 3                   # KDJ的M2值(D值平滑)
+  boll_window: 20             # 布林带周期
+  boll_std: 2.0               # 布林带标准差倍数
+  wr_window: 14               # 威廉指标周期
+  bias_windows:               # 乖离率周期
+    - 5
+    - 20
+    - 60
+  obv_ma_window: 20           # OBV移动平均周期
+  
+  # 新增5个简单ETF因子窗口参数
+  trend_consistency_window: 20      # 趋势一致性窗口
+  extreme_return_window: 60         # 极端收益统计窗口
+  extreme_return_threshold: 2.0     # 极端收益阈值（几倍标准差）
+  volume_price_corr_window: 20      # 量价相关性窗口
+  volatility_short_window: 20       # 短期波动率窗口
+  volatility_long_window: 60        # 长期波动率窗口
 
 # ========== 阈值参数 ==========
 thresholds:
@@ -105,6 +136,44 @@ factor_enable:
   price_volume_div: true
   intraday_position: true
   large_order_signal: true
+  
+  # 流动性因子
+  illiquidity: true
+  turnover_ratio: true
+  amount_change_rate: true
+  
+  # 微观结构因子
+  amplitude: true
+  shadow_ratio: true
+  up_down_days_ratio: true
+  
+  # 趋势强度因子
+  linear_slope: true
+  distance_to_high: true
+  
+  # 相对强弱因子
+  relative_strength_vs_index: true
+  relative_amplitude: true
+  
+  # 质量因子
+  return_quality: true
+  sharpe_ratio: true
+  drawdown_recovery_speed: true
+  
+  # 经典技术指标（学术验证有效）
+  macd: true                 # MACD指标
+  kdj: true                  # KDJ随机指标
+  bollinger_bands: true      # 布林带
+  bias: true                 # 乖离率
+  williams_r: true           # 威廉指标
+  obv: true                  # 能量潮
+  
+  # 新增5个简单ETF因子
+  trend_consistency: true        # 趋势一致性
+  extreme_return_freq: true      # 极端收益频率
+  consecutive_up_days: true      # 连续上涨天数
+  volume_price_divergence: true  # 量价背离强度
+  volatility_regime_shift: true  # 波动率突变
 
 # ========== 数据处理配置 ==========
 data_processing:

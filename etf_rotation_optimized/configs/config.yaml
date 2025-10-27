@@ -1,0 +1,117 @@
+# ETF轮动系统优化版 - 统一配置文件
+# 原则: 简单、实用、可执行
+
+# 数据路径
+data:
+  raw_dir: ../raw/ETF/daily  # 原始数据目录
+  cache_dir: ./cache  # 缓存目录
+  output_dir: ./output  # 输出目录
+
+# 因子配置
+factors:
+  # 技术因子（核心）
+  momentum:
+    - name: MOM_20D
+      period: 20
+      weight: 0.3
+    - name: MOM_60D  
+      period: 60
+      weight: 0.2
+  
+  # 波动率因子
+  volatility:
+    - name: VOL_20D
+      period: 20
+      weight: -0.2  # 负权重，低波动优先
+  
+  # 成交量因子
+  volume:
+    - name: OBV_RATIO
+      period: 20
+      weight: 0.15
+    - name: VOLUME_RATIO
+      period: 5
+      weight: 0.15
+
+# 筛选配置
+screening:
+  min_ic: 0.01  # 最小IC
+  min_ir: 0.05  # 最小IR
+  max_correlation: 0.7  # 最大相关性
+  use_fdr: true  # FDR校正
+  fdr_alpha: 0.1
+
+# 回测配置
+backtest:
+  # 核心参数
+  init_cash: 100000  # 初始资金
+  top_n: 5  # 持仓数量
+  rebalance_freq: 5  # 调仓频率(天)
+  
+  # 成本模型
+  commission: 0.002  # 佣金 0.2%
+  slippage: 0.001  # 滑点 0.1%
+  
+  # 风控参数
+  max_position: 0.3  # 单个ETF最大仓位
+  stop_loss: -0.08  # 止损线
+  
+# WFO配置
+wfo:
+  train_months: 12  # 训练期
+  test_months: 3  # 测试期
+  step_months: 3  # 步进
+  min_sharpe: 0.5  # 最小夏普比
+  
+# 性能配置
+performance:
+  n_jobs: 8  # 并行数（M4留4核给系统）
+  chunk_size: 100  # 批处理大小
+  use_cache: true  # 启用缓存
+  
+# 实盘配置
+production:
+  mode: paper  # paper/live
+  broker:
+    broker_type: simulation  # simulation/eastmoney
+    token: null
+    account_id: null
+  check_interval: 60  # 检查间隔(秒)
+
+# 风控配置
+risk_limits:
+  max_drawdown: 0.15  # 最大回撤15%
+  max_concentration: 0.3  # 最大单ETF仓位30%
+  max_turnover: 1.0  # 最大月换手率100%
+  min_sharpe: 0.5  # 最小夏普比率
+  max_correlation: 0.8  # 最大持仓相关性
+
+# 告警配置
+alerts:
+  enabled: true
+  methods: [log, email]  # log/email/webhook/slack
+  email:
+    smtp_server: smtp.gmail.com
+    smtp_port: 587
+    from_email: your_email@gmail.com
+    to_email: alert_recipient@gmail.com
+    password: your_password
+  # webhook_url: https://your-webhook-url.com/alerts
+  # slack_webhook: https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK
+
+# 数据验证配置
+data_validation:
+  strict_mode: false  # 严格验证模式
+  check_trading_days: true  # 检查交易日连续性
+  check_price_logic: true  # 检查OHLC逻辑
+  check_volume_anomalies: true  # 检查成交量异常
+  missing_data_threshold: 0.05  # 缺失数据阈值5%
+  extreme_change_threshold: 0.2  # 极端涨跌幅阈值20%
+
+# 性能配置
+performance:
+  n_jobs: 8  # 并行数（M4留4核给系统）
+  chunk_size: 100  # 批处理大小
+  use_cache: true  # 启用缓存
+  memory_limit: 1000  # 内存限制(MB)
+  enable_monitoring: true  # 启用性能监控

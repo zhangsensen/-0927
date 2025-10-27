@@ -73,31 +73,36 @@ class AnalysisConfig:
 
 @dataclass
 class ScreeningConfig:
-    """筛选标准配置"""
+    """筛选标准配置 - Linus优化"""
 
     # 基础筛选标准
-    min_ic: float = 0.005  # 最小IC (0.5%)
-    min_ir: float = 0.05  # 最小IR (实用标准)
-    max_pvalue: float = 0.2  # 最大p值
-    min_coverage: float = 0.7  # 最小覆盖率
+    min_ic: float = 0.01  # 最小IC (1%)
+    min_ir: float = 0.08  # 最小IR
+    max_pvalue: float = 0.05  # 最大p值
+    min_coverage: float = 0.75  # 最小覆盖率
 
     # 去重标准
-    max_correlation: float = 0.7  # 最大因子间相关性
+    max_correlation: float = 0.75  # 从0.65放宽到0.75,避免误杀
 
     # FDR校正
-    use_fdr: bool = True  # 是否启用FDR
-    fdr_alpha: float = 0.2  # FDR显著性水平
+    use_fdr: bool = True
+    fdr_alpha: float = 0.10  # 10% FDR显著性水平
 
-    # 🎯 强制保留因子（新增）
-    force_include_factors: List[str] = field(default_factory=list)  # 强制保留的因子名单
-    max_factors: int = 50  # 最大保留因子数（默认无限制）
-    priority_metric: str = "ic_ir"  # 优先级排序方式: ic_ir, ic_mean, combined
+    # 因子数量控制
+    force_include_factors: List[str] = field(default_factory=list)
+    max_factors: int = 20  # 从15提升到20
+    priority_metric: str = "ic_ir"
+
+    # Linus新增: 混合策略配置
+    use_period_specific_ic: bool = True  # 启用分周期IC筛选
+    target_rebalance_period: int = 5  # 目标换仓周期(日)
+    ic_period_for_screening: str = "ic_5d"  # 筛选用的IC列名
 
     # 分层评级阈值
     tier_thresholds: Dict[str, Dict[str, float]] = field(
         default_factory=lambda: {
-            "core": {"ic": 0.02, "ir": 0.1},
-            "supplement": {"ic": 0.01, "ir": 0.07},
+            "core": {"ic": 0.025, "ir": 0.15},
+            "supplement": {"ic": 0.015, "ir": 0.10},
             "research": {"ic": 0.0, "ir": 0.0},
         }
     )

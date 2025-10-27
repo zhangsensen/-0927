@@ -77,12 +77,12 @@ class ETFCrossSectionScreener:
             print(f"\n🔬 多周期IC分析: {self.config.analysis.ic_periods}")
 
         # 预计算所有周期的未来收益（向量化）
-        # 注意：不使用shift(-period)以避免向前看偏差
+        # 使用shift(-period)计算真实的未来收益率（向前看）
         fwd_rets = {}
         for period in self.config.analysis.ic_periods:
-            fwd_rets[period] = price_df.groupby(level="symbol")["close"].pct_change(
-                period
-            )
+            future_price = price_df.groupby(level="symbol")["close"].shift(-period)
+            current_price = price_df["close"]
+            fwd_rets[period] = future_price / current_price - 1
 
         results = []
 
@@ -156,7 +156,13 @@ class ETFCrossSectionScreener:
             ):
                 continue
 
-            # 综合指标（向量化）
+            # Linus优化: 使用5D IC作为主指标,不混合多周期
+            # 原逻辑: ic_mean = np.mean(all_date_ics) 混合了1D/5D/10D/20D
+            # 新逻辑: 只用5D IC排序,避免长周期因子虚高
+            ic_5d = period_ics.get("ic_5d", np.nan)
+            ir_5d = period_ics.get("ir_5d", np.nan)
+
+            # 保留综合IC供参考,但筛选用ic_5d
             ic_mean = np.mean(all_date_ics)
             ic_std = np.std(all_date_ics)
             ic_ir = ic_mean / ic_std if ic_std > 0 else 0
@@ -174,9 +180,11 @@ class ETFCrossSectionScreener:
 
             result = {
                 "factor": factor_name,
-                "ic_mean": ic_mean,
+                "ic_mean": ic_mean,  # 综合IC(供参考)
                 "ic_std": ic_std,
-                "ic_ir": ic_ir,
+                "ic_ir": ic_ir,  # 综合IR(供参考)
+                "ic_5d": ic_5d,  # 🎯 5D IC(筛选用)
+                "ir_5d": ir_5d,  # 🎯 5D IR(筛选用)
                 "ic_positive_rate": np.mean(np.array(all_date_ics) > 0),
                 "stability": stability,
                 "t_stat": t_stat,
@@ -188,11 +196,12 @@ class ETFCrossSectionScreener:
             results.append(result)
 
             if self.config.progress_reporting:
+                # 显示5D IC,不显示混合IC
                 print(
-                    f"  {factor_name:30s} IC={ic_mean:+.4f} IR={ic_ir:+.4f} Stab={stability:+.3f}"
+                    f"  {factor_name:30s} IC_5D={ic_5d:+.4f} IR_5D={ir_5d:+.4f} Stab={stability:+.3f}"
                 )
 
-        return pd.DataFrame(results).sort_values("ic_ir", ascending=False, key=abs)
+        return pd.DataFrame(results).sort_values("ir_5d", ascending=False, key=abs)
 
     def apply_fdr_correction(self, ic_df: pd.DataFrame) -> pd.DataFrame:
         """FDR校正 - 配置驱动"""
@@ -268,16 +277,16 @@ class ETFCrossSectionScreener:
             return labels["research"]
 
     def screen_factors(self, ic_df: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
-        """因子筛选 - 完全配置驱动 + 强制保留逻辑"""
+        """因子筛选 - Linus优化: 用5D IC筛选,不混合多周期"""
         config = self.config.screening
 
         if self.config.progress_reporting:
-            print(f"\n🎯 筛选标准:")
-            print(f"  IC均值 >= {config.min_ic} ({config.min_ic:.1%})")
-            print(f"  IC_IR >= {config.min_ir}")
+            print(f"\n🎯 筛选标准 (Linus优化):")
+            print(f"  IC_5D >= {config.min_ic} ({config.min_ic:.1%}) ⚡ 只用5D IC")
+            print(f"  IR_5D >= {config.min_ir}")
             print(f"  p-value <= {config.max_pvalue}")
             print(f"  覆盖率 >= {config.min_coverage}")
-            print(f"  最大相关性 = {config.max_correlation}")
+            print(f"  最大相关性 = {config.max_correlation} (从0.65放宽)")
             print(f"  FDR校正 = {'启用' if config.use_fdr else '禁用'}")
             if config.force_include_factors:
                 print(f"  🔒 强制保留: {config.force_include_factors}")
@@ -296,13 +305,13 @@ class ETFCrossSectionScreener:
             print(f"\n🔒 强制保留: {len(mandatory_df)} 因子")
             for _, row in mandatory_df.iterrows():
                 print(
-                    f"  ✓ {row['factor']:30s} IC={row['ic_mean']:+.4f} IR={row['ic_ir']:+.4f}"
+                    f"  ✓ {row['factor']:30s} IC_5D={row['ic_5d']:+.4f} IR_5D={row['ir_5d']:+.4f}"
                 )
 
-        # 第1步：基础筛选（仅对非强制因子）
+        # Linus修改: 用5D IC/IR筛选,不用混合IC
         mask = (
-            (other_df["ic_mean"].abs() >= config.min_ic)
-            & (other_df["ic_ir"].abs() >= config.min_ir)
+            (other_df["ic_5d"].abs() >= config.min_ic)  # 改用ic_5d
+            & (other_df["ir_5d"].abs() >= config.min_ir)  # 改用ir_5d
             & (other_df["p_value"] <= config.max_pvalue)
             & (other_df["coverage"] >= config.min_coverage)
         )

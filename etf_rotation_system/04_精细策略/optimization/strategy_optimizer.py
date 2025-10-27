@@ -292,13 +292,34 @@ class StrategyOptimizer:
 
     def _generate_random_weights(self) -> np.ndarray:
         """生成随机权重"""
+        # 防御性检查：确保有足够的因子
+        if len(self.factor_universe) < self.config.min_factors:
+            logger.warning(
+                f"因子数量({len(self.factor_universe)})少于最小要求({self.config.min_factors})，"
+                f"使用所有可用因子"
+            )
+            n_factors = len(self.factor_universe)
+        else:
+            # 随机选择因子数量
+            upper_bound = min(
+                self.config.max_factors + 1, len(self.factor_universe) + 1
+            )
+            lower_bound = min(self.config.min_factors, len(self.factor_universe))
+
+            # 确保上界大于下界
+            if upper_bound <= lower_bound:
+                n_factors = lower_bound
+            else:
+                n_factors = np.random.randint(lower_bound, upper_bound)
+
         weights = np.zeros(len(self.factor_universe))
 
-        # 随机选择因子数量
-        n_factors = np.random.randint(
-            self.config.min_factors,
-            min(self.config.max_factors + 1, len(self.factor_universe) + 1),
-        )
+        # 防止选择数量超过可用因子数
+        n_factors = min(n_factors, len(self.factor_universe))
+
+        if n_factors == 0:
+            logger.error("无法生成权重：没有可用因子")
+            return weights
 
         # 随机选择因子
         selected_indices = np.random.choice(

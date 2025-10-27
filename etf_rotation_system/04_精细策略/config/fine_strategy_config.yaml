@@ -253,6 +253,53 @@ debug_config:
   profiling_enabled: false           # 性能分析
   memory_tracking: false             # 内存跟踪
 
+# === WFO配置 (Walk-Forward Optimization) ===
+wfo_config:
+  # 启用WFO模式
+  enabled: true
+  
+  # 时间窗口配置
+  time_windows:
+    train_window_months: 12          # 训练窗口：12个月
+    test_window_months: 3            # 测试窗口：3个月
+    step_months: 3                   # 步进：3个月
+  
+  # 数据范围（需根据实际数据调整）
+  data_range:
+    start_date: "2022-01-01"         # 数据开始日期
+    end_date: "2024-12-31"           # 数据结束日期
+  
+  # IS期优化配置
+  in_sample:
+    top_n_strategies: 10             # IS期选择Top-N策略进入OOS
+    min_sharpe: 0.40                 # IS期最小Sharpe要求
+    optimization_rounds: 3           # 优化轮次
+  
+  # OOS期验证配置
+  out_of_sample:
+    min_sharpe: 0.30                 # OOS最小Sharpe阈值
+    save_period_results: true        # 保存每个周期结果
+  
+  # 过拟合检测阈值
+  overfit_detection:
+    max_overfit_ratio: 1.5           # 最大IS/OOS Sharpe比
+    max_decay_rate: 0.25             # 最大性能衰减率（25%）
+    min_is_oos_correlation: 0.30     # 最小IS-OOS相关性
+  
+  # 分析配置
+  analysis:
+    enable_detailed_analysis: true   # 启用详细分析
+    generate_markdown_report: true   # 生成Markdown报告
+    generate_charts: false           # 生成图表（需要matplotlib）
+  
+  # 并行配置
+  parallel:
+    n_workers: 6                     # 并行工作进程数
+    chunk_size: 10                   # 批处理大小
+  
+  # 随机种子（确保可复现）
+  random_seed: 42
+
 # === 运行配置 ===
 execution_config:
   # 运行模式

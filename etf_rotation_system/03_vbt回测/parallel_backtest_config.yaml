@@ -1,151 +1,184 @@
-# ETF轮动并行回测配置文件
-# 向量化高性能版本的配置抽象
-
-# === 数据路径配置 ===
 data_paths:
-  panel_file: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251020_162504/panel.parquet"
-  price_dir: "/Users/zhangshenshen/深度量化0927/raw/ETF/daily"
-  screening_file: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251020_104628/passed_factors.csv"
-  output_dir: "/Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/backtest"
-
-# === 并行计算配置 ===
+  panel_file: /Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/panels/panel_20251022_155341/panel.parquet
+  price_dir: /Users/zhangshenshen/深度量化0927/raw/ETF/daily
+  screening_file: /Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/screening/screening_20251022_155407/passed_factors.csv
+  output_dir: /Users/zhangshenshen/深度量化0927/etf_rotation_system/data/results/backtest
 parallel_config:
-  n_workers: 9                # 工作进程数 (自动检测CPU核心数-1)
-  chunk_size: 20              # 每个任务的权重组合数量
-  enable_cache: true          # 是否启用缓存
-  log_level: "INFO"           # 日志级别 (DEBUG, INFO, WARNING, ERROR)
-
-# === 因子配置 ===
+  n_workers: 9
+  chunk_size: 20
+  enable_cache: true
+  log_level: INFO
 factor_config:
-  top_k: 8                     # 使用筛选出的前8个因子
-  factors: ['PRICE_POSITION_60D', 'MOM_ACCEL', 'VOLATILITY_120D', 'VOL_VOLATILITY_20', 'VOLUME_PRICE_TREND', 'RSI_6', 'INTRADAY_POSITION', 'INTRA_DAY_RANGE']  # 指定8个有效因子
-
-# === 回测参数配置 ===
+  top_k: 15
+  factors: []
 backtest_config:
-  top_n_list: [3, 5, 8]        # Top-N候选列表 (移除10提高性能)
-  rebalance_freq: 20             # 调仓频率（交易日）
-  fees: 0.001                  # 交易费用率
-  init_cash: 1000000           # 初始资金
-
-# === 权重网格配置 ===
+  top_n_list:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  rebalance_freq_list:
+  - 3
+  - 5
+  - 8
+  - 10
+  - 13
+  - 18
+  - 25
+  fees: 0.001
+  init_cash: 1000000
 weight_grid:
-  # 权重网格点 - 支持自定义权重范围
-  grid_points: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 权重网格点 (11^8 = 2.14亿组合，必须限制)
-  weight_sum_range: [0.8, 1.2]                           # 权重和的有效范围
-  max_combinations: 10000                              # 最大组合数限制 (1万组合，测试性能)
-
-# === 复合因子计算配置 ===
+  grid_points:
+  - 0.0
+  - 0.1
+  - 0.2
+  - 0.3
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  weight_sum_range:
+  - 0.8
+  - 1.2
+  max_combinations: 10000
 composite_config:
-  standardization_method: "zscore"    # 标准化方法: "zscore" 或 "rank"
-  enable_score_cache: true           # 是否启用得分缓存（提高性能）
-  numerical_epsilon: 1e-8             # 数值计算精度保护
-
-# === 向量化优化配置 ===
+  standardization_method: zscore
+  enable_score_cache: true
+  numerical_epsilon: 1e-8
 vectorization_config:
-  # 内存管理
-  max_memory_usage_gb: 16.0           # 最大内存使用限制 (GB)
-  enable_gc: true                     # 启用垃圾回收
-  checkpoint_interval: 5000           # 检查点间隔
-
-  # 数值精度
-  use_float32: false                   # 是否使用float32节省内存 (可能影响精度)
-  batch_processing_size: 1000          # 批处理大小
-
-# === 性能优化配置 ===
+  max_memory_usage_gb: 16.0
+  enable_gc: true
+  checkpoint_interval: 5000
+  use_float32: false
+  batch_processing_size: 1000
 performance_config:
-  # 线程配置 (向量化优化时设置为1避免资源竞争)
   omp_num_threads: 1
+batch_config:
+  enable_batch_mode: false
+  batch_by: rebalance_freq
+  current_batch: null
+  save_intermediate: true
   veclib_maximum_threads: 1
   mkl_num_threads: 1
-
-  # 进度显示
-  enable_progress_bar: true           # 是否显示进度条
-
-# === 输出配置 ===
+  enable_progress_bar: true
 output_config:
-  save_top_results: 50            # 保存前N个结果
-  save_best_config: true          # 是否保存最优配置
-  save_detailed_results: true     # 是否保存详细结果
-
-  # 结果文件命名
-  results_prefix: "parallel_backtest_results"
-  best_config_prefix: "parallel_best_strategy"
-
-# === 调试和日志配置 ===
+  save_top_results: 200
+  save_best_config: true
+  save_detailed_results: true
+  results_prefix: parallel_backtest_results
+  best_config_prefix: parallel_best_strategy
 debug_config:
-  verbose: false                  # 详细输出模式
-  log_errors: true               # 记录错误日志
-  save_intermediate: false       # 保存中间结果
-
-# === 回测约束配置 ===
+  verbose: false
+  log_errors: true
+  save_intermediate: false
 constraints:
-  min_trade_days: 252           # 最少交易日数
-  max_single_weight: 0.8         # 单个因子最大权重
-  min_effective_symbols: 3      # 最少有效ETF数量
-
-# === 策略评估指标配置 ===
+  min_trade_days: 252
+  max_single_weight: 0.8
+  min_effective_symbols: 3
 metrics:
-  # 主要排序指标
-  primary_metric: "sharpe_ratio"  # 主要排序指标: "sharpe_ratio", "total_return", "max_drawdown"
-
-  # 风险指标计算
-  periods_per_year: 252          # 年化交易天数
-
-  # 报告阈值
-  min_sharpe_ratio: 0.5          # 最小夏普比率阈值
-  max_drawdown_threshold: -30    # 最大回撤阈值（百分比）
-
-# === 场景预设配置 ===
-# 可以定义多个预设场景，方便切换不同的参数配置
+  primary_metric: sharpe_ratio
+  periods_per_year: 252
+  min_sharpe_ratio: 0.5
+  max_drawdown_threshold: -30
 presets:
-  # 快速测试场景 - 用于代码验证和快速调试
   quick_test:
     weight_grid:
-      grid_points: [0.0, 0.5, 1.0]
+      grid_points:
+      - 0.0
+      - 0.5
+      - 1.0
       max_combinations: 100
     backtest_config:
-      top_n_list: [3, 5]
+      top_n_list:
+      - 3
+      - 5
     parallel_config:
       n_workers: 3
       chunk_size: 10
     output_config:
       save_top_results: 10
-
-  # 标准回测场景 - 日常研究使用
   standard:
     weight_grid:
-      grid_points: [0.0, 0.25, 0.5, 0.75, 1.0]
+      grid_points:
+      - 0.0
+      - 0.25
+      - 0.5
+      - 0.75
+      - 1.0
       max_combinations: 1000
-      weight_sum_range: [0.9, 1.1]
+      weight_sum_range:
+      - 0.9
+      - 1.1
     backtest_config:
-      top_n_list: [3, 5, 8]
+      top_n_list:
+      - 3
+      - 5
+      - 8
     parallel_config:
       n_workers: 6
       chunk_size: 15
-
-  # 高性能场景 - 利用所有CPU核心进行大规模计算
   high_performance:
     weight_grid:
-      grid_points: [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
+      grid_points:
+      - 0.0
+      - 0.05
+      - 0.1
+      - 0.15
+      - 0.2
+      - 0.25
+      - 0.3
+      - 0.35
+      - 0.4
+      - 0.45
+      - 0.5
+      - 0.55
+      - 0.6
+      - 0.65
+      - 0.7
+      - 0.75
+      - 0.8
+      - 0.85
+      - 0.9
+      - 0.95
+      - 1.0
       max_combinations: 20000
-      weight_sum_range: [0.7, 1.3]
+      weight_sum_range:
+      - 0.7
+      - 1.3
     backtest_config:
-      top_n_list: [3, 5, 8]
+      top_n_list:
+      - 3
+      - 5
+      - 8
     parallel_config:
       n_workers: 12
       chunk_size: 30
     vectorization_config:
       max_memory_usage_gb: 24.0
       checkpoint_interval: 10000
-
-  # 内存安全场景 - 适合内存受限的环境
   memory_safe:
     weight_grid:
-      grid_points: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+      grid_points:
+      - 0.0
+      - 0.2
+      - 0.4
+      - 0.6
+      - 0.8
+      - 1.0
       max_combinations: 5000
-      weight_sum_range: [0.9, 1.1]
+      weight_sum_range:
+      - 0.9
+      - 1.1
     backtest_config:
-      top_n_list: [3, 5, 8]
+      top_n_list:
+      - 3
+      - 5
+      - 8
     parallel_config:
       n_workers: 6
       chunk_size: 25
@@ -153,31 +186,61 @@ presets:
       max_memory_usage_gb: 8.0
       enable_gc: true
       checkpoint_interval: 2000
-
-  # 精细网格场景 - 高精度参数搜索
   fine_grid:
     weight_grid:
-      grid_points: [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
+      grid_points:
+      - 0.0
+      - 0.05
+      - 0.1
+      - 0.15
+      - 0.2
+      - 0.25
+      - 0.3
+      - 0.35
+      - 0.4
+      - 0.45
+      - 0.5
+      - 0.55
+      - 0.6
+      - 0.65
+      - 0.7
+      - 0.75
+      - 0.8
+      - 0.85
+      - 0.9
+      - 0.95
+      - 1.0
       max_combinations: 15000
-      weight_sum_range: [0.75, 1.25]
+      weight_sum_range:
+      - 0.75
+      - 1.25
     backtest_config:
-      top_n_list: [3, 4, 5, 6, 7, 8]
+      top_n_list:
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
     parallel_config:
       n_workers: 8
       chunk_size: 18
-
-  # 向量网格场景 - 专注于向量化优化测试
   vectorized_optimized:
     weight_grid:
-      grid_points: [0.0, 0.25, 0.5, 0.75, 1.0]
+      grid_points:
+      - 0.0
+      - 0.25
+      - 0.5
+      - 0.75
+      - 1.0
       max_combinations: 10000
     backtest_config:
-      top_n_list: [3, 5, 8]
+      top_n_list:
+      - 3
+      - 5
+      - 8
     vectorization_config:
       max_memory_usage_gb: 20.0
       enable_gc: true
       use_float32: false
       batch_processing_size: 2000
-
-# 当前使用的预设（可选）
-# current_preset: "standard"
