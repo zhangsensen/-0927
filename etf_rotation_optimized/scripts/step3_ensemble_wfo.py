@@ -88,7 +88,7 @@ def load_factor_selection_data(
     logger.info(f"数据目录: {factor_selection_dir}")
 
     # 1. 加载OHLCV
-    ohlcv_path = factor_selection_dir / "standardized_factors" / "OHLCV.parquet"
+    ohlcv_path = factor_selection_dir / "standardized" / "OHLCV.parquet"
     if not ohlcv_path.exists():
         raise FileNotFoundError(f"OHLCV数据不存在: {ohlcv_path}")
 
@@ -96,7 +96,7 @@ def load_factor_selection_data(
     logger.info(f"✅ OHLCV数据: {ohlcv_data.shape}")
 
     # 2. 加载所有因子
-    factors_dir = factor_selection_dir / "standardized_factors"
+    factors_dir = factor_selection_dir / "standardized"
     factors_dict = {}
 
     for factor_file in sorted(factors_dir.glob("*.parquet")):
@@ -110,7 +110,7 @@ def load_factor_selection_data(
     logger.info(f"✅ 加载 {len(factors_dict)} 个因子")
 
     # 3. 加载元数据
-    metadata_path = factor_selection_dir / "selection_metadata.json"
+    metadata_path = factor_selection_dir / "metadata.json"
     if metadata_path.exists():
         import json
 
@@ -183,6 +183,27 @@ def load_constraints_config(logger: logging.Logger) -> Dict:
 
     with open(constraints_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
+
+    # 格式转换: family_quota → family_quotas (兼容EnsembleSampler)
+    if "family_quota" in config:
+        family_quota_data = config["family_quota"]
+        
+        # 转换为EnsembleSampler期望的格式
+        family_quotas = {}
+        for family_name, family_config in family_quota_data.items():
+            if isinstance(family_config, dict) and family_config.get("enabled", True):
+                family_quotas[family_name] = {
+                    "max_count": family_config.get("max_count", 2),
+                    "candidates": family_config.get("factors", [])
+                }
+        
+        config["family_quotas"] = family_quotas
+    else:
+        config["family_quotas"] = {}
+    
+    # 确保mutually_exclusive_pairs存在
+    if "mutually_exclusive_pairs" not in config:
+        config["mutually_exclusive_pairs"] = []
 
     logger.info(f"✅ 加载约束配置: {constraints_path}")
     logger.info(f"   - 家族配额: {len(config.get('family_quotas', {}))} 个")
