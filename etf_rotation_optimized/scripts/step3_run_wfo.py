@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Step 3: WFO优化执行 - 独立执行脚本
 
@@ -7,6 +8,7 @@ Step 3: WFO优化执行 - 独立执行脚本
 2. 执行Walk-Forward优化（55个窗口）
 3. 保存WFO结果到 wfo/
 4. 详细的窗口进度和IC统计日志
+
 
 输入：
 - factor_selection/{date}/{timestamp}/standardized/
@@ -126,21 +128,30 @@ def run_wfo_optimization(factors_dict, metadata, ohlcv_data, output_dir, logger)
     in_sample_days = 252
     out_of_sample_days = 60
     step_days = 20
-    target_factor_count = 5
+
+    # 🔧 [P0修复] 硬编码窗口内最大因子数 = 5
+    # 历史均值3.8，上限设5，防止过拟合
+    MAX_FACTORS_PER_WINDOW = 5
+    target_factor_count = (
+        MAX_FACTORS_PER_WINDOW  # Exp6: max=8, beta=0.8, enabled=true → 改为5
+    )
+
     ic_threshold = 0.05
 
     logger.info("WFO参数配置:")
     logger.info(f"  样本内窗口: {in_sample_days} 天")
     logger.info(f"  样本外窗口: {out_of_sample_days} 天")
     logger.info(f"  滑动步长: {step_days} 天")
-    logger.info(f"  目标因子数: {target_factor_count}")
+    logger.info(
+        f"  目标因子数: {target_factor_count} [P0修复: 硬编码上限={MAX_FACTORS_PER_WINDOW}]"
+    )
     logger.info(f"  IC阈值: {ic_threshold}")
     logger.info("")
 
     # 准备数据：转换为3D numpy数组
     factor_names = list(factors_dict.keys())
     close_df = ohlcv_data["close"]
-    returns_df = close_df.pct_change()
+    returns_df = close_df.pct_change(fill_method=None)
 
     # 🔧 修复：pct_change()第一行是NaN，需要对齐因子和收益率的时间索引
     # 跳过第一行，确保因子和收益率时间对齐
@@ -195,6 +206,7 @@ def run_wfo_optimization(factors_dict, metadata, ohlcv_data, output_dir, logger)
         "constraint_reports": constraint_reports,
         "total_windows": len(wfo_df),
         "valid_windows": len(wfo_df),
+        "historical_oos_ics": optimizer.historical_oos_ics,  # ← Linus Fix: 保存ICIR计算所需数据
     }
 
     if len(wfo_df) > 0:

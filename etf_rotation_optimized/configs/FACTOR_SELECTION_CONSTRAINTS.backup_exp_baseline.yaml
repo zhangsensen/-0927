@@ -40,22 +40,14 @@ description: "当前无必选因子配置。可根据策略需要添加。\n\n�
 factor_selection: null
 family_quota:
   breakout_family:
-    description: 突破信号类（价格突破强度）
-    enabled: true
-    factors:
-    - BREAKOUT_20D
-    max_count: 1
+    enabled: false
   correlation:
     description: 相关性类因子最多选 1 个
     factors:
     - PV_CORR_20D
     max_count: 1
   flow_accel_family:
-    description: 资金流加速度类（换手率动态）
-    enabled: true
-    factors:
-    - TURNOVER_ACCEL_5_20
-    max_count: 1
+    enabled: false
   momentum:
     description: 动量类因子最多选 1 个 (避免同向冗余)
     factors:
@@ -79,12 +71,7 @@ family_quota:
     - RSI_14
     max_count: 1
   tsmom_family:
-    description: 时间序列动量类（中长期趋势）- 最多选 1 个
-    enabled: true
-    factors:
-    - TSMOM_60D
-    - TSMOM_120D
-    max_count: 1
+    enabled: false
   volatility:
     description: 波动率类因子最多选 2 个 (覆盖不同周期)
     factors:

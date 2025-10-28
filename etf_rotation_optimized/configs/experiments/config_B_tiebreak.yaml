@@ -1,0 +1,19 @@
+# 实验配置B: ICIR Tie-breaking Only
+# 用途: 仅在相关性去冗余时使用ICIR策略，不启用Meta Factor全局加权
+# 预期: 与配置A对比，验证ICIR tie-breaking的纯效果（之前A/B测试显示中性）
+
+meta_factor_weighting:
+  enabled: false  # 关闭Meta Factor加权
+
+correlation_deduplication:
+  threshold: 0.8
+  strategy: "keep_higher_icir"  # 使用历史ICIR做tie-breaking
+  icir_min_windows: 3
+  icir_std_floor: 0.005
+
+description: |
+  配置B: ICIR Tie-breaking Only
+  - Meta Factor: 关闭
+  - Tie-breaking: 用历史ICIR（Factor Momentum局部策略）
+  - 目的: 验证ICIR在相关性去重中的效果
+  - 对比A: 隔离tie-breaking的影响

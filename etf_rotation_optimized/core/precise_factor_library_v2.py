@@ -168,6 +168,146 @@ class PreciseFactorLibrary:
                 bounded=True,  # [0,100]有界
                 direction="neutral",
             ),
+            # ============ 第1批新增：资金流因子 ============
+            "OBV_SLOPE_10D": FactorMetadata(
+                name="OBV_SLOPE_10D",
+                description="10日OBV能量潮斜率",
+                dimension="资金流",
+                required_columns=["close", "volume"],
+                window=10,
+                bounded=False,
+                direction="high_is_good",
+            ),
+            "CMF_20D": FactorMetadata(
+                name="CMF_20D",
+                description="20日蔡金资金流",
+                dimension="资金流",
+                required_columns=["high", "low", "close", "volume"],
+                window=20,
+                bounded=True,  # [-1,1]有界
+                direction="high_is_good",
+            ),
+            # ============ 第2批新增：风险调整动量 ============
+            "SHARPE_RATIO_20D": FactorMetadata(
+                name="SHARPE_RATIO_20D",
+                description="20日夏普比率",
+                dimension="风险调整动量",
+                required_columns=["close"],
+                window=20,
+                bounded=False,
+                direction="high_is_good",
+            ),
+            "CALMAR_RATIO_60D": FactorMetadata(
+                name="CALMAR_RATIO_60D",
+                description="60日卡玛比率",
+                dimension="风险调整动量",
+                required_columns=["close"],
+                window=60,
+                bounded=False,
+                direction="high_is_good",
+            ),
+            # ============ 第3批新增：趋势强度 ============
+            "ADX_14D": FactorMetadata(
+                name="ADX_14D",
+                description="14日平均趋向指数",
+                dimension="趋势强度",
+                required_columns=["high", "low", "close"],
+                window=14,
+                bounded=True,  # [0,100]有界
+                direction="high_is_good",
+            ),
+            "VORTEX_14D": FactorMetadata(
+                name="VORTEX_14D",
+                description="14日螺旋指标",
+                dimension="趋势强度",
+                required_columns=["high", "low", "close"],
+                window=14,
+                bounded=False,
+                direction="neutral",
+            ),
+            # ============ 第4批新增：相对强度 ============
+            "RELATIVE_STRENGTH_VS_MARKET_20D": FactorMetadata(
+                name="RELATIVE_STRENGTH_VS_MARKET_20D",
+                description="20日相对市场强度",
+                dimension="相对强度",
+                required_columns=["close"],
+                window=20,
+                bounded=False,
+                direction="high_is_good",
+            ),
+            "CORRELATION_TO_MARKET_20D": FactorMetadata(
+                name="CORRELATION_TO_MARKET_20D",
+                description="20日与市场相关性",
+                dimension="相对强度",
+                required_columns=["close"],
+                window=20,
+                bounded=True,  # [-1,1]有界
+                direction="low_is_good",
+            ),
+            # ============ [P0修复] 禁用新增7个因子，回滚到历史18个 ============
+            # "TSMOM_60D": FactorMetadata(
+            #     name="TSMOM_60D",
+            #     description="60日时间序列动量",
+            #     dimension="趋势/动量",
+            #     required_columns=["close"],
+            #     window=60,
+            #     bounded=False,
+            #     direction="high_is_good",
+            # ),
+            # "TSMOM_120D": FactorMetadata(
+            #     name="TSMOM_120D",
+            #     description="120日时间序列动量",
+            #     dimension="趋势/动量",
+            #     required_columns=["close"],
+            #     window=120,
+            #     bounded=False,
+            #     direction="high_is_good",
+            # ),
+            # "BREAKOUT_20D": FactorMetadata(
+            #     name="BREAKOUT_20D",
+            #     description="20日突破信号",
+            #     dimension="趋势/动量",
+            #     required_columns=["high", "close"],
+            #     window=20,
+            #     bounded=False,
+            #     direction="high_is_good",
+            # ),
+            # "TURNOVER_ACCEL_5_20": FactorMetadata(
+            #     name="TURNOVER_ACCEL_5_20",
+            #     description="5日vs20日换手率加速度",
+            #     dimension="量能/流动性",
+            #     required_columns=["volume"],
+            #     window=20,
+            #     bounded=False,
+            #     direction="high_is_good",
+            # ),
+            # "REALIZED_VOL_20D": FactorMetadata(
+            #     name="REALIZED_VOL_20D",
+            #     description="20日实际波动率",
+            #     dimension="波动/风险",
+            #     required_columns=["close"],
+            #     window=20,
+            #     bounded=False,
+            #     direction="low_is_good",
+            # ),
+            # "AMIHUD_ILLIQUIDITY": FactorMetadata(
+            #     name="AMIHUD_ILLIQUIDITY",
+            #     description="Amihud流动性指标（冲击成本代理）",
+            #     dimension="流动性/成本",
+            #     required_columns=["close", "volume"],
+            #     window=20,
+            #     bounded=False,
+            #     direction="low_is_good",  # 值越低越好（低冲击）
+            # ),
+            # "SPREAD_PROXY": FactorMetadata(
+            #     name="SPREAD_PROXY",
+            #     description="日内价差代理（交易成本）",
+            #     dimension="流动性/成本",
+            #     required_columns=["high", "low", "close"],
+            #     window=5,
+            #     bounded=False,
+            #     direction="low_is_good",  # 价差越低越好
+            # ),
         }
 
     # =========================================================================
@@ -311,7 +451,7 @@ class PreciseFactorLibrary:
         Returns:
             pd.Series: 收益波动率（百分比）
         """
-        ret = close.pct_change() * 100  # 转为百分比
+        ret = close.pct_change(fill_method=None) * 100  # 转为百分比
         vol = ret.rolling(window=20).std()
         return vol
 
@@ -444,8 +584,8 @@ class PreciseFactorLibrary:
         Returns:
             pd.Series: 相关系数 [-1, 1]
         """
-        ret_price = close.pct_change()
-        ret_volume = volume.pct_change()
+        ret_price = close.pct_change(fill_method=None)
+        ret_volume = volume.pct_change(fill_method=None)
 
         # 🔧 优化：使用pandas内置rolling corr代替手工循环
         # 满窗原则：窗口内任一NaN会导致结果为NaN
@@ -486,6 +626,611 @@ class PreciseFactorLibrary:
         rsi = 100 - (100 / (1 + rs))
 
         return rsi
+
+    # =========================================================================
+    # 维度 7：资金流 (2个) - 第1批新增
+    # =========================================================================
+
+    def obv_slope_10d(self, close: pd.Series, volume: pd.Series) -> pd.Series:
+        """
+        10日OBV能量潮斜率 | OBV_SLOPE_10D
+
+        公式：
+        1. OBV[t] = OBV[t-1] + sign(close[t] - close[t-1]) * volume[t]
+        2. SLOPE = linear_regression_slope(OBV, window=10)
+
+        逻辑：
+        - OBV累计了资金流向（涨日volume为正，跌日为负）
+        - 斜率反映资金流入/流出的趋势强度
+
+        缺失处理：
+        - 窗口内任一close/volume缺失 → NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: OBV斜率
+        """
+        # 计算价格变化的符号
+        price_change = close.diff()
+        sign = np.sign(price_change)
+
+        # 计算OBV：累计 sign * volume
+        obv = (sign * volume).cumsum()
+
+        # 计算10日线性回归斜率
+        def calc_slope(x):
+            if x.isna().any() or len(x) < 10:
+                return np.nan
+            try:
+                # 线性回归：y = ax + b，返回斜率a
+                x_vals = np.arange(len(x))
+                y_vals = x.values
+                slope = np.polyfit(x_vals, y_vals, 1)[0]
+                return slope
+            except:
+                return np.nan
+
+        obv_slope = obv.rolling(window=10).apply(calc_slope, raw=False)
+        return obv_slope
+
+    def cmf_20d(
+        self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
+    ) -> pd.Series:
+        """
+        20日蔡金资金流 | CMF_20D
+
+        公式：
+        1. MFM[t] = ((close - low) - (high - close)) / (high - low)
+        2. MFV[t] = MFM[t] * volume[t]
+        3. CMF = sum(MFV, 20) / sum(volume, 20)
+
+        逻辑：
+        - MFM衡量日内收盘价的位置（接近高点=1，接近低点=-1）
+        - 乘以成交量得到资金流量
+        - 20日累计反映资金流向
+
+        缺失处理：
+        - 窗口内任一high/low/close/volume缺失 → NaN
+        - high=low时（无波动）→ NaN
+        - 无任何向前填充
+
+        标准化：无需（有界[-1,1]）
+        极值截断：无需（有界[-1,1]）
+
+        Returns:
+            pd.Series: CMF [-1, 1]
+        """
+        # 计算MFM（Money Flow Multiplier）
+        mfm = ((close - low) - (high - close)) / (high - low + 1e-10)
+
+        # 当high=low时，设为NaN
+        mfm = mfm.where(high != low, np.nan)
+
+        # 计算MFV（Money Flow Volume）
+        mfv = mfm * volume
+
+        # 计算20日CMF
+        cmf = mfv.rolling(window=20, min_periods=20).sum() / (
+            volume.rolling(window=20, min_periods=20).sum() + 1e-10
+        )
+
+        return cmf
+
+    # =========================================================================
+    # 维度 8：风险调整动量 (2个) - 第2批新增
+    # =========================================================================
+
+    def sharpe_ratio_20d(self, close: pd.Series) -> pd.Series:
+        """
+        20日夏普比率 | SHARPE_RATIO_20D
+
+        公式：
+        Sharpe = mean(daily_returns) / std(daily_returns) * sqrt(252)
+
+        逻辑：
+        - 衡量单位风险的收益
+        - 高夏普表示稳定上涨
+        - 低夏普表示高波动或负收益
+
+        缺失处理：
+        - 窗口内任一close缺失 → NaN
+        - 标准差=0（无波动）→ NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: 夏普比率
+        """
+        returns = close.pct_change(fill_method=None)
+
+        def calc_sharpe(x):
+            if x.isna().any() or len(x) < 20:
+                return np.nan
+            try:
+                mean_ret = x.mean()
+                std_ret = x.std()
+                if std_ret < 1e-10:
+                    return np.nan
+                # 年化：sqrt(252)
+                sharpe = (mean_ret / std_ret) * np.sqrt(252)
+                return sharpe
+            except:
+                return np.nan
+
+        sharpe = returns.rolling(window=20).apply(calc_sharpe, raw=False)
+        return sharpe
+
+    def calmar_ratio_60d(self, close: pd.Series) -> pd.Series:
+        """
+        60日卡玛比率 | CALMAR_RATIO_60D
+
+        公式：
+        Calmar = cumulative_return / abs(max_drawdown)
+
+        逻辑：
+        - 衡量收益与回撤的比率
+        - 高卡玛表示高收益低回撤
+        - 惩罚大幅回撤的策略
+
+        缺失处理：
+        - 窗口内任一close缺失 → NaN
+        - 最大回撤=0（无回撤）→ NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: 卡玛比率
+        """
+
+        def calc_calmar(x):
+            if x.isna().any() or len(x) < 60:
+                return np.nan
+            try:
+                # 累计收益
+                cum_ret = (x.iloc[-1] / x.iloc[0]) - 1
+
+                # 计算最大回撤
+                cum_prices = x / x.iloc[0]
+                running_max = cum_prices.expanding().max()
+                drawdown = (cum_prices - running_max) / running_max
+                max_dd = drawdown.min()
+
+                if abs(max_dd) < 1e-10:
+                    return np.nan
+
+                calmar = cum_ret / abs(max_dd)
+                return calmar
+            except:
+                return np.nan
+
+        calmar = close.rolling(window=60).apply(calc_calmar, raw=False)
+        return calmar
+
+    # =========================================================================
+    # 维度 9：趋势强度 (2个) - 第3批新增
+    # =========================================================================
+
+    def adx_14d(self, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+        """
+        14日平均趋向指数 | ADX_14D
+
+        公式：
+        1. +DM = max(high[t] - high[t-1], 0)
+        2. -DM = max(low[t-1] - low[t], 0)
+        3. TR = max(high - low, abs(high - close.shift(1)), abs(low - close.shift(1)))
+        4. +DI = 100 * EMA(+DM, 14) / EMA(TR, 14)
+        5. -DI = 100 * EMA(-DM, 14) / EMA(TR, 14)
+        6. DX = 100 * abs(+DI - -DI) / (+DI + -DI)
+        7. ADX = EMA(DX, 14)
+
+        逻辑：
+        - ADX > 25：强趋势
+        - ADX < 20：震荡市
+        - 不指示方向，只指示强度
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：无需（有界[0,100]）
+        极值截断：无需（有界[0,100]）
+
+        Returns:
+            pd.Series: ADX [0, 100]
+        """
+        # 计算+DM和-DM
+        high_diff = high.diff()
+        low_diff = -low.diff()
+
+        plus_dm = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0)
+        minus_dm = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0)
+
+        # 计算TR（真实波幅）
+        prev_close = close.shift(1)
+        tr1 = high - low
+        tr2 = (high - prev_close).abs()
+        tr3 = (low - prev_close).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+        # 计算14日EMA
+        atr = tr.ewm(span=14, adjust=False, min_periods=14).mean()
+        plus_di = 100 * (
+            plus_dm.ewm(span=14, adjust=False, min_periods=14).mean() / (atr + 1e-10)
+        )
+        minus_di = 100 * (
+            minus_dm.ewm(span=14, adjust=False, min_periods=14).mean() / (atr + 1e-10)
+        )
+
+        # 计算DX
+        dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10))
+
+        # 计算ADX
+        adx = dx.ewm(span=14, adjust=False, min_periods=14).mean()
+
+        return adx
+
+    def vortex_14d(
+        self, high: pd.Series, low: pd.Series, close: pd.Series
+    ) -> pd.Series:
+        """
+        14日螺旋指标 | VORTEX_14D
+
+        公式：
+        1. VM+ = abs(high[t] - low[t-1])
+        2. VM- = abs(low[t] - high[t-1])
+        3. TR = max(high - low, abs(high - close[t-1]), abs(low - close[t-1]))
+        4. VI+ = sum(VM+, 14) / sum(TR, 14)
+        5. VI- = sum(VM-, 14) / sum(TR, 14)
+        6. Vortex = VI+ - VI-
+
+        逻辑：
+        - Vortex > 0：上升趋势
+        - Vortex < 0：下降趋势
+        - 交叉点可能是趋势反转信号
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: Vortex差值
+        """
+        # 计算VM+和VM-
+        vm_plus = (high - low.shift(1)).abs()
+        vm_minus = (low - high.shift(1)).abs()
+
+        # 计算TR
+        prev_close = close.shift(1)
+        tr1 = high - low
+        tr2 = (high - prev_close).abs()
+        tr3 = (low - prev_close).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+        # 计算14日求和
+        vm_plus_sum = vm_plus.rolling(window=14, min_periods=14).sum()
+        vm_minus_sum = vm_minus.rolling(window=14, min_periods=14).sum()
+        tr_sum = tr.rolling(window=14, min_periods=14).sum()
+
+        # 计算VI+和VI-
+        vi_plus = vm_plus_sum / (tr_sum + 1e-10)
+        vi_minus = vm_minus_sum / (tr_sum + 1e-10)
+
+        # Vortex = VI+ - VI-
+        vortex = vi_plus - vi_minus
+
+        return vortex
+
+    # =========================================================================
+    # 维度 10：相对强度 (2个) - 第4批新增
+    # =========================================================================
+
+    def relative_strength_vs_market_20d(
+        self, close: pd.Series, market_close: pd.DataFrame
+    ) -> pd.Series:
+        """
+        20日相对市场强度 | RELATIVE_STRENGTH_VS_MARKET_20D
+
+        公式：
+        1. market_ret = mean(all_etf_returns)  # 等权市场组合
+        2. etf_ret = individual_etf_return
+        3. relative_strength = etf_ret - market_ret
+
+        逻辑：
+        - 正值：跑赢市场
+        - 负值：跑输市场
+        - 识别相对强势的ETF
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: 相对强度
+        """
+        # 计算个股收益率
+        etf_returns = close.pct_change(fill_method=None)
+
+        # 计算市场收益率（所有ETF等权平均）
+        market_returns = market_close.pct_change(fill_method=None).mean(axis=1)
+
+        # 计算20日累计相对强度
+        def calc_relative_strength(idx):
+            if idx < 20:
+                return np.nan
+
+            window_etf_ret = etf_returns.iloc[idx - 19 : idx + 1]
+            window_market_ret = market_returns.iloc[idx - 19 : idx + 1]
+
+            if window_etf_ret.isna().any() or window_market_ret.isna().any():
+                return np.nan
+
+            # 累计收益差
+            etf_cum = (1 + window_etf_ret).prod() - 1
+            market_cum = (1 + window_market_ret).prod() - 1
+
+            return etf_cum - market_cum
+
+        relative_strength = pd.Series(
+            [calc_relative_strength(i) for i in range(len(close))], index=close.index
+        )
+
+        return relative_strength
+
+    def correlation_to_market_20d(
+        self, close: pd.Series, market_close: pd.DataFrame
+    ) -> pd.Series:
+        """
+        20日与市场相关性 | CORRELATION_TO_MARKET_20D
+
+        公式：
+        correlation(etf_returns, market_returns) over 20-day window
+
+        逻辑：
+        - 高相关（接近1）：跟随市场
+        - 低相关（接近0）：独立行情
+        - 负相关（<0）：对冲属性
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：无需（有界[-1,1]）
+        极值截断：无需（有界[-1,1]）
+
+        Returns:
+            pd.Series: 相关系数 [-1, 1]
+        """
+        # 计算个股收益率
+        etf_returns = close.pct_change(fill_method=None)
+
+        # 计算市场收益率（所有ETF等权平均）
+        market_returns = market_close.pct_change(fill_method=None).mean(axis=1)
+
+        # 计算20日滚动相关系数
+        corr = etf_returns.rolling(window=20, min_periods=20).corr(market_returns)
+
+        return corr
+
+    # =========================================================================
+    # A方案优先因子 (4个核心增量因子)
+    # =========================================================================
+
+    def tsmom_60d(self, close: pd.Series) -> pd.Series:
+        """
+        60日时间序列动量 | TSMOM_60D
+
+        公式：sign(close[t] / SMA(close, 60) - 1)
+        或简化版：close[t] / SMA(close, 60) - 1（保留强度）
+
+        逻辑：
+        - 正值：价格在均线之上（上升趋势）
+        - 负值：价格在均线之下（下降趋势）
+        - 绝对值：偏离程度
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: 时间序列动量（百分比形式）
+        """
+        sma_60 = close.rolling(window=60, min_periods=60).mean()
+        tsmom = (close / sma_60 - 1) * 100  # 转为百分比
+        return tsmom
+
+    def tsmom_120d(self, close: pd.Series) -> pd.Series:
+        """
+        120日时间序列动量 | TSMOM_120D
+
+        公式：close[t] / SMA(close, 120) - 1
+
+        逻辑：
+        - 长期趋势强度
+        - 与TSMOM_60D互补（不同时间尺度）
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: 长期时间序列动量（百分比形式）
+        """
+        sma_120 = close.rolling(window=120, min_periods=120).mean()
+        tsmom = (close / sma_120 - 1) * 100  # 转为百分比
+        return tsmom
+
+    def breakout_20d(self, high: pd.Series, close: pd.Series) -> pd.Series:
+        """
+        20日突破信号 | BREAKOUT_20D
+
+        公式：
+        1. max_high_20 = max(high[-20:])
+        2. breakout = (close[t] - max_high_20) / max_high_20
+
+        逻辑：
+        - 正值：突破前20日高点（强势信号）
+        - 负值：未突破（弱势）
+        - 绝对值：突破强度
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: 突破强度（百分比形式）
+        """
+        # 计算前20日最高价（不包括当日）
+        max_high = high.shift(1).rolling(window=20, min_periods=20).max()
+
+        # 计算突破强度
+        breakout = (close - max_high) / (max_high + 1e-10) * 100  # 转为百分比
+
+        return breakout
+
+    def turnover_accel_5_20(self, volume: pd.Series) -> pd.Series:
+        """
+        5日vs20日换手率加速度 | TURNOVER_ACCEL_5_20
+
+        公式：
+        1. avg_vol_5 = mean(volume[-5:])
+        2. avg_vol_20 = mean(volume[-20:])
+        3. accel = (avg_vol_5 / avg_vol_20) - 1
+
+        逻辑：
+        - 正值：近期成交量加速（资金热度上升）
+        - 负值：成交量萎缩（资金退潮）
+        - 识别资金流入/流出的变化
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        标准化：WFO内执行
+        极值截断：WFO内 2.5%/97.5%分位
+
+        Returns:
+            pd.Series: 换手率加速度（百分比形式）
+        """
+        avg_vol_5 = volume.rolling(window=5, min_periods=5).mean()
+        avg_vol_20 = volume.rolling(window=20, min_periods=20).mean()
+
+        # 计算加速度
+        accel = (avg_vol_5 / (avg_vol_20 + 1e-10) - 1) * 100  # 转为百分比
+
+        return accel
+
+    # =========================================================================
+    # 辅助过滤因子（成本与容量约束，不作为选择因子）
+    # =========================================================================
+
+    def realized_vol_20d(self, close: pd.Series) -> pd.Series:
+        """
+        20日实际波动率 | REALIZED_VOL_20D
+
+        公式：std(daily_returns) over 20-day window × sqrt(252)（年化）
+
+        用途：
+        - 风险过滤器：高波动期降权/减仓
+        - 目标波动策略：动态调整仓位
+        - 不作为因子打分，作为约束条件
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        Returns:
+            pd.Series: 年化波动率（百分比形式）
+        """
+        returns = close.pct_change(fill_method=None)
+        realized_vol = (
+            returns.rolling(window=20, min_periods=20).std() * np.sqrt(252) * 100
+        )
+        return realized_vol
+
+    def amihud_illiquidity(
+        self, close: pd.Series, volume: pd.Series, amount: Optional[pd.Series] = None
+    ) -> pd.Series:
+        """
+        Amihud流动性指标 | AMIHUD_ILLIQUIDITY
+
+        公式：mean(|daily_return| / daily_amount) over 20-day window
+        如果amount不可得，用 volume × close 近似
+
+        用途：
+        - 冲击成本代理：值越大→冲击成本越高→降权或不交易
+        - 容量约束：Amihud > 阈值 → 排除
+        - 100万资金体量：关键约束条件
+
+        缺失处理：
+        - 窗口内任一缺失 → NaN
+        - 无任何向前填充
+
+        Returns:
+            pd.Series: Amihud流动性指标（×10^6，便于阅读）
+        """
+        returns = close.pct_change(fill_method=None).abs()
+
+        # 计算成交额
+        if amount is None:
+            amount = volume * close  # 近似
+
+        # 计算Amihud
+        amihud = returns / (amount + 1e-10)
+
+        # 20日滚动平均
+        amihud_avg = amihud.rolling(window=20, min_periods=20).mean()
+
+        # 放大为便于阅读的单位（×10^6）
+        return amihud_avg * 1e6
+
+    def spread_proxy(
+        self, high: pd.Series, low: pd.Series, close: pd.Series
+    ) -> pd.Series:
+        """
+        日内价差代理 | SPREAD_PROXY
+
+        公式：(high - low) / close
+
+        用途：
+        - 交易成本代理：价差越大→成本越高
+        - 流动性过滤器：极端价差→排除
+        - 点差估计的简化版本
+
+        缺失处理：
+        - 任一缺失 → NaN
+        - 无任何向前填充
+
+        Returns:
+            pd.Series: 价差比率（百分比形式）
+        """
+        spread = (high - low) / (close + 1e-10) * 100  # 转为百分比
+
+        # 可选：20日平滑避免单日异常
+        spread_smooth = spread.rolling(window=5, min_periods=5).mean()
+
+        return spread_smooth
 
     # =========================================================================
     # 批量计算
@@ -558,6 +1303,62 @@ class PreciseFactorLibrary:
 
                 # 维度6：反转
                 symbol_factors["RSI_14"] = self.rsi_14(close[symbol])
+
+                # 维度7：资金流（第1批新增）
+                symbol_factors["OBV_SLOPE_10D"] = self.obv_slope_10d(
+                    close[symbol], volume[symbol]
+                )
+                symbol_factors["CMF_20D"] = self.cmf_20d(
+                    high[symbol], low[symbol], close[symbol], volume[symbol]
+                )
+
+                # 维度8：风险调整动量（第2批新增）
+                symbol_factors["SHARPE_RATIO_20D"] = self.sharpe_ratio_20d(
+                    close[symbol]
+                )
+                symbol_factors["CALMAR_RATIO_60D"] = self.calmar_ratio_60d(
+                    close[symbol]
+                )
+
+                # 维度9：趋势强度（第3批新增）
+                symbol_factors["ADX_14D"] = self.adx_14d(
+                    high[symbol], low[symbol], close[symbol]
+                )
+                symbol_factors["VORTEX_14D"] = self.vortex_14d(
+                    high[symbol], low[symbol], close[symbol]
+                )
+
+                # 维度10：相对强度（第4批新增）
+                symbol_factors["RELATIVE_STRENGTH_VS_MARKET_20D"] = (
+                    self.relative_strength_vs_market_20d(close[symbol], close)
+                )
+                symbol_factors["CORRELATION_TO_MARKET_20D"] = (
+                    self.correlation_to_market_20d(close[symbol], close)
+                )
+
+                # ========== [P0修复] 禁用新增因子，回滚到历史18个 ==========
+                # # 时间序列动量（2个）
+                # symbol_factors["TSMOM_60D"] = self.tsmom_60d(close[symbol])
+                # symbol_factors["TSMOM_120D"] = self.tsmom_120d(close[symbol])
+                #
+                # # 突破信号（1个）
+                # symbol_factors["BREAKOUT_20D"] = self.breakout_20d(
+                #     high[symbol], close[symbol]
+                # )
+                #
+                # # 资金流加速度（1个）
+                # symbol_factors["TURNOVER_ACCEL_5_20"] = self.turnover_accel_5_20(
+                #     volume[symbol]
+                # )
+                #
+                # # 辅助过滤因子（成本/容量约束）
+                # symbol_factors["REALIZED_VOL_20D"] = self.realized_vol_20d(close[symbol])
+                # symbol_factors["AMIHUD_ILLIQUIDITY"] = self.amihud_illiquidity(
+                #     close[symbol], volume[symbol]
+                # )
+                # symbol_factors["SPREAD_PROXY"] = self.spread_proxy(
+                #     high[symbol], low[symbol], close[symbol]
+                # )
 
                 all_factors[symbol] = pd.DataFrame(symbol_factors)
 

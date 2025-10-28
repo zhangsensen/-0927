@@ -1,0 +1,57 @@
+# 实验配置: NewFactors (新因子增强)
+# 用途: A方案测试实验 - 启用新增的4个优先因子
+# 创建日期: 2025-10-28
+
+meta_factor_weighting:
+  enabled: true
+  mode: "icir"
+  beta: 0.8  # 当前最优Beta
+  min_windows: 5
+
+correlation_deduplication:
+  strategy: "keep_higher_ic"
+  threshold: 0.9
+
+minimum_ic:
+  global_minimum: 0.012  # 优化后阈值
+
+# 🔥 启用新因子族（A方案增量测试）
+family_quota:
+  tsmom_family:
+    enabled: true  # ✅ 启用时间序列动量
+    description: 时间序列动量类（中长期趋势）- 最多选 1 个
+    factors:
+    - TSMOM_60D
+    - TSMOM_120D
+    max_count: 1
+  breakout_family:
+    enabled: true  # ✅ 启用突破信号
+    description: 突破信号类（价格突破强度）
+    factors:
+    - BREAKOUT_20D
+    max_count: 1
+  flow_accel_family:
+    enabled: true  # ✅ 启用资金流加速度
+    description: 资金流加速度类（换手率动态）
+    factors:
+    - TURNOVER_ACCEL_5_20
+    max_count: 1
+
+description: |
+  A方案新因子增强实验
+  - 原有12个基础因子 + 4个新优先因子
+  - 新因子: TSMOM_60D/120D, BREAKOUT_20D, TURNOVER_ACCEL_5_20
+  - Meta Factor Beta=0.8（保持不变）
+  - 目的: 验证新因子对组合性能的增量贡献
+  
+  预期改善:
+  - OOS IC提升（更多维度捕捉alpha）
+  - 夏普比率提升 & 回撤改善
+  - 胜率不降（关键约束）
+  - 换手率可控（避免过度交易）
+  
+  辅助过滤因子（已实现但本实验不启用）:
+  - REALIZED_VOL_20D: 实际波动率（风险过滤）
+  - AMIHUD_ILLIQUIDITY: 流动性指标（冲击成本代理）
+  - SPREAD_PROXY: 价差代理（交易成本）
+  注: 这些因子在下一阶段（持仓构建优化）使用

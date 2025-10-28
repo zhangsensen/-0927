@@ -1,0 +1,39 @@
+# 实验配置: Baseline (基线)
+# 用途: A方案对照实验 - 仅使用原有12个基础因子
+# 创建日期: 2025-10-28
+
+meta_factor_weighting:
+  enabled: true
+  mode: "icir"
+  beta: 0.8  # 当前最优Beta
+  min_windows: 5
+
+correlation_deduplication:
+  strategy: "keep_higher_ic"
+  threshold: 0.9
+
+minimum_ic:
+  global_minimum: 0.012  # 优化后阈值
+
+# 新因子族全部禁用（仅使用原有因子）
+family_quota:
+  tsmom_family:
+    enabled: false
+  breakout_family:
+    enabled: false
+  flow_accel_family:
+    enabled: false
+
+description: |
+  A方案基线对照实验
+  - 仅使用原有12个基础因子
+  - Meta Factor Beta=0.8（当前最优）
+  - 新因子族全部禁用
+  - 目的: 作为对照基线，与新因子实验对比
+  
+  关键指标:
+  - OOS IC均值与中位数
+  - 夏普比率（年化）
+  - 最大回撤
+  - 换手率
+  - 因子选择稳定性

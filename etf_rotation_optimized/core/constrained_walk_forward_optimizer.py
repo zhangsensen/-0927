@@ -94,6 +94,9 @@ class ConstrainedWalkForwardOptimizer:
         self.verbose = verbose
         self.window_reports = []
 
+        # Factor Momentum: 记录历史 OOS IC（key=因子名, value=OOS IC列表）
+        self.historical_oos_ics: Dict[str, List[float]] = {}
+
         if verbose:
             logging.basicConfig(level=logging.INFO)
 
@@ -155,27 +158,77 @@ class ConstrainedWalkForwardOptimizer:
                     f"🔄 进度: {window_idx}/{len(windows)} 窗口完成 ({window_idx/len(windows)*100:.1f}%)"
                 )
 
-            # IS阶段
-            is_factors = factors_data[is_start:is_end]
+            # IS阶段：因子提前1天切片以实现T-1→T对齐
+            # 因子: [is_start-1, is_end-1) 长度 = is_end - is_start
+            # 收益: [is_start, is_end)     长度 = is_end - is_start
+            # 配对关系: factors[t] 预测 returns[t]
+            is_factor_start = max(0, is_start - 1)
+            is_factor_end = max(0, is_end - 1)  # 注意：slice的右边界是开区间
+            is_factors = factors_data[is_factor_start:is_factor_end]
             is_returns = returns[is_start:is_end]
 
-            # 计算IC
+            # 轻量日志：确认 T-1 切片已生效
+            if window_idx == 0 or (self.verbose and window_idx % 10 == 0):
+                logger.debug(
+                    f"[窗口{window_idx+1}] IS 使用 T-1 切片: "
+                    f"因子[{is_factor_start}:{is_factor_end}), 收益[{is_start}:{is_end})"
+                )
+
+            # 计算IC（因子与收益索引已对齐）
             ic_scores = self._compute_window_ic(is_factors, is_returns, factor_names)
 
-            # 应用约束筛选
+            # 计算因子相关矩阵（用于相关性去重）
+            factor_correlations = self._compute_factor_correlations(
+                is_factors, factor_names
+            )
+
+            meta_cfg = (
+                self.selector.constraints.get("meta_factor_weighting", {})
+                if hasattr(self.selector, "constraints")
+                else {}
+            )
+            use_meta = (
+                bool(meta_cfg.get("enabled", False))
+                and meta_cfg.get("mode", "") == "icir"
+            )
+            factor_icir: Dict[str, float] = {}
+            if use_meta and self.historical_oos_ics:
+                k = int(meta_cfg.get("windows", 20))
+                min_w = int(meta_cfg.get("min_windows", 5))
+                std_floor = float(meta_cfg.get("std_floor", 0.005))
+                for name in factor_names:
+                    hist = self.historical_oos_ics.get(name, [])
+                    if len(hist) >= min_w:
+                        arr = np.array(hist[-k:]) if k > 0 else np.array(hist)
+                        m = float(np.mean(arr))
+                        s = float(np.std(arr))
+                        s = s if s >= std_floor else std_floor
+                        factor_icir[name] = m / s
+                    else:
+                        factor_icir[name] = 0.0
+
             selected_factors, selection_report = self.selector.select_factors(
-                ic_scores, target_count=target_factor_count
+                ic_scores,
+                factor_correlations=factor_correlations,
+                target_count=target_factor_count,
+                historical_oos_ics=self.historical_oos_ics,
+                factor_icir=factor_icir if use_meta else None,
             )
 
             if self.verbose:
                 logger.info(f"筛选: {len(ic_scores)} → {len(selected_factors)} 因子")
 
-            # OOS阶段
-            oos_factors = factors_data[oos_start:oos_end]
+            # OOS阶段：因子提前1天切片以实现T-1→T对齐
+            oos_factor_start = max(0, oos_start - 1)
+            oos_factor_end = max(0, oos_end - 1)
+            oos_factors = factors_data[oos_factor_start:oos_factor_end]
             oos_returns = returns[oos_start:oos_end]
 
+            # 防御性初始化，避免空选择时未定义
+            oos_ic_scores = {}
+
             if len(selected_factors) > 0:
-                # 计算OOS性能
+                # 计算OOS性能（因子与收益索引已对齐）
                 oos_ic_scores = self._compute_window_ic(
                     oos_factors, oos_returns, factor_names
                 )
@@ -203,7 +256,8 @@ class ConstrainedWalkForwardOptimizer:
                     "min": np.min(list(ic_scores.values())),
                     "max": np.max(list(ic_scores.values())),
                 },
-                candidate_factors=list(ic_scores.keys()),
+                # ⚠️ Linus Fix: 使用排序后的候选列表（反映Meta Factor调整）
+                candidate_factors=selection_report.candidate_factors,
                 selected_factors=selected_factors,
                 constraint_violations=self._extract_violations(selection_report),
                 oos_performance=selected_oos_ics,
@@ -216,6 +270,14 @@ class ConstrainedWalkForwardOptimizer:
             )
 
             self.window_reports.append(report)
+
+            # Factor Momentum: 记录当前窗口【所有因子】的 OOS IC（解决未入选因子 ICIR=0 锁死问题）
+            # 🔪 Linus Fix: 不只记录已选因子，记录全部因子，给未来翻盘机会
+            for factor_name in factor_names:
+                oos_ic = oos_ic_scores.get(factor_name, 0.0)  # 未计算的默认0
+                if factor_name not in self.historical_oos_ics:
+                    self.historical_oos_ics[factor_name] = []
+                self.historical_oos_ics[factor_name].append(oos_ic)
 
             forward_performances.append(
                 {
@@ -258,28 +320,86 @@ class ConstrainedWalkForwardOptimizer:
 
         return windows
 
+    def _compute_factor_correlations(
+        self, factors: np.ndarray, factor_names: List[str]
+    ) -> Dict[Tuple[str, str], float]:
+        """
+        计算因子相关矩阵（用于相关性去重）
+
+        参数:
+            factors: shape (n_days, n_assets, n_factors)
+            factor_names: 因子名称列表
+
+        返回:
+            {(factor1, factor2): correlation} 字典
+        """
+        from scipy.stats import spearmanr
+
+        n_days, n_assets, n_factors = factors.shape
+
+        # 展平为 (n_days * n_assets, n_factors) 以计算因子间相关
+        factors_flat = factors.reshape(-1, n_factors)  # (n_days*n_assets, n_factors)
+
+        # 计算 Spearman 相关矩阵（因子维度）
+        corr_matrix, _ = spearmanr(factors_flat, axis=0, nan_policy="omit")
+
+        # 转为字典格式 {(f1, f2): corr}
+        # ⚠️ Linus Fix: 使用字母排序key，与factor_selector查找逻辑一致
+        correlations = {}
+        for i in range(n_factors):
+            for j in range(i + 1, n_factors):  # 只存储上三角（避免重复）
+                # 使用字母排序确保key规范一致
+                key = tuple(sorted([factor_names[i], factor_names[j]]))
+                correlations[key] = corr_matrix[i, j]
+
+        return correlations
+
     def _compute_window_ic(
         self, factors: np.ndarray, returns: np.ndarray, factor_names: List[str]
     ) -> Dict[str, float]:
-        """计算窗口内因子IC"""
+        """计算窗口内因子IC（与Step4一致的口径）
+
+        定义：日频横截面 Spearman IC，使用 T-1 因子预测 T 日收益。
+        做法：按日在资产维度做秩相关，得到每日IC后取均值。
+        注意：输入的 factors/returns 应已错位对齐（factors 比 returns 提前1天切片）。
+             函数会自动处理长度不等（当窗口起点无法再提前时）的情况。
+        """
+        from scipy.stats import spearmanr
+
         ic_scores = {}
 
+        n_factors_days, n_assets, n_factor_cols = factors.shape
+        n_returns_days = returns.shape[0]
+
+        # 取两者的最小长度，避免越界
+        n_days = min(n_factors_days, n_returns_days)
+
+        # 轻量校验日志：边界保护触发提示（仅在长度不等时记录一次）
+        if n_factors_days != n_returns_days:
+            logger.debug(
+                f"[边界保护] 因子天数({n_factors_days}) != 收益天数({n_returns_days})，"
+                f"使用 min={n_days}（T-1 对齐的边界情况）"
+            )
+
         for i, name in enumerate(factor_names):
-            factor_series = factors[:, :, i]
+            factor_ts = factors[:, :, i]  # (n_days, n_assets)
 
-            # 计算平均的IC (对所有资产)
-            ics = []
-            for j in range(factor_series.shape[1]):
-                factor_col = factor_series[:, j]
-                returns_col = returns[:, j]
+            daily_ics: List[float] = []
+            # 直接逐日配对（外部已保证因子提前1天切片）
+            for t in range(n_days):
+                signal_t = factor_ts[t, :]
+                ret_t = returns[t, :]
 
-                # 计算相关系数
-                corr = np.corrcoef(factor_col, returns_col)[0, 1]
-                if not np.isnan(corr):
-                    ics.append(corr)
+                # 有效掩码
+                valid_mask = ~(np.isnan(signal_t) | np.isnan(ret_t))
+                if valid_mask.sum() < 2:
+                    continue
 
-            # 取平均IC
-            ic_scores[name] = np.mean(ics) if ics else 0.0
+                ic, _ = spearmanr(signal_t[valid_mask], ret_t[valid_mask])
+                if not np.isnan(ic):
+                    daily_ics.append(float(ic))
+
+            ic_scores[name] = float(np.mean(daily_ics)) if daily_ics else 0.0
 
         return ic_scores
 

@@ -1,0 +1,4 @@
+- Clean legacy audit/report markdowns by archiving into docs/archive and keep minimal documentation.
+- Implement route A factor overhaul: new data loaders for fundamentals and order flow, factor registry, IC-IR weighting, state-dependent regimes, ML ensemble.
+- Update configs and scripts to adopt new pipeline, ensure metadata compatibility.
+- Run smoke backtest metrics script to verify pipeline execution.

@@ -28,15 +28,17 @@
   最终选择 + 约束报告
 
 作者: Step 5 Factor Selector
-日期: 2025-10-26
 """
 
+import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
-import pandas as pd
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -67,12 +69,12 @@ class SelectionReport:
     def __repr__(self):
         return f"""
 因子选择报告
-├─ 候选因子数: {len(self.candidate_factors)}
-├─ 最终选择数: {len(self.final_selection)}
-├─ 应用约束数: {len(self.applied_constraints)}
-├─ 约束违反数: {len(self.violations)}
-├─ 最终选择: {self.final_selection}
-└─ 选择评分: {self.selection_scores}
+- 候选因子数: {len(self.candidate_factors)}
+- 最终选择数: {len(self.final_selection)}
+- 应用约束数: {len(self.applied_constraints)}
+- 约束违反数: {len(self.violations)}
+- 最终选择: {self.final_selection}
+- 选择评分: {self.selection_scores}
 """
 
 
@@ -150,6 +152,8 @@ class FactorSelector:
         ic_scores: Dict[str, float],
         factor_correlations: Optional[Dict[Tuple[str, str], float]] = None,
         target_count: int = None,
+        historical_oos_ics: Optional[Dict[str, List[float]]] = None,  # Factor Momentum
+        factor_icir: Optional[Dict[str, float]] = None,  # Meta weighting
     ) -> Tuple[List[str], SelectionReport]:
         """
         选择满足约束的因子子集
@@ -169,8 +173,30 @@ class FactorSelector:
             print(f"候选因子数: {len(ic_scores)}")
             print(f"目标选择数: {target_count if target_count else '不限'}")
 
-        # 1. 按IC排序候选因子
-        sorted_candidates = sorted(ic_scores.items(), key=lambda x: x[1], reverse=True)
+        # 0. 元权重（ICIR）调整：仅用于排序/配额/截断，不影响最小IC过滤
+        work_ic_scores = ic_scores
+        meta_cfg = (
+            self.constraints.get("meta_factor_weighting", {})
+            if hasattr(self, "constraints")
+            else {}
+        )
+        if (
+            factor_icir
+            and meta_cfg.get("enabled", False)
+            and meta_cfg.get("mode", "") == "icir"
+        ):
+            beta = float(meta_cfg.get("beta", 1.0))
+            adjusted = {}
+            for f, ic in ic_scores.items():
+                ir = float(factor_icir.get(f, 0.0))
+                adjusted[f] = ic * (1.0 + beta * ir)
+            work_ic_scores = adjusted
+
+        # 1. 按IC排序候选因子（使用调整后的IC）
+        # 🔧 FIX: 添加因子名作为二级排序键，确保IC相同时顺序稳定
+        sorted_candidates = sorted(
+            work_ic_scores.items(), key=lambda x: (-x[1], x[0])  # IC降序，因子名升序
+        )
         candidate_names = [f for f, _ in sorted_candidates]
 
         violations = []
@@ -199,7 +225,7 @@ class FactorSelector:
                     )
                 )
 
-        # 3. 应用相关性去冗余
+        # 3. 应用相关性去冗余(Factor Momentum：支持 ICIR 策略)
         selected = candidate_names.copy()
         if factor_correlations and "correlation_deduplication" in self.constraints:
             dedup_config = self.constraints["correlation_deduplication"]
@@ -207,28 +233,40 @@ class FactorSelector:
             strategy = dedup_config.get("strategy", "keep_higher_ic")
 
             removed = self._apply_correlation_deduplication(
-                selected, ic_scores, factor_correlations, threshold, strategy
+                selected,
+                work_ic_scores,
+                factor_correlations,
+                threshold,
+                strategy,
+                historical_oos_ics=historical_oos_ics,  # Factor Momentum
             )
 
             if removed:
                 selected = [f for f in selected if f not in removed]
                 applied_constraints.append(
-                    f"correlation_deduplication (threshold={threshold})"
+                    f"correlation_deduplication (threshold={threshold}, strategy={strategy})"
                 )
                 constraint_impacts["correlation_deduplication"] = removed
+
+                # 🔪 Linus 日志增强：输出 ICIR vs IC 对比
+                if strategy == "keep_higher_icir":
+                    logger.info(
+                        f"[Factor Momentum] 相关性去重使用 ICIR 策略,排除 {len(removed)} 个因子"
+                    )
+
                 violations.append(
                     ConstraintViolation(
                         constraint_type="correlation_deduplication",
                         reason=f"相关系数 > {threshold}",
                         affected_factors=removed,
                         severity="info",
-                        action_taken=f"排除 {len(removed)} 个高相关因子",
+                        action_taken=f"排除 {len(removed)} 个高相关因子 (strategy={strategy})",
                     )
                 )
 
         # 4. 应用互斥对约束
         if "mutual_exclusivity" in self.constraints:
-            removed = self._apply_mutual_exclusivity(selected, ic_scores)
+            removed = self._apply_mutual_exclusivity(selected, work_ic_scores)
             if removed:
                 selected = [f for f in selected if f not in removed]
                 applied_constraints.append("mutual_exclusivity")
@@ -245,7 +283,7 @@ class FactorSelector:
 
         # 5. 应用家族配额
         if "family_quota" in self.constraints:
-            removed = self._apply_family_quota(selected, ic_scores)
+            removed = self._apply_family_quota(selected, work_ic_scores)
             if removed:
                 selected = [f for f in selected if f not in removed]
                 applied_constraints.append("family_quota")
@@ -269,12 +307,13 @@ class FactorSelector:
         # 7. 控制选择数量
         if target_count and len(selected) > target_count:
             # 按IC降序截断
-            selected = sorted(selected, key=lambda f: ic_scores[f], reverse=True)[
-                :target_count
-            ]
+            # 🔧 FIX: 添加因子名作为二级排序键，确保IC相同时顺序稳定
+            selected = sorted(
+                selected, key=lambda f: (-work_ic_scores[f], f)  # IC降序，因子名升序
+            )[:target_count]
 
         # 生成报告
-        selection_scores = {f: ic_scores[f] for f in selected}
+        selection_scores = {f: work_ic_scores[f] for f in selected}
 
         report = SelectionReport(
             candidate_factors=candidate_names,
@@ -299,6 +338,7 @@ class FactorSelector:
         correlations: Dict[Tuple[str, str], float],
         threshold: float,
         strategy: str,
+        historical_oos_ics: Optional[Dict[str, List[float]]] = None,  # Factor Momentum
     ) -> Set[str]:
         """
         应用相关性去冗余
@@ -308,12 +348,35 @@ class FactorSelector:
             ic_scores: IC分数
             correlations: 相关系数字典
             threshold: 相关性阈值
-            strategy: 去冗余策略
+            strategy: 去冗余策略(keep_higher_ic, keep_higher_icir, keep_longer_period, keep_first)
+            historical_oos_ics: 历史 OOS IC 字典(用于计算 ICIR)
 
         返回:
             被移除的因子集合
         """
         removed = set()
+
+        # Factor Momentum: 计算 ICIR (信息比率 = mean(IC) / std(IC))
+        icir_scores = {}
+        if strategy == "keep_higher_icir" and historical_oos_ics:
+            min_windows = self.constraints.get("correlation_deduplication", {}).get(
+                "icir_min_windows", 3
+            )
+            std_floor = self.constraints.get("correlation_deduplication", {}).get(
+                "icir_std_floor", 0.005
+            )
+
+            for factor in candidates:
+                if (
+                    factor in historical_oos_ics
+                    and len(historical_oos_ics[factor]) >= min_windows
+                ):
+                    ics = historical_oos_ics[factor][-min_windows:]  # 使用最近 K 个窗口
+                    mean_ic = np.mean(ics)
+                    std_ic = max(np.std(ics), std_floor)  # 避免除零
+                    icir_scores[factor] = mean_ic / std_ic
+                else:
+                    icir_scores[factor] = 0.0  # 历史不足,ICIR=0(劣势)
 
         for i, f1 in enumerate(candidates):
             if f1 in removed:
@@ -329,7 +392,14 @@ class FactorSelector:
 
                 if abs(corr) > threshold:
                     # 根据策略决定移除哪个
-                    if strategy == "keep_higher_ic":
+                    if strategy == "keep_higher_icir" and icir_scores:
+                        # Factor Momentum: 保留 ICIR 更高的因子
+                        to_remove = (
+                            f2
+                            if icir_scores.get(f1, 0) > icir_scores.get(f2, 0)
+                            else f1
+                        )
+                    elif strategy == "keep_higher_ic":
                         to_remove = f2 if ic_scores[f1] > ic_scores[f2] else f1
                     elif strategy == "keep_longer_period":
                         # 选择周期更长的 (假设名字中包含周期信息)
@@ -402,9 +472,11 @@ class FactorSelector:
             ]
 
             if len(selected_in_family) > max_count:
-                # 按IC降序选择，移除低IC的
+                # 按IC降序选择,移除低IC的
+                # 🔧 FIX: 添加因子名作为二级排序键，确保IC相同时顺序稳定
                 sorted_by_ic = sorted(
-                    selected_in_family, key=lambda f: ic_scores[f], reverse=True
+                    selected_in_family,
+                    key=lambda f: (-ic_scores[f], f),  # IC降序，因子名升序
                 )
                 to_remove = sorted_by_ic[max_count:]
                 removed.update(to_remove)
@@ -459,40 +531,53 @@ class FactorSelector:
 
 def create_default_selector() -> FactorSelector:
     """
-    创建默认的因子选择器
+    创建默认的因子选择器(从YAML加载配置)
 
     返回:
-        FactorSelector 实例，预装默认约束
+        FactorSelector 实例,从YAML文件加载约束
     """
-    selector = FactorSelector(verbose=True)
+    # 🔪 Linus Fix: 使用YAML配置，不要硬编码！
+    from pathlib import Path
 
-    # 设置默认约束
-    selector.constraints = {
-        "family_quota": {
-            "momentum": {"factors": ["MOM_20D", "SLOPE_20D"], "max_count": 1},
-            "volatility": {
-                "factors": ["RET_VOL_20D", "VOL_RATIO_20D", "VOL_RATIO_60D"],
-                "max_count": 2,
+    # 查找配置文件
+    config_file = (
+        Path(__file__).parent.parent / "configs" / "FACTOR_SELECTION_CONSTRAINTS.yaml"
+    )
+
+    if config_file.exists():
+        selector = FactorSelector(constraints_file=str(config_file), verbose=True)
+    else:
+        # 降级方案：无配置文件时使用默认值
+        selector = FactorSelector(verbose=True)
+        selector.constraints = {
+            "family_quota": {
+                "momentum": {"factors": ["MOM_20D", "SLOPE_20D"], "max_count": 1},
+                "volatility": {
+                    "factors": ["RET_VOL_20D", "VOL_RATIO_20D", "VOL_RATIO_60D"],
+                    "max_count": 2,
+                },
+                "risk_adjusted": {"factors": ["MAX_DD_60D"], "max_count": 1},
+                "price_features": {
+                    "factors": ["PRICE_POSITION_20D", "PRICE_POSITION_120D"],
+                    "max_count": 1,
+                },
+                "correlation": {"factors": ["PV_CORR_20D"], "max_count": 1},
+                "technical": {"factors": ["RSI_14"], "max_count": 1},
             },
-            "risk_adjusted": {"factors": ["MAX_DD_60D"], "max_count": 1},
-            "price_features": {
-                "factors": ["PRICE_POSITION_20D", "PRICE_POSITION_120D"],
-                "max_count": 1,
+            "mutual_exclusivity": [
+                {
+                    "pair": ["PRICE_POSITION_20D", "PRICE_POSITION_120D"],
+                    "reason": "周期重叠",
+                },
+                {"pair": ["MOM_20D", "SLOPE_20D"], "reason": "动量重叠"},
+            ],
+            "correlation_deduplication": {
+                "threshold": 0.8,
+                "strategy": "keep_higher_ic",
             },
-            "correlation": {"factors": ["PV_CORR_20D"], "max_count": 1},
-            "technical": {"factors": ["RSI_14"], "max_count": 1},
-        },
-        "mutual_exclusivity": [
-            {
-                "pair": ["PRICE_POSITION_20D", "PRICE_POSITION_120D"],
-                "reason": "周期重叠",
-            },
-            {"pair": ["MOM_20D", "SLOPE_20D"], "reason": "动量重叠"},
-        ],
-        "correlation_deduplication": {"threshold": 0.8, "strategy": "keep_higher_ic"},
-        "minimum_ic": {"global_minimum": 0.02},
-        "required_factors": [],
-    }
+            "minimum_ic": {"global_minimum": 0.02},
+            "required_factors": [],
+        }
 
     return selector
 

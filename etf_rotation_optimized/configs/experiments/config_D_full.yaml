@@ -1,0 +1,25 @@
+# 实验配置D: Full (Meta Factor + ICIR Tie-breaking)
+# 用途: 同时启用Meta Factor全局加权和ICIR tie-breaking
+# 预期: 与配置C对比，验证tie-breaking的增量价值
+
+meta_factor_weighting:
+  enabled: true  # 启用Meta Factor
+  mode: "icir"
+  beta: 0.3
+  windows: 20
+  min_windows: 5
+  std_floor: 0.005
+
+correlation_deduplication:
+  threshold: 0.8
+  strategy: "keep_higher_icir"  # 使用历史ICIR做tie-breaking
+  icir_min_windows: 3
+  icir_std_floor: 0.005
+
+description: |
+  配置D: Full (Meta + Tie-break)
+  - Meta Factor: 启用（beta=0.3，ICIR加权）
+  - Tie-breaking: 用历史ICIR
+  - 目的: 测试完整方案
+  - 对比C: tie-breaking的增量价值
+  - 对比A: 完整方案vs基线的总效果

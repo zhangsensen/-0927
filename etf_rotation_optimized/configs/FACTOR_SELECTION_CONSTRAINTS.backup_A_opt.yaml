@@ -32,29 +32,15 @@ correlation_deduplication:
   icir_min_windows: 3
   icir_std_floor: 0.005
   strategy: keep_higher_ic
-  threshold: 0.9
+  threshold: 0.85
 description: "当前无必选因子配置。可根据策略需要添加。\n\n示例 (若需要):\n  required_factors:\n    - 'MOM_20D'\
-  \        # 必选: 动量因子\n    - 'RET_VOL_20D'    # 必选: 波动率因子\n\n# A方案辅助过滤因子说明 (不参与因子选择，仅用于成本/容量约束):\n\
-  #   - REALIZED_VOL_20D: 实际波动率（风险过滤、目标波动策略）\n#   - AMIHUD_ILLIQUIDITY: 流动性指标（冲击成本代理，100万资金关键约束）\n\
-  #   - SPREAD_PROXY: 价差代理（交易成本估计）\n#   这些因子在后处理阶段（持仓构建）使用，不影响因子选择过程。\n"
+  \        # 必选: 动量因子\n    - 'RET_VOL_20D'    # 必选: 波动率因子\n"
 factor_selection: null
 family_quota:
-  breakout_family:
-    description: 突破信号类（价格突破强度）
-    enabled: true
-    factors:
-    - BREAKOUT_20D
-    max_count: 1
   correlation:
     description: 相关性类因子最多选 1 个
     factors:
     - PV_CORR_20D
-    max_count: 1
-  flow_accel_family:
-    description: 资金流加速度类（换手率动态）
-    enabled: true
-    factors:
-    - TURNOVER_ACCEL_5_20
     max_count: 1
   momentum:
     description: 动量类因子最多选 1 个 (避免同向冗余)
@@ -78,13 +64,6 @@ family_quota:
     factors:
     - RSI_14
     max_count: 1
-  tsmom_family:
-    description: 时间序列动量类（中长期趋势）- 最多选 1 个
-    enabled: true
-    factors:
-    - TSMOM_60D
-    - TSMOM_120D
-    max_count: 1
   volatility:
     description: 波动率类因子最多选 2 个 (覆盖不同周期)
     factors:
@@ -93,19 +72,17 @@ family_quota:
     - VOL_RATIO_60D
     max_count: 2
 meta_factor_weighting:
-  beta: 0.8
-  enabled: true
+  beta: 0.6
+  enabled: false
   min_windows: 5
   mode: icir
 metadata:
   created_date: '2025-10-26'
-  description: ETF 轮动因子筛选系统 Step 5 约束配置 + A方案增量因子（灰度测试）
-  last_modified: '2025-10-28'
-  new_factors_status: disabled_by_default
+  description: ETF 轮动因子筛选系统 Step 5 约束配置
+  last_modified: '2025-10-26'
   total_constraints: 5
-  total_factors: 13
-  total_families: 9
-  version: '1.1'
+  total_factors: 10
+  version: '1.0'
 minimum_ic:
   description: '全局最小IC要求: 0.012 (优化后: IC中位数水平)
 
