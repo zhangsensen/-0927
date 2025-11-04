@@ -315,7 +315,7 @@ class CrossSectionProcessor:
         self, factors_dict: Dict[str, pd.DataFrame]
     ) -> Dict[str, pd.DataFrame]:
         """
-        批量处理所有因子
+        批量处理所有因子（完全向量化 - 无逐日期循环）
 
         参数:
             factors_dict: 因子字典
@@ -324,12 +324,17 @@ class CrossSectionProcessor:
 
         返回:
             processed_factors: 处理后的因子字典
+
+        实现：
+            - DataFrame级别的axis=1操作（横截面）
+            - 使用quantile、clip、nanmean、nanstd等向量化方法
+            - O(T×N)复杂度，无Python循环
         """
         self.processing_report["timestamp"] = datetime.now().isoformat()
 
         if self.verbose:
             print("\n" + "=" * 70)
-            print("跨截面标准化处理 | Cross-Section Standardization")
+            print("跨截面标准化处理 | Cross-Section Standardization (向量化)")
             print("=" * 70)
 
         processed_factors = {}
@@ -338,53 +343,74 @@ class CrossSectionProcessor:
             if self.verbose:
                 print(f"\n📊 处理因子: {factor_name}")
 
-            # 初始化该因子的统计信息
-            factor_results = {}
-            factor_nan_stats = {
-                "original_nan_count": 0,
-                "final_nan_count": 0,
-                "nan_preserved": True,
+            # 统计NaN数量
+            original_nan_count = factor_data.isna().sum().sum()
+
+            # 检查有界性
+            if factor_name in self.BOUNDED_FACTORS:
+                # 有界因子：直接透传
+                processed_factors[factor_name] = factor_data
+                if self.verbose:
+                    print(f"  ✓ {factor_name:20s} [有界] 直接透传")
+
+                self.processing_report["factors_processed"].append(factor_name)
+                self.processing_report["nan_stats"][factor_name] = {
+                    "original_nan_count": original_nan_count,
+                    "final_nan_count": original_nan_count,
+                    "nan_preserved": True,
+                }
+                continue
+
+            # 无界因子：执行向量化标准化 + Winsorize
+            # Step 1: Z-score标准化（axis=1 = 横截面）
+            mean_cs = factor_data.mean(axis=1, skipna=True)
+            std_cs = factor_data.std(axis=1, skipna=True)
+
+            # 检测零方差日期（所有标的值相同）
+            zero_var_dates = std_cs < 1e-10
+            if zero_var_dates.any():
+                num_zero_var = zero_var_dates.sum()
+                msg = f"{factor_name}: {num_zero_var}个日期方差为0（所有标的值相同）"
+                self.processing_report["warnings"].append(msg)
+                if self.verbose:
+                    print(f"  ⚠️ {msg}")
+
+            # 广播减均值除标准差（零方差日期会产生NaN）
+            standardized = factor_data.sub(mean_cs, axis=0).div(std_cs, axis=0)
+
+            # Step 2: Winsorize（横截面分位数裁剪）
+            # 计算每行（日期）的分位数
+            lower_bound = standardized.quantile(self.lower_percentile / 100, axis=1)
+            upper_bound = standardized.quantile(self.upper_percentile / 100, axis=1)
+
+            # 广播裁剪
+            winsorized = standardized.clip(lower=lower_bound, upper=upper_bound, axis=0)
+
+            processed_factors[factor_name] = winsorized
+
+            # 统计信息
+            final_nan_count = winsorized.isna().sum().sum()
+            self.processing_report["factors_processed"].append(factor_name)
+            self.processing_report["nan_stats"][factor_name] = {
+                "original_nan_count": original_nan_count,
+                "final_nan_count": final_nan_count,
+                "nan_preserved": (original_nan_count == final_nan_count),
             }
 
-            # 逐日期处理
-            processed_dates = []
-            for date in factor_data.index:
-                series = factor_data.loc[date]
+            if self.verbose:
+                # 计算被裁剪的值数量
+                clipped_lower = (standardized < lower_bound.values[:, None]).sum().sum()
+                clipped_upper = (standardized > upper_bound.values[:, None]).sum().sum()
+                clipped_total = clipped_lower + clipped_upper
+                total_valid = standardized.notna().sum().sum()
+                pct = 100 * clipped_total / total_valid if total_valid > 0 else 0
 
-                # 处理该日期的因子序列
-                processed_series, process_stats = self.process_factor(
-                    factor_name, series
+                print(f"  ✓ {factor_name:20s} Z-score标准化 + Winsorize")
+                print(
+                    f"    截断 {clipped_total}/{total_valid} ({pct:.2f}%) "
+                    f"[{self.lower_percentile}%, {self.upper_percentile}%]"
                 )
-
-                processed_dates.append(processed_series)
-
-                # 累计 NaN 统计
-                factor_nan_stats["original_nan_count"] += series.isna().sum()
-                factor_nan_stats["final_nan_count"] += processed_series.isna().sum()
-
-            # 重新组合成 DataFrame
-            processed_df = pd.DataFrame(processed_dates)
-            processed_df.index = factor_data.index
-            processed_factors[factor_name] = processed_df
-
-            # 记录因子处理信息
-            self.processing_report["factors_processed"].append(factor_name)
-            self.processing_report["nan_stats"][factor_name] = factor_nan_stats
-
-            # 验证 NaN 是否被正确保留
-            if (
-                factor_nan_stats["original_nan_count"]
-                == factor_nan_stats["final_nan_count"]
-            ):
-                if self.verbose:
-                    print(
-                        f"  ✓ NaN 保留正确: {factor_nan_stats['original_nan_count']} → {factor_nan_stats['final_nan_count']}"
-                    )
-            else:
-                msg = f"⚠️ NaN 计数不匹配: {factor_nan_stats['original_nan_count']} → {factor_nan_stats['final_nan_count']}"
-                if self.verbose:
-                    print(msg)
-                self.processing_report["warnings"].append(msg)
+                print(f"    NaN保留: {original_nan_count} → {final_nan_count}")
 
         if self.verbose:
             print("\n" + "=" * 70)

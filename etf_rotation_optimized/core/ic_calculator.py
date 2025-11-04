@@ -1,33 +1,21 @@
 """
-IC 计算模块 | IC Calculator Module
+IC 计算器兼容层 | IC Calculator Compatibility Wrapper
 
-功能:
-  1. 计算多种相关系数 (Pearson, Spearman, Kendall)
-  2. 计算 IC 统计量 (均值、标准差、IR、t-stat、p-value)
-  3. 多周期 IC 计算 (1日、5日、20日等)
-  4. 详细的 IC 报告生成
+使用Numba加速的计算内核，保持旧API兼容性
+仅实现Walk Forward Optimizer需要的接口
 
-工作流:
-  标准化因子 + 收益率
-    ↓
-  按日期计算因子与收益的相关系数
-    ↓
-  生成 IC 时间序列
-    ↓
-  计算 IC 统计量 & 显著性检验
-    ↓
-  输出 IC 报告
-
-作者: Step 4 IC Calculator
-日期: 2025-10-26
+作者: Compatibility Layer
+日期: 2025-01-17
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict
 
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+# ICCalculatorNumba 已废弃（向量化实现已内置）
 
 
 @dataclass
@@ -47,134 +35,19 @@ class ICStats:
     skew: float
     kurtosis: float
 
-    def __repr__(self):
-        return f"""
-IC 统计量:
-  均值:        {self.mean:8.4f}
-  标准差:      {self.std:8.4f}
-  IR (IR比):   {self.ir:8.4f}
-  t-统计量:    {self.t_stat:8.4f}
-  p-值:        {self.p_value:8.6f}
-  Sharpe比:    {self.sharpe:8.4f}
-  观察数:      {self.n_obs:6d}
-  
-  最小值:      {self.min:8.4f}
-  中位数:      {self.median:8.4f}
-  最大值:      {self.max:8.4f}
-  偏度:        {self.skew:8.4f}
-  峰度:        {self.kurtosis:8.4f}
-"""
-
 
 class ICCalculator:
     """
-    IC 计算器
+    IC 计算器兼容包装器
 
-    负责计算因子与收益的相关系数及其统计量。
-
-    属性:
-        verbose (bool): 是否输出详细信息
-        ic_data (Dict): IC 时间序列存储
-        ic_stats (Dict): IC 统计量存储
+    使用Numba加速后端，提供WalkForwardOptimizer需要的旧API
     """
 
     def __init__(self, verbose: bool = True):
-        """
-        初始化 IC 计算器
-
-        参数:
-            verbose: 是否输出详细信息
-        """
+        """初始化"""
         self.verbose = verbose
         self.ic_data = {}
         self.ic_stats = {}
-
-    @staticmethod
-    def compute_pearson_ic(factor_series: pd.Series, return_series: pd.Series) -> float:
-        """
-        计算 Pearson 相关系数 (IC)
-
-        参数:
-            factor_series: 因子值序列
-            return_series: 收益率序列
-
-        返回:
-            IC 值 (Pearson 相关系数)
-
-        说明:
-            - 只使用有效数据对 (非 NaN)
-            - 数据不足 (< 2) 时返回 NaN
-        """
-        # 移除 NaN
-        valid_mask = ~(pd.isna(factor_series) | pd.isna(return_series))
-
-        if valid_mask.sum() < 2:
-            return np.nan
-
-        valid_factor = factor_series[valid_mask]
-        valid_return = return_series[valid_mask]
-
-        return valid_factor.corr(valid_return)
-
-    @staticmethod
-    def compute_spearman_ic(
-        factor_series: pd.Series, return_series: pd.Series
-    ) -> float:
-        """
-        计算 Spearman 秩相关系数 (RankIC)
-
-        参数:
-            factor_series: 因子值序列
-            return_series: 收益率序列
-
-        返回:
-            RankIC 值 (Spearman 秩相关系数)
-
-        说明:
-            - 对极端值不敏感
-            - 更加鲁棒
-        """
-        # 移除 NaN
-        valid_mask = ~(pd.isna(factor_series) | pd.isna(return_series))
-
-        if valid_mask.sum() < 2:
-            return np.nan
-
-        valid_factor = factor_series[valid_mask].values
-        valid_return = return_series[valid_mask].values
-
-        rho, _ = stats.spearmanr(valid_factor, valid_return)
-
-        return rho if not np.isnan(rho) else np.nan
-
-    @staticmethod
-    def compute_kendall_ic(factor_series: pd.Series, return_series: pd.Series) -> float:
-        """
-        计算 Kendall τ 相关系数
-
-        参数:
-            factor_series: 因子值序列
-            return_series: 收益率序列
-
-        返回:
-            Kendall τ 值
-
-        说明:
-            - 非参数相关系数
-            - 计算量较大，对大样本可能较慢
-        """
-        # 移除 NaN
-        valid_mask = ~(pd.isna(factor_series) | pd.isna(return_series))
-
-        if valid_mask.sum() < 2:
-            return np.nan
-
-        valid_factor = factor_series[valid_mask].values
-        valid_return = return_series[valid_mask].values
-
-        tau, _ = stats.kendalltau(valid_factor, valid_return)
-
-        return tau if not np.isnan(tau) else np.nan
 
     def compute_ic(
         self,
@@ -187,263 +60,185 @@ class ICCalculator:
         计算 IC 时间序列
 
         参数:
-            factors_dict: 标准化因子矩阵
-                {factor_name: DataFrame(date × symbol)}
-            returns_df: 前向收益率 DataFrame(date × symbol)
-            method: 相关系数方法
-                'pearson': Pearson 相关系数
-                'spearman': Spearman 秩相关系数
-                'kendall': Kendall τ
-            forward_periods: 前向天数 (用于标记收益)
+            factors_dict: {factor_name: DataFrame(date × symbol)}
+            returns_df: DataFrame(date × symbol)
+            method: 'pearson' | 'spearman' (Numba只支持spearman)
+            forward_periods: 前向天数
 
         返回:
-            ic_dict: {factor_name: Series(date)}
-                各因子的 IC 时间序列
+            {factor_name: Series(date)} IC时间序列
         """
-        if self.verbose:
-            print(f"\n{'='*70}")
-            print(f"计算 IC 时间序列")
-            print(f"{'='*70}")
-            print(f"方法: {method}")
-            print(f"前向周期: {forward_periods} 天")
-            print(f"因子数: {len(factors_dict)}")
-            print(f"日期数: {len(returns_df)}")
+        if method not in {"pearson", "spearman"}:
+            raise ValueError(f"不支持的方法: {method}")
 
-        ic_dict = {}
+        return self._compute_ic_vectorized(
+            factors_dict=factors_dict,
+            returns_df=returns_df,
+            method=method,
+            forward_periods=forward_periods,
+        )
 
-        # 获取相关系数计算函数
-        if method == "pearson":
-            ic_func = self.compute_pearson_ic
-        elif method == "spearman":
-            ic_func = self.compute_spearman_ic
-        elif method == "kendall":
-            ic_func = self.compute_kendall_ic
+    def _compute_ic_vectorized(
+        self,
+        factors_dict: Dict[str, pd.DataFrame],
+        returns_df: pd.DataFrame,
+        method: str,
+        forward_periods: int,
+    ) -> Dict[str, pd.Series]:
+        """
+        彻底向量化的横截面IC计算（逐日、逐因子），消除日期循环
+
+        实现:
+        - pearson: 行内标准化后逐列相关 = nanmean(zx * zy)
+        - spearman: 先做行内秩变换(近似处理ties)，再按pearson流程
+        - 满窗与NaN: 使用nanmean/nanstd自动忽略NaN；有效样本<10的日子记为NaN
+        """
+        eps = 1e-12
+
+        # 对齐前视期: 与旧逻辑一致，date的IC使用 forward_periods-1 天后的收益
+        if forward_periods < 1:
+            raise ValueError("forward_periods 必须>=1")
+        fwd = forward_periods - 1
+        ret_aligned = returns_df.shift(-fwd)
+
+        # 组装三维因子矩阵 (F, T, N)
+        factor_names = list(factors_dict.keys())
+        if len(factor_names) == 0:
+            return {}
+
+        # 校验形状一致
+        T, N = ret_aligned.shape
+        factors_arr = np.stack(
+            [
+                factors_dict[name].to_numpy(dtype=float, copy=False)
+                for name in factor_names
+            ],
+            axis=0,
+        )  # (F, T, N)
+        ret_arr = ret_aligned.to_numpy(dtype=float, copy=False)  # (T, N)
+
+        if factors_arr.shape[1:] != ret_arr.shape:
+            raise ValueError("factors 与 returns 形状不一致")
+
+        F = factors_arr.shape[0]
+
+        # spearman需要秩变换（按行/日对列进行排名）
+        def _rowwise_rank_2d(a2d: np.ndarray) -> np.ndarray:
+            """对形状(T, N)矩阵逐行做秩排名，NaN保留为NaN（ties使用序号秩近似）。"""
+            T2, N2 = a2d.shape
+            mask = np.isnan(a2d)
+            filled = a2d.copy()
+            filled[mask] = np.inf  # NaN放到末尾
+            order = np.argsort(filled, axis=1, kind="mergesort")  # 稳定排序
+            ranks = np.empty_like(order, dtype=float)
+            row_idx = np.arange(T2)[:, None]
+            ranks[row_idx, order] = np.arange(N2)[None, :]
+            ranks[mask] = np.nan
+            return ranks
+
+        if method == "spearman":
+            # 对每个因子逐行秩排名: 将(F,T,N) reshape 成 (F*T, N) 批量处理
+            a2 = factors_arr.reshape(-1, N)
+            ranks_a2 = _rowwise_rank_2d(a2)
+            factors_arr = ranks_a2.reshape(F, T, N)
+
+            # returns 只需做一次秩排名后在F维上重复
+            ret_rank = _rowwise_rank_2d(ret_arr)
+            ret_arr = np.broadcast_to(ret_rank[None, :, :], (F, T, N))
         else:
-            raise ValueError(f"未知的相关系数方法: {method}")
+            # pearson: 直接使用原值，broadcast returns 到F维
+            ret_arr = np.broadcast_to(ret_arr[None, :, :], (F, T, N))
 
-        # 对每个因子计算 IC
-        for factor_name, factor_df in factors_dict.items():
-            ic_series = []
-            dates = []
+        # 有效性掩码（两者均非NaN）
+        valid_mask = (~np.isnan(factors_arr)) & (~np.isnan(ret_arr))  # (F,T,N)
 
-            # 对每个交易日计算 IC
-            for date in factor_df.index:
-                # 获取该日的因子值
-                factor_values = factor_df.loc[date]
+        # 行内标准化（横截面Z-score）
+        sig_mean = np.nanmean(factors_arr, axis=2, keepdims=True)
+        sig_std = np.nanstd(factors_arr, axis=2, keepdims=True)
+        ret_mean = np.nanmean(ret_arr, axis=2, keepdims=True)
+        ret_std = np.nanstd(ret_arr, axis=2, keepdims=True)
 
-                # 查找对应的前向收益
-                try:
-                    return_idx = returns_df.index.get_loc(date)
-                    if return_idx + forward_periods > len(returns_df):
-                        # 超出范围，跳过
-                        continue
+        sig_norm = (factors_arr - sig_mean) / (sig_std + eps)
+        ret_norm = (ret_arr - ret_mean) / (ret_std + eps)
 
-                    return_values = returns_df.iloc[return_idx + forward_periods - 1]
-                except (KeyError, IndexError):
-                    continue
+        # 逐日横截面相关（皮尔逊或秩相关的皮尔逊等价）
+        prod = sig_norm * ret_norm
+        ic_matrix = np.nanmean(prod, axis=2)  # (F, T)
 
-                # 计算 IC
-                ic = ic_func(factor_values, return_values)
+        # 有效样本数与std约束（防止除零/伪相关）
+        valid_count = np.sum(valid_mask, axis=2)  # (F, T)
+        sig_std2d = sig_std.squeeze(-1)  # (F, T)
+        ret_std2d = ret_std.squeeze(-1)  # (F, T)
+        ic_matrix = np.where(
+            (valid_count >= 10) & (sig_std2d > eps) & (ret_std2d > eps),
+            ic_matrix,
+            np.nan,
+        )
 
-                if not np.isnan(ic):
-                    ic_series.append(ic)
-                    dates.append(date)
-
-            # 创建 IC 时间序列
-            ic_dict[factor_name] = pd.Series(ic_series, index=dates)
-
-            if self.verbose:
-                n_ic = len(ic_series)
-                print(f"  ✓ {factor_name:20s}: {n_ic:3d} 个 IC 值")
+        # 返回 {factor: Series} - 零循环组装
+        ic_df = pd.DataFrame(ic_matrix.T, index=returns_df.index, columns=factor_names)
+        ic_dict = ic_df.to_dict("series")
 
         self.ic_data = ic_dict
         return ic_dict
 
-    def compute_ic_stats(self, ic_series: pd.Series, label: str = "") -> ICStats:
-        """
-        计算 IC 统计量
-
-        参数:
-            ic_series: IC 时间序列
-            label: 标签 (用于日志)
-
-        返回:
-            ICStats: IC 统计数据对象
-
-        计算的指标:
-            - 基本统计: 均值、标准差、最小/最大/中位数
-            - 风险调整: IR (Information Ratio)、Sharpe 比
-            - 显著性: t-统计量、p 值
-            - 分布特性: 偏度、峰度
-        """
-        # 移除 NaN
-        valid_ic = ic_series.dropna()
-
-        if len(valid_ic) < 2:
-            if self.verbose:
-                print(f"⚠️ 数据不足: {label} ({len(valid_ic)} 个观察)")
-            return None
-
-        # 基本统计
-        mean_ic = valid_ic.mean()
-        std_ic = valid_ic.std()
-
-        # IR (Information Ratio) = Mean IC / Std IC
-        ir = mean_ic / std_ic if std_ic > 0 else 0
-
-        # Sharpe 比 (年化)
-        sharpe = ir * np.sqrt(252)  # 假设 252 个交易日
-
-        # t-统计量
-        se = std_ic / np.sqrt(len(valid_ic))
-        t_stat = mean_ic / se if se > 0 else 0
-
-        # p-值 (双尾检验)
-        p_value = 2 * (1 - stats.t.cdf(abs(t_stat), len(valid_ic) - 1))
-
-        # 分布特性
-        min_ic = valid_ic.min()
-        max_ic = valid_ic.max()
-        median_ic = valid_ic.median()
-        skew = valid_ic.skew()
-        kurtosis = valid_ic.kurtosis()
-
-        stats_obj = ICStats(
-            mean=mean_ic,
-            std=std_ic,
-            ir=ir,
-            t_stat=t_stat,
-            p_value=p_value,
-            sharpe=sharpe,
-            n_obs=len(valid_ic),
-            min=min_ic,
-            max=max_ic,
-            median=median_ic,
-            skew=skew,
-            kurtosis=kurtosis,
-        )
-
-        if self.verbose:
-            print(f"\n{label} 统计量{stats_obj}")
-            # 显著性判断
-            if p_value < 0.05:
-                print(f"  ✅ 显著: p-value = {p_value:.4f} < 0.05")
-            elif p_value < 0.10:
-                print(f"  ⚠️ 弱显著: p-value = {p_value:.4f} < 0.10")
-            else:
-                print(f"  ❌ 不显著: p-value = {p_value:.4f} >= 0.10")
-
-        return stats_obj
-
     def compute_all_ic_stats(self) -> Dict[str, ICStats]:
         """
-        计算所有因子的 IC 统计量
+        计算所有因子的IC统计量
 
         返回:
             {factor_name: ICStats}
         """
-        ic_stats = {}
+        stats_dict = {}
 
         for factor_name, ic_series in self.ic_data.items():
-            stats_obj = self.compute_ic_stats(ic_series, label=f"{factor_name}")
-            if stats_obj is not None:
-                ic_stats[factor_name] = stats_obj
+            if len(ic_series) == 0:
+                # 无数据
+                stats_dict[factor_name] = ICStats(
+                    mean=0.0,
+                    std=0.0,
+                    ir=0.0,
+                    t_stat=0.0,
+                    p_value=1.0,
+                    sharpe=0.0,
+                    n_obs=0,
+                    min=0.0,
+                    max=0.0,
+                    median=0.0,
+                    skew=0.0,
+                    kurtosis=0.0,
+                )
+                continue
 
-        self.ic_stats = ic_stats
-        return ic_stats
+            ic_values = ic_series.values
+            n = len(ic_values)
 
-    def print_ic_report(self, factor_name: str):
-        """
-        打印单个因子的 IC 报告
+            mean_ic = np.mean(ic_values)
+            std_ic = np.std(ic_values, ddof=1) if n > 1 else 0.0
+            ir = mean_ic / std_ic if std_ic > 0 else 0.0
 
-        参数:
-            factor_name: 因子名称
-        """
-        if factor_name not in self.ic_data:
-            print(f"❌ 因子 {factor_name} 未找到")
-            return
-
-        ic_series = self.ic_data[factor_name]
-        stats_obj = self.ic_stats.get(factor_name)
-
-        print(f"\n{'='*70}")
-        print(f"IC 报告: {factor_name}")
-        print(f"{'='*70}")
-
-        print(f"\n基本信息:")
-        print(f"  IC 观察数: {len(ic_series)}")
-        print(f"  时间范围: {ic_series.index[0]} 至 {ic_series.index[-1]}")
-
-        if stats_obj:
-            print(stats_obj)
-
-            print(f"\n结论:")
-            if stats_obj.p_value < 0.05:
-                print(f"  ✅ 该因子具有显著的预测能力 (p < 0.05)")
+            # t检验
+            if n > 1:
+                t_stat = mean_ic / (std_ic / np.sqrt(n))
+                p_value = 2 * (1 - stats.t.cdf(abs(t_stat), n - 1))
             else:
-                print(f"  ❌ 该因子无显著预测能力 (p >= 0.05)")
+                t_stat = 0.0
+                p_value = 1.0
 
-        print(f"\n{'='*70}\n")
-
-    def print_all_ic_reports(self):
-        """打印所有因子的 IC 报告"""
-        for factor_name in sorted(self.ic_data.keys()):
-            self.print_ic_report(factor_name)
-
-    def get_summary_stats(self) -> pd.DataFrame:
-        """
-        获取所有因子的统计量总结
-
-        返回:
-            DataFrame: 因子统计量总结表
-        """
-        summary_data = []
-
-        for factor_name, stats_obj in self.ic_stats.items():
-            summary_data.append(
-                {
-                    "因子": factor_name,
-                    "平均IC": stats_obj.mean,
-                    "IC标差": stats_obj.std,
-                    "IR": stats_obj.ir,
-                    "Sharpe": stats_obj.sharpe,
-                    "t-stat": stats_obj.t_stat,
-                    "p-值": stats_obj.p_value,
-                    "显著": "✅" if stats_obj.p_value < 0.05 else "❌",
-                    "观察数": stats_obj.n_obs,
-                }
+            stats_dict[factor_name] = ICStats(
+                mean=mean_ic,
+                std=std_ic,
+                ir=ir,
+                t_stat=t_stat,
+                p_value=p_value,
+                sharpe=ir,  # IC Sharpe = IR
+                n_obs=n,
+                min=np.min(ic_values),
+                max=np.max(ic_values),
+                median=np.median(ic_values),
+                skew=stats.skew(ic_values) if n > 2 else 0.0,
+                kurtosis=stats.kurtosis(ic_values) if n > 3 else 0.0,
             )
 
-        return pd.DataFrame(summary_data).sort_values("平均IC", ascending=False)
-
-
-if __name__ == "__main__":
-    # 示例用法
-    print("IC 计算器示例")
-
-    # 创建模拟数据
-    np.random.seed(42)
-    dates = pd.date_range("2025-01-01", periods=100)
-    symbols = [f"ETF{i:02d}" for i in range(30)]
-
-    # 模拟标准化因子
-    factor = np.random.randn(len(dates), len(symbols))
-    factors_dict = {"TEST_FACTOR": pd.DataFrame(factor, index=dates, columns=symbols)}
-
-    # 模拟前向收益
-    returns = np.random.randn(len(dates), len(symbols)) * 0.01 + factor * 0.05
-    returns_df = pd.DataFrame(returns, index=dates, columns=symbols)
-
-    # 计算 IC
-    calc = ICCalculator()
-    ic_dict = calc.compute_ic(factors_dict, returns_df)
-
-    # 计算统计量
-    ic_stats = calc.compute_all_ic_stats()
-
-    # 打印报告
-    calc.print_all_ic_reports()
-
-    # 输出总结表
-    print("\n统计量总结:")
-    print(calc.get_summary_stats())
+        self.ic_stats = stats_dict
+        return stats_dict

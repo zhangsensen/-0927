@@ -154,6 +154,7 @@ class FactorSelector:
         target_count: int = None,
         historical_oos_ics: Optional[Dict[str, List[float]]] = None,  # Factor Momentum
         factor_icir: Optional[Dict[str, float]] = None,  # Meta weighting
+        ic_stats: Optional[Dict] = None,  # IC统计量（含p_value）
     ) -> Tuple[List[str], SelectionReport]:
         """
         选择满足约束的因子子集
@@ -203,25 +204,50 @@ class FactorSelector:
         applied_constraints = []
         constraint_impacts = {}
 
-        # 2. 应用最小IC约束
+        # 2. 应用最小IC约束 + 统计显著性检验
         min_ic = self.constraints.get("minimum_ic", {}).get("global_minimum", 0.0)
-        if min_ic > 0:
+        max_pvalue = self.constraints.get("minimum_ic", {}).get(
+            "max_pvalue", 0.10
+        )  # 默认10%显著性
+
+        if min_ic > 0 or max_pvalue < 1.0:
             before = len(candidate_names)
-            candidate_names = [f for f in candidate_names if ic_scores[f] > min_ic]
+            filtered = []
+
+            for f in candidate_names:
+                # IC阈值检查
+                if ic_scores[f] <= min_ic:
+                    continue
+
+                # 统计显著性检查（如果有p_value）
+                if ic_stats and hasattr(ic_stats.get(f), "p_value"):
+                    if ic_stats[f].p_value > max_pvalue:
+                        continue
+
+                filtered.append(f)
+
+            candidate_names = filtered
             after = len(candidate_names)
 
             if before > after:
-                applied_constraints.append(f"minimum_ic (threshold={min_ic})")
+                applied_constraints.append(f"minimum_ic (IC>{min_ic}, p<{max_pvalue})")
                 constraint_impacts["minimum_ic"] = [
-                    f for f in ic_scores if ic_scores[f] <= min_ic
+                    f
+                    for f in ic_scores
+                    if ic_scores[f] <= min_ic
+                    or (
+                        ic_stats
+                        and hasattr(ic_stats.get(f), "p_value")
+                        and ic_stats[f].p_value > max_pvalue
+                    )
                 ]
                 violations.append(
                     ConstraintViolation(
                         constraint_type="minimum_ic",
-                        reason=f"IC ≤ {min_ic}",
+                        reason=f"IC ≤ {min_ic} 或 p-value > {max_pvalue}",
                         affected_factors=constraint_impacts["minimum_ic"],
                         severity="info",
-                        action_taken=f"排除 {before - after} 个因子",
+                        action_taken=f"排除 {before - after} 个因子（含统计不显著）",
                     )
                 )
 

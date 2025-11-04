@@ -1,0 +1,89 @@
+# 纯向量化回测配置（无WFO，全因子暴力测试）
+
+data_paths:
+  # 标准化因子路径（从factor_selection获取）
+  factor_dir: ../results/factor_selection
+  # OHLCV数据路径（从cross_section获取）
+  ohlcv_dir: ../results/cross_section
+  # 输出路径
+  output_dir: ./results
+
+parallel_config:
+  # 并行进程数（建议CPU核心数-1）
+  n_workers: 8
+  # 每批处理的策略数
+  chunk_size: 100
+  # 日志级别
+  log_level: INFO
+
+factor_config:
+  # 使用的因子列表（空=使用全部标准化因子）
+  factors: []
+  # 因子组合大小（开发阶段先测试1-2因子）
+  combination_sizes: [1, 2]
+  # 最大组合数（防止爆炸）
+  max_combinations: 10000
+  # 因子权重网格（开发阶段只用等权）
+  weight_grid:
+    - [1.0]  # 单因子
+    - [0.5, 0.5]  # 双因子等权
+  # 最大允许因子相关系数
+  max_correlation: 0.8
+  # 因子筛选阈值
+  selection_thresholds:
+    # IC绝对值阈值
+    min_abs_ic: 0.01
+    # IR阈值
+    min_ic_ir: 0.02
+    # 正IC比例阈值
+    min_positive_rate: 0.55
+    # 显著IC比例阈值
+    min_significant_rate: 0.1
+    # 最小样本数
+    min_observations: 80
+    # Benjamini-Hochberg FDR阈值
+    fdr_q: 0.1
+    # 回退策略保留前K因子
+    fallback_top_k: 20
+    # 统计显著性判定阈值（绝对IC）
+    significance_threshold: 0.02
+
+backtest_config:
+  # Top-N持仓数量（加入8以评估阶段1改动的收益影响）
+  top_n_list: [5, 8, 10, 15]
+  # 调仓频率（交易日）（开发阶段减少参数）
+  rebalance_freq_list: [10, 20, 30]
+  # 交易费用（双边）
+  fees: 0.0005  # 5bp
+  # 初始资金
+  init_cash: 1000000
+  # 是否启用空仓（允许0持仓）
+  allow_zero_position: false
+
+signal_config:
+  # 信号生成方式
+  method: "composite_score"  # composite_score 或 rank_average
+  # 标准化方法
+  standardization: "zscore"  # zscore, minmax, rank
+  # 是否对因子值取负（适配做空逻辑）
+  invert_factors: []
+
+performance_metrics:
+  # 计算的性能指标
+  - sharpe_ratio
+  - annual_return
+  - max_drawdown
+  - calmar_ratio
+  - win_rate
+  - avg_turnover
+  - total_trades
+
+output_config:
+  # 保存前N名策略的详细结果
+  save_top_n: 100
+  # 是否保存完整权益曲线
+  save_equity_curves: true
+  # 是否保存交易记录
+  save_trades: false
+  # 输出格式
+  format: "csv"  # csv, parquet, both

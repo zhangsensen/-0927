@@ -52,6 +52,9 @@ class ConstraintApplicationReport:
     is_ic_stats: Dict[str, float]
     """IS阶段IC统计"""
 
+    is_ic_scores: Dict[str, float]
+    """IS阶段每个因子的IC值"""
+
     candidate_factors: List[str]
     """候选因子列表"""
 
@@ -256,6 +259,7 @@ class ConstrainedWalkForwardOptimizer:
                     "min": np.min(list(ic_scores.values())),
                     "max": np.max(list(ic_scores.values())),
                 },
+                is_ic_scores=ic_scores,  # 保存每个因子的IC值用于回测加权
                 # ⚠️ Linus Fix: 使用排序后的候选列表（反映Meta Factor调整）
                 candidate_factors=selection_report.candidate_factors,
                 selected_factors=selected_factors,
@@ -345,7 +349,18 @@ class ConstrainedWalkForwardOptimizer:
 
         # 转为字典格式 {(f1, f2): corr}
         # ⚠️ Linus Fix: 使用字母排序key，与factor_selector查找逻辑一致
+        # 🔧 单因子时 corr_matrix 是标量，需特殊处理
         correlations = {}
+
+        if n_factors == 1:
+            # 单因子时无相关性，返回空字典
+            return correlations
+
+        # 确保 corr_matrix 是二维数组
+        if corr_matrix.ndim == 0:
+            # 标量情况（2因子时可能返回标量）
+            corr_matrix = np.array([[1.0, corr_matrix], [corr_matrix, 1.0]])
+
         for i in range(n_factors):
             for j in range(i + 1, n_factors):  # 只存储上三角（避免重复）
                 # 使用字母排序确保key规范一致
@@ -395,7 +410,14 @@ class ConstrainedWalkForwardOptimizer:
                 if valid_mask.sum() < 2:
                     continue
 
-                ic, _ = spearmanr(signal_t[valid_mask], ret_t[valid_mask])
+                # 检查是否为常数数组（避免ConstantInputWarning）
+                signal_valid = signal_t[valid_mask]
+                ret_valid = ret_t[valid_mask]
+
+                if np.std(signal_valid) < 1e-10 or np.std(ret_valid) < 1e-10:
+                    continue  # 跳过常数数组
+
+                ic, _ = spearmanr(signal_valid, ret_valid)
                 if not np.isnan(ic):
                     daily_ics.append(float(ic))
 

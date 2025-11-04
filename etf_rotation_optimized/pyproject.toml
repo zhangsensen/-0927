@@ -1,0 +1,235 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "etf-rotation-optimized"
+version = "2.0.0"
+description = "ETF轮动量化交易系统优化版 - 高性能因子筛选与回测平台"
+authors = [
+    "Linus Refactor <linus.refactor@example.com>"
+]
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/your-org/etf-rotation-optimized"
+repository = "https://github.com/your-org/etf-rotation-optimized"
+documentation = "https://etf-rotation-optimized.readthedocs.io"
+keywords = ["quantitative-finance", "etf", "rotation", "factor-investing", "backtesting"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+# Core scientific computing
+numpy = ">=1.24.0,<2.0.0"
+pandas = "^2.0.0"
+scipy = "^1.11.0"
+
+# Performance optimization
+numba = "^0.58.0"
+
+# Financial analysis and backtesting
+vectorbt = [
+    {version = "^0.25.0", python = "^3.10,<3.12"},
+    {version = "^0.26.0", python = "^3.12"}
+]
+yfinance = "^0.2.0"
+
+# Data processing and storage
+pyarrow = "^14.0.0"
+h5py = "^3.10.0"
+openpyxl = "^3.1.0"
+
+# CLI and configuration
+click = "^8.1.0"
+pyyaml = "^6.0"
+toml = "^0.10.0"
+
+# Logging and monitoring
+structlog = "^23.0.0"
+prometheus-client = "^0.19.0"
+
+# HTTP and async
+httpx = "^0.25.0"
+aiofiles = "^23.0.0"
+
+# Security and encryption
+cryptography = "^41.0.0"
+
+# Development and testing (optional groups)
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pytest-asyncio = "^0.21.0"
+pytest-mock = "^3.12.0"
+pytest-benchmark = "^4.0.0"
+pytest-xdist = "^3.5.0"
+
+# Code quality
+black = "^23.11.0"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+mypy = "^1.7.0"
+pre-commit = "^3.6.0"
+
+# Documentation
+sphinx = "^7.2.0"
+sphinx-rtd-theme = "^1.3.0"
+mkdocs = "^1.5.0"
+mkdocs-material = "^9.4.0"
+
+# Performance profiling
+memory-profiler = "^0.61.0"
+line-profiler = "^4.1.0"
+py-spy = "^0.3.14"
+
+[tool.poetry.group.performance.dependencies]
+# Performance testing tools
+locust = "^2.17.0"
+psutil = "^5.9.0"
+
+# Data sources (optional)
+tushare = "^1.2.0"  # Chinese market data
+akshare = "^1.11.0"  # Alternative Chinese market data
+
+[tool.poetry.group.security.dependencies]
+# Security scanning
+bandit = "^1.7.0"
+safety = "^2.3.0"
+semgrep = "^1.50.0"
+
+[tool.poetry.scripts]
+etf-rotation = "main:cli"
+
+# Tool configurations
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["core"]
+known_third_party = ["pandas", "numpy", "numba", "vectorbt"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# Ignore specific modules that are hard to type
+[[tool.mypy.overrides]]
+module = [
+    "numba.*",
+    "vectorbt.*",
+    "yfinance.*",
+    "tushare.*",
+    "akshare.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--cov=core",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "benchmark: marks tests as benchmark tests",
+    "security: marks tests as security tests",
+]
+
+[tool.coverage.run]
+source = ["core"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.bandit]
+exclude_dirs = ["tests", "test_*"]
+skips = ["B101", "B601"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",  # whitespace before ':'
+    "W503",  # line break before binary operator
+    "E501",  # line too long (handled by black)
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    ".tox",
+]

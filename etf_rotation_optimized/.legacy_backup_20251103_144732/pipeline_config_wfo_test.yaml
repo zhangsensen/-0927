@@ -1,0 +1,37 @@
+run_id: "wfo_fix_validation"
+output_root: "results"
+
+# 数据配置
+data:
+  symbols:
+    - "159941.XSHE"  # 纳指ETF
+    - "159920.XSHE"  # 恒生ETF
+    - "159915.XSHE"  # 创业板ETF
+    - "510300.XSHG"  # 沪深300ETF
+    - "159919.XSHE"  # 300ETF
+    - "512880.XSHG"  # 证券ETF
+    - "512690.XSHG"  # 酒ETF
+  start_date: "2022-01-01"
+  end_date: "2024-10-01"
+
+# 横截面配置
+cross_section: {}
+
+# 因子筛选配置
+factor_selection: {}
+
+# WFO配置
+wfo:
+  factor_weighting: "ic_weighted"
+  min_factor_ic: 0.01
+  ic_floor: 0.0
+  is_period: 252
+  oos_period: 60
+  step_size: 20
+
+# 回测配置（使用修复后的portfolio_constructor）
+backtest:
+  commission_rate: 0.0003
+  stamp_tax_rate: 0.0  # ETF免印花税
+  slippage_bps: 5.0
+  top_n: 3

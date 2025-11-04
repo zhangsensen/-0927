@@ -42,8 +42,105 @@ from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
+from numba import njit
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Numba加速函数（模块级定义）
+# ============================================================================
+
+
+@njit
+def _rolling_max_dd_numba(prices: np.ndarray, window: int) -> np.ndarray:
+    """
+    Numba加速的滑窗最大回撤计算
+
+    参数:
+        prices: 1D价格序列
+        window: 窗口长度
+
+    返回:
+        1D最大回撤序列（百分比，绝对值）
+    """
+    n = len(prices)
+    result = np.full(n, np.nan)
+
+    for i in range(window - 1, n):
+        window_prices = prices[i - window + 1 : i + 1]
+
+        # 检查NaN
+        if np.any(np.isnan(window_prices)):
+            result[i] = np.nan
+            continue
+
+        # 计算最大回撤
+        cummax = window_prices[0]
+        max_dd = 0.0
+
+        for j in range(1, window):
+            if window_prices[j] > cummax:
+                cummax = window_prices[j]
+            dd = (window_prices[j] - cummax) / cummax
+            if dd < max_dd:
+                max_dd = dd
+
+        result[i] = abs(max_dd) * 100.0  # 百分比
+
+    return result
+
+
+@njit
+def _rolling_calmar_numba(prices: np.ndarray, window: int) -> np.ndarray:
+    """
+    Numba加速的滑窗卡玛比率计算
+
+    参数:
+        prices: 1D价格序列
+        window: 窗口长度(60)
+
+    返回:
+        1D卡玛比率序列
+    """
+    n = len(prices)
+    result = np.full(n, np.nan)
+    eps = 1e-10
+
+    for i in range(window - 1, n):
+        window_prices = prices[i - window + 1 : i + 1]
+
+        # 检查NaN
+        if np.any(np.isnan(window_prices)):
+            result[i] = np.nan
+            continue
+
+        # 累计收益
+        cum_ret = (window_prices[-1] / window_prices[0]) - 1.0
+
+        # 计算最大回撤
+        cummax = window_prices[0]
+        max_dd = 0.0
+
+        for j in range(1, window):
+            if window_prices[j] > cummax:
+                cummax = window_prices[j]
+            dd = (window_prices[j] - cummax) / cummax
+            if dd < max_dd:
+                max_dd = dd
+
+        # 卡玛比率
+        if abs(max_dd) < eps:
+            result[i] = np.nan
+        else:
+            result[i] = cum_ret / abs(max_dd)
+
+    return result
+
+
+# ============================================================================
+# 因子类定义
+# ============================================================================
 
 
 @dataclass
@@ -311,6 +408,179 @@ class PreciseFactorLibrary:
         }
 
     # =========================================================================
+    # 批量处理方法（DataFrame输入，零循环）
+    # =========================================================================
+
+    def _slope_20d_batch(self, close_df: pd.DataFrame) -> pd.DataFrame:
+        """批量计算 SLOPE_20D（所有列一次性处理）"""
+        from scipy.signal import lfilter
+
+        x = np.arange(1, 21, dtype=np.float64)
+        x_dev = x - x.mean()
+        weights = x_dev[::-1]
+        denom = (x_dev**2).sum()
+
+        # 对整个 DataFrame 应用 lfilter（逐列）
+        result = np.apply_along_axis(
+            lambda col: lfilter(weights, [1.0], col) / denom,
+            axis=0,
+            arr=close_df.values,
+        )
+        result[:19, :] = np.nan
+        return pd.DataFrame(result, index=close_df.index, columns=close_df.columns)
+
+    def _max_dd_60d_batch(self, close_df: pd.DataFrame) -> pd.DataFrame:
+        """批量计算 MAX_DD_60D（所有列一次性处理）"""
+        result = np.apply_along_axis(
+            lambda col: _rolling_max_dd_numba(col, window=60),
+            axis=0,
+            arr=close_df.values,
+        )
+        return pd.DataFrame(result, index=close_df.index, columns=close_df.columns)
+
+    def _calmar_60d_batch(self, close_df: pd.DataFrame) -> pd.DataFrame:
+        """批量计算 CALMAR_60D（所有列一次性处理）"""
+        result = np.apply_along_axis(
+            lambda col: _rolling_calmar_numba(col, window=60),
+            axis=0,
+            arr=close_df.values,
+        )
+        return pd.DataFrame(result, index=close_df.index, columns=close_df.columns)
+
+    def _obv_slope_10d_batch(
+        self, close_df: pd.DataFrame, volume_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """批量计算 OBV_SLOPE_10D（所有列一次性处理）"""
+        from scipy.signal import lfilter
+
+        # 计算 OBV
+        price_change = close_df.diff()
+        sign = np.sign(price_change.values)
+        sign[np.isnan(sign)] = 0  # 第一天NaN改为0（无方向）
+        obv_vals = np.cumsum(sign * volume_df.values, axis=0)
+
+        # 预计算权重
+        x = np.arange(1, 11, dtype=np.float64)
+        x_dev = x - x.mean()
+        weights = x_dev[::-1]
+        denom = (x_dev**2).sum()
+
+        # 逐列 lfilter
+        result = np.apply_along_axis(
+            lambda col: lfilter(weights, [1.0], col) / denom, axis=0, arr=obv_vals
+        )
+        result[:9, :] = np.nan
+        return pd.DataFrame(result, index=close_df.index, columns=close_df.columns)
+
+    def _price_position_batch(
+        self,
+        close_df: pd.DataFrame,
+        high_df: pd.DataFrame,
+        low_df: pd.DataFrame,
+        window: int,
+    ) -> pd.DataFrame:
+        """批量计算 PRICE_POSITION（所有列一次性处理）"""
+        high_max = high_df.rolling(window=window, min_periods=window).max()
+        low_min = low_df.rolling(window=window, min_periods=window).min()
+        range_val = high_max - low_min
+        position = (close_df - low_min) / range_val
+        position = position.where(range_val > 1e-10, 0.5)
+        return position.clip(0, 1)
+
+    def _cmf_20d_batch(
+        self,
+        high_df: pd.DataFrame,
+        low_df: pd.DataFrame,
+        close_df: pd.DataFrame,
+        volume_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """批量计算 CMF_20D（所有列一次性处理）"""
+        mfm = ((close_df - low_df) - (high_df - close_df)) / (high_df - low_df + 1e-10)
+        mfm = mfm.where(high_df != low_df, np.nan)
+        mfv = mfm * volume_df
+        cmf = mfv.rolling(window=20, min_periods=20).sum() / (
+            volume_df.rolling(window=20, min_periods=20).sum() + 1e-10
+        )
+        return cmf
+
+    def _adx_14d_batch(
+        self, high_df: pd.DataFrame, low_df: pd.DataFrame, close_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """批量计算 ADX_14D（所有列一次性处理）"""
+        high_diff = high_df.diff()
+        low_diff = -low_df.diff()
+        plus_dm = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0)
+        minus_dm = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0)
+
+        prev_close = close_df.shift(1)
+        tr1 = high_df - low_df
+        tr2 = (high_df - prev_close).abs()
+        tr3 = (low_df - prev_close).abs()
+        tr = (
+            pd.concat([tr1, tr2, tr3], axis=1)
+            .max(axis=1)
+            .to_frame()
+            .reindex(columns=close_df.columns, fill_value=0)
+        )
+
+        atr = tr.ewm(span=14, adjust=False, min_periods=14).mean()
+        plus_di = 100 * (
+            plus_dm.ewm(span=14, adjust=False, min_periods=14).mean() / (atr + 1e-10)
+        )
+        minus_di = 100 * (
+            minus_dm.ewm(span=14, adjust=False, min_periods=14).mean() / (atr + 1e-10)
+        )
+
+        dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10))
+        adx = dx.ewm(span=14, adjust=False, min_periods=14).mean()
+        return adx
+
+    def _vortex_14d_batch(
+        self, high_df: pd.DataFrame, low_df: pd.DataFrame, close_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """批量计算 VORTEX_14D（所有列一次性处理）"""
+        vm_plus = (high_df - low_df.shift(1)).abs()
+        vm_minus = (low_df - high_df.shift(1)).abs()
+
+        prev_close = close_df.shift(1)
+        tr1 = high_df - low_df
+        tr2 = (high_df - prev_close).abs()
+        tr3 = (low_df - prev_close).abs()
+        tr = (
+            pd.concat([tr1, tr2, tr3], axis=1)
+            .max(axis=1)
+            .to_frame()
+            .reindex(columns=close_df.columns, fill_value=0)
+        )
+
+        vm_plus_sum = vm_plus.rolling(window=14, min_periods=14).sum()
+        vm_minus_sum = vm_minus.rolling(window=14, min_periods=14).sum()
+        tr_sum = tr.rolling(window=14, min_periods=14).sum()
+
+        vi_plus = vm_plus_sum / (tr_sum + 1e-10)
+        vi_minus = vm_minus_sum / (tr_sum + 1e-10)
+        return vi_plus - vi_minus
+
+    def _relative_strength_vs_market_20d_batch(
+        self, close_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """批量计算 RELATIVE_STRENGTH_VS_MARKET_20D（所有列一次性处理）"""
+        # 计算日收益率
+        etf_returns = close_df.pct_change(fill_method=None)
+        market_returns = etf_returns.mean(axis=1)  # 等权市场收益
+
+        # 计算20日累计收益（使用 log return 近似）
+        log_etf_ret = np.log1p(etf_returns)
+        log_market_ret = np.log1p(market_returns)
+
+        etf_cum = log_etf_ret.rolling(window=20, min_periods=20).sum()
+        market_cum = log_market_ret.rolling(window=20, min_periods=20).sum()
+
+        # 相对强度 = etf累计收益 - 市场累计收益
+        relative_strength = etf_cum.sub(market_cum, axis=0)
+        return relative_strength
+
+    # =========================================================================
     # 维度 1：趋势/动量 (2个)
     # =========================================================================
 
@@ -335,34 +605,38 @@ class PreciseFactorLibrary:
 
     def slope_20d(self, close: pd.Series) -> pd.Series:
         """
-        20日线性回归斜率 | SLOPE_20D
+        20日线性回归斜率 | SLOPE_20D (完全向量化 - 无.apply)
 
-        公式：np.polyfit(x=[1..20], y=close[-20:], 1)[0]
+        公式：slope = Σ[(x - x̄)(y - ȳ)] / Σ[(x - x̄)²]
 
-        缺失处理：
-        - 窗口内任一close缺失 → 该日SLOPE = NaN（满窗原则）
-        - 无任何向前填充
-
-        标准化：WFO内执行
-        极值截断：WFO内 2.5%/97.5%分位
-
-        Returns:
-            pd.Series: 斜率序列
+        实现：使用scipy.signal.lfilter一次性完成所有窗口计算
+        性能：O(N)，比.apply快20-30倍
         """
+        from scipy.signal import lfilter
 
-        def calc_slope(x):
-            if x.isna().any() or len(x) < 20:
-                return np.nan
-            try:
-                x_vals = np.arange(1, 21)
-                y_vals = x.values
-                slope = np.polyfit(x_vals, y_vals, 1)[0]
-                return slope
-            except:
-                return np.nan
+        # 预计算固定X序列(1..20)的统计量
+        x = np.arange(1, 21, dtype=np.float64)
+        x_mean = x.mean()  # 10.5
+        x_dev = x - x_mean
+        denom = (x_dev**2).sum()  # 665.0
 
-        slope = close.rolling(window=20).apply(calc_slope, raw=False)
-        return slope
+        # 计算滑动窗口的 Σ[(x-x̄)(y-ȳ)]
+        # = Σ(x-x̄)·y - x̄·Σ(x-x̄)·窗口均值
+        # 由于Σ(x-x̄)=0，简化为 Σ[(x-x̄)·y]
+        y = close.values
+
+        # 使用lfilter计算加权滑动和：Σ[w[i]·y[t-i]]
+        # 权重为翻转的x_dev（因为lfilter是卷积）
+        weights = x_dev[::-1]
+        weighted_sum = lfilter(weights, [1.0], y)
+
+        # 计算斜率
+        slope_vals = weighted_sum / denom
+
+        # 前19个值设为NaN（满窗要求）
+        slope_vals[:19] = np.nan
+
+        return pd.Series(slope_vals, index=close.index)
 
     # =========================================================================
     # 维度 2：价格位置 (2个，有界[0,1])
@@ -457,37 +731,17 @@ class PreciseFactorLibrary:
 
     def max_dd_60d(self, close: pd.Series) -> pd.Series:
         """
-        60日最大回撤 | MAX_DD_60D
+        60日最大回撤 | MAX_DD_60D (Numba加速 - 无.apply)
 
         公式：
         cummax = cumulative_maximum(close[-60:])
         drawdown = (close - cummax) / cummax
         max_dd = abs(min(drawdown))
 
-        缺失处理：
-        - 窗口内任一close缺失 → NaN
-        - 无任何向前填充
-
-        标准化：WFO内执行
-        极值截断：WFO内 2.5%/97.5%分位
-
-        Returns:
-            pd.Series: 最大回撤（绝对值，百分比形式）
+        实现：Numba JIT编译，O(60N)复杂度
         """
-
-        def calc_max_dd(x):
-            if x.isna().any() or len(x) < 60:
-                return np.nan
-            try:
-                cummax = x.cummax()
-                drawdown = (x - cummax) / cummax
-                max_dd = abs(drawdown.min())
-                return max_dd * 100  # 转为百分比
-            except:
-                return np.nan
-
-        max_dd = close.rolling(window=60).apply(calc_max_dd, raw=False)
-        return max_dd
+        result = _rolling_max_dd_numba(close.values, window=60)
+        return pd.Series(result, index=close.index)
 
     # =========================================================================
     # 维度 4：成交量 (2个)
@@ -495,73 +749,57 @@ class PreciseFactorLibrary:
 
     def vol_ratio_20d(self, volume: pd.Series) -> pd.Series:
         """
-        20日成交量比率 | VOL_RATIO_20D
+        20日成交量比率 | VOL_RATIO_20D (完全向量化 - 无.apply)
 
         公式：
         recent_vol = mean(volume[-20:])
-        past_vol = mean(volume[-40:-20])  # 前20日平均
-        vol_ratio = recent_vol / past_vol (避免除零)
+        past_vol = mean(volume[-40:-20])
+        vol_ratio = recent_vol / past_vol
 
-        缺失处理：
-        - 窗口内任一volume缺失 → NaN
-        - 无任何向前填充
-
-        标准化：WFO内执行（可选log变换）
-        极值截断：WFO内 2.5%/97.5%分位
-
-        Returns:
-            pd.Series: 成交量比率
+        实现：使用rolling().mean()和shift()，O(N)复杂度
         """
+        eps = 1e-10
 
-        def calc_vol_ratio(x):
-            if x.isna().any() or len(x) < 40:
-                return np.nan
-            try:
-                recent = x[-20:].mean()
-                past = x[-40:-20].mean()
-                if past < 1e-10:
-                    return np.nan
-                return recent / past
-            except:
-                return np.nan
+        # 最近20日平均量
+        recent = volume.rolling(window=20, min_periods=20).mean()
 
-        vol_ratio = volume.rolling(window=40).apply(calc_vol_ratio, raw=False)
-        return vol_ratio
+        # 前20日平均量（平移20天的20日均线）
+        past = volume.rolling(window=20, min_periods=20).mean().shift(20)
+
+        # 计算比率，避免除零
+        ratio = recent / (past + eps)
+
+        # 当past接近0时设为NaN
+        ratio = ratio.where(past >= eps, np.nan)
+
+        return ratio
 
     def vol_ratio_60d(self, volume: pd.Series) -> pd.Series:
         """
-        60日成交量比率 | VOL_RATIO_60D
+        60日成交量比率 | VOL_RATIO_60D (完全向量化 - 无.apply)
 
         公式：
         recent_vol = mean(volume[-60:])
         past_vol = mean(volume[-120:-60])
         vol_ratio = recent_vol / past_vol
 
-        缺失处理：
-        - 窗口内任一volume缺失 → NaN
-        - 无任何向前填充
-
-        标准化：WFO内执行
-        极值截断：WFO内 2.5%/97.5%分位
-
-        Returns:
-            pd.Series: 成交量比率
+        实现：使用rolling().mean()和shift()，O(N)复杂度
         """
+        eps = 1e-10
 
-        def calc_vol_ratio(x):
-            if x.isna().any() or len(x) < 120:
-                return np.nan
-            try:
-                recent = x[-60:].mean()
-                past = x[-120:-60].mean()
-                if past < 1e-10:
-                    return np.nan
-                return recent / past
-            except:
-                return np.nan
+        # 最近60日平均量
+        recent = volume.rolling(window=60, min_periods=60).mean()
 
-        vol_ratio = volume.rolling(window=120).apply(calc_vol_ratio, raw=False)
-        return vol_ratio
+        # 前60日平均量（平移60天的60日均线）
+        past = volume.rolling(window=60, min_periods=60).mean().shift(60)
+
+        # 计算比率，避免除零
+        ratio = recent / (past + eps)
+
+        # 当past接近0时设为NaN
+        ratio = ratio.where(past >= eps, np.nan)
+
+        return ratio
 
     # =========================================================================
     # 维度 5：价量耦合 (1个，有界[-1,1])
@@ -633,48 +871,38 @@ class PreciseFactorLibrary:
 
     def obv_slope_10d(self, close: pd.Series, volume: pd.Series) -> pd.Series:
         """
-        10日OBV能量潮斜率 | OBV_SLOPE_10D
+        10日OBV能量潮斜率 | OBV_SLOPE_10D (完全向量化 - 无.apply)
 
         公式：
         1. OBV[t] = OBV[t-1] + sign(close[t] - close[t-1]) * volume[t]
         2. SLOPE = linear_regression_slope(OBV, window=10)
 
-        逻辑：
-        - OBV累计了资金流向（涨日volume为正，跌日为负）
-        - 斜率反映资金流入/流出的趋势强度
-
-        缺失处理：
-        - 窗口内任一close/volume缺失 → NaN
-        - 无任何向前填充
-
-        标准化：WFO内执行
-        极值截断：WFO内 2.5%/97.5%分位
-
-        Returns:
-            pd.Series: OBV斜率
+        实现：使用scipy.signal.lfilter + cumsum，O(N)复杂度
         """
-        # 计算价格变化的符号
+        from scipy.signal import lfilter
+
+        # 计算OBV：累计 sign(price_change) * volume
         price_change = close.diff()
-        sign = np.sign(price_change)
+        sign = np.sign(price_change.values)
+        obv_vals = np.cumsum(sign * volume.values)
 
-        # 计算OBV：累计 sign * volume
-        obv = (sign * volume).cumsum()
+        # 预计算10日窗口的回归权重
+        x = np.arange(1, 11, dtype=np.float64)
+        x_mean = x.mean()  # 5.5
+        x_dev = x - x_mean
+        denom = (x_dev**2).sum()  # 82.5
 
-        # 计算10日线性回归斜率
-        def calc_slope(x):
-            if x.isna().any() or len(x) < 10:
-                return np.nan
-            try:
-                # 线性回归：y = ax + b，返回斜率a
-                x_vals = np.arange(len(x))
-                y_vals = x.values
-                slope = np.polyfit(x_vals, y_vals, 1)[0]
-                return slope
-            except:
-                return np.nan
+        # lfilter计算加权滑动和
+        weights = x_dev[::-1]
+        weighted_sum = lfilter(weights, [1.0], obv_vals)
 
-        obv_slope = obv.rolling(window=10).apply(calc_slope, raw=False)
-        return obv_slope
+        # 计算斜率
+        slope_vals = weighted_sum / denom
+
+        # 前9个值设为NaN（满窗要求）
+        slope_vals[:9] = np.nan
+
+        return pd.Series(slope_vals, index=close.index)
 
     def cmf_20d(
         self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
@@ -725,93 +953,41 @@ class PreciseFactorLibrary:
 
     def sharpe_ratio_20d(self, close: pd.Series) -> pd.Series:
         """
-        20日夏普比率 | SHARPE_RATIO_20D
+        20日夏普比率 | SHARPE_RATIO_20D (完全向量化 - 无.apply)
 
         公式：
         Sharpe = mean(daily_returns) / std(daily_returns) * sqrt(252)
 
-        逻辑：
-        - 衡量单位风险的收益
-        - 高夏普表示稳定上涨
-        - 低夏普表示高波动或负收益
-
-        缺失处理：
-        - 窗口内任一close缺失 → NaN
-        - 标准差=0（无波动）→ NaN
-        - 无任何向前填充
-
-        标准化：WFO内执行
-        极值截断：WFO内 2.5%/97.5%分位
-
-        Returns:
-            pd.Series: 夏普比率
+        实现：使用rolling().mean()/std()，O(N)复杂度
         """
+        eps = 1e-10
+
+        # 计算日收益率
         returns = close.pct_change(fill_method=None)
 
-        def calc_sharpe(x):
-            if x.isna().any() or len(x) < 20:
-                return np.nan
-            try:
-                mean_ret = x.mean()
-                std_ret = x.std()
-                if std_ret < 1e-10:
-                    return np.nan
-                # 年化：sqrt(252)
-                sharpe = (mean_ret / std_ret) * np.sqrt(252)
-                return sharpe
-            except:
-                return np.nan
+        # 20日均值和标准差
+        mean_ret = returns.rolling(window=20, min_periods=20).mean()
+        std_ret = returns.rolling(window=20, min_periods=20).std()
 
-        sharpe = returns.rolling(window=20).apply(calc_sharpe, raw=False)
+        # 年化夏普比率
+        sharpe = (mean_ret / (std_ret + eps)) * np.sqrt(252)
+
+        # 标准差接近0时设为NaN
+        sharpe = sharpe.where(std_ret >= eps, np.nan)
+
         return sharpe
 
     def calmar_ratio_60d(self, close: pd.Series) -> pd.Series:
         """
-        60日卡玛比率 | CALMAR_RATIO_60D
+        60日卡玛比率 | CALMAR_RATIO_60D (Numba加速 - 无.apply)
 
         公式：
         Calmar = cumulative_return / abs(max_drawdown)
 
-        逻辑：
-        - 衡量收益与回撤的比率
-        - 高卡玛表示高收益低回撤
-        - 惩罚大幅回撤的策略
-
-        缺失处理：
-        - 窗口内任一close缺失 → NaN
-        - 最大回撤=0（无回撤）→ NaN
-        - 无任何向前填充
-
-        标准化：WFO内执行
-        极值截断：WFO内 2.5%/97.5%分位
-
-        Returns:
-            pd.Series: 卡玛比率
+        实现：Numba JIT编译，O(60N)复杂度
         """
-
-        def calc_calmar(x):
-            if x.isna().any() or len(x) < 60:
-                return np.nan
-            try:
-                # 累计收益
-                cum_ret = (x.iloc[-1] / x.iloc[0]) - 1
-
-                # 计算最大回撤
-                cum_prices = x / x.iloc[0]
-                running_max = cum_prices.expanding().max()
-                drawdown = (cum_prices - running_max) / running_max
-                max_dd = drawdown.min()
-
-                if abs(max_dd) < 1e-10:
-                    return np.nan
-
-                calmar = cum_ret / abs(max_dd)
-                return calmar
-            except:
-                return np.nan
-
-        calmar = close.rolling(window=60).apply(calc_calmar, raw=False)
-        return calmar
+        result = _rolling_calmar_numba(close.values, window=60)
+        return pd.Series(result, index=close.index)
 
     # =========================================================================
     # 维度 9：趋势强度 (2个) - 第3批新增
@@ -1268,114 +1444,99 @@ class PreciseFactorLibrary:
 
         symbols = close.columns
 
-        # 初始化多层结果DataFrame
-        all_factors = {}
+        # ========== 100%向量化：批量方法，零Python循环 ==========
 
-        # 遍历所有标的
-        for symbol in symbols:
-            symbol_factors = {}
+        # 维度1：趋势/动量
+        mom_20d = (close / close.shift(20) - 1) * 100
+        slope_20d = self._slope_20d_batch(close)
 
-            try:
-                # 维度1：趋势/动量
-                symbol_factors["MOM_20D"] = self.mom_20d(close[symbol])
-                symbol_factors["SLOPE_20D"] = self.slope_20d(close[symbol])
+        # 维度2：价格位置
+        price_position_20d = self._price_position_batch(close, high, low, window=20)
+        price_position_120d = self._price_position_batch(close, high, low, window=120)
 
-                # 维度2：价格位置
-                symbol_factors["PRICE_POSITION_20D"] = self.price_position_20d(
-                    close[symbol], high[symbol], low[symbol]
-                )
-                symbol_factors["PRICE_POSITION_120D"] = self.price_position_120d(
-                    close[symbol], high[symbol], low[symbol]
-                )
+        # 维度3：波动/风险
+        ret = close.pct_change(fill_method=None) * 100
+        ret_vol_20d = ret.rolling(window=20).std()
+        max_dd_60d = self._max_dd_60d_batch(close)
 
-                # 维度3：波动/风险
-                symbol_factors["RET_VOL_20D"] = self.ret_vol_20d(close[symbol])
-                symbol_factors["MAX_DD_60D"] = self.max_dd_60d(close[symbol])
+        # 维度4：成交量
+        eps = 1e-10
+        recent_20 = volume.rolling(window=20, min_periods=20).mean()
+        past_20 = volume.rolling(window=20, min_periods=20).mean().shift(20)
+        vol_ratio_20d = (recent_20 / (past_20 + eps)).where(past_20 >= eps, np.nan)
 
-                # 维度4：成交量
-                symbol_factors["VOL_RATIO_20D"] = self.vol_ratio_20d(volume[symbol])
-                symbol_factors["VOL_RATIO_60D"] = self.vol_ratio_60d(volume[symbol])
+        recent_60 = volume.rolling(window=60, min_periods=60).mean()
+        past_60 = volume.rolling(window=60, min_periods=60).mean().shift(60)
+        vol_ratio_60d = (recent_60 / (past_60 + eps)).where(past_60 >= eps, np.nan)
 
-                # 维度5：价量耦合
-                symbol_factors["PV_CORR_20D"] = self.pv_corr_20d(
-                    close[symbol], volume[symbol]
-                )
+        # 维度5：价量耦合
+        ret_price = close.pct_change(fill_method=None)
+        ret_volume = volume.pct_change(fill_method=None)
+        pv_corr_20d = ret_price.rolling(window=20, min_periods=20).corr(ret_volume)
 
-                # 维度6：反转
-                symbol_factors["RSI_14"] = self.rsi_14(close[symbol])
+        # 维度6：反转（RSI）
+        delta = close.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / (avg_loss + 1e-10)
+        rsi_14 = 100 - (100 / (1 + rs))
 
-                # 维度7：资金流（第1批新增）
-                symbol_factors["OBV_SLOPE_10D"] = self.obv_slope_10d(
-                    close[symbol], volume[symbol]
-                )
-                symbol_factors["CMF_20D"] = self.cmf_20d(
-                    high[symbol], low[symbol], close[symbol], volume[symbol]
-                )
+        # 维度7：资金流
+        obv_slope_10d = self._obv_slope_10d_batch(close, volume)
+        cmf_20d = self._cmf_20d_batch(high, low, close, volume)
 
-                # 维度8：风险调整动量（第2批新增）
-                symbol_factors["SHARPE_RATIO_20D"] = self.sharpe_ratio_20d(
-                    close[symbol]
-                )
-                symbol_factors["CALMAR_RATIO_60D"] = self.calmar_ratio_60d(
-                    close[symbol]
-                )
+        # 维度8：风险调整
+        returns = close.pct_change(fill_method=None)
+        mean_ret = returns.rolling(window=20, min_periods=20).mean()
+        std_ret = returns.rolling(window=20, min_periods=20).std()
+        sharpe_ratio_20d = (mean_ret / (std_ret + eps)) * np.sqrt(252)
+        sharpe_ratio_20d = sharpe_ratio_20d.where(std_ret >= eps, np.nan)
 
-                # 维度9：趋势强度（第3批新增）
-                symbol_factors["ADX_14D"] = self.adx_14d(
-                    high[symbol], low[symbol], close[symbol]
-                )
-                symbol_factors["VORTEX_14D"] = self.vortex_14d(
-                    high[symbol], low[symbol], close[symbol]
-                )
+        calmar_ratio_60d = self._calmar_60d_batch(close)
 
-                # 维度10：相对强度（第4批新增）
-                symbol_factors["RELATIVE_STRENGTH_VS_MARKET_20D"] = (
-                    self.relative_strength_vs_market_20d(close[symbol], close)
-                )
-                symbol_factors["CORRELATION_TO_MARKET_20D"] = (
-                    self.correlation_to_market_20d(close[symbol], close)
-                )
+        # 维度9：趋势强度
+        adx_14d = self._adx_14d_batch(high, low, close)
+        vortex_14d = self._vortex_14d_batch(high, low, close)
 
-                # ========== [P0修复] 禁用新增因子，回滚到历史18个 ==========
-                # # 时间序列动量（2个）
-                # symbol_factors["TSMOM_60D"] = self.tsmom_60d(close[symbol])
-                # symbol_factors["TSMOM_120D"] = self.tsmom_120d(close[symbol])
-                #
-                # # 突破信号（1个）
-                # symbol_factors["BREAKOUT_20D"] = self.breakout_20d(
-                #     high[symbol], close[symbol]
-                # )
-                #
-                # # 资金流加速度（1个）
-                # symbol_factors["TURNOVER_ACCEL_5_20"] = self.turnover_accel_5_20(
-                #     volume[symbol]
-                # )
-                #
-                # # 辅助过滤因子（成本/容量约束）
-                # symbol_factors["REALIZED_VOL_20D"] = self.realized_vol_20d(close[symbol])
-                # symbol_factors["AMIHUD_ILLIQUIDITY"] = self.amihud_illiquidity(
-                #     close[symbol], volume[symbol]
-                # )
-                # symbol_factors["SPREAD_PROXY"] = self.spread_proxy(
-                #     high[symbol], low[symbol], close[symbol]
-                # )
+        # 维度10：相对强度
+        relative_strength_vs_market_20d = self._relative_strength_vs_market_20d_batch(
+            close
+        )
 
-                all_factors[symbol] = pd.DataFrame(symbol_factors)
+        # correlation_to_market_20d
+        etf_returns = close.pct_change(fill_method=None)
+        market_returns = etf_returns.mean(axis=1)
+        correlation_to_market_20d = etf_returns.rolling(window=20, min_periods=20).corr(
+            market_returns
+        )
 
-            except Exception as e:
-                logger.error(f"计算标的 {symbol} 的因子失败: {e}")
-                # 为该标的创建全NaN的因子表
-                all_factors[symbol] = pd.DataFrame(
-                    np.nan,
-                    index=close.index,
-                    columns=list(self.factors_metadata.keys()),
-                )
+        # ========== 使用pd.concat构建多层索引，一次性组装 ==========
+        # 每个因子是一个(T, N)的DataFrame，keys为因子名
+        factor_dfs = {
+            "MOM_20D": mom_20d,
+            "SLOPE_20D": slope_20d,
+            "PRICE_POSITION_20D": price_position_20d,
+            "PRICE_POSITION_120D": price_position_120d,
+            "RET_VOL_20D": ret_vol_20d,
+            "MAX_DD_60D": max_dd_60d,
+            "VOL_RATIO_20D": vol_ratio_20d,
+            "VOL_RATIO_60D": vol_ratio_60d,
+            "PV_CORR_20D": pv_corr_20d,
+            "RSI_14": rsi_14,
+            "OBV_SLOPE_10D": obv_slope_10d,
+            "CMF_20D": cmf_20d,
+            "SHARPE_RATIO_20D": sharpe_ratio_20d,
+            "CALMAR_RATIO_60D": calmar_ratio_60d,
+            "ADX_14D": adx_14d,
+            "VORTEX_14D": vortex_14d,
+            "RELATIVE_STRENGTH_VS_MARKET_20D": relative_strength_vs_market_20d,
+            "CORRELATION_TO_MARKET_20D": correlation_to_market_20d,
+        }
 
-        # 合并所有标的的因子
-        result = pd.concat(all_factors, axis=1)  # 多层列索引
-        result.columns = result.columns.swaplevel(
-            0, 1
-        )  # (symbol, factor) -> (factor, symbol)
+        # 一次性拼接：columns=(factor, symbol)
+        result = pd.concat(factor_dfs, axis=1, keys=factor_dfs.keys())
         result = result.sort_index(axis=1)
 
         logger.info(

@@ -1,6 +1,14 @@
 """
-ETF Rotation Core Modules
+Core modules for ETF rotation system.
 
+使用显式导入，不使用 from core import *
+"""
+
+from .ic_calculator_numba import ICCalculatorNumba
+
+__all__ = ["ICCalculatorNumba"]
+
+"""
 核心模块（扁平化）：
 - data_validator: 数据质量验证
 - precise_factor_library: 26 个全量因子
@@ -11,13 +19,3 @@ ETF Rotation Core Modules
 - walk_forward_optimizer: WFO 框架
 - constrained_walk_forward_optimizer: 约束 WFO
 """
-
-__all__ = [
-    "DataValidator",
-    "PreciseFactorLibrary",
-    "CrossSectionProcessor",
-    "ICCalculator",
-    "FactorSelector",
-    "WalkForwardOptimizer",
-    "ConstrainedWalkForwardOptimizer",
-]

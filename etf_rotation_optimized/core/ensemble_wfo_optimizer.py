@@ -14,18 +14,16 @@ Ensemble WFO Optimizer | 集成Walk-Forward优化器
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
-
 from core.constrained_walk_forward_optimizer import (
     ConstrainedWalkForwardOptimizer,
-    ConstraintApplicationReport,
 )
 from core.ensemble_sampler import EnsembleSampler
 from core.factor_weighting import FactorWeighting
-from core.ic_calculator import ICCalculator
+from core.ic_calculator_numba import ICCalculatorNumba as ICCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +81,7 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
         combo_size: int = 5,
         top_k: int = 10,
         weighting_scheme: str = "gradient_decay",
+        gradient_decay_rate: float = 0.5,
         random_seed: int = 42,
         verbose: bool = True,
     ):
@@ -95,6 +94,7 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
             combo_size: 每组合因子数 (默认5)
             top_k: 集成的最优组合数 (默认10, 抗过拟合)
             weighting_scheme: 加权方案 ('equal'/'ic_weighted'/'gradient_decay')
+            gradient_decay_rate: 梯度衰减率 (默认0.5)
             random_seed: 随机种子 (确保可复现)
             verbose: 是否打印日志
         """
@@ -111,6 +111,7 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
         self.combo_size = combo_size
         self.top_k = top_k
         self.weighting_scheme = weighting_scheme
+        self.gradient_decay_rate = gradient_decay_rate
         self.random_seed = random_seed
 
         # 结果存储
@@ -157,9 +158,7 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
             logger.info(
                 f"数据形状: {num_time_steps} 日期 × {num_assets} 资产 × {num_factors} 因子"
             )
-            logger.info(
-                f"窗口设置: IS={is_period}, OOS={oos_period}, step={step_size}"
-            )
+            logger.info(f"窗口设置: IS={is_period}, OOS={oos_period}, step={step_size}")
 
         # 划分窗口
         windows = self._partition_windows(
@@ -171,7 +170,14 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
             logger.info("=" * 80)
 
         # 逐窗口优化
+        import time
+
+        from .performance_monitor import PerformanceMonitor
+
+        window_times = []
         for window_idx, (is_start, is_end, oos_start, oos_end) in enumerate(windows):
+            window_start_time = time.time()
+
             if self.verbose:
                 logger.info(
                     f"\n{'─'*80}\n【窗口 {window_idx+1}/{len(windows)}】"
@@ -180,30 +186,38 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
 
             # 进度心跳
             if window_idx % 10 == 0 and window_idx > 0:
+                avg_time = np.mean(window_times[-10:])
+                eta = avg_time * (len(windows) - window_idx)
                 logger.info(
                     f"🔄 进度: {window_idx}/{len(windows)} 窗口完成 "
-                    f"({window_idx/len(windows)*100:.1f}%)"
+                    f"({window_idx/len(windows)*100:.1f}%) | "
+                    f"平均耗时: {avg_time:.1f}s | ETA: {eta/60:.1f}min"
                 )
 
             # 运行单窗口优化
-            window_result = self._run_single_window(
-                factors_data,
-                returns,
-                factor_names,
-                is_start,
-                is_end,
-                oos_start,
-                oos_end,
-                window_idx,
-            )
+            with PerformanceMonitor.timer(f"窗口{window_idx+1}"):
+                window_result = self._run_single_window(
+                    factors_data,
+                    returns,
+                    factor_names,
+                    is_start,
+                    is_end,
+                    oos_start,
+                    oos_end,
+                    window_idx,
+                )
 
             self.window_results.append(window_result)
+
+            window_elapsed = time.time() - window_start_time
+            window_times.append(window_elapsed)
 
             if self.verbose:
                 logger.info(
                     f"✓ 窗口{window_idx+1} 完成: "
                     f"OOS IC={window_result.oos_ensemble_ic:.4f}, "
-                    f"Sharpe={window_result.oos_ensemble_sharpe:.2f}"
+                    f"Sharpe={window_result.oos_ensemble_sharpe:.2f} | "
+                    f"耗时: {window_elapsed:.1f}s"
                 )
 
         # 生成汇总报告
@@ -247,17 +261,14 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
         Returns:
             单窗口集成结果
         """
-        # Step 1: IS数据切片 (T-1对齐: 因子[t-1]预测收益[t])
-        is_factor_start = max(0, is_start - 1)
-        is_factor_end = max(0, is_end - 1)
-        is_factors = factors_data[is_factor_start:is_factor_end]
-        is_returns = returns[is_start:is_end]
+        # Step 1: IS数据切片 + T-1对齐
+        from .data_contract import align_factor_to_return
 
-        if self.verbose and window_idx == 0:
-            logger.debug(
-                f"IS切片: 因子[{is_factor_start}:{is_factor_end}), "
-                f"收益[{is_start}:{is_end})"
-            )
+        is_factors_raw = factors_data[is_start:is_end]
+        is_returns_raw = returns[is_start:is_end]
+
+        # T-1对齐: 因子[t] 预测 收益[t+1]
+        is_factors, is_returns = align_factor_to_return(is_factors_raw, is_returns_raw)
 
         # Step 2: 计算IS阶段各因子IC
         is_ic_scores = self._compute_window_ic(is_factors, is_returns, factor_names)
@@ -301,36 +312,40 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
                 f"IS IC范围=[{min(top10_is_ics):.4f}, {max(top10_is_ics):.4f}]"
             )
 
-        # Step 6: OOS集成预测
-        oos_factor_start = max(0, oos_start - 1)
-        oos_factor_end = max(0, oos_end - 1)
-        oos_factors = factors_data[oos_factor_start:oos_factor_end]
-        oos_returns = returns[oos_start:oos_end]
+        # Step 6: OOS集成预测 - T-1对齐
+        from .data_contract import align_factor_to_return
 
-        # 6.1 计算每个Top10组合的OOS预测信号
-        ensemble_signals = []
+        # 预计算因子名称到索引的映射（避免重复查找）
+        factor_name_to_idx = {name: idx for idx, name in enumerate(factor_names)}
+
+        # Step 6: OOS集成预测 + 性能评估（向量化优化）
+        # 6.1 提取OOS窗口数据并T-1对齐
+        oos_factors_raw = factors_data[oos_start:oos_end]
+        oos_returns_raw = returns[oos_start:oos_end]
+
+        # T-1对齐：因子[t] 预测 收益[t+1]
+        oos_factors, oos_returns = align_factor_to_return(
+            oos_factors_raw, oos_returns_raw
+        )
+
+        # 6.2 批量提取Top10组合的因子索引
+        top10_indices = np.array(
+            [[factor_name_to_idx[f] for f in combo] for combo in top10_combos]
+        )  # (10, 5)
+
+        # 向量化提取因子数据: (T, N, K) → (10, T, N, 5)
+        # 使用高级索引一次性提取所有组合
+        top10_factors = oos_factors[:, :, top10_indices.T]  # (T, N, 5, 10)
+        top10_factors = np.transpose(top10_factors, (3, 0, 1, 2))  # (10, T, N, 5)
+
+        # 向量化计算每个组合的信号（等权平均）
+        ensemble_signals_array = np.mean(top10_factors, axis=3)  # (10, T, N)
+
+        # 向量化计算每个组合的OOS IC
         oos_single_ics = {}
-
-        for combo in top10_combos:
-            # 获取该组合的因子索引
-            combo_indices = [factor_names.index(f) for f in combo]
-
-            # 提取该组合的因子数据: (T, N, K) → (T, N)
-            combo_factors = oos_factors[:, :, combo_indices]
-
-            # 等权合并为单一信号 (简化版, 可用加权方案)
-            combo_signal = np.mean(combo_factors, axis=2)  # (T, N)
-
-            ensemble_signals.append(combo_signal)
-
-            # 计算该组合的OOS IC (用于验证)
-            combo_ic = self._compute_signal_ic(combo_signal, oos_returns)
+        for i, combo in enumerate(top10_combos):
+            combo_ic = self._compute_signal_ic(ensemble_signals_array[i], oos_returns)
             oos_single_ics[combo] = combo_ic
-
-        # 6.2 集成预测: 使用梯度衰减权重
-        ensemble_signals_array = np.stack(
-            ensemble_signals, axis=0
-        )  # (top_k, T, N)
 
         # 计算集成权重 (基于IS IC排序)
         # 使用简化方式: 直接根据IC计算权重,无需FactorWeighting
@@ -340,9 +355,11 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
             ic_array = np.array(top10_is_ics)
             combo_weights = ic_array / ic_array.sum()
         elif self.weighting_scheme == "gradient_decay":
-            # 梯度衰减: w_i = exp(-0.5*i) / Z
+            # 梯度衰减: w_i = exp(-decay_rate*i) / Z
+            # 从配置读取衰减率，默认0.5
+            decay_rate = getattr(self, "gradient_decay_rate", 0.5)
             ranks = np.arange(self.top_k)
-            weights = np.exp(-0.5 * ranks)
+            weights = np.exp(-decay_rate * ranks)
             combo_weights = weights / weights.sum()
         else:
             combo_weights = np.ones(self.top_k) / self.top_k
@@ -355,19 +372,31 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
         # 6.3 计算OOS性能
         oos_ensemble_ic = self._compute_signal_ic(final_signal, oos_returns)
 
-        # 计算Sharpe (信号的时序稳定性)
-        ic_series = []
+        # 计算Sharpe (按日横截面相关的时序稳定性) - 向量化
         T_oos = min(len(final_signal), len(oos_returns))
-        
-        for t in range(T_oos):
-            if np.std(final_signal[t]) > 0 and np.std(oos_returns[t]) > 0:
-                ic_t = np.corrcoef(final_signal[t], oos_returns[t])[0, 1]
-                if not np.isnan(ic_t):
-                    ic_series.append(ic_t)
+        sig = final_signal[:T_oos]
+        ret = oos_returns[:T_oos]
 
-        oos_ensemble_sharpe = (
-            np.mean(ic_series) / np.std(ic_series) if len(ic_series) > 0 else 0.0
-        )
+        # 行内标准差与有效掩码
+        sig_std = np.nanstd(sig, axis=1)
+        ret_std = np.nanstd(ret, axis=1)
+        valid_mask = (sig_std > 1e-10) & (ret_std > 1e-10)
+
+        if np.any(valid_mask):
+            sig_mean = np.nanmean(sig, axis=1, keepdims=True)
+            ret_mean = np.nanmean(ret, axis=1, keepdims=True)
+            sig_norm = (sig - sig_mean) / (sig_std[:, None] + 1e-10)
+            ret_norm = (ret - ret_mean) / (ret_std[:, None] + 1e-10)
+            ic_series = np.nanmean(sig_norm * ret_norm, axis=1)
+            ic_series = ic_series[valid_mask]
+            ic_std = np.nanstd(ic_series)
+            oos_ensemble_sharpe = (
+                float(np.nanmean(ic_series) / ic_std)
+                if ic_series.size > 0 and ic_std > 1e-12
+                else 0.0
+            )
+        else:
+            oos_ensemble_sharpe = 0.0
 
         if self.verbose:
             logger.info(
@@ -399,7 +428,7 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
         factor_names: List[str],
     ) -> List[float]:
         """
-        批量评估所有组合的IS IC性能
+        批量评估所有组合的IS IC性能 - 全向量化版本
 
         Args:
             combos: 因子组合列表
@@ -410,27 +439,35 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
         Returns:
             每个组合的IS IC列表
         """
-        combo_ics = []
+        from .performance_monitor import PerformanceMonitor
 
-        for combo in combos:
-            # 获取组合因子索引
-            combo_indices = [factor_names.index(f) for f in combo]
+        with PerformanceMonitor.timer("批量组合评估"):
+            # 预计算因子索引映射 - O(K)一次性完成
+            factor_idx_map = {name: idx for idx, name in enumerate(factor_names)}
 
-            # 提取组合因子: (T, N, K) → (T, N)
-            combo_factors = is_factors[:, :, combo_indices]
-            combo_signal = np.mean(combo_factors, axis=2)  # 等权合并
+            # 批量提取所有组合的索引 - O(C*5)
+            combo_indices = np.array(
+                [[factor_idx_map[f] for f in combo] for combo in combos]
+            )  # (C, 5)
 
-            # 计算IC
-            ic = self._compute_signal_ic(combo_signal, is_returns)
-            combo_ics.append(ic)
+            # 向量化提取所有组合因子 - O(1)高级索引
+            # (T, N, K) → (C, T, N, 5)
+            all_combo_factors = is_factors[:, :, combo_indices.T]  # (T, N, 5, C)
+            all_combo_factors = np.transpose(
+                all_combo_factors, (3, 0, 1, 2)
+            )  # (C, T, N, 5)
+
+            # 向量化等权合并 - O(1)
+            all_signals = np.mean(all_combo_factors, axis=3)  # (C, T, N)
+
+            # 向量化IC计算
+            combo_ics = self._compute_batch_ic(all_signals, is_returns)
 
         return combo_ics
 
-    def _compute_signal_ic(
-        self, signal: np.ndarray, returns: np.ndarray
-    ) -> float:
+    def _compute_signal_ic(self, signal: np.ndarray, returns: np.ndarray) -> float:
         """
-        计算信号与收益的IC (Information Coefficient)
+        计算信号与收益的IC (Information Coefficient) - 向量化版本
 
         Args:
             signal: 预测信号 (T, N)
@@ -439,17 +476,84 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
         Returns:
             平均IC
         """
+        T = min(len(signal), len(returns))
+
         ic_series = []
 
-        T = min(len(signal), len(returns))  # 防止长度不一致
-
         for t in range(T):
-            if np.std(signal[t]) > 0 and np.std(returns[t]) > 0:
-                ic_t = np.corrcoef(signal[t], returns[t])[0, 1]
-                if not np.isnan(ic_t):
-                    ic_series.append(ic_t)
+            signal_t = signal[t]
+            return_t = returns[t]
 
-        return np.mean(ic_series) if len(ic_series) > 0 else 0.0
+            # 删除NaN值
+            valid_mask = ~np.isnan(signal_t) & ~np.isnan(return_t)
+            signal_valid = signal_t[valid_mask]
+            return_valid = return_t[valid_mask]
+
+            # 至少需要2个有效数据点来计算相关
+            if len(signal_valid) >= 10:
+                if np.std(signal_valid) > 1e-10 and np.std(return_valid) > 1e-10:
+                    # 标准化
+                    signal_norm = (signal_valid - np.mean(signal_valid)) / (
+                        np.std(signal_valid) + 1e-10
+                    )
+                    return_norm = (return_valid - np.mean(return_valid)) / (
+                        np.std(return_valid) + 1e-10
+                    )
+
+                    # 计算相关系数
+                    ic_t = np.corrcoef(signal_norm, return_norm)[0, 1]
+                    if not np.isnan(ic_t):
+                        ic_series.append(ic_t)
+
+        return np.mean(ic_series) if ic_series else 0.0
+
+    def _compute_batch_ic(
+        self, signals: np.ndarray, returns: np.ndarray
+    ) -> List[float]:
+        """
+        批量计算多个信号的IC - 全向量化（处理NaN）
+
+        Args:
+            signals: (C, T, N) C个组合的信号
+            returns: (T, N) 收益
+
+        Returns:
+            C个IC值
+        """
+        from .performance_monitor import PerformanceMonitor
+
+        with PerformanceMonitor.timer("批量IC计算"):
+            eps = 1e-10
+            # 形状
+            C, T, N = signals.shape
+
+            # (C, T, 1) 与 (1, T, 1)
+            sig_mean = np.nanmean(signals, axis=2, keepdims=True)
+            sig_std = np.nanstd(signals, axis=2, keepdims=True)
+            ret_mean = np.nanmean(returns, axis=1, keepdims=True)
+            ret_std = np.nanstd(returns, axis=1, keepdims=True)
+
+            # 标准化，NaN保持
+            sig_norm = (signals - sig_mean) / (sig_std + eps)  # (C, T, N)
+            ret_norm = (returns - ret_mean) / (ret_std + eps)  # (T, N)
+
+            # 逐日横截面相关（皮尔逊近似Spearman的秩相关）
+            ic_matrix = np.nanmean(sig_norm * ret_norm[None, :, :], axis=2)  # (C, T)
+
+            # 有效性掩码：有效样本数>=10 且 std>0
+            valid_count = np.sum(
+                ~np.isnan(signals) & ~np.isnan(returns[None, :, :]), axis=2
+            )  # (C, T)
+            sig_std_2d = sig_std.squeeze(-1)  # (C, T)
+            ret_std_1d = ret_std.squeeze(-1)  # (T,)
+            valid_mask = (
+                (valid_count >= 10) & (sig_std_2d > eps) & (ret_std_1d[None, :] > eps)
+            )
+
+            ic_masked = np.where(valid_mask, ic_matrix, np.nan)  # (C, T)
+            combo_ics = np.nanmean(ic_masked, axis=1)  # (C,)
+
+        return np.nan_to_num(combo_ics, nan=0.0).astype(float).tolist()
 
     def _generate_summary_report(self) -> pd.DataFrame:
         """
@@ -469,10 +573,14 @@ class EnsembleWFOOptimizer(ConstrainedWalkForwardOptimizer):
                     "oos_start": result.oos_start,
                     "oos_end": result.oos_end,
                     "n_sampled_combos": result.n_sampled_combos,
-                    "top10_mean_is_ic": np.mean(result.top10_is_ics),
+                    "top10_mean_is_ic": (
+                        float(np.mean(result.top10_is_ics))
+                        if len(result.top10_is_ics) > 0
+                        else 0.0
+                    ),
                     "oos_ensemble_ic": result.oos_ensemble_ic,
                     "oos_ensemble_sharpe": result.oos_ensemble_sharpe,
-                    "top10_combos": str(result.top10_combos[:3]),  # 前3个组合
+                    "top10_combos": str(result.top10_combos[:3]),
                 }
             )
 
