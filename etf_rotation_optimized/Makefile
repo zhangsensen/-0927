@@ -1,92 +1,24 @@
-# ============================================================================
-# ETF轮动系统优化版 - Makefile
-# ============================================================================
-# 重构日期: 2025-10-28
-# 架构: 横截面 -> 因子筛选 -> WFO -> VBT回测
-# ============================================================================
-
-.PHONY: install test clean run run-steps help
-
-# ============================================================================
-# 环境管理
-# ============================================================================
+.PHONY: install run clean clean-results help
 
 install:
-	@echo "📦 安装依赖..."
-	pip install -r requirements.txt
-
-# ============================================================================
-# 测试
-# ============================================================================
-
-test:
-	@echo "🧪 运行测试..."
-	python -m pytest tests/ -v
-
-# ============================================================================
-# 清理
-# ============================================================================
-
-clean:
-	@echo "🧹 清理缓存和输出..."
-	rm -rf cache/*
-	rm -rf results/*
-	rm -rf output/*
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-
-# ============================================================================
-# 运行流程
-# ============================================================================
+	@echo "[install] 使用pep517安装本地包"
+	@pip install -e .
 
 run:
-	@echo "🚀 运行完整流程（横截面 -> 因子筛选 -> WFO -> 回测）..."
-	python main.py run --config configs/default.yaml
+	@echo "[run] 运行ETF轮动流水线"
+	@python run_final_production.py --config configs/default.yaml
 
-# 运行单个步骤
-run-cross-section:
-	@echo "▶️  运行横截面加工..."
-	python main.py run-steps --config configs/default.yaml --steps cross_section
+clean:
+	@echo "[clean] 删除缓存与编译产物"
+	@rm -rf .cache __pycache__ */__pycache__
 
-run-factor-selection:
-	@echo "▶️  运行因子筛选..."
-	python main.py run-steps --config configs/default.yaml --steps factor_selection
-
-run-wfo:
-	@echo "▶️  运行WFO验证..."
-	python main.py run-steps --config configs/default.yaml --steps wfo
-
-run-backtest:
-	@echo "▶️  运行VBT回测..."
-	python main.py run-steps --config configs/default.yaml --steps backtest
-
-# ============================================================================
-# 帮助
-# ============================================================================
+clean-results:
+	@echo "[clean-results] 清理results目录下的产物"
+	@find results -mindepth 1 -maxdepth 1 -print -exec rm -rf {} +
 
 help:
-	@echo "============================================================================"
-	@echo "ETF轮动系统优化版 v2.0 - 可用命令"
-	@echo "============================================================================"
-	@echo ""
-	@echo "环境管理:"
-	@echo "  make install              - 安装依赖"
-	@echo ""
-	@echo "测试:"
-	@echo "  make test                 - 运行测试"
-	@echo ""
-	@echo "清理:"
-	@echo "  make clean                - 清理缓存和输出"
-	@echo ""
-	@echo "运行流程:"
-	@echo "  make run                  - 运行完整流程"
-	@echo "  make run-cross-section    - 运行横截面加工"
-	@echo "  make run-factor-selection - 运行因子筛选"
-	@echo "  make run-wfo              - 运行WFO验证"
-	@echo "  make run-backtest         - 运行VBT回测"
-	@echo ""
-	@echo "直接使用 main.py:"
-	@echo "  python main.py run --config configs/default.yaml"
-	@echo "  python main.py run-steps --config configs/default.yaml --steps cross_section"
-	@echo ""
-	@echo "============================================================================"
+	@echo "可用命令:"
+	@echo "  make install        安装/更新依赖"
+	@echo "  make run            执行完整流水线"
+	@echo "  make clean          删除缓存与编译文件"
+	@echo "  make clean-results  清空 results/ 输出"

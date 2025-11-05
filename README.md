@@ -1,10 +1,43 @@
-# 深度量化0927 - 量化因子系统
+# 深度量化0927 - 量化交易研究平台
 
 ## 项目概述
 
-本项目是一个专业级量化交易开发环境，提供统一的因子计算引擎，支持多市场算法化交易研究。系统核心是**FactorEngine**架构，确保研究、回测和生产环境的100%一致性。系统涵盖A股、港股和ETF市场，提供154个技术指标和完整的资金流因子系统。
+本项目是一个专业级量化交易开发环境,包含多个独立子系统,每个系统专注于特定市场或策略类型。
 
-**核心理念**：Linus Torvalds工程原则 - 消除特殊案例，提供实用解决方案，确保代码在实际市场中可靠运行。
+**核心理念**: Linus Torvalds工程原则 - 消除特殊案例,提供实用解决方案,确保代码在实际市场中可靠运行。
+
+## 🎯 核心子系统
+
+### 1. **ETF轮动系统** (`etf_rotation_optimized/`) ⭐ 主力系统
+- **状态**: ✅ 生产就绪
+- **市场**: 中国ETF市场 (43只核心ETF)
+- **策略**: 横截面因子轮动 + WFO优化
+- **特性**: 
+  - 18个精选因子 (趋势/动量/波动/资金流)
+  - IC加权 + 多策略枚举
+  - 交易级胜率计算
+  - 事件驱动组合构建
+- **文档**: [详见 etf_rotation_optimized/README.md](etf_rotation_optimized/README.md)
+
+### 2. **FactorEngine统一框架** (`factor_system/`)
+- **状态**: 维护模式
+- **功能**: 154个技术指标 + 15个资金流因子
+- **市场**: A股、港股、ETF多市场支持
+- **特性**: 统一API、双重缓存、向量化计算
+
+### 3. **A股策略** (`a_shares_strategy/`)
+- **状态**: 研发中
+- **市场**: A股市场
+- **特性**: T+1约束、资金流因子
+
+### 4. **港股中频** (`hk_midfreq/`)
+- **状态**: 研发中  
+- **市场**: 港股市场 (276+股票)
+- **频率**: 1分钟到日线
+
+### 5. **ETF数据管理** (`etf_download_manager/`)
+- **功能**: ETF数据下载和管理
+- **支持**: 自定义日期范围、增量更新
 
 ## ✅ 核心系统组件
 
@@ -59,45 +92,95 @@
 | `weekly` | 周线 | 周频策略 |
 | `monthly` | 月线 | 月频策略 |
 
-## 🚀 快速开始
+## 🚀 快速开始 - ETF轮动系统
 
-### 环境安装
+ETF轮动系统是当前主力系统,推荐从这里开始:
+
 ```bash
-# 使用uv现代包管理器
-uv sync
+# 进入ETF轮动目录
+cd etf_rotation_optimized
 
-# 激活虚拟环境
-source .venv/bin/activate
+# 安装依赖
+make install
 
-# 开发安装（包含所有工具）
-uv sync --group all
+# 运行完整pipeline
+make run
 ```
 
-### 核心使用
+详细文档: [etf_rotation_optimized/README.md](etf_rotation_optimized/README.md)
 
-#### 1. 因子计算（推荐方式）
-```python
-from factor_system.factor_engine import api
-from datetime import datetime
+## 📁 项目结构
 
-# 计算技术指标
-factors = api.calculate_factors(
-    factor_ids=["RSI14", "MACD", "STOCH"],
-    symbols=["0700.HK", "0005.HK"],
-    timeframe="15min",
-    start_date=datetime(2025, 9, 1),
-    end_date=datetime(2025, 9, 30)
-)
-
-# 计算资金流因子（A股）
-money_flow_factors = api.calculate_factors(
-    factor_ids=["MainNetInflow_Rate", "LargeOrder_Ratio"],
-    symbols=["000001.SZ", "600036.SH"],
-    timeframe="daily",
-    start_date=datetime(2025, 9, 1),
-    end_date=datetime(2025, 9, 30)
-)
 ```
+深度量化0927/
+├── README.md                      # 本文件
+├── zen_mcp_使用指南.md            # MCP工具使用指南
+│
+├── etf_rotation_optimized/        # ⭐ 主力系统: ETF轮动
+│   ├── core/                      # 核心引擎 (28个模块)
+│   ├── configs/                   # 配置文件
+│   ├── docs/                      # 详细文档
+│   ├── tests/                     # 单元测试
+│   └── results/                   # 运行结果
+│
+├── factor_system/                 # FactorEngine框架 (维护)
+├── a_shares_strategy/             # A股策略 (研发中)
+├── hk_midfreq/                    # 港股中频 (研发中)
+├── etf_download_manager/          # ETF数据管理
+│
+├── production/                    # 生产配置
+├── cache/                         # 缓存目录
+└── results/                       # 历史结果
+```
+
+## 📖 文档导航
+
+### ETF轮动系统核心文档
+- [快速开始](etf_rotation_optimized/README.md) - 5分钟上手
+- [项目结构](etf_rotation_optimized/PROJECT_STRUCTURE.md) - 代码架构
+- [交易指南](etf_rotation_optimized/EVENT_DRIVEN_TRADING_GUIDE.md) - 事件驱动交易
+- [胜率功能](etf_rotation_optimized/DELIVERY_DOCUMENT.md) - 交易级胜率计算
+
+### 完整文档索引
+- [文档索引](etf_rotation_optimized/docs/INDEX.md) - 所有文档列表
+- [部署指南](etf_rotation_optimized/docs/DEPLOYMENT.md) - 生产部署
+- [运维手册](etf_rotation_optimized/docs/OPERATIONS.md) - 日常运维
+
+## 🔧 技术栈
+
+- **语言**: Python 3.11+
+- **数据处理**: Pandas, NumPy, Numba
+- **配置管理**: YAML
+- **测试**: pytest
+- **构建**: Make, uv
+
+## 📊 系统对比
+
+| 系统 | 状态 | 市场 | 策略类型 | 推荐度 |
+|------|------|------|----------|--------|
+| ETF轮动 | ✅ 生产 | ETF | 横截面轮动 | ⭐⭐⭐⭐⭐ |
+| FactorEngine | 🔧 维护 | A股/港股/ETF | 因子框架 | ⭐⭐⭐ |
+| A股策略 | 🚧 研发 | A股 | 资金流 | ⭐⭐ |
+| 港股中频 | 🚧 研发 | 港股 | 中高频 | ⭐⭐ |
+
+## 💡 开发建议
+
+1. **新用户**: 从ETF轮动系统开始,文档完善、代码清晰
+2. **策略研发**: 使用`etf_rotation_optimized/configs/experiments/`进行实验
+3. **因子开发**: 在`core/precise_factor_library_v2.py`添加新因子
+4. **回测验证**: 使用`vectorbt_backtest/`进行暴力回测
+
+## 🤝 贡献指南
+
+- 代码风格: 遵循PEP 8
+- 提交信息: 简洁明了,描述清晰
+- 测试要求: 新功能必须包含单元测试
+- 文档更新: 代码修改同步更新文档
+
+---
+
+**最后更新**: 2025-11-04
+**维护者**: 深度量化团队
 
 #### 2. 批量因子生成
 ```bash
