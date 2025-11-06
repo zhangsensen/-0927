@@ -1,5 +1,27 @@
 # ETF轮动优化系统 🎯
 
+> 重要：请先阅读 `docs/PROJECT_OVERVIEW.md` 与 `docs/LLM_GUARDRAILS.md`
+>
+> - 规范入口：`real_backtest/`（同名脚本以该目录为准）
+> - WFO 主入口：`run_combo_wfo.py`（根目录唯一副本）
+> - 输出契约：见 `docs/OUTPUT_SCHEMA.md`，修改前务必同步更新文档与读取脚本
+
+## 🧩 启用「Markdown 新建限制」
+
+为避免大模型随意新建无意义的 `.md` 文件，本仓库提供 pre-commit 钩子进行约束：
+
+- 仅允许在 `docs/` 目录新建 `.md`；
+- 新建文档需在前 20 行加入允许标记（任选其一）：`<!-- ALLOW-MD -->` / `[ALLOW-MD]` / `ALLOW_MD: true`；
+- 已存在的 `.md` 不受影响（可自由修改）。
+
+安装钩子：
+
+```bash
+bash scripts/install_git_hooks.sh
+```
+
+说明：具体策略见 `docs/LLM_GUARDRAILS.md`。
+
 一个高性能、生产就绪的ETF轮动策略系统，基于因子投资和Walk Forward Optimization (WFO) 框架。系统支持从单因子分析到组合级深度挖掘的全流程，专为量化交易和个人投资者设计。
 
 ## ✨ 核心特性
