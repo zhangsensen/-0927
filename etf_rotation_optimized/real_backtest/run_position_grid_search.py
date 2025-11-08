@@ -17,21 +17,32 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+
+# 可选：tqdm 进度条（建议安装 tqdm 与 tqdm-joblib）
+try:
+    from tqdm.auto import tqdm  # type: ignore
+    try:
+        from tqdm_joblib import tqdm_joblib  # type: ignore
+    except Exception:  # pragma: no cover
+        tqdm_joblib = None  # type: ignore
+except Exception:  # pragma: no cover
+    tqdm = None  # type: ignore
+    tqdm_joblib = None  # type: ignore
 from joblib import Parallel, delayed
 from scipy.stats import spearmanr
 
 # 添加 sys path
 sys.path.insert(0, "/Users/zhangshenshen/深度量化0927/etf_rotation_optimized")
 
-from test_freq_no_lookahead import backtest_no_lookahead
+from run_production_backtest import backtest_no_lookahead
 
 
 def extract_top500_params():
     """从all_freq_scan中提取Top 500收益的参数"""
 
-    # 读取全部扫描结果
+    # 读取全部扫描结果(从父目录)
     freq_scan_file = (
-        "results_combo_wfo/20251106_021606/all_freq_scan_20251106_021606.csv"
+        "../results_combo_wfo/20251106_021606/all_freq_scan_20251106_021606.csv"
     )
 
     if not Path(freq_scan_file).exists():
@@ -107,7 +118,7 @@ def load_data_and_config():
 
     from core.cross_section_processor import CrossSectionProcessor
     from core.data_loader import DataLoader
-    from core.factor_library import PreciseFactorLibrary
+    from core.precise_factor_library_v2 import PreciseFactorLibrary
 
     # 加载配置
     with open("configs/combo_wfo_config.yaml", "r") as f:
@@ -146,12 +157,12 @@ def load_data_and_config():
     returns_df = ohlcv["close"].pct_change(fill_method=None)
     returns = returns_df.values
     etf_names = list(ohlcv["close"].columns)
-    dates = ohlcv.index.strftime("%Y-%m-%d").tolist()
+    dates = returns_df.index.strftime("%Y-%m-%d").tolist()
 
     return config, factors_data, returns, etf_names, dates
 
 
-def run_grid_search(output_dir="results_combo_wfo"):
+def run_grid_search(output_dir="../results_combo_wfo"):
     """执行 Top 500 收益参数的持仓数网格搜索"""
 
     print("\n" + "=" * 80)
@@ -193,7 +204,7 @@ def run_grid_search(output_dir="results_combo_wfo"):
                 rebalance_freq=task["test_freq"],
                 lookback_window=config["backtest"]["lookback_window"],
                 position_size=task["position_size"],
-                transaction_cost=config["backtest"]["transaction_cost"],
+                commission_rate=config["backtest"].get("commission_rate", 0.00005),
                 initial_capital=config["backtest"]["initial_capital"],
             )
 
@@ -211,12 +222,25 @@ def run_grid_search(output_dir="results_combo_wfo"):
             )
             return None
 
-    # 并行执行
-    results = Parallel(
-        n_jobs=config["backtest"]["max_workers"],
-        backend="loky",
-        verbose=1,
-    )(delayed(run_task)(task) for task in tasks)
+    # 并行执行（集成 tqdm 进度条）
+    use_tqdm = (tqdm is not None) and (tqdm_joblib is not None)
+
+    if use_tqdm:
+        print("📟 使用 tqdm 进度条监控任务进度（如需关闭请卸载 tqdm-joblib 或改用 verbose）")
+        with tqdm_joblib(tqdm(total=len(tasks), desc="回测进度", dynamic_ncols=True)):
+            results = Parallel(
+                n_jobs=config["backtest"]["max_workers"],
+                backend="loky",
+                verbose=0,
+            )(delayed(run_task)(task) for task in tasks)
+    else:
+        if tqdm is None or tqdm_joblib is None:
+            print("ℹ️ 未检测到 tqdm/tqdm-joblib，回退为 joblib 自带进度日志。\n   安装建议: pip install tqdm tqdm-joblib")
+        results = Parallel(
+            n_jobs=config["backtest"]["max_workers"],
+            backend="loky",
+            verbose=10,
+        )(delayed(run_task)(task) for task in tasks)
 
     print()
     print("-" * 80)

@@ -20,6 +20,7 @@
 
 import json
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -68,6 +69,21 @@ def main():
     logger.info(f'  - IS窗口: {config["combo_wfo"]["is_period"]}天')
     logger.info(f'  - OOS窗口: {config["combo_wfo"]["oos_period"]}天')
     logger.info("")
+
+    # 环境变量覆盖：可通过 RB_FREQ_SUBSET 指定逗号分隔的换仓频率列表（例如 "8" 或 "8,16,24"）
+    # 可通过 RB_RESULT_TS 指定输出目录的时间戳，以便与启动脚本的日志时间戳一致。
+    env_freq = os.environ.get("RB_FREQ_SUBSET")
+    if env_freq:
+        try:
+            override = [int(x.strip()) for x in env_freq.split(",") if x.strip()]
+            if override:
+                config["combo_wfo"]["rebalance_frequencies"] = override
+                logger.info(f"🔧 通过环境变量覆盖频率: RB_FREQ_SUBSET={override}")
+        except Exception as e:
+            logger.warning(f"忽略非法的 RB_FREQ_SUBSET 值: {env_freq} ({e})")
+    env_ts = os.environ.get("RB_RESULT_TS", "").strip()
+    if env_ts:
+        logger.info(f"🔧 使用外部指定时间戳 RB_RESULT_TS={env_ts}")
 
     # ========== 2. 加载数据 ==========
     logger.info("=" * 100)
@@ -182,10 +198,16 @@ def main():
     logger.info("💾 保存结果")
     logger.info("=" * 100)
 
-    # 创建输出目录
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path("results") / f"run_{timestamp}"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # 创建输出目录（原子写入）：pending_run_<ts> -> run_<ts>
+    timestamp = env_ts if env_ts else datetime.now().strftime("%Y%m%d_%H%M%S")
+    results_root = Path("results")
+    final_dir = results_root / f"run_{timestamp}"
+    pending_dir = results_root / f"pending_run_{timestamp}"
+    if pending_dir.exists():
+        import shutil
+        logger.warning(f"清理残留的临时目录: {pending_dir}")
+        shutil.rmtree(pending_dir, ignore_errors=True)
+    pending_dir.mkdir(parents=True, exist_ok=True)
 
     # 保存配置 (匹配现有格式)
     run_config = {
@@ -201,29 +223,29 @@ def main():
         },
     }
 
-    with open(output_dir / "run_config.json", "w", encoding="utf-8") as f:
+    with open(pending_dir / "run_config.json", "w", encoding="utf-8") as f:
         json.dump(run_config, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"✅ 配置已保存: {output_dir}/run_config.json")
+    logger.info(f"✅ 配置已保存: {pending_dir}/run_config.json")
 
     # 保存WFO结果
-    all_combos_df.to_parquet(output_dir / "all_combos.parquet", index=False)
+    all_combos_df.to_parquet(pending_dir / "all_combos.parquet", index=False)
     logger.info(
-        f"✅ 全部组合已保存: {output_dir}/all_combos.parquet ({len(all_combos_df)} 个组合)"
+        f"✅ 全部组合已保存: {pending_dir}/all_combos.parquet ({len(all_combos_df)} 个组合)"
     )
 
     # 保存Top组合 (匹配现有文件名: top_combos.parquet)
     top_n = config["combo_wfo"].get("top_n", 100)
     top_combos = all_combos_df.head(top_n)  # 已经排序过了
-    top_combos.to_parquet(output_dir / "top_combos.parquet", index=False)
-    logger.info(f"✅ Top{top_n}组合已保存: {output_dir}/top_combos.parquet")
+    top_combos.to_parquet(pending_dir / "top_combos.parquet", index=False)
+    logger.info(f"✅ Top{top_n}组合已保存: {pending_dir}/top_combos.parquet")
 
     # 同时保存为 top100_by_ic.parquet (为了兼容回测脚本)
-    top_combos.to_parquet(output_dir / "top100_by_ic.parquet", index=False)
-    logger.info(f"✅ Top{top_n}组合已保存(兼容): {output_dir}/top100_by_ic.parquet")
+    top_combos.to_parquet(pending_dir / "top100_by_ic.parquet", index=False)
+    logger.info(f"✅ Top{top_n}组合已保存(兼容): {pending_dir}/top100_by_ic.parquet")
 
     # 保存因子数据到 factors/ 目录
-    factors_dir = output_dir / "factors"
+    factors_dir = pending_dir / "factors"
     factors_dir.mkdir(exist_ok=True)
     for factor_name in factor_names:
         factor_df = standardized_factors[factor_name]
@@ -246,10 +268,10 @@ def main():
         },
     }
 
-    with open(output_dir / "factor_selection_summary.json", "w", encoding="utf-8") as f:
+    with open(pending_dir / "factor_selection_summary.json", "w", encoding="utf-8") as f:
         json.dump(factor_selection_summary, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"✅ 因子汇总已保存: {output_dir}/factor_selection_summary.json")
+    logger.info(f"✅ 因子汇总已保存: {pending_dir}/factor_selection_summary.json")
 
     # 保存WFO汇总信息 (匹配现有格式)
     significant_combos = all_combos_df[all_combos_df.get("is_significant", True)]
@@ -274,10 +296,31 @@ def main():
         "runtime_minutes": 0.0,  # 运行时间将在后续更新
     }
 
-    with open(output_dir / "wfo_summary.json", "w", encoding="utf-8") as f:
+    with open(pending_dir / "wfo_summary.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
-
-    logger.info(f"✅ WFO汇总已保存: {output_dir}/wfo_summary.json")
+    logger.info(f"✅ WFO汇总已保存: {pending_dir}/wfo_summary.json")
+    # 原子切换到最终目录
+    try:
+        if final_dir.exists():
+            import shutil
+            logger.warning(f"目标目录已存在，将被替换: {final_dir}")
+            shutil.rmtree(final_dir, ignore_errors=True)
+        pending_dir.rename(final_dir)
+        # 写入就绪标记
+        (final_dir / "READY").write_text("ok", encoding="utf-8")
+        # 维护指针
+        latest_ptr = results_root / ".latest_run"
+        latest_ptr.write_text(final_dir.name, encoding="utf-8")
+        latest_link = results_root / "run_latest"
+        try:
+            if latest_link.exists() or latest_link.is_symlink():
+                latest_link.unlink()
+            latest_link.symlink_to(final_dir)
+        except Exception as e:
+            logger.warning(f"创建最新运行符号链接失败: {e}")
+    except Exception as e:
+        logger.error(f"切换到最终目录失败: {e}")
+        raise
     logger.info("")
 
     # ========== 8. 结果汇总 ==========
@@ -285,7 +328,7 @@ def main():
     logger.info("📊 结果汇总")
     logger.info("=" * 100)
     logger.info("")
-    logger.info(f"输出目录: {output_dir}")
+    logger.info(f"输出目录: {final_dir}")
     logger.info(f'总组合数: {summary["total_combos"]}')
     logger.info("")
     logger.info("🏆 Top 1 组合:")

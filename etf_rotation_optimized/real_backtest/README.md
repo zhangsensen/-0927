@@ -8,22 +8,15 @@ real_backtest/
 │   ├── default.yaml           # 默认配置
 │   ├── combo_wfo_config.yaml  # Combo优化配置
 │   └── FACTOR_SELECTION_CONSTRAINTS.yaml
-├── core/                       # 核心引擎
-│   ├── data_loader.py         # 数据加载
-│   ├── ic_calculator_numba.py # IC计算 (Numba优化)
-│   ├── cross_section_processor.py
-│   ├── combo_wfo_optimizer.py # Combo优化
-│   ├── direct_factor_wfo_optimizer.py
-│   └── precise_factor_library_v2.py
 ├── scripts/                    # 脚本
 │   └── cleanup.sh
 ├── results/                    # 输出结果
 │   ├── logs/
 │   └── run_*/
 ├── output/                     # 临时输出
-├── test_freq_no_lookahead.py  # 主回测脚本
-├── top500_pos_grid_search.py  # Top500优化
-└── run_backtest.py             # 启动脚本 (可选)
+├── run_production_backtest.py  # 生产级回测脚本（主）
+├── run_position_grid_search.py # 持仓数网格搜索
+└── README.md                    # 本文档
 ```
 
 ## 🚀 快速开始
@@ -45,25 +38,24 @@ python -m core.combo_wfo_optimizer
 
 ## 📊 关键文件说明
 
-### test_freq_no_lookahead.py
-- **功能**: 无前向偏差的回测框架
-- **优化**: 向量化streak计算 (9.41x加速)
-- **特性**: 支持多频率扫描
+### run_production_backtest.py
 
-### top500_pos_grid_search.py
-- **功能**: ETF池位置优化
-- **特性**: Grid search方法
-- **性能**: 42秒节省 (vs原始版本)
+- **功能**: 无前向偏差的生产级回测框架
+- **优化**: 向量化计算与并行化IC权重预计算
+- **特性**: 支持多频率/持仓数扫描、成本明细追踪
 
-### core/combo_wfo_optimizer.py
-- **功能**: Combo因子组合优化
-- **方法**: Walk Forward优化
-- **输出**: 最佳组合及回测结果
+### run_position_grid_search.py
+
+- **功能**: 持仓数网格优化
+- **特性**: 基于Top 500参数进行网格搜索
+- **性能**: 针对性优化，大幅降低计算量
 
 ## 🔧 配置说明
 
 ### default.yaml
+
 基础配置，包含：
+
 - 数据源路径
 - 回测参数
 - 因子参数

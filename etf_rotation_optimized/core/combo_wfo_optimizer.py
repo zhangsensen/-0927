@@ -11,6 +11,7 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
+from tqdm import tqdm
 from numba import njit
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
@@ -243,9 +244,9 @@ class ComboWFOOptimizer:
             all_combos.extend(combos)
             logger.info(f"  {size}-factor combos: {len(combos)}")
         logger.info(f"Total: {len(all_combos)} combos")
-        results = Parallel(n_jobs=self.config.n_jobs, verbose=self.config.verbose)(
+        results = Parallel(n_jobs=self.config.n_jobs, verbose=0)(
             delayed(self._test_combo_impl)(combo, factors_data, returns, windows)
-            for combo in all_combos
+            for combo in tqdm(all_combos, desc="WFO组合评估", unit="combo", ncols=80)
         )
         records = []
         for res in results:

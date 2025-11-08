@@ -67,7 +67,7 @@ etf_rotation_optimized/
     - `top_combos_list: List[dict]`（包含 combo、best_rebalance_freq、mean_oos_ic、stability_score、rank 等）
     - `all_combos_df: pd.DataFrame`（全部组合/频率统计，按 IC 已排序）
 
-- `backtest_no_lookahead(factors_data, returns, etf_names, rebalance_freq, lookback_window=252, position_size=4, transaction_cost=0.0003, initial_capital=1_000_000.0) -> dict`
+- `backtest_no_lookahead(factors_data, returns, etf_names, rebalance_freq, lookback_window=252, position_size=4, commission_rate=0.00005, initial_capital=1_000_000.0) -> dict`
   - 仅使用历史数据估计权重；返回包含 `annual_ret / sharpe / max_dd / nav / daily_returns` 等指标
 
 接口稳定性承诺：以上返回结构是下游脚本与结果可复现的基础，严禁在未同步更新文档与下游的情况下更改字段名与含义。
@@ -79,7 +79,7 @@ etf_rotation_optimized/
 - `data`: `data_dir`、`cache_dir`、`symbols`、`start_date`、`end_date`
 - `cross_section`: `winsorize_lower`、`winsorize_upper`
 - `combo_wfo`: `top_n`、IS/OOS/step、频率候选、FDR 参数
-- `backtest`: `lookback_window`、`position_size`、`transaction_cost`、并行度等
+- `backtest`: `lookback_window`、`position_size`、`commission_rate`、并行度等
 
 ## 如何运行
 

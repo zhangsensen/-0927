@@ -1,10 +1,12 @@
-# ETF轮动优化系统 🎯
+# ETF轮动优化系统（面向AI的快速导览） 🎯
 
-> 重要：请先阅读 `docs/PROJECT_OVERVIEW.md` 与 `docs/LLM_GUARDRAILS.md`
->
-> - 规范入口：`real_backtest/`（同名脚本以该目录为准）
-> - WFO 主入口：`run_combo_wfo.py`（根目录唯一副本）
-> - 输出契约：见 `docs/OUTPUT_SCHEMA.md`，修改前务必同步更新文档与读取脚本
+本文件是为代码审阅后整理的“高密度项目导览”。大模型或新同学可用本页在1–3分钟内掌握：入口、数据流、关键模块、配置与产物契约。若需细节，请再跳转到 `docs/`。
+
+重要参考：`docs/PROJECT_OVERVIEW.md`、`docs/OUTPUT_SCHEMA.md`、`docs/LLM_GUARDRAILS.md`
+
+- 主入口（组合级WFO）：`run_combo_wfo.py`
+- 实盘/回测入口（同名以 `real_backtest/` 为准）：`real_backtest/`
+- 输出契约：`docs/OUTPUT_SCHEMA.md`（修改逻辑前必须同步更新）
 
 ## 🧩 启用「Markdown 新建限制」
 
@@ -24,26 +26,23 @@ bash scripts/install_git_hooks.sh
 
 一个高性能、生产就绪的ETF轮动策略系统，基于因子投资和Walk Forward Optimization (WFO) 框架。系统支持从单因子分析到组合级深度挖掘的全流程，专为量化交易和个人投资者设计。
 
-## ✨ 核心特性
+## ✨ 系统要点（一屏速览）
 
-### 🚀 性能优势
-- **Numba JIT编译**：核心计算函数加速10-100倍
-- **向量化处理**：避免Python循环，充分利用NumPy优化
-- **并行计算**：多核CPU并行处理大规模组合测试
-- **内存优化**：智能缓存和数据流管理
+— 性能：Numba JIT（IC/滚动指标）、全向量化、joblib 并行
+— 稳健：严格窗口切割（IS/OOS/step），FDR显著性控制，NaN不填充
+— 契约：数据契约校验、因子标准化规范、输出文件/字段固定
 
-### 📊 策略能力
-- **18个精选因子**：动量、波动率、相对强度、技术指标全覆盖
-- **组合级WFO**：支持2-5因子的深度协同效应挖掘
-- **多频率测试**：自动测试5-30天换仓频率的最优选择
-- **FDR控制**：假发现率校正，确保统计显著性
+策略能力：
+- 18个精选因子（动量/位置/波动/量能/价量/相对强度/风险调整）
+- 组合级 WFO（2–5 因子），多换仓频率投票择优
+- FDR（BH）控制显著性；稳定性评分含复杂度惩罚
 
 ### 🛡️ 稳健性保证
 - **滑动窗口验证**：避免过拟合，确保策略泛化能力
 - **严格数据处理**：Z-score标准化、Winsorize极值处理
 - **未来函数防护**：彻底排查前瞻偏差，确保结果可信
 
-## 🎯 快速开始
+## 🎯 快速开始（最小闭环）
 
 ### 基础运行（单因子WFO）
 ```bash
@@ -54,7 +53,7 @@ python run_final_production.py
 cat results/wfo/wfo_summary.csv
 ```
 
-### 深度挖掘（组合级WFO）
+### 组合级WFO（推荐）
 ```bash
 # 运行组合级深度优化（推荐）
 python run_combo_wfo.py
@@ -63,7 +62,7 @@ python run_combo_wfo.py
 head -5 results_combo_wfo/top_combos.csv
 ```
 
-### 无未来函数回测验证
+### 无未来函数回测验证（如保留）
 ```bash
 # 严格回测验证（无前瞻偏差）
 python test_freq_no_lookahead.py
@@ -81,7 +80,19 @@ python run_combo_wfo.py --quick
 open results_combo_wfo/REPORT.md
 ```
 
-## 📈 核心结果
+## 🧠 运行机制（对AI友好）
+
+数据流（T 日 × N ETF × F 因子）：
+1) DataLoader 读取 `raw/ETF/daily/*.parquet`（可用 `ETF_DATA_DIR` 覆盖），产出 `{'close','high','low','open','volume'}`，不填充 NaN，执行数据契约校验。参见 `core/data_loader.py`。
+2) PreciseFactorLibrary 计算18个精选因子；窗口不足→NaN；不做生成期标准化。参见 `core/precise_factor_library_v2.py`。
+3) CrossSectionProcessor 对无界因子做“按日横截面 Z-score + Winsorize(2.5/97.5)”，有界因子透传；严格保留 NaN。参见 `core/cross_section_processor.py`。
+4) ComboWFOOptimizer：
+   - 以 IS 绝对IC对组合内因子加权
+   - 在 OOS 上枚举多种换仓频率，计算OOS均值IC/IR/正IC占比；频率多数票择优
+   - FDR(BH)控制显著性，打分含稳定性与复杂度惩罚
+   - 并行：`joblib.Parallel(n_jobs)`；参见 `core/combo_wfo_optimizer.py`
+
+入口脚本 `run_combo_wfo.py` 负责：加载配置→数据→因子→标准化→WFO→产物落盘（包含兼容别名 `top100_by_ic.parquet`）。
 
 ### 🏆 最优组合发现
 **Top 1**: `RELATIVE_STRENGTH_VS_MARKET_20D + RET_VOL_20D + SLOPE_20D + VOL_RATIO_20D`
@@ -104,7 +115,7 @@ open results_combo_wfo/REPORT.md
 - **最大回撤**: -33.6%
 - **组合**: CORRELATION_TO_MARKET_20D + OBV_SLOPE_10D + PV_CORR_20D + RELATIVE_STRENGTH_VS_MARKET_20D + VOL_RATIO_20D
 
-## 🏗️ 技术架构
+## 🏗️ 目录与关键文件
 
 ### 核心模块
 ```
@@ -143,7 +154,7 @@ graph LR
     style G fill:#9f9,stroke:#333
 ```
 
-## 🔧 配置指南
+## 🔧 配置要点（常用键）
 
 ### 单因子WFO配置 (`configs/default.yaml`)
 ```yaml
@@ -166,13 +177,22 @@ wfo:
 ```yaml
 combo_wfo:
   combo_sizes: [2, 3, 4, 5]           # 2-5因子组合
-  rebalance_frequencies: [5, 10, 15, 20, 25, 30]  # 多频率测试
+  rebalance_frequencies: [8]          # 历史验证最佳：固定8天换仓
   enable_fdr: true                      # FDR控制
   fdr_alpha: 0.05                        # 5%显著性水平
   complexity_penalty_lambda: 0.15         # 复杂度惩罚
 ```
 
-## 📚 使用场景
+环境变量（可选）：`ETF_DATA_DIR` 指向原始 parquet 数据目录，`ETF_CACHE_DIR` 指向缓存目录。
+
+## 📦 产物契约（落盘清单）
+- 运行目录：`results/run_YYYYMMDD_HHMMSS/`
+- 文件：
+  - `all_combos.parquet`：每个组合的 OOS 统计（IC/IR/正占比/频率等）
+  - `top_combos.parquet`、`top100_by_ic.parquet`（兼容别名）：TopN 组合
+  - `wfo_summary.json`：窗口/显著性/最优组合摘要
+  - `factors/*.parquet`：标准化后的各单因子矩阵
+  - `factor_selection_summary.json`：因子处理概要
 
 ### 🎯 个人量化投资者
 - **快速验证策略想法**: 5分钟获得统计显著性结果
@@ -189,7 +209,11 @@ combo_wfo:
 - **组合优化理论**: 多因子协同效应的实证研究
 - **机器学习**: 为AI策略提供高质量特征工程
 
-## 🔍 核心算法
+## ✅ 守护与实用提示
+- 严禁提交秘钥；数据路径通过环境变量或配置注入
+- `docs/LLM_GUARDRAILS.md` 与 `scripts/pre-commit-md-guard.sh` 启用“Markdown 新建限制”
+- 任何修改可能影响产物字段/顺序时，先更新 `docs/OUTPUT_SCHEMA.md` 并在小样本回归验证
+ - 频率选择已通过历史验证：最佳换仓频率=8天。为保证复现性与生产一致性，WFO 固定使用 `[8]`，不再进行频率维度搜索。
 
 ### 1. Walk Forward Optimization
 ```python
@@ -232,7 +256,66 @@ for combo_size in [2, 3, 4, 5]:
 - **并行计算**: 10核CPU并行处理12K组合
 - **内存管理**: 智能缓存，避免重复计算
 
+### ✅ 性能冻结与推荐运行配置 (2025-11-08)
+
+> 已完成高ROI优化：日级IC预计算 + memmap共享 + Numba预热 + 稳定排名(平均 ties) + 批任务调度 + 全局IC缓存。进一步微优化进入长尾阶段，暂不建议继续。
+
+#### 最新 Top200 对照 (优化 vs 基线)
+
+| 指标 | 基线 (无预计算/稳定排名) | 优化 (RB_DAILY_IC_PRECOMP=1 + STABLE_RANK) | 提升 |
+|------|------------------------|-------------------------------------------|------|
+| time_total mean | 1096.9 ms | 29.0 ms | ≈37.8× |
+| time_total median | 963.6 ms | 6.4 ms | ≈150× |
+| time_total p95 | 1258.6 ms | 13.0 ms | ≈96.8× |
+| time_precompute_ic mean | 1039.5 ms | 0.9 ms | ≈1155× |
+| time_main_loop median | 35.7 ms | 5.4 ms | ≈6.6× |
+
+> 单批少量组合的极端耗时 (p99) 仍可能 ~500–600ms（策略主循环固有），属可接受“结构性长尾”。
+
+#### 推荐生产环境变量模板
+
+```bash
+export RB_DAILY_IC_PRECOMP=1          # 启用日级IC预计算 + 前缀和 O(1) 滑窗
+export RB_DAILY_IC_MEMMAP=1           # 多进程共享日IC矩阵，避免重复构建
+export RB_NUMBA_WARMUP=1              # 进程启动时一次性 JIT 预热
+export RB_PRELOAD_IC=1                # 提前填充常用 (freq×factor) 缓存对
+export RB_STABLE_RANK=1               # Spearman 日IC 使用平均 ties 稳定排名
+export RB_TASK_BATCH_SIZE=8           # joblib 调度批大小；根据CPU可调 4/8/16
+export RB_ENFORCE_NO_LOOKAHEAD=0      # 日常跑关闭；回归/审计时再开
+export RB_PROFILE_BACKTEST=0          # 诊断阶段开启
+export RB_OUTLIER_REPORT=0            # 仅在性能分析阶段开启
+```
+
+#### 诊断/审计附加参数
+
+```bash
+# 严格无未来函数抽样验证（稳定排名下需要更宽容容差）
+export RB_ENFORCE_NO_LOOKAHEAD=1
+export RB_NL_CHECK_TOL=1e-2           # 稳定排名 vs 旧权重路径差异在 1e-3~1e-2
+export RB_NL_CHECK_MAX=5              # 抽样次数
+
+# 性能剖析与异常组合定位
+export RB_PROFILE_BACKTEST=1
+export RB_OUTLIER_REPORT=1
+```
+
+#### Outlier 处理策略
+
+- p95 以上多数为高频权重重算循环的自然长尾（组合头部因子集类似，缓存命中后 loop 成为主耗时）。
+- 未发现重复IC重算或明显I/O瓶颈，不再追加微优化。
+- 若需忽略展示：可在 `real_backtest/outlier_whitelist.txt` 维护组合白名单。
+
+#### 冻结原则
+
+1. 未来性能改动需提出明确收益预估 (×倍或 ≥15% 壁钟缩减)。
+2. 修改 IC 权重路径或排名模式需同步更新无未来函数回归 (RB_ENFORCE_NO_LOOKAHEAD=1)。
+3. 默认保持与当前推荐环境一致，避免回测结果不可复现。
+
+---
+**状态结论**：性能阶段完成；后续聚焦策略研究 / 新因子扩展 / 风险管理集成。
+
 ### 统计严谨性
+
 - **FDR多重检验**: Benjamini-Hochberg校正
 - **滑动窗口**: 避免过拟合，确保泛化能力
 - **前瞻偏差防护**: 严格的未来函数排查
@@ -241,12 +324,14 @@ for combo_size in [2, 3, 4, 5]:
 ## 📊 结果解读
 
 ### 关键指标
+
 - **IC (Information Coefficient)**: 因子与未来收益的相关系数
 - **IR (Information Ratio)**: IC均值/IC标准差，衡量风险调整后表现
 - **胜率**: 正IC占比，评估方向准确性
 - **稳定性得分**: 综合评分(0.5*IC + 0.3*IR + 0.2*胜率 - 复杂度惩罚)
 
 ### 优化建议
+
 1. **换仓频率**: 10天(高收益) vs 30天(低成本)
 2. **因子数量**: 4-5因子(协同效应) vs 2-3因子(简单性)
 3. **风险控制**: 结合波动率和最大回撤指标
@@ -268,6 +353,7 @@ for combo_size in [2, 3, 4, 5]:
 ## 🛠️ 高级用法
 
 ### 自定义因子
+
 ```python
 # 在precise_factor_library_v2.py中添加
 @njit
@@ -277,6 +363,7 @@ def custom_factor(close, volume, window=20):
 ```
 
 ### 风险集成
+
 ```yaml
 # 添加风险约束
 risk_management:
@@ -286,6 +373,7 @@ risk_management:
 ```
 
 ### 实盘部署
+
 ```bash
 # 1. 回测验证
 python run_combo_wfo.py
@@ -300,12 +388,14 @@ python run_final_production.py
 ## 📈 路线图
 
 ### 2024年发展历程
+
 - **Q1**: 系统架构重构，移除历史遗留代码
 - **Q2**: Numba JIT优化，性能提升10倍
 - **Q3**: 组合级WFO实现，支持深度挖掘
 - **Q4**: FDR控制集成，统计严谨性提升
 
 ### 未来规划
+
 - [ ] 多周期扩展(周频、月频)
 - [ ] 跨资产类别支持(股票、期货)
 - [ ] 机器学习特征工程

@@ -26,6 +26,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 
 @dataclass
@@ -339,7 +340,8 @@ class CrossSectionProcessor:
 
         processed_factors = {}
 
-        for factor_name, factor_data in factors_dict.items():
+        factor_items = list(factors_dict.items())
+        for factor_name, factor_data in tqdm(factor_items, desc="横截面标准化", unit="因子", ncols=80, disable=not self.verbose):
             if self.verbose:
                 print(f"\n📊 处理因子: {factor_name}")
 
