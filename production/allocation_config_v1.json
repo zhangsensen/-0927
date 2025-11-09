@@ -1,0 +1,89 @@
+{
+  "version": "v1.0",
+  "date": "2025-11-10",
+  "method": "expert_judgment_with_diversification",
+  "strategies": [
+    {
+      "id": "strat_001",
+      "name": "RSI_MaxDD_Momentum",
+      "weight": 0.25,
+      "expected_return": 0.221,
+      "expected_sharpe": 1.121,
+      "max_drawdown": -0.174
+    },
+    {
+      "id": "strat_002",
+      "name": "RSI_CMF_Volatility",
+      "weight": 0.25,
+      "expected_return": 0.234,
+      "expected_sharpe": 1.132,
+      "max_drawdown": -0.21
+    },
+    {
+      "id": "strat_003",
+      "name": "VOL_Position_Sharpe",
+      "weight": 0.2,
+      "expected_return": 0.208,
+      "expected_sharpe": 1.063,
+      "max_drawdown": -0.239
+    },
+    {
+      "id": "strat_004",
+      "name": "CMF_OBV_Position",
+      "weight": 0.15,
+      "expected_return": 0.216,
+      "expected_sharpe": 1.102,
+      "max_drawdown": -0.269
+    },
+    {
+      "id": "strat_005",
+      "name": "ADX_Position_Sharpe",
+      "weight": 0.15,
+      "expected_return": 0.204,
+      "expected_sharpe": 1.03,
+      "max_drawdown": -0.24
+    }
+  ],
+  "portfolio_metrics": {
+    "expected_return": 0.21835,
+    "weighted_sharpe": 1.09565,
+    "weighted_max_dd": -0.22014999999999998
+  },
+  "correlation_matrix": [
+    [
+      1.0,
+      0.65,
+      0.35,
+      0.25,
+      0.2
+    ],
+    [
+      0.65,
+      1.0,
+      0.3,
+      0.25,
+      0.3
+    ],
+    [
+      0.35,
+      0.3,
+      1.0,
+      0.4,
+      0.35
+    ],
+    [
+      0.25,
+      0.25,
+      0.4,
+      1.0,
+      0.45
+    ],
+    [
+      0.2,
+      0.3,
+      0.35,
+      0.45,
+      1.0
+    ]
+  ]
+}

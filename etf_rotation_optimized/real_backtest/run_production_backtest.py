@@ -533,20 +533,15 @@ def backtest_no_lookahead(
     """
     ⚠️ 严格无未来函数的回测 (优化版)
 
-    优化点:
-    1. 预计算所有调仓日的IC权重 (向量化)
-    2. 预分配数组避免append
-    3. 调仓日用集合查找O(1)
-
     参数:
         factors_data: (T, N, F) 全部因子数据
-        returns: (T, N) 全部收益数据
+        returns: (T, N) 全部收盘到收盘收益 (定义: close[t]/close[t-1]-1)
         etf_names: list, ETF名称
         rebalance_freq: int, 调仓频率(天)
         lookback_window: int, 计算权重的回看窗口
         position_size: int, 持仓数量（默认按Top N）
         initial_capital: float, 初始资金
-    commission_rate: float, 佣金率（双边，买入和卖出都收取，ETF默认万0.5）
+    commission_rate: float, 佣金率（双边，买入和卖出都收取，ETF默认例0.5）
     commission_min: float, 佣金最低费用（绝对金额，默认0表示不启用）
 
     返回:
@@ -556,14 +551,12 @@ def backtest_no_lookahead(
     profile_log = logger.info if profile_enabled else (lambda *args, **kwargs: None)
     profile_data = {} if profile_enabled else None
 
-    # 严格无未来函数自检开关（仅在小批量验证时开启，避免开销）
     enforce_nl = os.environ.get("RB_ENFORCE_NO_LOOKAHEAD", "0").strip().lower() in ("1", "true", "yes")
     nl_check_max = int(os.environ.get("RB_NL_CHECK_MAX", "5") or 5)
     try:
         nl_tol = float(os.environ.get("RB_NL_CHECK_TOL", "1e-9") or 1e-9)
     except Exception:
         nl_tol = 1e-9
-    # 新增：相对/绝对误差容差（与 np.allclose 语义一致）
     try:
         nl_rtol = float(os.environ.get("RB_NL_CHECK_RTOL", "0"))
     except Exception:
@@ -576,12 +569,21 @@ def backtest_no_lookahead(
 
     total_timer_start = time.perf_counter() if profile_enabled else None
 
+    # 优先级2：确保内存布局连续，避免不必要的拷贝与 cache miss（不改变 dtype/数值）
+    factors_data = np.ascontiguousarray(factors_data)
+    returns = np.ascontiguousarray(returns)
+    if factors_data_full is not None:
+        factors_data_full = np.ascontiguousarray(factors_data_full)
+
+    # 优先级3：默认启用日级IC预计算+memmap（仅当可用，且不覆盖用户显式设置）
+    os.environ.setdefault("RB_DAILY_IC_PRECOMP", "1")
+    os.environ.setdefault("RB_DAILY_IC_MEMMAP", "1")
+    os.environ.setdefault("RB_NUMBA_WARMUP", "1")
+
     T, N, F = factors_data.shape
 
-    # 起始点: 需要足够的历史数据
-    start_idx = lookback_window + 1  # +1是因为returns从第1天开始
+    start_idx = lookback_window + 1  # +1 因 returns 第1天不可用
 
-    # 调仓日索引数组
     rebalance_indices = np.arange(start_idx, T, rebalance_freq, dtype=np.int32)
     n_rebalance = len(rebalance_indices)
 
@@ -590,12 +592,17 @@ def backtest_no_lookahead(
     )
     profile_log(f"  起始日: 第{start_idx}天, 调仓次数: {n_rebalance}次")
 
-    # ========== 优化1: 预计算所有调仓日的IC权重 (向量化+并行) ==========
     profile_log("  预计算IC权重...")
     ic_timer_start = time.perf_counter() if profile_enabled else None
-    # 优先使用全局缓存（以避免跨组合重复计算）
     disable_cache = os.environ.get("RB_DISABLE_IC_CACHE", "0").strip().lower() in ("1", "true", "yes")
-    if (not disable_cache) and (factors_data_full is not None) and (factor_indices_for_cache is not None):
+
+    # 若未提供全量数组/因子索引，退化为使用当前输入（不改变语义，仅使预计算路径可用）
+    if factors_data_full is None:
+        factors_data_full = factors_data
+    if factor_indices_for_cache is None:
+        factor_indices_for_cache = np.arange(F, dtype=np.int64)
+
+    if not disable_cache:
         ic_weights_matrix = get_ic_weights_matrix_cached(
             factors_data_full=factors_data_full,
             returns=returns,
@@ -603,10 +610,19 @@ def backtest_no_lookahead(
             lookback_window=lookback_window,
             factor_indices=np.asarray(factor_indices_for_cache, dtype=np.int64),
         )
-        ic_path_type = ("daily_stable" if (os.environ.get("RB_DAILY_IC_PRECOMP","0").strip().lower() in ("1","true","yes") and os.environ.get("RB_STABLE_RANK","0").strip().lower() in ("1","true","yes")) else ("daily_simple" if (os.environ.get("RB_DAILY_IC_PRECOMP","0").strip().lower() in ("1","true","yes")) else "cached_batch"))
+        ic_path_type = (
+            "daily_stable"
+            if (
+                os.environ.get("RB_DAILY_IC_PRECOMP", "0").strip().lower() in ("1", "true", "yes")
+                and os.environ.get("RB_STABLE_RANK", "0").strip().lower() in ("1", "true", "yes")
+            )
+            else (
+                "daily_simple"
+                if (os.environ.get("RB_DAILY_IC_PRECOMP", "0").strip().lower() in ("1", "true", "yes"))
+                else "cached_batch"
+            )
+        )
     else:
-        # 回退到组合内计算（保留旧路径以兼容）
-        # 注：该路径计算成本更高，仅在无法使用全局缓存时才走。
         F_sel = factors_data.shape[2]
         tmp_ic = np.zeros((n_rebalance, F_sel), dtype=np.float64)
         for i in range(n_rebalance):
@@ -628,21 +644,19 @@ def backtest_no_lookahead(
         profile_data["n_rebalance"] = int(n_rebalance)
         profile_data["n_days"] = int(T - start_idx)
 
-    # ========== 优化2: 预分配数组 ==========
     n_days = T - start_idx
     portfolio_values = np.zeros(n_days + 1)
     portfolio_values[0] = initial_capital
     daily_returns_arr = np.zeros(n_days)
-    turnover_list = []
-    cost_rate_list = []
-    cost_amount_list = []
 
-    # ========== 优化3: 调仓日检测用指针而非集合查找 ==========
-    # 通过顺序指针避免 set 查找的开销
+    # 预分配：按“调仓事件”次数，而非按日
+    turnover_arr = np.empty(n_rebalance, dtype=float) if n_rebalance > 0 else np.empty(0, dtype=float)
+    cost_rate_arr = np.empty(n_rebalance, dtype=float) if n_rebalance > 0 else np.empty(0, dtype=float)
+    cost_amount_arr = np.empty(n_rebalance, dtype=float) if n_rebalance > 0 else np.empty(0, dtype=float)
+    n_holdings_arr = np.empty(n_rebalance, dtype=np.int32) if n_rebalance > 0 else np.empty(0, dtype=np.int32)
 
     current_weights = np.zeros(N)
     rebalance_counter = 0
-    n_holdings_list = []  # 追踪每次调仓时的持仓数量
 
     loop_timer_start = time.perf_counter() if profile_enabled else None
 
@@ -652,44 +666,32 @@ def backtest_no_lookahead(
         )
 
         if is_rebalance_day:
-            # === 调仓日: 使用预计算的IC权重 ===
-
-            # 1. 获取预计算的因子权重
             factor_weights = ic_weights_matrix[rebalance_counter]
-            # 无未来函数自检：抽样重新以原生窗口计算IC权重并与预计算权重对比
             if enforce_nl and nl_checks_done < nl_check_max:
                 try:
-                    # 简单均匀抽样：每 ceil(n_rebalance / nl_check_max) 次检查一次
                     stride = max(1, n_rebalance // max(1, nl_check_max))
                     if (rebalance_counter % stride) == 0:
                         hist_start = max(0, day_idx - lookback_window)
-                        hist_end = day_idx  # 不含当日
+                        hist_end = day_idx
                         F_sel = factors_data.shape[2]
-                        # 与稳定排名保持一致：若启用稳定排名 + 日级IC预计算，则直接用 daily_ic 滚动窗口均值代替重算
                         ics = np.zeros(F_sel, dtype=np.float64)
-                        # 自检统一使用原始滚动窗口重算路径，避免作用域问题；稳定排名差异通过 rtol/atol 调和
                         for f in range(F_sel):
                             ics[f] = compute_spearman_ic_numba(
                                 factors_data[hist_start:hist_end, :, f],
                                 returns[hist_start:hist_end],
                             )
                         abs_ics = np.abs(ics)
-                        if abs_ics.sum() > 0:
-                            w_chk = abs_ics / abs_ics.sum()
-                        else:
-                            w_chk = np.full(F_sel, 1.0 / F_sel)
-                        # 优先使用与生产一致的“日级IC预计算+稳定秩”路径进行窗口均值自检
-                        stable_rank_enabled = os.environ.get("RB_STABLE_RANK","0").strip().lower() in ("1","true","yes")
-                        daily_precomp_enabled = os.environ.get("RB_DAILY_IC_PRECOMP","0").strip().lower() in ("1","true","yes")
+                        w_chk = abs_ics / abs_ics.sum() if abs_ics.sum() > 0 else np.full(F_sel, 1.0 / F_sel)
+                        stable_rank_enabled = os.environ.get("RB_STABLE_RANK", "0").strip().lower() in ("1", "true", "yes")
+                        daily_precomp_enabled = os.environ.get("RB_DAILY_IC_PRECOMP", "0").strip().lower() in ("1", "true", "yes")
                         can_use_daily = (
                             stable_rank_enabled and daily_precomp_enabled and (factors_data_full is not None) and (factor_indices_for_cache is not None)
                         )
                         if can_use_daily:
                             try:
                                 daily_ic_full = _compute_or_load_daily_ic_memmap(factors_data_full, returns, stable_rank=True)
-                                # 仅取本组合涉及的因子列
                                 cols = np.asarray(factor_indices_for_cache, dtype=np.int64)
-                                di_slice = daily_ic_full[hist_start:hist_end][:, cols]  # (W, F_sel)
+                                di_slice = daily_ic_full[hist_start:hist_end][:, cols]
                                 window_mean = np.nanmean(di_slice, axis=0)
                                 abs_ics_local = np.abs(window_mean)
                                 if np.isfinite(abs_ics_local).any() and np.nansum(abs_ics_local) > 0:
@@ -697,7 +699,6 @@ def backtest_no_lookahead(
                                 else:
                                     w_chk = np.full(F_sel, 1.0 / F_sel)
                             except Exception:
-                                # 回退到原始重算路径
                                 ics = np.zeros(F_sel, dtype=np.float64)
                                 for f in range(F_sel):
                                     ics[f] = compute_spearman_ic_numba(
@@ -707,7 +708,6 @@ def backtest_no_lookahead(
                                 abs_ics = np.abs(ics)
                                 w_chk = (abs_ics / abs_ics.sum()) if abs_ics.sum() > 0 else np.full(F_sel, 1.0 / F_sel)
                         else:
-                            # 回退旧路径（简单秩重算）
                             ics = np.zeros(F_sel, dtype=np.float64)
                             for f in range(F_sel):
                                 ics[f] = compute_spearman_ic_numba(
@@ -716,58 +716,54 @@ def backtest_no_lookahead(
                                 )
                             abs_ics = np.abs(ics)
                             w_chk = (abs_ics / abs_ics.sum()) if abs_ics.sum() > 0 else np.full(F_sel, 1.0 / F_sel)
-                        # 对比：允许 rtol/atol
                         if not np.allclose(w_chk, factor_weights, rtol=nl_rtol, atol=nl_atol, equal_nan=True):
                             diff = np.nanmax(np.abs(w_chk - factor_weights))
                             raise RuntimeError(
                                 f"NO_LOOKAHEAD_CHECK_FAILED: day_idx={day_idx}, max_weight_diff={diff:.3e} (rtol={nl_rtol}, atol={nl_atol})"
                             )
                         nl_checks_done += 1
-                except Exception as e:
-                    # 立即中止并报告
+                except Exception:
                     raise
+
+            # 记录当前调仓事件索引（自增前）
+            idx_rb = rebalance_counter
             rebalance_counter += 1
+
             prev_weights = current_weights.copy()
 
-            # 2. 计算信号 (⚠️ 用前一日因子值,无未来函数)
             factors_yesterday = factors_data[day_idx - 1]
             signal_yesterday = compute_signal_single_day(
                 factors_yesterday, factor_weights
             )
 
-            # 3. 选择Top N（使用argpartition降复杂度 + 阈值法处理并列，确保确定性）
             valid_mask = ~np.isnan(signal_yesterday)
 
             if np.sum(valid_mask) < position_size:
                 target_weights = np.zeros(N)
-                n_holdings_list.append(0)  # 无法选出足够的标的
+                n_holdings_arr[idx_rb] = 0
             else:
                 sig_valid = signal_yesterday.copy()
                 sig_valid[~valid_mask] = -np.inf
-                # 阈值法：先找到第K大阈值，再按(-value, index)稳定选择前K个
                 kth_val = np.partition(sig_valid, -position_size)[-position_size]
                 candidates = np.where(sig_valid >= kth_val)[0]
                 if len(candidates) > position_size:
-                    # 稳定排序：优先值大，其次索引小
                     order = np.lexsort((candidates, -sig_valid[candidates]))
                     chosen = candidates[order][:position_size]
                 else:
-                    # 已经恰好K个或更少
                     chosen = candidates[:position_size]
                 top_indices = chosen
                 target_weights = np.zeros(N)
                 target_weights[top_indices] = 1.0 / position_size
-                n_holdings_list.append(len(top_indices))  # 记录实际持仓数
+                n_holdings_arr[idx_rb] = len(top_indices)
 
-            # 4. 计算换手率与各项成本
+            # 换手与成本（按调仓事件）
             delta_weights = target_weights - prev_weights
             buy_turnover = float(np.sum(delta_weights[delta_weights > 0]))
             sell_turnover = float(np.sum(-delta_weights[delta_weights < 0]))
             turnover = buy_turnover + sell_turnover
-            turnover_list.append(turnover)
+            turnover_arr[idx_rb] = turnover
 
             portfolio_before_cost = portfolio_values[offset]
-            # ETF佣金: 以成交金额乘以万0.5（示例: 150000 × 0.00005 = 7.5 元）
             trade_notional = (buy_turnover + sell_turnover) * portfolio_before_cost
             commission_value = trade_notional * commission_rate
             if commission_min > 0 and turnover > 1e-12:
@@ -782,20 +778,19 @@ def backtest_no_lookahead(
                 cost_rate = 0.0
                 total_cost_amount = 0.0
 
-            cost_rate_list.append(cost_rate)
-            cost_amount_list.append(total_cost_amount)
+            cost_rate_arr[idx_rb] = cost_rate
+            cost_amount_arr[idx_rb] = total_cost_amount
 
-            # 5. 更新持仓
             current_weights = target_weights
 
         # === 每日收益计算 ===
-        ret_today = returns[day_idx]
-        daily_ret = np.nansum(current_weights * ret_today)
+        # 显式使用收盘到收盘定义 (close[t]/close[t-1]-1)
+        close_to_close_ret = returns[day_idx]  # 等价于 (close[t]/close[t-1]-1)
+        daily_ret = np.nansum(current_weights * close_to_close_ret)
         daily_returns_arr[offset] = daily_ret
 
         portfolio_values[offset + 1] = portfolio_values[offset] * (1 + daily_ret)
 
-    # 计算绩效指标
     if profile_enabled and loop_timer_start is not None:
         profile_data["time_main_loop"] = time.perf_counter() - loop_timer_start
 
@@ -812,7 +807,6 @@ def backtest_no_lookahead(
     dd = (portfolio_values - cummax) / cummax
     max_dd = np.min(dd)
 
-    # ========== 新增：胜率相关指标 ==========
     positive_returns = daily_returns_arr[daily_returns_arr > 0]
     negative_returns = daily_returns_arr[daily_returns_arr < 0]
 
@@ -827,16 +821,12 @@ def backtest_no_lookahead(
     avg_win = float(np.mean(positive_returns)) if len(positive_returns) > 0 else 0.0
     avg_loss = float(np.mean(negative_returns)) if len(negative_returns) > 0 else 0.0
 
-    # 利润因子 = 总盈利 / 总亏损
     profit_factor = 0.0
     if losing_days > 0 and abs(np.sum(negative_returns)) > 1e-10:
         profit_factor = float(np.sum(positive_returns) / abs(np.sum(negative_returns)))
 
-    # ========== 新增：高级风险指标 ==========
-    # Calmar Ratio = 年化收益 / 最大回撤
     calmar_ratio = annual_ret / abs(max_dd) if abs(max_dd) > 1e-10 else 0.0
 
-    # Sortino Ratio = 年化收益 / 下行波动率
     downside_returns = daily_returns_arr[daily_returns_arr < 0]
     downside_vol = (
         np.sqrt(np.mean(downside_returns**2)) * np.sqrt(252)
@@ -845,7 +835,6 @@ def backtest_no_lookahead(
     )
     sortino_ratio = annual_ret / downside_vol if downside_vol > 1e-10 else 0.0
 
-    # 最长连胜/连败（向量化优化版本 - 9.77x加速）
     if len(daily_returns_arr) > 0:
         max_consecutive_wins, max_consecutive_losses = calculate_streaks_vectorized(
             daily_returns_arr
@@ -854,8 +843,7 @@ def backtest_no_lookahead(
         max_consecutive_wins = 0
         max_consecutive_losses = 0
 
-    # ========== 新增：持仓数统计 ==========
-    avg_n_holdings = np.mean(n_holdings_list) if len(n_holdings_list) > 0 else 0
+    avg_n_holdings = float(np.mean(n_holdings_arr)) if n_rebalance > 0 else 0.0
 
     result = {
         "freq": rebalance_freq,
@@ -866,7 +854,7 @@ def backtest_no_lookahead(
         "sharpe": sharpe,
         "max_dd": max_dd,
         "n_rebalance": n_rebalance,
-        "avg_turnover": np.mean(turnover_list) if len(turnover_list) > 0 else 0,
+        "avg_turnover": float(np.mean(turnover_arr)) if n_rebalance > 0 else 0.0,
         # 胜率相关
         "win_rate": win_rate,
         "winning_days": winning_days,
@@ -879,14 +867,14 @@ def backtest_no_lookahead(
         "sortino_ratio": sortino_ratio,
         "max_consecutive_wins": max_consecutive_wins,
         "max_consecutive_losses": max_consecutive_losses,
-        # 持仓数统计
+        # 持仓数统计（按调仓事件）
         "avg_n_holdings": avg_n_holdings,
         # 详细数据
         "nav": portfolio_values,
         "daily_returns": daily_returns_arr,
-        "turnover_series": np.array(turnover_list, dtype=float),
-        "cost_rate_series": np.array(cost_rate_list, dtype=float),
-        "cost_amount_series": np.array(cost_amount_list, dtype=float),
+        "turnover_series": turnover_arr,
+        "cost_rate_series": cost_rate_arr,
+        "cost_amount_series": cost_amount_arr,
     }
 
     if profile_enabled and total_timer_start is not None:
@@ -895,7 +883,7 @@ def backtest_no_lookahead(
         profile_data["loop_iterations"] = int(n_days)
         profile_data["avg_turnover"] = float(result["avg_turnover"])
         profile_data["ic_path"] = ic_path_type
-        profile_data["stable_rank"] = os.environ.get("RB_STABLE_RANK","0").strip().lower() in ("1","true","yes")
+        profile_data["stable_rank"] = os.environ.get("RB_STABLE_RANK", "0").strip().lower() in ("1", "true", "yes")
         result["profile"] = profile_data
 
     return result
@@ -1103,6 +1091,9 @@ def main():
     if env_test_all_freqs is not None:
         val = env_test_all_freqs.strip().lower()
         config.setdefault("backtest", {})["test_all_frequencies"] = val in ("1", "true", "yes")
+    # 强制锁定频率为8天（已验证最优），若关闭 test_all_frequencies 则使用 combo_wfo.rebalance_frequencies=[8]
+    if not config.get("backtest", {}).get("test_all_frequencies", False):
+        config.setdefault("combo_wfo", {})["rebalance_frequencies"] = [8]
 
     env_freq_subset = os.environ.get("RB_FREQ_SUBSET")
     freq_subset_list = None
@@ -1771,7 +1762,14 @@ def main():
         return df_local
 
     # ========== 全频率扫描模式(可选) ==========
-    TEST_ALL_FREQS = config.get("backtest", {}).get("test_all_frequencies", False)
+    # 原逻辑根据配置/环境变量决定是否触发 1-30 天全频率扫描；当前已验证 8 天频率最优，
+    # 为避免误触导致 30x 扩容的巨量任务，这里强制关闭全频率扫描。
+    # 如果后续确需重新开启，请将下面的 TEST_ALL_FREQS 改为原来的读取配置方式：
+    # TEST_ALL_FREQS = config.get("backtest", {}).get("test_all_frequencies", False)
+    TEST_ALL_FREQS = False  # 🔒 强制禁用全频率扫描
+    # 同步回写（防止后续代码再次读取配置触发 True）
+    if "backtest" in config:
+        config["backtest"]["test_all_frequencies"] = False
     TEST_ALL_POSITION_SIZES = config.get("backtest", {}).get(
         "test_all_position_sizes", False
     )
@@ -1895,7 +1893,7 @@ def main():
             logger.info(f"📊 平均年化最优持仓数: {best_pos_by_return}个")
             return
 
-    elif TEST_ALL_FREQS:
+    elif TEST_ALL_FREQS:  # 此分支现在不可达（TEST_ALL_FREQS 强制为 False）
         logger.info("")
         logger.info("⚡️" * 50)
         logger.info("启动全频率扫描模式: 1-30天换仓频率全扫描")
