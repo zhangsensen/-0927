@@ -1,5 +1,7 @@
 <!-- ALLOW-MD --># WFO校准器实施报告
 
+> 更新（2025-11-08）：排序基线已采用固定 8 天频率 + 稳定排名(平均 ties)；性能优化（IC预计算、memmap、Numba预热、全局缓存）已冻结。建议在全量回测后使用 `scripts/train_calibrator_full.py` 进行再训练，并确保输出字段契约与 `README.md` 保持一致。
+
 ## 问题诊断
 
 ### 原始WFO排序失效

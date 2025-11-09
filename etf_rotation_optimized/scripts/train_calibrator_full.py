@@ -9,6 +9,7 @@
 """
 
 import sys
+import os
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -28,24 +29,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def find_latest_full_backtest_csv():
-    """查找最新的全量回测CSV文件"""
+def find_latest_full_backtest_csv() -> Path:
+    """
+    查找最新的全量回测 CSV 文件。
+    逻辑:
+      - 匹配 *_full.csv (回测脚本的完整输出命名约定)
+      - 选择行数最多的文件(防止旧/不完整)
+      - 若行数 < 5000 视为不完整直接报错
+    """
     results_dir = Path("results_combo_wfo")
-    
-    # 查找包含full或all关键字的CSV文件（按修改时间排序）
-    csv_files = []
-    for csv_path in results_dir.rglob("*full*.csv"):
-        if "all" in csv_path.stem or "12597" in csv_path.stem or "combos" in csv_path.stem:
-            csv_files.append((csv_path, csv_path.stat().st_mtime))
-    
-    if not csv_files:
-        raise FileNotFoundError(
-            f"未找到全量回测CSV文件。请确保已完成全量回测 (scripts/run_full_backtest_all_combos.sh)"
-        )
-    
-    # 返回最新的文件
-    latest_csv = sorted(csv_files, key=lambda x: x[1], reverse=True)[0][0]
-    return latest_csv
+    candidates = []
+    for p in results_dir.rglob("*_full.csv"):
+        try:
+            n = sum(1 for _ in open(p, 'r')) - 1  # 粗略计数(减header)
+        except Exception:
+            continue
+        candidates.append((p, n, p.stat().st_mtime))
+    if not candidates:
+        raise FileNotFoundError("未找到 *_full.csv，需先运行 scripts/run_full_backtest_all_combos.sh")
+    # 优先按行数，再按时间
+    candidates.sort(key=lambda x: (x[1], x[2]), reverse=True)
+    best = candidates[0]
+    if best[1] < 5000:
+        raise RuntimeError(f"检测到完整回测文件 {best[0]} 仅 {best[1]} 行，疑似未完成或损坏")
+    return best[0]
 
 
 def main():
@@ -53,13 +60,18 @@ def main():
     logger.info("全量GBDT校准器训练")
     logger.info("="*80)
     
-    # 1. 加载WFO结果
-    wfo_path = Path("results/run_20251108_193712/all_combos.parquet")
-    if not wfo_path.exists():
-        logger.error(f"WFO结果不存在: {wfo_path}")
+    # 1. 加载最新 WFO 结果 (动态读取 .latest_run)
+    latest_run_file = Path("results/.latest_run")
+    if not latest_run_file.exists():
+        logger.error("缺少 results/.latest_run，无法定位最新 WFO 运行目录")
         return
-    
-    logger.info(f"\n加载WFO结果: {wfo_path}")
+    latest_run_dir = latest_run_file.read_text().strip()
+    wfo_path = Path(f"results/{latest_run_dir}/all_combos.parquet")
+    if not wfo_path.exists():
+        logger.error(f"WFO结果不存在: {wfo_path} (latest_run={latest_run_dir})")
+        return
+
+    logger.info(f"\n加载WFO结果: {wfo_path} (run={latest_run_dir})")
     wfo_df = pd.read_parquet(wfo_path)
     logger.info(f"  组合数: {len(wfo_df)}")
     logger.info(f"  IC范围: {wfo_df['mean_oos_ic'].min():.4f} ~ {wfo_df['mean_oos_ic'].max():.4f}")
@@ -75,6 +87,11 @@ def main():
     
     logger.info(f"\n加载全量回测结果: {backtest_csv}")
     backtest_df = pd.read_csv(backtest_csv)
+    # 去重防御: 若重复 combo 行保留第一条
+    if backtest_df['combo'].duplicated().any():
+        before = len(backtest_df)
+        backtest_df = backtest_df.drop_duplicates(subset='combo', keep='first')
+        logger.warning(f"发现重复回测组合行，已去重: {before} -> {len(backtest_df)}")
     logger.info(f"  回测组合数: {len(backtest_df)}")
     logger.info(f"  Sharpe范围: {backtest_df['sharpe'].min():.3f} ~ {backtest_df['sharpe'].max():.3f}")
     
@@ -115,12 +132,34 @@ def main():
     
     calibrator_full = WFORealBacktestCalibrator(
         model_type="gbdt",
-        n_estimators=300,  # 增加树数量（样本更多）
-        max_depth=5,       # 增加深度（捕捉更复杂关系）
-        cv_folds=10,       # 增加CV折数（更稳健）
+        n_estimators=300,
+        max_depth=5,
+        cv_folds=10,
     )
-    
-    metrics_full = calibrator_full.fit(merged, backtest_df, target_metric='sharpe')
+
+    # 可选: 样本加权(提高高 Sharpe / 高稳定性样本影响力)
+    enable_weight = os.environ.get('FULL_SAMPLE_WEIGHT','0').strip().lower() in ('1','true','yes')
+    if enable_weight:
+        sharpe_median = merged['sharpe'].median()
+        sharpe_scale = merged['sharpe'].std() + 1e-6
+        merged['sample_weight'] = 1.0 / (1.0 + np.exp(-(merged['sharpe'] - sharpe_median) / sharpe_scale))
+        logger.info("启用 sample_weight (logistic Sharpe 权重) — 强调高 Sharpe 样本")
+    else:
+        merged['sample_weight'] = 1.0
+
+    # fit 接口当前不支持外部权重，临时通过重复高权重样本近似实现（避免改动核心类）
+    if enable_weight:
+        repeat_factor = 3  # 控制重复强度
+        w_copy = merged.loc[merged['sample_weight'] > merged['sample_weight'].median()]
+        augmented = pd.concat([merged, w_copy] * repeat_factor, ignore_index=True)
+        logger.info(f"样本扩增: 原始 {len(merged)} → 扩增 {len(augmented)}")
+    else:
+        augmented = merged
+
+    # 重要：传入校准器的第一个参数应仅包含 WFO 特征，避免已包含 'sharpe' 导致merge后列名被加后缀（sharpe_x/sharpe_y）
+    augmented_for_fit = augmented.drop(columns=['sharpe', 'annual_ret', 'max_dd'], errors='ignore')
+
+    metrics_full = calibrator_full.fit(augmented_for_fit, backtest_df, target_metric='sharpe')
     
     logger.info(f"\n全量模型训练评估:")
     for k, v in metrics_full.items():
@@ -151,7 +190,7 @@ def main():
         logger.info(f"  提升:                 {(corr_full-corr_top2000):+.4f} ({(corr_full-corr_top2000)/abs(corr_top2000)*100:+.1f}%)")
         
         # Precision@K对比
-        for k in [50, 100, 200, 500]:
+        for k in [50, 100, 200, 500, 1000, 2000]:
             # Top2000模型
             top2000_topk = set(merged.nlargest(k, 'pred_top2000')['combo'])
             real_topk = set(merged.nlargest(k, 'sharpe')['combo'])
@@ -231,13 +270,13 @@ def main():
     
     wfo_df['calibrated_sharpe_full'] = calibrator_full.predict(wfo_df)
     
-    calibrated_path = Path("results/run_20251108_193712/all_combos_calibrated_gbdt_full.parquet")
+    calibrated_path = Path(f"results/{latest_run_dir}/all_combos_calibrated_gbdt_full.parquet")
     wfo_df.to_parquet(calibrated_path, index=False)
     logger.info(f"✅ 校准结果已保存: {calibrated_path}")
     
     # 11. 生成校准后Top2000白名单
     calibrated_top2000 = wfo_df.nlargest(2000, 'calibrated_sharpe_full')
-    whitelist_path = Path("results/run_20251108_193712/whitelist_top2000_calibrated_gbdt_full.txt")
+    whitelist_path = Path(f"results/{latest_run_dir}/whitelist_top2000_calibrated_gbdt_full.txt")
     calibrated_top2000['combo'].to_csv(whitelist_path, index=False, header=False)
     logger.info(f"✅ 校准Top2000白名单已保存: {whitelist_path}")
     
@@ -247,7 +286,7 @@ def main():
     overlap = len(original_top2000 & calibrated_top2000_set)
     
     logger.info(f"\n排序变化:")
-    logger.info(f"  原始WFO Top2000 vs 校准Top2000 重叠: {overlap}/2000 ({overlap/20:.1f}%)")
+    logger.info(f"  原始WFO Top2000 vs 校准Top2000 重叠: {overlap}/2000 ({overlap/2000*100:.1f}%)")
     logger.info(f"  {2000-overlap} 个组合被替换")
     
     logger.info(f"\n{'='*80}")

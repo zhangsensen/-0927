@@ -1,4 +1,4 @@
-.PHONY: install run clean clean-results help
+.PHONY: install run clean clean-results help post-calibration
 
 install:
 	@echo "[install] 使用pep517安装本地包"
@@ -22,3 +22,8 @@ help:
 	@echo "  make run            执行完整流水线"
 	@echo "  make clean          删除缓存与编译文件"
 	@echo "  make clean-results  清空 results/ 输出"
+	@echo "  make post-calibration  执行校准后分析( sanity + holdout + blended + grid )"
+
+post-calibration:
+	@echo "[post-calibration] 运行校准后分析流水线"
+	@python scripts/post_calibration_pipeline.py

@@ -15,6 +15,8 @@ from tqdm import tqdm
 from numba import njit
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
+from .wfo_realbt_calibrator import WFORealBacktestCalibrator
+from pathlib import Path
 
 from .ic_calculator_numba import compute_spearman_ic_numba
 
@@ -291,10 +293,37 @@ class ComboWFOOptimizer:
             results_df["p_value"] = np.nan
             results_df["q_value"] = np.nan
             results_df["is_significant"] = True
-        # 改为按IC排序（IC越高越好），稳定性得分作为次要指标
-        results_df = results_df.sort_values(
-            by=["mean_oos_ic", "stability_score"], ascending=[False, False]
-        ).reset_index(drop=True)
+        # 使用校准器排序（若可用），否则退回IC排序
+        calibrated_model_path = Path("results/calibrator_gbdt_full.joblib")
+        use_calibrated = calibrated_model_path.exists()
+        if use_calibrated:
+            try:
+                calibrator = WFORealBacktestCalibrator.load(calibrated_model_path)
+                # 生成校准预测分（与训练时一致的特征列）
+                results_df = results_df.copy()
+                results_df["calibrated_sharpe_pred"] = calibrator.predict(results_df)
+                # 以校准分为主排序，稳定性次序，保留原始IC便于诊断
+                results_df = results_df.sort_values(
+                    by=["calibrated_sharpe_pred", "stability_score"],
+                    ascending=[False, False],
+                ).reset_index(drop=True)
+                logger.info(
+                    "✅ 使用已训练校准器(results/calibrator_gbdt_full.joblib)进行排序"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"校准器预测失败，回退到IC排序。原因: {e}"
+                )
+                results_df = results_df.sort_values(
+                    by=["mean_oos_ic", "stability_score"], ascending=[False, False]
+                ).reset_index(drop=True)
+        else:
+            # 改为按IC排序（IC越高越好），稳定性得分作为次要指标
+            results_df = results_df.sort_values(
+                by=["mean_oos_ic", "stability_score"], ascending=[False, False]
+            ).reset_index(drop=True)
         top_combos = results_df.head(top_n).to_dict("records")
-        logger.info(f"Found {len(top_combos)} top combos (sorted by IC)")
+        logger.info(
+            f"Found {len(top_combos)} top combos (sorted by {'calibrated' if use_calibrated else 'IC'})"
+        )
         return top_combos, results_df

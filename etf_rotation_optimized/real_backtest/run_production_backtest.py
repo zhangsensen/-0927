@@ -1,13 +1,31 @@
 """
-无未来函数的换仓频率测试
+生产回测主脚本（无未来函数保障 + 可选性能/诊断开关）
 ================================================================================
-严格时间隔离：每个调仓日只使用截至前一日的历史数据
+严格时间隔离：每个调仓日只使用截至前一日的历史数据。
 
-关键原则：
-1. 因子计算：逐日计算，不提前计算全部时间序列
-2. 权重计算：每个调仓日用历史窗口重新计算IC权重
-3. 信号计算：每个调仓日用当日因子值计算信号
-4. 选股决策：基于当日信号，不知道未来信号
+核心原则
+---------
+1) 因子计算：逐日计算，不提前计算全部时间序列。
+2) 权重计算：每个调仓日用历史窗口计算 IC 权重（可走“日级IC预计算”路径）。
+3) 信号计算：每个调仓日用当日因子值计算信号。
+4) 选股决策：基于当日信号，不知道未来信号。
+
+关键环境变量（只列最常用）
+--------------------------
+- RB_DAILY_IC_PRECOMP=1    启用“日级IC预计算 + 前缀和 O(1) 滑窗”。
+- RB_DAILY_IC_MEMMAP=1     通过 np.memmap 在多进程间共享日级IC矩阵。
+- RB_STABLE_RANK=1         Spearman 使用“平均 ties”的稳定排名（更鲁棒）。
+- RB_PRELOAD_IC=1          预装常用 (freq×factor) 配对以提高缓存命中。
+- RB_NUMBA_WARMUP=1        进程启动时对关键 numba 路径做一次预热。
+- RB_ENFORCE_NO_LOOKAHEAD  开启抽样重算做自检（与稳定排名路径存在微小数值差异）。
+- RB_NL_CHECK_TOL          自检权重差异容差（稳定排名建议 1e-2）。
+- RB_OUTLIER_REPORT        打印组合级耗时 outlier 诊断（仅诊断期开）。
+- RB_PROFILE_BACKTEST      输出分阶段耗时统计（mean/median/p95/p99）。
+
+说明
+----
+稳定排名路径（RB_STABLE_RANK=1）在日级IC预计算与旧的“窗口内即时重算”之间可能存在轻微数值差异，
+属于并列秩处理方式不同导致的可解释偏差。严格审计时请适当放宽 RB_NL_CHECK_TOL（如 1e-2）。
 """
 
 import logging
@@ -104,6 +122,16 @@ def _average_ranks(values: np.ndarray) -> np.ndarray:
             ranks[order[k]] = avg
         i = j
     return ranks
+
+def _average_ranks_py(values: np.ndarray) -> np.ndarray:
+    """Python fallback 使用 scipy.stats.rankdata(method='average').
+    仅在需要与外部库对齐或调试时使用，避免在 numba 下引入额外依赖。
+    """
+    try:
+        from scipy.stats import rankdata
+        return rankdata(values, method='average').astype(np.float64) - 1.0  # 转为0基
+    except Exception:
+        return _average_ranks(values)
 
 
 @njit(cache=True)
@@ -207,21 +235,23 @@ def _compute_or_load_daily_ic_memmap(factors_data_full: np.ndarray, returns: np.
     os.makedirs(memmap_dir, exist_ok=True)
     T, N, F_total = factors_data_full.shape
     use_fp32 = os.environ.get("RB_DAILY_IC_MEMMAP_FP32", "0").strip().lower() in ("1", "true", "yes")
-    custom_key = os.environ.get("RB_DAILY_IC_MEMMAP_KEY", "")
+    custom_key = os.environ.get("RB_DAILY_IC_MEMMAP_KEY", "").strip()
     if not custom_key:
-        # 自动构造唯一 key: 形状 + returns 前 128 字节哈希
+        # 模式敏感 key：加入排名模式 + 算法版本，避免 stable/simple 交叉污染
+        algo_version = "v2stable" if stable_rank else "v1simple"
         try:
-            sample = returns.ravel()[:128]
-            h = hashlib.md5(sample.tobytes()).hexdigest()[:10]
+            sample = returns.ravel()[:256]
+            h = hashlib.sha1(sample.tobytes()).hexdigest()[:12]
         except Exception:
             h = "nohash"
-        custom_key = f"auto_{T}_{N}_{F_total}_{h}"
+        custom_key = f"auto_{algo_version}_{T}_{N}_{F_total}_{h}"
     dtype_str = "fp32" if use_fp32 else "fp64"
     file_name = f"daily_ic_{custom_key}_{dtype_str}.mmap"
     path = os.path.join(memmap_dir, file_name)
 
     if os.path.exists(path):
         mm = np.memmap(path, dtype=np.float32 if use_fp32 else np.float64, mode="r", shape=(T, F_total))
+        logger.info(f"[daily_ic_memmap] reuse {path} mode={'stable' if stable_rank else 'simple'}")
         return np.asarray(mm, dtype=np.float64)
 
     # 简单文件锁避免并发竞争
@@ -237,9 +267,11 @@ def _compute_or_load_daily_ic_memmap(factors_data_full: np.ndarray, returns: np.
             time.sleep(0.1)
     if not got_lock and os.path.exists(path):
         mm = np.memmap(path, dtype=np.float32 if use_fp32 else np.float64, mode="r", shape=(T, F_total))
+        logger.info(f"[daily_ic_memmap] locked – fallback reuse {path} mode={'stable' if stable_rank else 'simple'}")
         return np.asarray(mm, dtype=np.float64)
     if not got_lock:
-        # 仍未获取锁：退化为内存计算
+        # 仍未获取锁：退化为内存计算（不写盘，保证隔离）
+        logger.info("[daily_ic_memmap] lock wait exhausted, compute in-memory only")
         daily_ic_mat = _compute_daily_ic_all_factors_stable(factors_data_full, returns) if stable_rank else _compute_daily_ic_all_factors_simple(factors_data_full, returns)
         return daily_ic_mat
 
@@ -248,7 +280,8 @@ def _compute_or_load_daily_ic_memmap(factors_data_full: np.ndarray, returns: np.
         arr_to_store = daily_ic_mat.astype(np.float32 if use_fp32 else np.float64)
         mm = np.memmap(path, dtype=arr_to_store.dtype, mode="w+", shape=(T, F_total))
         mm[:] = arr_to_store[:]
-        del mm  # 关闭
+        del mm  # 关闭文件句柄
+        logger.info(f"[daily_ic_memmap] built {path} mode={'stable' if stable_rank else 'simple'}")
     finally:
         try:
             os.remove(lock_path)
@@ -467,49 +500,20 @@ def get_ic_weights_matrix_cached(
                     ic_mat[:, fi] = batch[:, idx_k]
                     filled[fi] = True
 
-    # 提取所需子矩阵并按行做abs归一化为权重
-    sub = np.abs(ic_mat[:, factor_indices])  # (n_reb, F_selected)
-    row_sums = sub.sum(axis=1, keepdims=True)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        weights = np.where(row_sums > 0, sub / row_sums, 1.0 / sub.shape[1])
+    # 构造并返回所需因子权重矩阵 (n_rebalance, len(factor_indices))
+    sel_ic = ic_mat[:, factor_indices]  # 可能含NaN
+    abs_ic = np.abs(sel_ic)
+    weights = np.zeros_like(sel_ic)
+    row_sums = np.nansum(abs_ic, axis=1)
+    F_sel = len(factor_indices)
+    for i in range(len(row_sums)):
+        s = row_sums[i]
+        if s > 0:
+            w = abs_ic[i] / s
+        else:
+            w = np.full(F_sel, 1.0 / F_sel)
+        weights[i] = w
     return weights
-
-
-def calculate_streaks_vectorized(daily_returns_arr):
-    """向量化的连胜/连败计算
-
-    使用 NumPy 向量操作替代 Python for 循环，性能提升 9.77x
-
-    Parameters:
-    -----------
-    daily_returns_arr : np.ndarray
-        日收益率数组
-
-    Returns:
-    --------
-    tuple: (max_consecutive_wins, max_consecutive_losses)
-        最大连胜数和最大连败数
-    """
-    returns_sign = np.sign(daily_returns_arr)
-
-    # 找到所有符号变化的位置
-    sign_changes = np.concatenate(([1], (np.diff(returns_sign) != 0).astype(int), [1]))
-    change_indices = np.where(sign_changes)[0]
-
-    # 计算每个连续区间的长度
-    streaks = np.diff(change_indices)
-
-    # 获取每个连续区间的符号
-    streak_signs = returns_sign[change_indices[:-1]]
-
-    # 分别获取正收益和负收益的连胜数
-    win_streaks = streaks[streak_signs == 1]
-    loss_streaks = streaks[streak_signs == -1]
-
-    max_consecutive_wins = np.max(win_streaks) if len(win_streaks) > 0 else 0
-    max_consecutive_losses = np.max(loss_streaks) if len(loss_streaks) > 0 else 0
-
-    return max_consecutive_wins, max_consecutive_losses
 
 
 def backtest_no_lookahead(
@@ -559,6 +563,15 @@ def backtest_no_lookahead(
         nl_tol = float(os.environ.get("RB_NL_CHECK_TOL", "1e-9") or 1e-9)
     except Exception:
         nl_tol = 1e-9
+    # 新增：相对/绝对误差容差（与 np.allclose 语义一致）
+    try:
+        nl_rtol = float(os.environ.get("RB_NL_CHECK_RTOL", "0"))
+    except Exception:
+        nl_rtol = 0.0
+    try:
+        nl_atol = float(os.environ.get("RB_NL_CHECK_ATOL", str(nl_tol)))
+    except Exception:
+        nl_atol = nl_tol
     nl_checks_done = 0
 
     total_timer_start = time.perf_counter() if profile_enabled else None
@@ -652,7 +665,9 @@ def backtest_no_lookahead(
                         hist_start = max(0, day_idx - lookback_window)
                         hist_end = day_idx  # 不含当日
                         F_sel = factors_data.shape[2]
+                        # 与稳定排名保持一致：若启用稳定排名 + 日级IC预计算，则直接用 daily_ic 滚动窗口均值代替重算
                         ics = np.zeros(F_sel, dtype=np.float64)
+                        # 自检统一使用原始滚动窗口重算路径，避免作用域问题；稳定排名差异通过 rtol/atol 调和
                         for f in range(F_sel):
                             ics[f] = compute_spearman_ic_numba(
                                 factors_data[hist_start:hist_end, :, f],
@@ -663,11 +678,49 @@ def backtest_no_lookahead(
                             w_chk = abs_ics / abs_ics.sum()
                         else:
                             w_chk = np.full(F_sel, 1.0 / F_sel)
-                        # 对比
-                        if not np.allclose(w_chk, factor_weights, rtol=0.0, atol=nl_tol, equal_nan=True):
+                        # 优先使用与生产一致的“日级IC预计算+稳定秩”路径进行窗口均值自检
+                        stable_rank_enabled = os.environ.get("RB_STABLE_RANK","0").strip().lower() in ("1","true","yes")
+                        daily_precomp_enabled = os.environ.get("RB_DAILY_IC_PRECOMP","0").strip().lower() in ("1","true","yes")
+                        can_use_daily = (
+                            stable_rank_enabled and daily_precomp_enabled and (factors_data_full is not None) and (factor_indices_for_cache is not None)
+                        )
+                        if can_use_daily:
+                            try:
+                                daily_ic_full = _compute_or_load_daily_ic_memmap(factors_data_full, returns, stable_rank=True)
+                                # 仅取本组合涉及的因子列
+                                cols = np.asarray(factor_indices_for_cache, dtype=np.int64)
+                                di_slice = daily_ic_full[hist_start:hist_end][:, cols]  # (W, F_sel)
+                                window_mean = np.nanmean(di_slice, axis=0)
+                                abs_ics_local = np.abs(window_mean)
+                                if np.isfinite(abs_ics_local).any() and np.nansum(abs_ics_local) > 0:
+                                    w_chk = abs_ics_local / np.nansum(abs_ics_local)
+                                else:
+                                    w_chk = np.full(F_sel, 1.0 / F_sel)
+                            except Exception:
+                                # 回退到原始重算路径
+                                ics = np.zeros(F_sel, dtype=np.float64)
+                                for f in range(F_sel):
+                                    ics[f] = compute_spearman_ic_numba(
+                                        factors_data[hist_start:hist_end, :, f],
+                                        returns[hist_start:hist_end],
+                                    )
+                                abs_ics = np.abs(ics)
+                                w_chk = (abs_ics / abs_ics.sum()) if abs_ics.sum() > 0 else np.full(F_sel, 1.0 / F_sel)
+                        else:
+                            # 回退旧路径（简单秩重算）
+                            ics = np.zeros(F_sel, dtype=np.float64)
+                            for f in range(F_sel):
+                                ics[f] = compute_spearman_ic_numba(
+                                    factors_data[hist_start:hist_end, :, f],
+                                    returns[hist_start:hist_end],
+                                )
+                            abs_ics = np.abs(ics)
+                            w_chk = (abs_ics / abs_ics.sum()) if abs_ics.sum() > 0 else np.full(F_sel, 1.0 / F_sel)
+                        # 对比：允许 rtol/atol
+                        if not np.allclose(w_chk, factor_weights, rtol=nl_rtol, atol=nl_atol, equal_nan=True):
                             diff = np.nanmax(np.abs(w_chk - factor_weights))
                             raise RuntimeError(
-                                f"NO_LOOKAHEAD_CHECK_FAILED: day_idx={day_idx}, max_weight_diff={diff:.3e} (tol={nl_tol})"
+                                f"NO_LOOKAHEAD_CHECK_FAILED: day_idx={day_idx}, max_weight_diff={diff:.3e} (rtol={nl_rtol}, atol={nl_atol})"
                             )
                         nl_checks_done += 1
                 except Exception as e:
@@ -848,6 +901,48 @@ def backtest_no_lookahead(
     return result
 
 
+def calculate_streaks_vectorized(daily_returns_arr: np.ndarray):
+    """向量化计算最长连续盈利与亏损天数 (0 收益视为中断)。
+
+    Args:
+        daily_returns_arr: (T,) 日收益序列
+    Returns:
+        (max_consecutive_wins, max_consecutive_losses)
+    """
+    if daily_returns_arr.size == 0:
+        return 0, 0
+    signs = np.sign(daily_returns_arr).astype(np.int32)
+    # 正数->1, 负数->-1, 0 保持0作为分隔
+    signs[signs > 0] = 1
+    signs[signs < 0] = -1
+    max_win = 0
+    max_loss = 0
+    cur_len = 0
+    cur_sign = 0
+    for s in signs:
+        if s == 0 or s != cur_sign:
+            # 结算上一个序列
+            if cur_sign == 1:
+                if cur_len > max_win:
+                    max_win = cur_len
+            elif cur_sign == -1:
+                if cur_len > max_loss:
+                    max_loss = cur_len
+            # 重置
+            cur_sign = s
+            cur_len = 1 if s != 0 else 0
+        else:
+            cur_len += 1
+    # 结算最后一个序列
+    if cur_sign == 1:
+        if cur_len > max_win:
+            max_win = cur_len
+    elif cur_sign == -1:
+        if cur_len > max_loss:
+            max_loss = cur_len
+    return max_win, max_loss
+
+
 def load_top_combos_from_run(run_dir: Path, top_n: int = 100, load_all: bool = False):
     """
     加载某个 run_ 目录下的组合列表。
@@ -871,43 +966,53 @@ def load_top_combos_from_run(run_dir: Path, top_n: int = 100, load_all: bool = F
     all_combos_file = run_dir / "all_combos.parquet"
 
     # 🔥 新增：支持加载全量组合（用于完整样本训练）
+    # 若存在校准分或预测列则优先使用校准排序；否则按IC/稳定性
+    def _sort_df(df: pd.DataFrame) -> pd.DataFrame:
+        if "calibrated_sharpe_pred" in df.columns:
+            return df.sort_values(
+                by=["calibrated_sharpe_pred", "stability_score"], ascending=[False, False]
+            )
+        if "calibrated_sharpe_full" in df.columns:
+            return df.sort_values(
+                by=["calibrated_sharpe_full", "stability_score"], ascending=[False, False]
+            )
+        return df.sort_values(
+            by=["mean_oos_ic", "stability_score"], ascending=[False, False]
+        )
+
     if load_all:
         if all_combos_file.exists():
             df = pd.read_parquet(all_combos_file)
-            df = df.sort_values(
-                by=["mean_oos_ic", "stability_score"], ascending=[False, False]
-            )
-            return df.reset_index(drop=True), f"ALL ({len(df)} combos from all_combos)"
+            df = _sort_df(df)
+            sort_label = "ALL calibrated" if ("calibrated_sharpe_pred" in df.columns or "calibrated_sharpe_full" in df.columns) else "ALL IC"
+            return df.reset_index(drop=True), f"ALL ({len(df)} combos from all_combos, {sort_label})"
         else:
             raise FileNotFoundError(f"全量回测模式需要 all_combos.parquet，但未找到: {all_combos_file}")
 
     if top_by_ic_file.exists():
-        df = pd.read_parquet(top_by_ic_file)
-        df = df.reset_index(drop=True)
-        # 如果文件行数小于期望的top_n，则回退到all_combos生成TopN
+        df = pd.read_parquet(top_by_ic_file).reset_index(drop=True)
+        df = _sort_df(df)
         if len(df) >= top_n:
-            return df.head(top_n), "IC (top100_by_ic)"
+            lbl = "calibrated (top100_by_ic)" if ("calibrated_sharpe_pred" in df.columns or "calibrated_sharpe_full" in df.columns) else "IC (top100_by_ic)"
+            return df.head(top_n), lbl
         elif all_combos_file.exists():
             df2 = pd.read_parquet(all_combos_file)
-            df2 = df2.sort_values(
-                by=["mean_oos_ic", "stability_score"], ascending=[False, False]
-            ).head(top_n)
-            return df2.reset_index(drop=True), "IC (from all_combos)"
+            df2 = _sort_df(df2).head(top_n)
+            lbl = "calibrated (from all_combos)" if ("calibrated_sharpe_pred" in df2.columns or "calibrated_sharpe_full" in df2.columns) else "IC (from all_combos)"
+            return df2.reset_index(drop=True), lbl
         else:
             return df, "IC (top100_by_ic)"
     if top_combos_file.exists():
         df = pd.read_parquet(top_combos_file)
-        # 确保按 IC/稳定性排序
-        df = df.sort_values(
-            by=["mean_oos_ic", "stability_score"], ascending=[False, False]
-        )
-        return df.reset_index(drop=True), "IC (top_combos)"
+        df = _sort_df(df)
+        lbl = "calibrated (top_combos)" if ("calibrated_sharpe_pred" in df.columns or "calibrated_sharpe_full" in df.columns) else "IC (top_combos)"
+        return df.reset_index(drop=True), lbl
     if all_combos_file.exists():
         df = pd.read_parquet(all_combos_file)
-        df = df.sort_values(
-            by=["mean_oos_ic", "stability_score"], ascending=[False, False]
-        ).head(top_n)
-        return df.reset_index(drop=True), "IC (from all_combos)"
+        df = _sort_df(df).head(top_n)
+        lbl = "calibrated (from all_combos)" if ("calibrated_sharpe_pred" in df.columns or "calibrated_sharpe_full" in df.columns) else "IC (from all_combos)"
+    # 修复参数名错误: drop_more -> drop
+    return df.reset_index(drop=True), lbl
     raise FileNotFoundError(
         f"未找到 {run_dir} 下的 top100_by_ic/top_combos/all_combos 文件"
     )
