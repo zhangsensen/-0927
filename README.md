@@ -187,7 +187,7 @@ make run
 1. 排序稳定性（平均排名法避免并列跳跃）
 2. 日度IC预计算 + memmap 加速
 3. 无前视自检容差 (rtol=0.016, atol=0.0025) 已固化于 `real_backtest/NO_LOOKAHEAD_TOL_FREEZE.json`
-4. 全量 12,597 组合 GBDT 校准排序 与 风险控制（Blended + 保留比）上线
+4. 全量 12,597 组合 GBDT 校准排序已上线；生产不使用白名单/混合保留（Blended/whitelist 已弃用）
 
  
 后续仅接受：

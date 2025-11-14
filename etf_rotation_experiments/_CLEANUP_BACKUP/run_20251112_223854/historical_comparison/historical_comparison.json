@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-11-13T11:20:48.221604",
+  "backtest_source": "../results_combo_wfo/20251109_032515_20251110_001325/top12597_backtest_by_ic_20251109_032515_20251110_001325_full.csv",
+  "ic_ranking": {
+    "n_valid": 100,
+    "annual_ret_mean": 0.11817447704744267,
+    "annual_ret_median": 0.12776903223909214,
+    "sharpe_mean": 0.5711309301159675,
+    "sharpe_median": 0.6246166414553581,
+    "max_dd_mean": -0.2984745480181593,
+    "vol_mean": 0.209937631605684,
+    "avg_turnover_mean": 1.1203055555555557,
+    "n_rebalance_mean": 144.0
+  },
+  "calibrated_ranking": {
+    "n_valid": 100,
+    "annual_ret_mean": 0.11992990916477876,
+    "annual_ret_median": 0.1261170898907762,
+    "sharpe_mean": 0.5854352971867346,
+    "sharpe_median": 0.6048120876880099,
+    "max_dd_mean": -0.30516168946976036,
+    "vol_mean": 0.21538403230785808,
+    "avg_turnover_mean": 1.1626666666666665,
+    "n_rebalance_mean": 144.0
+  },
+  "deltas": {
+    "annual_ret_delta": 0.0017554321173360865,
+    "sharpe_delta": 0.014304367070767099,
+    "max_dd_delta": -0.006687141451601042
+  },
+  "verdict": {
+    "annual_ret_improved": true,
+    "sharpe_improved": true,
+    "both_improved": true
+  }
+}

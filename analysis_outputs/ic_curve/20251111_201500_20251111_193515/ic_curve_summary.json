@@ -1,0 +1,17 @@
+{
+  "rows": 2000,
+  "ic_column": "wfo_ic",
+  "return_column": "annual_ret_net",
+  "quantiles": 10,
+  "global_spearman": -0.15374300874189734,
+  "global_pearson": 0.22104081903967007,
+  "polyfit": {
+    "coefficients": {
+      "a": -27.630380906288753,
+      "b": 3.700947257413746,
+      "c": 0.017864176569282058
+    },
+    "vertex_ic": 0.06697242556962724,
+    "vertex_return": 0.14179488393641113
+  }
+}

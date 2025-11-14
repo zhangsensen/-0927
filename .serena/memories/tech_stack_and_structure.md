@@ -1,0 +1,11 @@
+# Tech Stack & Structure
+- Primary language: Python with pandas, numpy, numba, LightGBM; configuration via YAML.
+- Build & env tools: Make, uv, pre-commit, pytest.
+- Key directories:
+  - `etf_rotation_optimized/`: production ETF rotation engine (core, configs, docs, tests).
+  - `etf_rotation_experiments/`: experimental ranking and backtest workflows for ETF strategies.
+  - `factor_system/`: shared factor computation framework.
+  - `real_backtest/`: production-grade profit backtest scripts.
+  - `results/` & `results_combo_wfo/`: generated artifacts and WFO backtests.
+  - `scripts/`: utility CLI scripts.
+- Data artifacts stored in parquet/csv under `results/` or subsystem-specific folders; large archives kept in `deployment_archive_*`.

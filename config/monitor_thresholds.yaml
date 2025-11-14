@@ -1,0 +1,9 @@
+# Rank quality monitoring thresholds
+# Adjust based on historical stability and risk appetite
+pearson_min: 0.85
+spearman_min: 0.80
+precision_at_500_min: 0.30
+precision_at_2000_min: 0.70
+# Herfindahl-Hirschman Index (HHI) across Top500 combos (equal weight baseline ≈ 0.002)
+# Larger means more concentration; set a generous cap to allow some skew
+top500_hhi_max: 0.010

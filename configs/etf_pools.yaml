@@ -58,6 +58,28 @@ pools:
       - "159928.SZ"
       - "159992.SZ"
       - "159995.SZ"
+  A_SHARE_LIVE:
+    name: "A股ETF实盘池"
+    description: "当前实盘调仓模板使用的精简高流动性ETF集合"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    trading_hours:
+      morning: ["09:30", "11:30"]
+      afternoon: ["13:00", "15:00"]
+    symbols:
+      - "510300.SH"  # 300ETF
+      - "510500.SH"  # 500ETF
+      - "159915.SZ"  # 创业板
+      - "159919.SZ"  # 沪深300（备选）
+      - "512880.SH"  # 证券ETF
+      - "512000.SH"  # 券商ETF
+      - "159949.SZ"  # 创业板50
+      - "515790.SH"  # 光伏ETF
+      - "516160.SH"  # 新能源ETF
+    capacity_overrides:
+      max_adv_pct: 0.04  # 实盘控制更保守
+      max_single_weight: 0.30
+      notes: "用于 live_alloc 模板生成与实盘风控；保持与高流动性名单同步"
   
   QDII:
     name: "QDII ETF"

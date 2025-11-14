@@ -1,0 +1,32 @@
+{
+  "overall": {
+    "rows": 597,
+    "ic_column": "wfo_ic",
+    "return_column": "annual_ret_net",
+    "buckets": 10,
+    "global_spearman": 0.10945030645810588,
+    "global_pearson": 0.11200434010053885
+  },
+  "extremes": {
+    "bottom_bucket": {
+      "bucket": "(-0.0366, 0.0266]",
+      "samples": 60,
+      "return_min": -0.0355586100897801,
+      "return_max": 0.0265008362072454,
+      "return_mean": 0.010425261013996554,
+      "ic_mean": 0.00046912334636089667,
+      "spearman": 0.09308141150319535,
+      "pearson": 0.08076648036469236
+    },
+    "top_bucket": {
+      "bucket": "(0.0982, 0.157]",
+      "samples": 60,
+      "return_min": 0.0982663977804128,
+      "return_max": 0.1566757365291344,
+      "return_mean": 0.11368282494032285,
+      "ic_mean": 0.011644262989090893,
+      "spearman": -0.0180050013892748,
+      "pearson": 0.010765072726241632
+    }
+  }
+}

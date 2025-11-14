@@ -1,0 +1,92 @@
+backtest:
+  commission_rate: 0.00005
+  initial_capital: 1000000
+  lookback_window: 252
+  rebalance_frequency: 21d
+  max_workers: 8
+  
+  # 网格搜索配置
+  # 固化调仓频率：已验证 8 天最优，关闭全频率扫描避免无意义耗时
+  test_all_frequencies: false
+  test_all_position_sizes: false  # 已验证最优值为4，无需再扫描
+  position_size_range: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+combo_wfo:
+  combo_sizes:
+  - 2
+  - 3
+  - 4
+  - 5
+  enable_fdr: true
+  fdr_alpha: 0.05
+  fdr_method: fdr_bh
+  is_period: 252
+  n_jobs: -1
+  oos_period: 60
+  rebalance_frequencies:
+  - 8
+  save_all_results: true
+  scoring:
+    complexity_penalty_lambda: 0.15
+    use_robust_scoring: true
+  step_size: 60
+  top_n: 100
+  verbose: true
+cross_section:
+  bounded_factors:
+  - PRICE_POSITION_20D
+  - PRICE_POSITION_120D
+  - PV_CORR_20D
+  - RSI_14
+  winsorize_lower: 0.025
+  winsorize_upper: 0.975
+data:
+  cache_dir: null
+  data_dir: null
+  end_date: '2025-10-14'
+  start_date: '2020-01-01'
+  symbols:
+  - '159801'
+  - '159819'
+  - '159859'
+  - '159883'
+  - '159915'
+  - '159920'
+  - '159928'
+  - '159949'
+  - '159992'
+  - '159995'
+  - '159998'
+  - '510050'
+  - '510300'
+  - '510500'
+  - '511010'
+  - '511260'
+  - '511380'
+  - '512010'
+  - '512100'
+  - '512400'
+  - '512480'
+  - '512660'
+  - '512690'
+  - '512720'
+  - '512800'
+  - '512880'
+  - '512980'
+  - '513050'
+  - '513100'
+  - '513130'
+  - '513500'
+  - '515030'
+  - '515180'
+  - '515210'
+  - '515650'
+  - '515790'
+  - '516090'
+  - '516160'
+  - '516520'
+  - '518850'
+  - '518880'
+  - '588000'
+  - '588200'
+output_root: results_combo_wfo
+run_id: COMBO_WFO_DEEP_MINING

@@ -1,5 +1,17 @@
 # 量化交易开发环境 Makefile
 
+# Audit candidate pool (requires RUN_DIR=results/run_YYYYMMDD_HHMMSS)
+.PHONY: audit
+audit:
+	@if [ -z "$(RUN_DIR)" ]; then echo "Usage: make audit RUN_DIR=results/run_YYYYMMDD_HHMMSS"; exit 2; fi
+	python3 scripts/audit_candidate_pool.py --run-dir $(RUN_DIR)
+
+# Monitor WFO rank quality against thresholds
+.PHONY: monitor
+monitor:
+	@if [ -z "$(RUN_DIR)" ]; then echo "Usage: make monitor RUN_DIR=results/run_YYYYMMDD_HHMMSS"; exit 2; fi
+	python3 scripts/monitor_wfo_rank_quality.py --run-dir $(RUN_DIR) --thresholds config/monitor_thresholds.yaml
+
 .PHONY: help install format lint test clean run
 
 help:  ## 显示帮助信息
