@@ -1,0 +1,12 @@
+{
+  "latest_run": "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/results/run_20251114_184946",
+  "config_file": "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/configs/combo_wfo_config.yaml",
+  "top_source": "ML排序:ranking_ml_top200.parquet",
+  "order_label": "ML (LTR 模型)",
+  "slippage_bps": 2.0,
+  "count": 200,
+  "mean_annual_net": 0.19064636714080913,
+  "median_annual_net": 0.1910854568505418,
+  "mean_sharpe_net": 0.9273060194069793,
+  "median_sharpe_net": 0.9291865622321043
+}

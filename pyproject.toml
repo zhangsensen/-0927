@@ -1,84 +1,71 @@
-[project]
-name = "factor-engine"
-version = "0.2.0"
-description = "专业级因子计算引擎 - 研究与回测的统一计算核心"
-readme = "README.md"
-requires-python = ">=3.11"
-license = "MIT"
-authors = [
-    {name = "量化首席工程师", email = "your.email@example.com"},
-]
-keywords = ["quantitative", "factors", "backtesting", "technical-analysis", "trading"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Financial and Insurance Industry",
-      "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Office/Business :: Financial :: Investment",
-    "Topic :: Scientific/Engineering :: Mathematics",
-]
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
-# 核心依赖（必须安装）
+[project]
+name = "quant-factor-trading"
+version = "0.3.0"
+description = "综合量化因子投资平台 - ETF轮动 + 因子库 + WFO优化"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Quant Team", email = "quant@example.com"}]
+requires-python = ">=3.11"
+
+# ============ 核心依赖 ============
 dependencies = [
-    # 核心量化回测引擎
-    "vectorbt>=0.28.1",
-    # 数据处理框架
-    "pandas>=2.3.2",
+    # 数据处理（NumPy + Pandas + Polars）
     "numpy>=2.3.3",
-    # 科学计算库
+    "pandas>=2.3.2",
+    "polars>=1.33.1",
+    
+    # 科学计算
     "scipy>=1.16.2",
     "scikit-learn>=1.7.2",
-    # 技术分析库
+    "statsmodels>=0.14.0",
+    
+    # 量化/技术分析
+    "vectorbt>=0.28.1",
     "ta-lib>=0.6.7",
-    # 金融数据接口
     "yfinance>=0.2.66",
-    # 数据存储与处理
+    
+    # 数据存储与序列化
     "pyarrow>=21.0.0",
     "fastparquet>=2024.11.0",
-    # 并行计算与缓存
-    "joblib>=1.5.2",
-    # HTTP请求库
-    "requests>=2.32.0",
-    # 环境变量管理
-    "python-dotenv>=1.0.0",
-    # 统计模型（VIF计算需要）
-    "statsmodels>=0.14.0",
-    # YAML配置文件支持
+    
+    # 配置与工具
     "pyyaml>=6.0.0",
-    "seaborn>=0.13.2",
-    "mplfinance>=0.12.10b0",
-    "polars>=1.33.1",
-    "numba>=0.62.0",
-    "pandas-vet>=2023.8.2",
-    "httpx[socks]>=0.28.1",
     "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
     "pyscn>=1.1.1",
-]
-
-# 可选依赖（按需安装）
-[project.optional-dependencies]
-# 性能优化
-performance = [
-    "polars>=1.0.0",
-    "numba>=0.60.0",
-]
-
-# 可视化
-visualization = [
+    
+    # 网络与HTTP
+    "requests>=2.32.0",
+    "httpx[socks]>=0.28.1",
+    
+    # 并行与性能
+    "joblib>=1.5.2",
+    "numba>=0.62.0",
+    
+    # 可视化
     "matplotlib>=3.10.6",
+    "seaborn>=0.13.2",
     "mplfinance>=0.12.10b0",
     "plotly>=5.24.0",
-    "seaborn>=0.13.2",
+    
+    # 代码质量
+    "pandas-vet>=2023.8.2",
 ]
 
-# Web界面
+# ============ 可选依赖 ============
+[project.optional-dependencies]
+# Web界面与API
 web = [
     "dash>=2.18.0",
     "beautifulsoup4>=4.13.5",
+    "flask>=3.0.0",
 ]
 
-# 数据库
+# 数据库与缓存
 database = [
     "sqlalchemy>=2.0.0",
     "redis>=5.0.0",
@@ -89,71 +76,55 @@ scheduling = [
     "schedule>=1.2.0",
 ]
 
-# 开发工具 - Linus模式精选
+# 开发与测试工具
 dev = [
-    # 核心质量工具 (必需)
+    # 单元测试
     "pytest>=8.4.2",
     "pytest-cov>=7.0.0",
+    
+    # 代码格式化与检查
     "black>=25.9.0",
     "isort>=6.0.1",
-    "mypy>=1.18.2",
     "flake8>=7.3.0",
-
-    # 安全工具 (量化系统必需)
+    "ruff>=0.13.2",
+    "mypy>=1.18.2",
+    
+    # 安全扫描
     "bandit>=1.8.6",
     "safety>=3.6.2",
-
-    # 性能分析工具 (量化核心)
+    
+    # 性能分析
     "line-profiler>=5.0.0",
     "memory-profiler>=0.61.0",
-
-    # 量化专用工具
-    "pandas-vet>=2023.8.2",
     "vulture>=2.14",
-
-    # 自动化工具
+    
+    # Git钩子
     "pre-commit>=4.3.0",
-
-    # 开发辅助
+    
+    # 交互式开发
     "ipython>=9.5.0",
     "jupyterlab>=4.4.9",
     "notebook>=7.3.0",
+    
+    # 类型检查
+    "pandas-stubs>=2.3.2.250926",
+    "types-psutil>=7.0.0.20251001",
+    "types-pyyaml>=6.0.12.20250915",
+    "types-seaborn>=0.13.2.20250914",
 ]
 
-# 完整安装（包含所有可选依赖）
+# 所有可选依赖
 all = [
-    "factor-engine[performance,visualization,web,database,scheduling,dev]"
+    "quant-factor-trading[web,database,scheduling,dev]",
 ]
 
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-packages = ["factor_system", "factor_system.shared", "factor_system.factor_engine", "factor_system.factor_engine.core", "factor_system.factor_engine.providers", "factor_system.factor_engine.factors", "factor_system.factor_engine.factors.technical", "factor_system.factor_engine.factors.overlap", "factor_system.factor_engine.factors.money_flow", "factor_system.factor_generation", "factor_system.factor_screening", "factor_system.research", "factor_system.utils"]
-package-dir = {"" = "."}
-
-[tool.setuptools.package-data]
-"factor_system" = ["*.yaml", "*.json", "data/*.json"]
-
-[project.urls]
-Homepage = "https://github.com/yourusername/quant-trading"
-Repository = "https://github.com/yourusername/quant-trading.git"
-Documentation = "https://quant-trading.readthedocs.io"
-"Bug Tracker" = "https://github.com/yourusername/quant-trading/issues"
-
-# 移除无效的控制台脚本，quant.cli 不存在
-# [project.scripts]
-# quant-backtest = "quant.cli:backtest"
-# quant-data = "quant.cli:data_fetcher"
-
+# ============ 工具配置 ============
 [tool.black]
 line-length = 88
-target-version = ['py311']
+target-version = ['py310', 'py311', 'py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
-  # directories
   \.eggs
   | \.git
   | \.hg
@@ -162,6 +133,7 @@ extend-exclude = '''
   | \.venv
   | build
   | dist
+  | _archive
 )/
 '''
 
@@ -173,86 +145,55 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 88
+skip_glob = ["*/migrations/*", ".venv/*", "_archive/*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [".venv", "_archive", "build", "dist", ".git"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
 check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
-strict_equality = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-]
+addopts = ["-v", "--strict-markers", "--tb=short"]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
+    "slow: 标记为慢速测试",
+    "integration: 标记为集成测试",
+    "unit: 标记为单元测试",
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["etf_rotation_optimized", "a_shares_strategy", "etf_download_manager"]
 omit = [
     "*/tests/*",
-    "*/test_*",
-    "*/conftest.py",
-    "*/setup.py",
     "*/__pycache__/*",
+    "*/site-packages/*",
 ]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
     "raise AssertionError",
     "raise NotImplementedError",
-    "if 0:",
     "if __name__ == .__main__.:",
-    "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
 ]
 
-[dependency-groups]
-dev = [
-    "bandit>=1.8.6",
-    "black>=25.9.0",
-    "flake8>=7.3.0",
-    "isort>=6.0.1",
-    "line-profiler>=5.0.0",
-    "memory-profiler>=0.61.0",
-    "mypy>=1.18.2",
-    "pandas-stubs>=2.3.2.250926",
-    "pandas-vet>=2023.8.2",
-    "pre-commit>=4.3.0",
-    "pytest>=8.4.2",
-    "ruff>=0.13.2",
-    "safety>=3.6.2",
-    "scipy-stubs>=1.16.2.0",
-    "types-psutil>=7.0.0.20251001",
-    "types-pyyaml>=6.0.12.20250915",
-    "types-seaborn>=0.13.2.20250914",
-    "vulture>=2.14",
-]
-
-[tool.vulture]
-paths = ["factor_system", "examples", "scripts"]
-exclude = ["**/__pycache__", "**/test_*.py", "**/*_test.py", "venv", ".venv", "build", "dist", ".pytest_cache", "migrations"]
-ignore_names = ["test_*", "_*", "setUp", "tearDown", "visit_*", "do_*"]
-min_confidence = 80
-sort_by_size = true
+# ============ 项目URLs ============
+[project.urls]
+Homepage = "https://github.com/zhangsensen/quant-factor-trading"
+Repository = "https://github.com/zhangsensen/quant-factor-trading.git"
+Documentation = "https://github.com/zhangsensen/quant-factor-trading/blob/main/README.md"
+"Bug Tracker" = "https://github.com/zhangsensen/quant-factor-trading/issues"
+Changelog = "https://github.com/zhangsensen/quant-factor-trading/releases"

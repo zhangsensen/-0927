@@ -1,0 +1,33 @@
+{
+  "timestamp": "20251112_223854",
+  "n_factors": 18,
+  "factor_names": [
+    "ADX_14D",
+    "CALMAR_RATIO_60D",
+    "CMF_20D",
+    "CORRELATION_TO_MARKET_20D",
+    "MAX_DD_60D",
+    "MOM_20D",
+    "OBV_SLOPE_10D",
+    "PRICE_POSITION_120D",
+    "PRICE_POSITION_20D",
+    "PV_CORR_20D",
+    "RELATIVE_STRENGTH_VS_MARKET_20D",
+    "RET_VOL_20D",
+    "RSI_14",
+    "SHARPE_RATIO_20D",
+    "SLOPE_20D",
+    "VOL_RATIO_20D",
+    "VOL_RATIO_60D",
+    "VORTEX_14D"
+  ],
+  "data_shape": {
+    "n_days": 1399,
+    "n_etfs": 43,
+    "n_factors": 18
+  },
+  "winsorize": {
+    "lower": 0.025,
+    "upper": 0.975
+  }
+}

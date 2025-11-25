@@ -1,0 +1,87 @@
+./PROJECT_AUDIT_EXECUTIVE_SUMMARY.md:**审计范围**: etf_rotation_optimized + etf_rotation_experiments  
+./etf_rotation_experiments/real_backtest/run_profit_backtest.py:    stable_root = repo_root / "etf_rotation_optimized"
+./etf_rotation_experiments/real_backtest/run_profit_backtest.py:    candidates.append((repo_root / "etf_rotation_optimized" / "configs" / "combo_wfo_config.yaml").resolve())
+./etf_rotation_experiments/real_backtest/run_profit_backtest.py:    roots.append((repo_root / "etf_rotation_optimized" / "results").resolve())
+./etf_rotation_experiments/archive/historical_reports_20251114/CONFIG_INDEPENDENCE_NOTE.md:  -> ../../etf_rotation_optimized/configs/combo_wfo_config.yaml
+./etf_rotation_experiments/archive/historical_reports_20251114/CONFIG_INDEPENDENCE_NOTE.md:cp ../../etf_rotation_optimized/configs/combo_wfo_config.yaml combo_wfo_config.yaml
+./etf_rotation_experiments/archive/historical_reports_20251114/CONFIG_INDEPENDENCE_NOTE.md:- `etf_rotation_optimized/` 应设置为**只读**或**受保护分支**
+./etf_rotation_experiments/archive/historical_reports_20251114/CONFIG_INDEPENDENCE_NOTE.md:head -3 /Users/zhangshenshen/深度量化0927/etf_rotation_optimized/configs/combo_wfo_config.yaml
+./etf_rotation_experiments/archive/historical_reports_20251114/CONFIG_INDEPENDENCE_NOTE.md:chmod -R 444 /Users/zhangshenshen/深度量化0927/etf_rotation_optimized/configs/
+./etf_rotation_experiments/archive/historical_reports_20251114/PROJECT_DIFF_SUMMARY.md:**老项目**: etf_rotation_optimized（稳定管线）  
+./etf_rotation_experiments/archive/historical_reports_20251114/REAL_COST_CORRECTION_REPORT.md:- `etf_rotation_optimized/configs/combo_wfo_config.yaml`
+./etf_rotation_experiments/archive/historical_reports_20251114/PROFIT_OPTIMIZATION_REPORT.md:   - 审核了稳定仓 (`etf_rotation_optimized`) 与实验仓 (`etf_rotation_experiments`) 的完整架构
+./etf_rotation_experiments/archive/historical_reports_20251114/docs/ML_VS_STABLE_PIPELINE_COMPARISON.md:- **老方案**: GBDT 校准器 (WFO特征 → Sharpe) - `etf_rotation_optimized`
+./etf_rotation_experiments/archive/historical_reports_20251114/docs/ML_VS_STABLE_PIPELINE_COMPARISON.md:### 7.1 老方案 (etf_rotation_optimized)
+./etf_rotation_experiments/archive/historical_reports_20251114/docs/ML_VS_STABLE_PIPELINE_COMPARISON.md:**老方案** (`etf_rotation_optimized`):
+./etf_rotation_experiments/archive/ml_ranking_experiments_20251114/scripts/compare_top100_backtest.py:    # 实际使用时需要接入 etf_rotation_optimized/real_backtest/run_production_backtest.py
+./etf_rotation_experiments/archive/ml_ranking_experiments_20251114/scripts/extract_combo_daily_nav.py:    stable_root = repo_root / "etf_rotation_optimized"
+./etf_rotation_experiments/archive/ml_ranking_experiments_20251114/scripts/train_calibrator_profit.py:    roots.append((repo_root / "etf_rotation_optimized" / "results").resolve())
+./FULL_EXECUTION_REPORT.md:cd /home/sensen/dev/projects/-0927/etf_rotation_optimized
+./FULL_EXECUTION_REPORT.md:# - cache_dir: /home/sensen/dev/projects/-0927/etf_rotation_optimized/.cache
+./MIGRATION_LOG.md:**目标**: 将 etf_rotation_optimized/ 合并到 etf_rotation_experiments/，形成统一代码库
+./.serena/memories/tech_stack_and_structure.md:  - `etf_rotation_optimized/`: production ETF rotation engine (core, configs, docs, tests).
+./.serena/memories/suggested_commands.md:- `cd etf_rotation_optimized && make install` – install dependencies for ETF rotation subsystem.
+./.serena/memories/suggested_commands.md:- `cd etf_rotation_optimized && make run` – execute the end-to-end ETF rotation pipeline.
+./.serena/memories/project_overview.md:- Priority subsystem: `etf_rotation_optimized/` (production-ready ETF cross-sectional rotation with WFO optimization and risk management).
+./etf_rotation_optimized/real_backtest/run_production_backtest.py:_PKG_ROOT = _HERE.parent  # etf_rotation_optimized
+./etf_rotation_optimized/real_backtest/run_production_backtest.py:        RB_DAILY_IC_MEMMAP_DIR: 目录（默认 etf_rotation_optimized/.cache）
+./etf_rotation_optimized/real_backtest/run_production_backtest.py:    memmap_dir = os.environ.get("RB_DAILY_IC_MEMMAP_DIR", "etf_rotation_optimized/.cache").strip()
+./etf_rotation_optimized/real_backtest/run_production_backtest.py:    # 脚本上级(etf_rotation_optimized)下 results
+./etf_rotation_optimized/real_backtest/scripts/robust_rank_from_allfreq.py:    root = Path(__file__).resolve().parents[2]  # etf_rotation_optimized/
+./etf_rotation_optimized/real_backtest/run_position_grid_search.py:sys.path.insert(0, "/Users/zhangshenshen/深度量化0927/etf_rotation_optimized")
+./etf_rotation_optimized/CLEANUP_REPORT.md:### 主目录 (`etf_rotation_optimized/`)
+./etf_rotation_optimized/CLEANUP_REPORT.md:etf_rotation_optimized/
+./etf_rotation_optimized/scripts/weight_diff_analyzer.py:from etf_rotation_optimized.core.data_loader import DataLoader
+./etf_rotation_optimized/scripts/weight_diff_analyzer.py:from etf_rotation_optimized.real_backtest.run_production_backtest import (
+./etf_rotation_optimized/scripts/convert_etf_daily_to_csv.py:    --alloc etf_rotation_optimized/results/run_YYYYMMDD_HHMMSS/selection/live/live_alloc_YYYYMMDD.csv \
+./etf_rotation_optimized/scripts/convert_etf_daily_to_csv.py:    --out etf_rotation_optimized/results/run_YYYYMMDD_HHMMSS/selection/live/your_prices.csv
+./etf_rotation_optimized/scripts/quick_robustness_check.py:from etf_rotation_optimized.core.data_loader import DataLoader
+./etf_rotation_optimized/scripts/quick_robustness_check.py:from etf_rotation_optimized.core.factor_library import FactorLibrary
+./etf_rotation_optimized/scripts/quick_robustness_check.py:from etf_rotation_optimized.real_backtest.run_production_backtest import backtest_no_lookahead
+./etf_rotation_optimized/scripts/generate_top5000_whitelist.py:    base = os.path.dirname(os.path.dirname(__file__))  # etf_rotation_optimized
+./etf_rotation_optimized/scripts/concordance_analyzer.py:  - Whitelist file: etf_rotation_optimized/results/run_<wfo_ts>/whitelist_8d_wfo_qualified_<wfo_ts>.txt
+./etf_rotation_optimized/scripts/concordance_analyzer.py:        os.path.join("etf_rotation_optimized", "results", f"run_{wfo_ts}", f"whitelist_8d_wfo_qualified_{wfo_ts}.txt"),
+./etf_rotation_optimized/scripts/concordance_analyzer.py:        os.path.join("etf_rotation_optimized", "results", f"run_{wfo_ts}", f"whitelist_{wfo_ts}.txt"),
+./etf_rotation_optimized/scripts/validate_live_alloc.py:    --alloc etf_rotation_optimized/results/run_YYYYMMDD_HHMMSS/selection/live/live_alloc_YYYYMMDD.csv \
+./etf_rotation_optimized/scripts/validate_live_alloc.py:    --strategies etf_rotation_optimized/results/run_YYYYMMDD_HHMMSS/selection/live/live_strategies.csv \
+./etf_rotation_optimized/scripts/select_topk_candidates.py:If --run-dir is omitted, tries to use etf_rotation_optimized/results/run_latest or .latest_run.
+./etf_rotation_optimized/README.md:etf_rotation_optimized/
+./etf_rotation_optimized/docs/PROJECT_OVERVIEW.md:etf_rotation_optimized/
+./etf_rotation_optimized/docs/WFO_CALIBRATION_REPORT.md:etf_rotation_optimized/
+./etf_rotation_optimized/docs/EXECUTION_CHECKLIST.md:  - `etf_rotation_optimized/core/` → `/prod/core/`
+./etf_rotation_optimized/docs/EXECUTION_CHECKLIST.md:  - `etf_rotation_optimized/real_backtest/` → `/prod/backtest/`
+./etf_rotation_optimized/docs/EXECUTION_CHECKLIST.md:  cd /Users/zhangshenshen/深度量化0927/etf_rotation_optimized
+./etf_rotation_optimized/docs/REFACTOR_NOTES.md:1. **重复的 core 目录**: `real_backtest/core/` 与父目录 `etf_rotation_optimized/core/` 完全相同（SHA1校验一致）
+./etf_rotation_optimized/docs/REFACTOR_NOTES.md:cd etf_rotation_optimized/real_backtest
+./etf_rotation_optimized/docs/REFACTOR_NOTES.md:1. `etf_rotation_optimized/README.md`
+./etf_rotation_optimized/docs/REFACTOR_NOTES.md:2. `etf_rotation_optimized/docs/PROJECT_OVERVIEW.md`
+./etf_rotation_optimized/docs/REFACTOR_NOTES.md:3. `etf_rotation_optimized/docs/MODULE_MAP.md`
+./etf_rotation_optimized/docs/REFACTOR_NOTES.md:4. `etf_rotation_optimized/QUICK_REFERENCE.md`
+./ETF_ML_MODULE_AUDIT.md:**涉及项目**: etf_rotation_optimized, etf_rotation_experiments  
+./ETF_ML_MODULE_AUDIT.md:etf_rotation_optimized/           [核心成熟项目 ✅]
+./ETF_ML_MODULE_AUDIT.md:**文件**: `etf_rotation_optimized/core/wfo_realbt_calibrator.py`  
+./ETF_ML_MODULE_AUDIT.md:- WFO 文档: `etf_rotation_optimized/docs/`
+./ETF_ML_MODULE_AUDIT.md:- 校准器文档: `etf_rotation_optimized/core/wfo_realbt_calibrator.py` 中的 docstring
+./scripts/build_simple_rankings_for_gating.py:        repo_root / "etf_rotation_optimized" / "results" / "calibrator_gbdt_full.joblib",
+./scripts/diagnostic/diagnose_ic_decay.py:    sys.path.insert(0, str(PROJECT_ROOT / "etf_rotation_optimized"))
+./scripts/diagnostic/diagnose_ic_decay.py:    wfo_dir = PROJECT_ROOT / "etf_rotation_optimized/results/wfo/20251027_170352"
+./scripts/diagnostic/diagnose_ic_decay.py:    backtest_dir = PROJECT_ROOT / f"etf_rotation_optimized/results/backtest/{ts}"
+./scripts/select_diverse_strategies.py:    --run-dir etf_rotation_optimized/results/run_YYYYMMDD_HHMMSS \
+./ML_ALGORITHMS_TECHNICAL_SPECIFICATION.md:**适用范围**: etf_rotation_optimized + etf_rotation_experiments
+./ML_ALGORITHMS_TECHNICAL_SPECIFICATION.md:**文件**: `etf_rotation_optimized/core/wfo_realbt_calibrator.py`  
+./CLEANUP_&_DEPENDENCY_CONSOLIDATION_REPORT.md:- ✅ `etf_rotation_optimized/` ⭐ (成熟管线项目)
+./CLEANUP_&_DEPENDENCY_CONSOLIDATION_REPORT.md:  ├── etf_rotation_optimized/ ⭐
+./CLEANUP_&_DEPENDENCY_CONSOLIDATION_REPORT.md:   - 在 `etf_rotation_optimized/docs/` 记录项目整合历史
+./README.md:### 1. **ETF轮动系统** (`etf_rotation_optimized/`) ⭐ 主力系统
+./README.md:- **文档**: [详见 etf_rotation_optimized/README.md](etf_rotation_optimized/README.md)
+./README.md:cd etf_rotation_optimized
+./README.md:详细文档: [etf_rotation_optimized/README.md](etf_rotation_optimized/README.md)
+./README.md:├── etf_rotation_optimized/        # ⭐ 主力系统: ETF轮动
+./README.md:- [快速开始](etf_rotation_optimized/README.md) - 5分钟上手
+./README.md:- [项目结构](etf_rotation_optimized/PROJECT_STRUCTURE.md) - 代码架构
+./README.md:- [交易指南](etf_rotation_optimized/EVENT_DRIVEN_TRADING_GUIDE.md) - 事件驱动交易
+./README.md:- [胜率功能](etf_rotation_optimized/DELIVERY_DOCUMENT.md) - 交易级胜率计算
+./README.md:- [文档索引](etf_rotation_optimized/docs/INDEX.md) - 所有文档列表
+./README.md:- [部署指南](etf_rotation_optimized/docs/DEPLOYMENT.md) - 生产部署
+./README.md:- [运维手册](etf_rotation_optimized/docs/OPERATIONS.md) - 日常运维
+./README.md:2. **策略研发**: 使用`etf_rotation_optimized/configs/experiments/`进行实验

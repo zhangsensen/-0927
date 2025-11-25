@@ -1,0 +1,288 @@
+[LightGBM] [Fatal] Number of rows 10077 exceeds upper limit of 10000 for a query
+
+================================================================================
+🚀 开始训练LTR排序模型
+================================================================================
+
+🔍 自动查找最新WFO结果...
+✓ 自动发现最新WFO运行: run_latest
+🔍 自动查找最新回测结果...
+✓ 自动发现最新回测运行: 20251114_155420_20251114_161032
+  WFO目录: results/run_latest
+  回测目录: results_combo_wfo/20251114_155420_20251114_161032
+
+================================================================================
+📂 加载训练数据
+================================================================================
+✓ 加载WFO特征: 12597 个策略组合
+  特征维度: (12597, 27)
+  唯一combo: 12597
+✓ 加载真实回测结果: 12597 个策略
+  数据文件: top12597_profit_backtest_slip2bps_20251114_155420_20251114_161032.csv
+  目标列: annual_ret_net (均值=0.1210, std=0.0478)
+
+构建训练数据集:
+  WFO策略数: 12597
+  真实回测策略数: 12597
+  匹配成功: 12597 (100.0%)
+  次要目标: sharpe_net (均值=0.5645)
+
+目标变量 'annual_ret_net' 统计:
+  均值: 0.120962
+  标准差: 0.047821
+  最小值: -0.051912
+  最大值: 0.226249
+  缺失值: 0
+  样本数: 12597
+  目标变量: annual_ret_net
+  均值: 0.1210, 标准差: 0.0478
+
+================================================================================
+🛠️ 构建特征矩阵
+================================================================================
+
+构建特征矩阵:
+  提取标量特征: 16 列
+  提取序列特征: 21 列
+  创建交叉特征: 6 列
+
+✓ 特征矩阵构建完成:
+  样本数: 12597
+  特征数: 44
+  特征列表 (前20): ['mean_oos_ic', 'oos_ic_std', 'oos_ic_ir', 'positive_rate', 'best_rebalance_freq', 'stability_score', 'mean_oos_sharpe', 'oos_sharpe_std', 'mean_oos_sample_count', 'oos_compound_sharpe', 'oos_compound_mean', 'oos_compound_std', 'oos_compound_sample_count', 'p_value', 'q_value', 'oos_sharpe_proxy', 'is_significant', 'ic_seq_mean', 'ic_seq_std', 'ic_seq_min']
+  特征数: 44
+  特征维度: (12597, 44)
+  样本示例: ['mean_oos_ic', 'oos_ic_std', 'oos_ic_ir', 'positive_rate', 'best_rebalance_freq']
+
+================================================================================
+🔥 训练LTR模型
+================================================================================
+
+================================================================================
+开始训练LTR模型
+================================================================================
+
+--- Fold 1/5 ---
+Traceback (most recent call last):
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/train_ranker.py", line 234, in <module>
+    main()
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/train_ranker.py", line 135, in main
+    model.train(
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/ml_ranker/ltr_model.py", line 140, in train
+    model = lgb.train(
+            ^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/lightgbm/engine.py", line 297, in train
+    booster = Booster(params=params, train_set=train_set)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/lightgbm/basic.py", line 3660, in __init__
+    _safe_call(
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/lightgbm/basic.py", line 313, in _safe_call
+    raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
+lightgbm.basic.LightGBMError: Number of rows 10077 exceeds upper limit of 10000 for a query
+
+================================================================================
+🚀 开始训练LTR排序模型
+================================================================================
+
+🔍 自动查找最新WFO结果...
+✓ 自动发现最新WFO运行: run_latest
+🔍 自动查找最新回测结果...
+✓ 自动发现最新回测运行: 20251114_155420_20251114_161032
+  WFO目录: results/run_latest
+  回测目录: results_combo_wfo/20251114_155420_20251114_161032
+
+================================================================================
+📂 加载训练数据
+================================================================================
+✓ 加载WFO特征: 12597 个策略组合
+  特征维度: (12597, 27)
+  唯一combo: 12597
+✓ 加载真实回测结果: 12597 个策略
+  数据文件: top12597_profit_backtest_slip2bps_20251114_155420_20251114_161032.csv
+  目标列: annual_ret_net (均值=0.1210, std=0.0478)
+
+构建训练数据集:
+  WFO策略数: 12597
+  真实回测策略数: 12597
+  匹配成功: 12597 (100.0%)
+  次要目标: sharpe_net (均值=0.5645)
+
+目标变量 'annual_ret_net' 统计:
+  均值: 0.120962
+  标准差: 0.047821
+  最小值: -0.051912
+  最大值: 0.226249
+  缺失值: 0
+  样本数: 12597
+  目标变量: annual_ret_net
+  均值: 0.1210, 标准差: 0.0478
+
+================================================================================
+🛠️ 构建特征矩阵
+================================================================================
+
+构建特征矩阵:
+  提取标量特征: 16 列
+  提取序列特征: 21 列
+  创建交叉特征: 6 列
+
+✓ 特征矩阵构建完成:
+  样本数: 12597
+  特征数: 44
+  特征列表 (前20): ['mean_oos_ic', 'oos_ic_std', 'oos_ic_ir', 'positive_rate', 'best_rebalance_freq', 'stability_score', 'mean_oos_sharpe', 'oos_sharpe_std', 'mean_oos_sample_count', 'oos_compound_sharpe', 'oos_compound_mean', 'oos_compound_std', 'oos_compound_sample_count', 'p_value', 'q_value', 'oos_sharpe_proxy', 'is_significant', 'ic_seq_mean', 'ic_seq_std', 'ic_seq_min']
+  特征数: 44
+  特征维度: (12597, 44)
+  样本示例: ['mean_oos_ic', 'oos_ic_std', 'oos_ic_ir', 'positive_rate', 'best_rebalance_freq']
+
+================================================================================
+🔥 训练LTR模型
+================================================================================
+
+================================================================================
+开始训练LTR模型
+================================================================================
+
+--- Fold 1/5 ---
+Training until validation scores don't improve for 50 rounds
+[50]	train's rmse: 0.0248825	valid's rmse: 0.0265111
+[100]	train's rmse: 0.0219751	valid's rmse: 0.0246548
+[150]	train's rmse: 0.0202502	valid's rmse: 0.0236394
+[200]	train's rmse: 0.0190641	valid's rmse: 0.0230213
+[250]	train's rmse: 0.0179134	valid's rmse: 0.0225349
+[300]	train's rmse: 0.0170036	valid's rmse: 0.0221629
+[350]	train's rmse: 0.0160642	valid's rmse: 0.0217801
+[400]	train's rmse: 0.0152606	valid's rmse: 0.0214834
+[450]	train's rmse: 0.0146262	valid's rmse: 0.0212749
+[500]	train's rmse: 0.0140666	valid's rmse: 0.0211027
+Did not meet early stopping. Best iteration is:
+[500]	train's rmse: 0.0140666	valid's rmse: 0.0211027
+  Fold 1 Spearman相关性: 0.8944
+
+--- Fold 2/5 ---
+Training until validation scores don't improve for 50 rounds
+[50]	train's rmse: 0.0250003	valid's rmse: 0.0266755
+[100]	train's rmse: 0.0220964	valid's rmse: 0.0246403
+[150]	train's rmse: 0.0203114	valid's rmse: 0.023603
+[200]	train's rmse: 0.0189712	valid's rmse: 0.0229295
+[250]	train's rmse: 0.0178331	valid's rmse: 0.0223087
+[300]	train's rmse: 0.0168972	valid's rmse: 0.02186
+[350]	train's rmse: 0.0160613	valid's rmse: 0.0215368
+[400]	train's rmse: 0.0153905	valid's rmse: 0.0212671
+[450]	train's rmse: 0.0147389	valid's rmse: 0.021019
+[500]	train's rmse: 0.0141362	valid's rmse: 0.0208443
+Did not meet early stopping. Best iteration is:
+[500]	train's rmse: 0.0141362	valid's rmse: 0.0208443
+  Fold 2 Spearman相关性: 0.9025
+
+--- Fold 3/5 ---
+Training until validation scores don't improve for 50 rounds
+[50]	train's rmse: 0.0249929	valid's rmse: 0.0268831
+[100]	train's rmse: 0.0219357	valid's rmse: 0.024731
+[150]	train's rmse: 0.0202571	valid's rmse: 0.0238057
+[200]	train's rmse: 0.0189195	valid's rmse: 0.023086
+[250]	train's rmse: 0.0178159	valid's rmse: 0.0225424
+[300]	train's rmse: 0.0168671	valid's rmse: 0.0221092
+[350]	train's rmse: 0.0160493	valid's rmse: 0.0217203
+[400]	train's rmse: 0.0153399	valid's rmse: 0.0213621
+[450]	train's rmse: 0.0146668	valid's rmse: 0.0211197
+[500]	train's rmse: 0.0140689	valid's rmse: 0.0209398
+Did not meet early stopping. Best iteration is:
+[500]	train's rmse: 0.0140689	valid's rmse: 0.0209398
+  Fold 3 Spearman相关性: 0.8991
+
+--- Fold 4/5 ---
+Training until validation scores don't improve for 50 rounds
+[50]	train's rmse: 0.0251212	valid's rmse: 0.0269854
+[100]	train's rmse: 0.0221148	valid's rmse: 0.0250397
+[150]	train's rmse: 0.0204099	valid's rmse: 0.0240786
+[200]	train's rmse: 0.0190492	valid's rmse: 0.0233195
+[250]	train's rmse: 0.017848	valid's rmse: 0.0226771
+[300]	train's rmse: 0.0169806	valid's rmse: 0.0222954
+[350]	train's rmse: 0.0161368	valid's rmse: 0.0218889
+[400]	train's rmse: 0.0154577	valid's rmse: 0.0216092
+[450]	train's rmse: 0.0148054	valid's rmse: 0.0213068
+[500]	train's rmse: 0.0142021	valid's rmse: 0.0210891
+Did not meet early stopping. Best iteration is:
+[500]	train's rmse: 0.0142021	valid's rmse: 0.0210891
+  Fold 4 Spearman相关性: 0.9003
+
+--- Fold 5/5 ---
+Training until validation scores don't improve for 50 rounds
+[50]	train's rmse: 0.0250745	valid's rmse: 0.0264784
+[100]	train's rmse: 0.0221487	valid's rmse: 0.0243812
+[150]	train's rmse: 0.0204978	valid's rmse: 0.0232918
+[200]	train's rmse: 0.0190303	valid's rmse: 0.0224782
+[250]	train's rmse: 0.0178742	valid's rmse: 0.0218987
+[300]	train's rmse: 0.0168801	valid's rmse: 0.0214225
+[350]	train's rmse: 0.0161006	valid's rmse: 0.0211642
+[400]	train's rmse: 0.0154049	valid's rmse: 0.0209058
+[450]	train's rmse: 0.0147247	valid's rmse: 0.0206534
+[500]	train's rmse: 0.0141799	valid's rmse: 0.0204768
+Did not meet early stopping. Best iteration is:
+[500]	train's rmse: 0.0141799	valid's rmse: 0.0204768
+  Fold 5 Spearman相关性: 0.9102
+
+================================================================================
+训练完成
+================================================================================
+CV平均Spearman相关性: 0.9013 ± 0.0052
+最佳Fold: 5 (Spearman=0.9102)
+
+  ✓ 训练完成
+  CV Spearman: 0.9102
+
+================================================================================
+🎯 预测排序
+================================================================================
+  预测分数范围: [-0.0319, 0.2000]
+  排名范围: [1, 12597]
+
+================================================================================
+📊 特征重要性分析
+================================================================================
+
+  Top-15 重要特征:
+    sharpe_seq_max                     :         56
+    ic_seq_max                         :         19
+    oos_compound_std                   :         14
+    ic_seq_trend                       :         11
+    oos_ic_std                         :          8
+    sharpe_seq_min                     :          7
+    oos_compound_mean                  :          6
+    ir_seq_std                         :          5
+    oos_sharpe_std                     :          4
+    ic_seq_median                      :          4
+    ic_seq_min                         :          3
+    ic_seq_std                         :          3
+    ic_seq_cv                          :          3
+    sharpe_seq_cv                      :          2
+    sharpe_seq_median                  :          2
+
+================================================================================
+📈 模型评估
+================================================================================
+
+================================================================================
+生成评估报告
+================================================================================
+Traceback (most recent call last):
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/train_ranker.py", line 236, in <module>
+    main()
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/train_ranker.py", line 174, in main
+    eval_report = generate_evaluation_report(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/ml_ranker/evaluator.py", line 222, in generate_evaluation_report
+    model_metrics = compute_ranking_metrics(y_true, y_pred, metadata)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/ml_ranker/evaluator.py", line 129, in compute_ranking_metrics
+    metrics[f"ndcg@{k}"] = compute_ndcg(y_true, y_pred, k=k)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/ml_ranker/evaluator.py", line 52, in compute_ndcg
+    return ndcg_score(y_true_2d, y_pred_2d, k=k)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/sklearn/utils/_param_validation.py", line 218, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/sklearn/metrics/_ranking.py", line 1895, in ndcg_score
+    raise ValueError("ndcg_score should not be used on negative y_true values.")
+ValueError: ndcg_score should not be used on negative y_true values.

@@ -1,0 +1,42 @@
+{
+  "features": [
+    "mean_oos_ic",
+    "oos_ic_std",
+    "positive_rate",
+    "stability_score",
+    "combo_size",
+    "calmar_ratio",
+    "sortino_ratio",
+    "profit_factor",
+    "win_rate",
+    "max_consecutive_wins",
+    "max_consecutive_losses",
+    "sharpe_calmar_product",
+    "dd_recovery_ratio",
+    "sortino_sharpe_ratio",
+    "win_rate_profit_composite",
+    "win_loss_streak_ratio"
+  ],
+  "wfo_features": [
+    "mean_oos_ic",
+    "oos_ic_std",
+    "positive_rate",
+    "stability_score",
+    "combo_size"
+  ],
+  "enhanced_features": [
+    "calmar_ratio",
+    "sortino_ratio",
+    "profit_factor",
+    "win_rate",
+    "max_consecutive_wins",
+    "max_consecutive_losses",
+    "sharpe_calmar_product",
+    "dd_recovery_ratio",
+    "sortino_sharpe_ratio",
+    "win_rate_profit_composite",
+    "win_loss_streak_ratio"
+  ],
+  "train_spearman": 0.9998931216219236,
+  "test_spearman": 0.9997551021087389
+}

@@ -1,0 +1,310 @@
+[
+  {
+    "alpha": 0.1,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.10"
+  },
+  {
+    "alpha": 0.2,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.20"
+  },
+  {
+    "alpha": 0.3,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.30"
+  },
+  {
+    "alpha": 0.4,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.40"
+  },
+  {
+    "alpha": 0.5,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.50"
+  },
+  {
+    "alpha": 0.6,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.60"
+  },
+  {
+    "alpha": 0.7,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.70"
+  },
+  {
+    "alpha": 0.8,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.80"
+  },
+  {
+    "alpha": 0.9,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_0.90"
+  },
+  {
+    "alpha": 1.0,
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "blend_1.00"
+  },
+  {
+    "alpha": "two_stage_safe",
+    "sharpe_threshold": 0.0,
+    "results": {
+      "100": {
+        "max_allowed": 10,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.03,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "500": {
+        "max_allowed": 75,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.02,
+        "replaced_combos": [],
+        "removed_combos": []
+      },
+      "1000": {
+        "max_allowed": 150,
+        "actual_replacements": 0,
+        "confidence_threshold": 0.01,
+        "replaced_combos": [],
+        "removed_combos": []
+      }
+    },
+    "mode": "two_stage_safe"
+  }
+]

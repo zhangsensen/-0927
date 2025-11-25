@@ -1,0 +1,18 @@
+# 项目清理审计报告 - 2025-11-14
+
+## 一、过期代码识别
+
+### 1. 明确DEPRECATED文件
+./DEPRECATED_CALIBRATOR_SCRIPTS.md
+
+### 2. Archive目录内容
+195M	archive/wfo_runs
+
+### 3. 重复的scripts
+      45
+
+### 4. 历史数据占用
+665M	results/
+ 33M	results_combo_wfo/
+1.7M	logs/
+ 23M	data/

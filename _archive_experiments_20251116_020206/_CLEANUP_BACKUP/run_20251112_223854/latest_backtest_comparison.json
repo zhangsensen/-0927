@@ -1,0 +1,34 @@
+{
+  "ic_ranking": {
+    "label": "IC\u6392\u5e8f",
+    "n": 100,
+    "annual_ret_mean": 0.11996115032004973,
+    "annual_ret_median": 0.12952478948529328,
+    "sharpe_mean": 0.5797065009511874,
+    "sharpe_median": 0.6334051446322924,
+    "max_dd_mean": -0.2969961555966735,
+    "vol_mean": 0.20993763160568396,
+    "turnover_mean": 1.1203055555555557
+  },
+  "calibrated_ranking": {
+    "label": "\u6821\u51c6\u6392\u5e8f",
+    "n": 100,
+    "annual_ret_mean": 0.1217926400776002,
+    "annual_ret_median": 0.12794613608494781,
+    "sharpe_mean": 0.594303202835585,
+    "sharpe_median": 0.6139356227837389,
+    "max_dd_mean": -0.3033372846096832,
+    "vol_mean": 0.21538403230785808,
+    "turnover_mean": 1.1626666666666667
+  },
+  "deltas": {
+    "annual_ret": 0.0018314897575504724,
+    "sharpe": 0.014596701884397656,
+    "max_dd": -0.006341129013009705
+  },
+  "verdict": {
+    "annual_ret_improved": true,
+    "sharpe_improved": true,
+    "both_improved": true
+  }
+}

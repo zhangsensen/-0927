@@ -1,0 +1,12 @@
+{
+  "latest_run": "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/results/run_20251114_180915",
+  "config_file": "/Users/zhangshenshen/深度量化0927/etf_rotation_experiments/configs/combo_wfo_config.yaml",
+  "top_source": "ranking:ranking_ic_top200.parquet",
+  "order_label": "ranking:ranking_ic_top200.parquet",
+  "slippage_bps": 2.0,
+  "count": 200,
+  "mean_annual_net": 0.11197238303903884,
+  "median_annual_net": 0.12132859566367749,
+  "mean_sharpe_net": 0.5481008051593291,
+  "median_sharpe_net": 0.59710675481696
+}

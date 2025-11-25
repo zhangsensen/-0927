@@ -1,0 +1,323 @@
+{
+  "model_metrics": {
+    "spearman_corr": 0.9156434533467249,
+    "ndcg@5": 0.8979639799992258,
+    "ndcg@10": 0.8999950789388582,
+    "ndcg@20": 0.9103553826314942,
+    "ndcg@50": 0.9177257701812908,
+    "ndcg@100": 0.9268965447502918,
+    "top10_hit_rate": 0.1,
+    "top10_hits": 1,
+    "top10_pred_mean": 0.1922945565804552,
+    "top10_true_mean": 0.2195131015130801,
+    "top10_overall_mean": 0.1209621722536295,
+    "top10_lift_vs_baseline": 1.5897081955279233,
+    "top10_lift_vs_optimal": 0.8760049184080111,
+    "top20_hit_rate": 0.1,
+    "top20_hits": 2,
+    "top20_pred_mean": 0.19416419904374085,
+    "top20_true_mean": 0.21718319083506618,
+    "top20_overall_mean": 0.1209621722536295,
+    "top20_lift_vs_baseline": 1.6051646182132357,
+    "top20_lift_vs_optimal": 0.8940111723065784,
+    "top50_hit_rate": 0.08,
+    "top50_hits": 4,
+    "top50_pred_mean": 0.1925922678776068,
+    "top50_true_mean": 0.21322322008037528,
+    "top50_overall_mean": 0.1209621722536295,
+    "top50_lift_vs_baseline": 1.592169388904373,
+    "top50_lift_vs_optimal": 0.9032424695819172,
+    "n_samples": 12597,
+    "y_true_mean": 0.1209621722536295,
+    "y_true_std": 0.04781918319640928,
+    "y_pred_mean": 0.12095296911903522,
+    "y_pred_std": 0.040541555422089565
+  },
+  "baseline_metrics": {
+    "spearman_corr": -0.1453569279293057,
+    "ndcg@5": 0.4932927178724983,
+    "ndcg@10": 0.48367025811751485,
+    "ndcg@20": 0.5183750594587188,
+    "ndcg@50": 0.5672866063017371,
+    "ndcg@100": 0.5978812708122295,
+    "top10_hit_rate": 0.0,
+    "top10_hits": 0,
+    "top10_pred_mean": 0.08501748852994492,
+    "top10_true_mean": 0.2195131015130801,
+    "top10_overall_mean": 0.1209621722536295,
+    "top10_lift_vs_baseline": 0.7028435993335425,
+    "top10_lift_vs_optimal": 0.3873002929844668,
+    "top20_hit_rate": 0.0,
+    "top20_hits": 0,
+    "top20_pred_mean": 0.09510482228663532,
+    "top20_true_mean": 0.21718319083506618,
+    "top20_overall_mean": 0.1209621722536295,
+    "top20_lift_vs_baseline": 0.7862360646700578,
+    "top20_lift_vs_optimal": 0.43790139522749744,
+    "top50_hit_rate": 0.0,
+    "top50_hits": 0,
+    "top50_pred_mean": 0.10601609886533296,
+    "top50_true_mean": 0.21322322008037528,
+    "top50_overall_mean": 0.1209621722536295,
+    "top50_lift_vs_baseline": 0.8764401042917938,
+    "top50_lift_vs_optimal": 0.497207099796025,
+    "n_samples": 12597,
+    "y_true_mean": 0.1209621722536295,
+    "y_true_std": 0.04781918319640928,
+    "y_pred_mean": 0.011413768453123686,
+    "y_pred_std": 0.013705883724181332
+  },
+  "comparison": [
+    {
+      "指标": "ndcg@10",
+      "WFO原始排序": "0.4837",
+      "LTR模型": "0.9000",
+      "提升(%)": "+86.08%"
+    },
+    {
+      "指标": "ndcg@100",
+      "WFO原始排序": "0.5979",
+      "LTR模型": "0.9269",
+      "提升(%)": "+55.03%"
+    },
+    {
+      "指标": "ndcg@20",
+      "WFO原始排序": "0.5184",
+      "LTR模型": "0.9104",
+      "提升(%)": "+75.62%"
+    },
+    {
+      "指标": "ndcg@5",
+      "WFO原始排序": "0.4933",
+      "LTR模型": "0.8980",
+      "提升(%)": "+82.03%"
+    },
+    {
+      "指标": "ndcg@50",
+      "WFO原始排序": "0.5673",
+      "LTR模型": "0.9177",
+      "提升(%)": "+61.77%"
+    },
+    {
+      "指标": "spearman_corr",
+      "WFO原始排序": "-0.1454",
+      "LTR模型": "0.9156",
+      "提升(%)": "+729.93%"
+    },
+    {
+      "指标": "top10_hit_rate",
+      "WFO原始排序": "0.0000",
+      "LTR模型": "0.1000",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top10_hits",
+      "WFO原始排序": "0.0000",
+      "LTR模型": "1.0000",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top10_lift_vs_baseline",
+      "WFO原始排序": "0.7028",
+      "LTR模型": "1.5897",
+      "提升(%)": "+126.18%"
+    },
+    {
+      "指标": "top10_lift_vs_optimal",
+      "WFO原始排序": "0.3873",
+      "LTR模型": "0.8760",
+      "提升(%)": "+126.18%"
+    },
+    {
+      "指标": "top10_overall_mean",
+      "WFO原始排序": "0.1210",
+      "LTR模型": "0.1210",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top10_pred_mean",
+      "WFO原始排序": "0.0850",
+      "LTR模型": "0.1923",
+      "提升(%)": "+126.18%"
+    },
+    {
+      "指标": "top10_true_mean",
+      "WFO原始排序": "0.2195",
+      "LTR模型": "0.2195",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top20_hit_rate",
+      "WFO原始排序": "0.0000",
+      "LTR模型": "0.1000",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top20_hits",
+      "WFO原始排序": "0.0000",
+      "LTR模型": "2.0000",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top20_lift_vs_baseline",
+      "WFO原始排序": "0.7862",
+      "LTR模型": "1.6052",
+      "提升(%)": "+104.16%"
+    },
+    {
+      "指标": "top20_lift_vs_optimal",
+      "WFO原始排序": "0.4379",
+      "LTR模型": "0.8940",
+      "提升(%)": "+104.16%"
+    },
+    {
+      "指标": "top20_overall_mean",
+      "WFO原始排序": "0.1210",
+      "LTR模型": "0.1210",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top20_pred_mean",
+      "WFO原始排序": "0.0951",
+      "LTR模型": "0.1942",
+      "提升(%)": "+104.16%"
+    },
+    {
+      "指标": "top20_true_mean",
+      "WFO原始排序": "0.2172",
+      "LTR模型": "0.2172",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top50_hit_rate",
+      "WFO原始排序": "0.0000",
+      "LTR模型": "0.0800",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top50_hits",
+      "WFO原始排序": "0.0000",
+      "LTR模型": "4.0000",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top50_lift_vs_baseline",
+      "WFO原始排序": "0.8764",
+      "LTR模型": "1.5922",
+      "提升(%)": "+81.66%"
+    },
+    {
+      "指标": "top50_lift_vs_optimal",
+      "WFO原始排序": "0.4972",
+      "LTR模型": "0.9032",
+      "提升(%)": "+81.66%"
+    },
+    {
+      "指标": "top50_overall_mean",
+      "WFO原始排序": "0.1210",
+      "LTR模型": "0.1210",
+      "提升(%)": "+0.00%"
+    },
+    {
+      "指标": "top50_pred_mean",
+      "WFO原始排序": "0.1060",
+      "LTR模型": "0.1926",
+      "提升(%)": "+81.66%"
+    },
+    {
+      "指标": "top50_true_mean",
+      "WFO原始排序": "0.2132",
+      "LTR模型": "0.2132",
+      "提升(%)": "+0.00%"
+    }
+  ],
+  "top10_analysis": {
+    "true_mean": 0.2195131015130801,
+    "model_pred_mean": 0.1922945565804552,
+    "baseline_pred_mean": 0.08501748852994492,
+    "model_hits": 1,
+    "baseline_hits": 0
+  },
+  "feature_importance": [
+    {
+      "feature": "sharpe_seq_max",
+      "importance": 55.52714436646784
+    },
+    {
+      "feature": "ic_seq_max",
+      "importance": 18.392601751998882
+    },
+    {
+      "feature": "oos_compound_std",
+      "importance": 13.55695460629795
+    },
+    {
+      "feature": "ic_seq_trend",
+      "importance": 10.05352937004318
+    },
+    {
+      "feature": "oos_ic_std",
+      "importance": 7.215264872997068
+    },
+    {
+      "feature": "sharpe_seq_min",
+      "importance": 5.884323488658993
+    },
+    {
+      "feature": "oos_compound_mean",
+      "importance": 5.55619007399946
+    },
+    {
+      "feature": "ir_seq_std",
+      "importance": 4.089854055779455
+    },
+    {
+      "feature": "oos_sharpe_std",
+      "importance": 3.6841908283604425
+    },
+    {
+      "feature": "ic_seq_median",
+      "importance": 3.1240974051470403
+    },
+    {
+      "feature": "ic_seq_std",
+      "importance": 2.6881927826907486
+    },
+    {
+      "feature": "ic_seq_cv",
+      "importance": 2.510465441431734
+    },
+    {
+      "feature": "ic_seq_min",
+      "importance": 2.3291475853643533
+    },
+    {
+      "feature": "sharpe_seq_cv",
+      "importance": 1.9819464647880523
+    },
+    {
+      "feature": "stability_score",
+      "importance": 1.7435234347358346
+    },
+    {
+      "feature": "ic_positive_ratio",
+      "importance": 1.5838606945762876
+    },
+    {
+      "feature": "sharpe_seq_median",
+      "importance": 1.5524513043201296
+    },
+    {
+      "feature": "oos_compound_sharpe",
+      "importance": 1.4283419534840505
+    },
+    {
+      "feature": "compound_sharpe_x_ic",
+      "importance": 1.3091005653550383
+    },
+    {
+      "feature": "mean_oos_sharpe",
+      "importance": 1.2542767361010192
+    }
+  ]
+}

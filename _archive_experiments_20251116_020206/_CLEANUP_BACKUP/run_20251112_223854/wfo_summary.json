@@ -1,0 +1,24 @@
+{
+  "timestamp": "20251112_223854",
+  "total_combos": 12597,
+  "significant_combos": 0,
+  "mean_ic": 0.0114249351762395,
+  "best_combo": {
+    "combo": "ADX_14D + CORRELATION_TO_MARKET_20D + VOL_RATIO_20D",
+    "ic": 0.04937389721661447,
+    "score": -0.2807653073743177,
+    "freq": 8
+  },
+  "config": {
+    "is_period": 252,
+    "oos_period": 60,
+    "step_size": 60,
+    "combo_sizes": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "runtime_minutes": 0.0
+}

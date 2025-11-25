@@ -1,0 +1,61 @@
+# ETF轮动WFO排序系统 - 核心文件清单
+
+## 核心执行脚本
+1. run_combo_wfo.py - WFO主流程入口
+2. core/combo_wfo_optimizer.py - WFO优化器
+3. core/pipeline.py - 数据处理管道
+4. core/data_loader.py - ETF数据加载器
+5. core/precise_factor_library_v2.py - 因子库
+
+## 核心配置
+1. configs/combo_wfo_config.yaml - WFO配置
+
+## 回测验证
+1. real_backtest/run_profit_backtest.py - 利润回测
+
+## 待确认脚本用途：
+scripts/analysis_utils.py
+scripts/analyze_actual_results.py
+scripts/analyze_historical_backtest.py
+scripts/analyze_ic_return_curve.py
+scripts/analyze_return_decile_correlation.py
+scripts/analyze_wfo_backtest_alignment.py
+scripts/apply_enhanced_gbdt.py
+scripts/apply_lambdarank_model.py
+scripts/apply_rank_calibrator.py
+scripts/batch_backtest.py
+scripts/build_rank_dataset.py
+scripts/check_data_leakage.py
+scripts/cluster_combos_by_correlation.py
+scripts/compare_backtest_results.py
+scripts/compare_top100_backtest.py
+scripts/compare_topk_backtests.py
+scripts/diagnose_calibrator.py
+scripts/diagnose_rank_features.py
+scripts/diagnose_wfo_windows.py
+scripts/diagnose_window_sharpe_alignment.py
+scripts/ensemble_backtest.py
+scripts/evaluate_ab_test.py
+scripts/evaluate_baseline_models.py
+scripts/evaluate_rank_calibrator.py
+scripts/export_top100_from_blends.py
+scripts/extract_combo_daily_nav.py
+scripts/generate_comprehensive_report.py
+scripts/generate_enhanced_features.py
+scripts/generate_ensemble_rankings.py
+scripts/generate_final_report.py
+scripts/generate_ml_ranking.py
+scripts/inspect_dataset.py
+scripts/prepare_ranking_training_data.py
+scripts/quick_lambdarank_experiment.py
+scripts/run_baseline_evaluation.py
+scripts/run_top100_comparison_backtest.py
+scripts/train_calibrator_profit.py
+scripts/train_calibrator_ranking.py
+scripts/train_enhanced_gbdt.py
+scripts/train_multi_objective_gbdt.py
+scripts/train_simple_lambdarank.py
+scripts/train_two_stage_ranker.py
+scripts/validate_ml_ranking_accuracy.py
+scripts/validate_ranking_predictive_power.py
+scripts/verify_sharpe_formula.py

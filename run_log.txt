@@ -1,1 +1,0 @@
-/Library/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python: can't open file '/Users/zhangshenshen/深度量化0927/run_final_production.py': [Errno 2] No such file or directory

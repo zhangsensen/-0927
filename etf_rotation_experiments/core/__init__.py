@@ -1,10 +1,15 @@
 """
-Core modules for ETF rotation system.
-
-使用显式导入，不使用 from core import *
+Core模块
+包含基础设施：数据加载、因子计算、横截面处理、IC计算
 """
 
-from .direct_factor_wfo_optimizer import DirectFactorWFOOptimizer
+from .data_loader import DataLoader
+from .precise_factor_library_v2 import PreciseFactorLibrary
+from .cross_section_processor import CrossSectionProcessor
+from .ic_calculator_numba import ICCalculatorNumba
+
+__all__ = ["ICCalculatorNumba", "DataLoader", "PreciseFactorLibrary", "CrossSectionProcessor"]
+
 from .ic_calculator_numba import ICCalculatorNumba
 
 __all__ = ["ICCalculatorNumba", "DirectFactorWFOOptimizer"]

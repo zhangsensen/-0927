@@ -1,0 +1,11 @@
+[
+  {
+    "combo": "ADX_14D + CORRELATION_TO_MARKET_20D + VOL_RATIO_20D",
+    "combo_size": 3,
+    "mean_oos_ic": 0.04937389721661447,
+    "oos_ic_std": 0.12246530720182479,
+    "oos_ic_ir": 0.1542265298269459,
+    "positive_rate": 0.5526315789473685,
+    "best_rebalance_freq": 8,
+    "stability_score": -0.2807653073743177,
+    "oos_ic_list": 
