@@ -516,12 +516,9 @@ class PreciseFactorLibrary:
         tr1 = high_df - low_df
         tr2 = (high_df - prev_close).abs()
         tr3 = (low_df - prev_close).abs()
-        tr = (
-            pd.concat([tr1, tr2, tr3], axis=1)
-            .max(axis=1)
-            .to_frame()
-            .reindex(columns=close_df.columns, fill_value=0)
-        )
+        
+        # 修复：使用 np.maximum 逐元素比较，保持 DataFrame 结构
+        tr = np.maximum(np.maximum(tr1, tr2), tr3)
 
         atr = tr.ewm(span=14, adjust=False, min_periods=14).mean()
         plus_di = 100 * (
@@ -538,7 +535,10 @@ class PreciseFactorLibrary:
     def _vortex_14d_batch(
         self, high_df: pd.DataFrame, low_df: pd.DataFrame, close_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """批量计算 VORTEX_14D（所有列一次性处理）"""
+        """批量计算 VORTEX_14D（所有列一次性处理）
+        
+        修复：正确计算 TR（逐列取 max，而非全局 concat 后 max）
+        """
         vm_plus = (high_df - low_df.shift(1)).abs()
         vm_minus = (low_df - high_df.shift(1)).abs()
 
@@ -546,12 +546,9 @@ class PreciseFactorLibrary:
         tr1 = high_df - low_df
         tr2 = (high_df - prev_close).abs()
         tr3 = (low_df - prev_close).abs()
-        tr = (
-            pd.concat([tr1, tr2, tr3], axis=1)
-            .max(axis=1)
-            .to_frame()
-            .reindex(columns=close_df.columns, fill_value=0)
-        )
+        
+        # 修复：使用 np.maximum 逐元素比较，保持 DataFrame 结构
+        tr = np.maximum(np.maximum(tr1, tr2), tr3)
 
         vm_plus_sum = vm_plus.rolling(window=14, min_periods=14).sum()
         vm_minus_sum = vm_minus.rolling(window=14, min_periods=14).sum()

@@ -197,3 +197,8 @@ Repository = "https://github.com/zhangsensen/quant-factor-trading.git"
 Documentation = "https://github.com/zhangsensen/quant-factor-trading/blob/main/README.md"
 "Bug Tracker" = "https://github.com/zhangsensen/quant-factor-trading/issues"
 Changelog = "https://github.com/zhangsensen/quant-factor-trading/releases"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["etf_rotation_optimized*", "etf_download_manager*", "etf_rotation_experiments*"]
+exclude = ["tests*", "scripts*", "docs*", "config*", "configs*", "raw*", "results*", "untitled*"]

@@ -1,0 +1,12 @@
+{
+  "latest_run": "/home/sensen/dev/projects/-0927/etf_rotation_experiments/results/run_20251124_211257",
+  "config_file": "/home/sensen/dev/projects/-0927/etf_rotation_experiments/configs/combo_wfo_lagtest.yaml",
+  "top_source": "ranking_file:ranking_ml_top2000.parquet",
+  "order_label": "ranking_file:ranking_ml_top2000.parquet",
+  "slippage_bps": 0.0,
+  "count": 100,
+  "mean_annual_net": -0.012343692361829766,
+  "median_annual_net": -0.01622402184384819,
+  "mean_sharpe_net": -0.04496476896025811,
+  "median_sharpe_net": -0.05887014815639585
+}

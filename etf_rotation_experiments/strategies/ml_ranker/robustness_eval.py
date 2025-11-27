@@ -41,30 +41,30 @@ warnings.filterwarnings('ignore')
 # 导入现有模块（支持直接运行和作为模块导入）
 try:
     # 作为模块导入
-    from etf_rotation_experiments.strategies.ml_ranker.data_loader import (
+    from .data_loader import (
         load_wfo_features, 
         load_real_backtest_results, 
         build_training_dataset,
         find_latest_wfo_run,
         find_latest_backtest_run
     )
-    from etf_rotation_experiments.strategies.ml_ranker.feature_engineer import build_feature_matrix
-    from etf_rotation_experiments.strategies.ml_ranker.evaluator import compute_spearman_correlation, compute_ndcg
-except ModuleNotFoundError:
+    from .feature_engineer import build_feature_matrix
+    from .evaluator import compute_spearman_correlation, compute_ndcg
+except ImportError:
     # 直接运行时使用相对导入
     import sys
     from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     
-    from etf_rotation_experiments.strategies.ml_ranker.data_loader import (
+    from strategies.ml_ranker.data_loader import (
         load_wfo_features, 
         load_real_backtest_results, 
         build_training_dataset,
         find_latest_wfo_run,
         find_latest_backtest_run
     )
-    from etf_rotation_experiments.strategies.ml_ranker.feature_engineer import build_feature_matrix
-    from etf_rotation_experiments.strategies.ml_ranker.evaluator import compute_spearman_correlation, compute_ndcg
+    from strategies.ml_ranker.feature_engineer import build_feature_matrix
+    from strategies.ml_ranker.evaluator import compute_spearman_correlation, compute_ndcg
 
 
 def train_single_model(

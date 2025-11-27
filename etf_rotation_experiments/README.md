@@ -17,9 +17,11 @@
 cd /Users/zhangshenshen/深度量化0927/etf_rotation_experiments
 
 # 运行 WFO 优化 (默认使用 ML 排序)
-python run_combo_wfo.py
+python applications/run_combo_wfo.py
 
 # 结果输出至: results/run_YYYYMMDD_HHMMSS/
+
+# 兼容：仍可运行 python run_combo_wfo.py，但该入口仅作代理
 ```
 
 **默认行为**: 系统会使用 ML 模型对 WFO 组合进行排序, 自动生成 `ranking_ml_top200.parquet`
@@ -50,7 +52,7 @@ python run_combo_wfo.py
 
 - **配置**: 修改 `configs/combo_wfo_config.yaml` 中 `ranking.method: "wfo"`
 - **用途**: 对照基准或 ML 模型不可用时的回退选项
-- **切换**: 改配置后重新运行 `python run_combo_wfo.py` 即可
+- **切换**: 改配置后重新运行 `python applications/run_combo_wfo.py` 即可
 
 **详细文档**: 参见 `docs/ML_RANKING_INTEGRATION_GUIDE.md`
 
@@ -62,8 +64,13 @@ python run_combo_wfo.py
 etf_rotation_experiments/
 ├── README.md                      # 本文档
 ├── PROJECT_BASELINE.md            # 详细技术文档
-├── run_combo_wfo.py               # ⭐ WFO主入口
-├── apply_ranker.py                # ⭐ ML排序脚本
+├── applications/                  # ⭐ CLI入口集合
+│   ├── run_combo_wfo.py           # 组合级WFO
+│   ├── run_ranking_pipeline.py    # 排序管线
+│   ├── train_ranker.py            # LTR训练
+│   └── apply_ranker.py            # ML排序脚本
+├── run_combo_wfo.py               # 兼容入口 → applications.run_combo_wfo
+├── apply_ranker.py                # 兼容入口 → applications.apply_ranker
 ├── core/                          # ⭐ 核心模块
 │   ├── data_loader.py             # ETF数据加载
 │   ├── precise_factor_library_v2.py # 因子计算库
@@ -92,11 +99,12 @@ etf_rotation_experiments/
 ```
 
 **已归档目录**:
+
 - `archive/historical_reports_20251114/` - 历史分析报告
 
 ---
 
-## 🚀 快速开始
+## 🚀 快速开始（详细流程）
 
 ### 前置要求
 
@@ -111,7 +119,7 @@ etf_rotation_experiments/
 cd /Users/zhangshenshen/深度量化0927/etf_rotation_experiments
 
 # 1. 运行WFO优化 (约30-60分钟)
-python run_combo_wfo.py
+python applications/run_combo_wfo.py
 
 # 输出位置（所有输出保持在项目内部）:
 # - etf_rotation_experiments/results/run_YYYYMMDD_HHMMSS/
@@ -150,7 +158,7 @@ print(f'最大回撤: {df[\"max_dd_net\"].mean():.2%}')
 
 ```bash
 # 使用最小配置验证核心流程（实测 < 5秒）
-python run_combo_wfo.py -c configs/combo_wfo_config_minimal_test.yaml
+python applications/run_combo_wfo.py -c configs/combo_wfo_config_minimal_test.yaml
 
 # 验证输出:
 # - 目录: results/run_YYYYMMDD_HHMMSS/
@@ -158,6 +166,7 @@ python run_combo_wfo.py -c configs/combo_wfo_config_minimal_test.yaml
 ```
 
 **✅ 最小测试已验证通过** (2024-11-14):
+
 - 数据加载: 4只ETF × 429天 ✅
 - 因子计算: 18个因子 × 4只ETF ✅  
 - WFO优化: 153个2因子组合 × 17个滚动窗口 ✅
@@ -169,28 +178,33 @@ python run_combo_wfo.py -c configs/combo_wfo_config_minimal_test.yaml
 ## 🔬 核心流程
 
 ### 1. 数据加载
+
 - 从 `raw/ETF/daily` 加载43只ETF的日线数据（2020-2025）
 - 使用Tushare标准格式（trade_date, adj_close等）
 - 自动缓存已处理数据到内存
 
 ### 2. 因子计算
+
 - **动量类**: RET_5D, RET_20D, SLOPE_20D, ADX_14D
 - **波动率类**: VOL_RATIO_20D, RET_VOL_20D, MAX_DD_60D
 - **量价类**: CMF_20D, OBV_SLOPE_20D
 - **综合类**: SHARPE_RATIO_20D, CORRELATION_TO_MARKET_20D
 
 ### 3. WFO优化
+
 - **滚动窗口**: is_period=252天, oos_period=60天
 - **组合生成**: 2-5因子随机组合
 - **评估指标**: IC均值、IC_IR、稳定性得分
 - **FDR控制**: Benjamini-Hochberg方法，alpha=0.05
 
 ### 4. 排序筛选
+
 - 基于样本外IC均值排序
 - 考虑IC稳定性（IC_IR）
 - 输出Top5000组合
 
 ### 5. 回测验证
+
 - 等权持仓，定期调仓
 - 扣除滑点（2bps）和手续费（0.05%）
 - 计算年化收益、Sharpe、最大回撤等指标

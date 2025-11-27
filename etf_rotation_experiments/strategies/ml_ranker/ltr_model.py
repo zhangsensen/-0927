@@ -48,10 +48,17 @@ class LTRRanker:
             metric: 评估指标 (ndcg, map等)
             其他参数: LightGBM标准参数
         """
+        import os
+        
+        # 自动检测 GPU 可用性 (RTX 5070 Ti 配置)
+        use_gpu = os.getenv("LIGHTGBM_USE_GPU", "0") == "1"
+        device_type = "gpu" if use_gpu else "cpu"
+        
         self.params = {
             "objective": objective,
             "metric": metric,
             "boosting_type": "gbdt",
+            "device": device_type,  # GPU 加速 (RTX 5070 Ti)
             "n_estimators": n_estimators,
             "learning_rate": learning_rate,
             "max_depth": max_depth,
@@ -64,8 +71,12 @@ class LTRRanker:
             "lambda_l2": lambda_l2,
             "random_state": random_state,
             "verbose": verbose,
+            "num_threads": int(os.getenv("JOBLIB_N_JOBS", "16")),  # CPU 并行线程数
             **kwargs
         }
+        
+        if use_gpu:
+            print(f"✅ LightGBM GPU 模式已启用 (device={device_type})")
         
         self.model = None
         self.scaler = StandardScaler()

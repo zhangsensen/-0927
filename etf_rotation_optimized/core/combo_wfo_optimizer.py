@@ -22,6 +22,17 @@ from .ic_calculator_numba import compute_spearman_ic_numba
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+import os
+
+
+def _get_optimal_n_jobs() -> int:
+    """获取最优并行核心数 (优先使用物理核心数，避免 SMT 竞争)"""
+    env_jobs = os.getenv("JOBLIB_N_JOBS")
+    if env_jobs:
+        return int(env_jobs)
+    # 默认使用物理核心数 (16) 而非逻辑核心数 (32)
+    cpu_count = os.cpu_count() or 8
+    return min(cpu_count // 2, 16)  # 物理核心数，最大 16
 
 
 @dataclass
@@ -30,11 +41,16 @@ class ComboWFOConfig:
     is_period: int
     oos_period: int
     step_size: int
-    n_jobs: int = -1
+    n_jobs: int = -1  # -1 表示自动检测
     verbose: int = 1
     enable_fdr: bool = True
     fdr_alpha: float = 0.05
     complexity_penalty_lambda: float = 0.01
+    
+    def __post_init__(self):
+        """初始化后自动调整 n_jobs"""
+        if self.n_jobs == -1:
+            self.n_jobs = _get_optimal_n_jobs()
 
 
 @njit(cache=True)
@@ -246,6 +262,9 @@ class ComboWFOOptimizer:
             all_combos.extend(combos)
             logger.info(f"  {size}-factor combos: {len(combos)}")
         logger.info(f"Total: {len(all_combos)} combos")
+        
+        # 恢复 joblib 进程池并行
+        # 单 combo 现在只需 ~50ms（parallel=False 后优化了 25x）
         results = Parallel(n_jobs=self.config.n_jobs, verbose=0)(
             delayed(self._test_combo_impl)(combo, factors_data, returns, windows)
             for combo in tqdm(all_combos, desc="WFO组合评估", unit="combo", ncols=80)

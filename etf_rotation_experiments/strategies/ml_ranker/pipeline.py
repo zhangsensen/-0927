@@ -22,17 +22,17 @@ import numpy as np
 warnings.filterwarnings('ignore')
 
 # 导入现有模块
-from etf_rotation_experiments.strategies.ml_ranker.config import DatasetConfig, DataSource
-from etf_rotation_experiments.strategies.ml_ranker.data_loader import (
+from .config import DatasetConfig, DataSource
+from .data_loader import (
     load_multi_source_data, 
     build_training_dataset,
     load_wfo_features,
     load_real_backtest_results
 )
-from etf_rotation_experiments.strategies.ml_ranker.feature_engineer import build_feature_matrix
-from etf_rotation_experiments.strategies.ml_ranker.ltr_model import LTRRanker
-from etf_rotation_experiments.strategies.ml_ranker.evaluator import generate_evaluation_report, create_ranking_comparison_df
-from etf_rotation_experiments.strategies.ml_ranker.robustness_eval import (
+from .feature_engineer import build_feature_matrix
+from .ltr_model import LTRRanker
+from .evaluator import generate_evaluation_report, create_ranking_comparison_df
+from .robustness_eval import (
     evaluate_kfold_cv, 
     evaluate_repeated_holdout,
     generate_robustness_report
@@ -78,7 +78,7 @@ def run_training_pipeline(
         - output_paths: 所有输出文件路径
         
     Example:
-        >>> from etf_rotation_experiments.strategies.ml_ranker.config import DatasetConfig
+        >>> from strategies.ml_ranker.config import DatasetConfig
         >>> config = DatasetConfig.from_yaml("configs/ranking_datasets.yaml")
         >>> result = run_training_pipeline(config, enable_robustness=True)
         >>> print(f"模型Spearman: {result['evaluation']['model_metrics']['spearman_corr']:.4f}")

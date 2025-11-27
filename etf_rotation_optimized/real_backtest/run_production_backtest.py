@@ -55,6 +55,7 @@ from core.cross_section_processor import CrossSectionProcessor
 from core.data_loader import DataLoader
 from core.ic_calculator_numba import compute_spearman_ic_numba
 from core.precise_factor_library_v2 import PreciseFactorLibrary
+from core.market_timing import LightTimingModule
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -522,16 +523,18 @@ def backtest_no_lookahead(
     etf_names,
     rebalance_freq,
     lookback_window=252,
-    position_size=4,
+    position_size=3,
     initial_capital=1_000_000.0,
     commission_rate=0.00005,
     commission_min=0.0,
     *,
     factors_data_full=None,
     factor_indices_for_cache=None,
+    timing_signal=None,
+    etf_stop_loss=0.0,
 ):
     """
-    ⚠️ 严格无未来函数的回测 (优化版)
+    ⚠️ 严格无未来函数的回测 (优化版 + V10止损机制)
 
     参数:
         factors_data: (T, N, F) 全部因子数据
@@ -543,6 +546,8 @@ def backtest_no_lookahead(
         initial_capital: float, 初始资金
     commission_rate: float, 佣金率（双边，买入和卖出都收取，ETF默认例0.5）
     commission_min: float, 佣金最低费用（绝对金额，默认0表示不启用）
+    timing_signal: np.ndarray, (T,) 择时仓位比例数组 (0.0-1.0)，需预先对齐并Shift以避免未来函数
+    etf_stop_loss: float, 单一ETF止损阈值（0=禁用，0.05=5%止损）
 
     返回:
         dict: 回测结果
@@ -656,6 +661,12 @@ def backtest_no_lookahead(
     n_holdings_arr = np.empty(n_rebalance, dtype=np.int32) if n_rebalance > 0 else np.empty(0, dtype=np.int32)
 
     current_weights = np.zeros(N)
+
+    # === V10 止损机制状态跟踪 ===
+    entry_cumret = np.ones(N, dtype=np.float64)  # 每个ETF入场时的累计收益基准
+    etf_cumret = np.ones(N, dtype=np.float64)    # 当前每个ETF的累计收益
+    stop_loss_events = []  # 止损事件记录
+    stop_loss_enabled = etf_stop_loss > 0
     rebalance_counter = 0
 
     loop_timer_start = time.perf_counter() if profile_enabled else None
@@ -782,11 +793,60 @@ def backtest_no_lookahead(
             cost_amount_arr[idx_rb] = total_cost_amount
 
             current_weights = target_weights
+            # 记录新买入ETF的入场基准
+            new_positions = (target_weights > 0) & (prev_weights == 0)
+            entry_cumret[new_positions] = etf_cumret[new_positions]
 
         # === 每日收益计算 ===
         # 显式使用收盘到收盘定义 (close[t]/close[t-1]-1)
         close_to_close_ret = returns[day_idx]  # 等价于 (close[t]/close[t-1]-1)
+        
+        # 更新每个ETF的累计收益（用于止损计算）
+        etf_cumret = etf_cumret * (1 + np.nan_to_num(close_to_close_ret, nan=0.0))
+
+        # === V10 止损检查 ===
+        if stop_loss_enabled:
+            held_mask = current_weights > 0
+            if np.any(held_mask):
+                # 计算每个持仓ETF从入场以来的累计收益
+                holding_returns = etf_cumret[held_mask] / entry_cumret[held_mask] - 1
+                stop_triggered = holding_returns <= -etf_stop_loss
+
+                if np.any(stop_triggered):
+                    # 找出触发止损的ETF索引
+                    held_indices = np.where(held_mask)[0]
+                    stop_indices = held_indices[stop_triggered]
+
+                    # 计算止损卖出的换手和成本
+                    stop_turnover = np.sum(current_weights[stop_indices])
+                    stop_cost = stop_turnover * portfolio_values[offset] * commission_rate
+
+                    # 记录止损事件
+                    for idx in stop_indices:
+                        stop_loss_events.append({
+                            "day_idx": int(day_idx),
+                            "etf_idx": int(idx),
+                            "etf_name": etf_names[idx] if etf_names else str(idx),
+                            "holding_return": float(etf_cumret[idx] / entry_cumret[idx] - 1),
+                        })
+
+                    # 清除止损ETF的仓位
+                    current_weights[stop_indices] = 0.0
+
+                    # 修正: 止损后不应重新归一化，而是持有现金
+                    # 原逻辑: remaining_weight = np.sum(current_weights); if > 1e-12: current_weights /= remaining_weight
+                    # 新逻辑: 保持 current_weights 不变 (总仓位降低)
+
+                    # 扣除止损卖出成本
+                    portfolio_values[offset] = max(portfolio_values[offset] - stop_cost, 0.0)
+
         daily_ret = np.nansum(current_weights * close_to_close_ret)
+        
+        # 应用择时仓位控制
+        if timing_signal is not None:
+            pos_ratio = timing_signal[day_idx]
+            daily_ret *= pos_ratio
+            
         daily_returns_arr[offset] = daily_ret
 
         portfolio_values[offset + 1] = portfolio_values[offset] * (1 + daily_ret)
@@ -869,6 +929,9 @@ def backtest_no_lookahead(
         "max_consecutive_losses": max_consecutive_losses,
         # 持仓数统计（按调仓事件）
         "avg_n_holdings": avg_n_holdings,
+        # V10 止损统计
+        "n_stop_loss": len(stop_loss_events),
+        "stop_loss_events": stop_loss_events if len(stop_loss_events) < 100 else stop_loss_events[:100],
         # 详细数据
         "nav": portfolio_values,
         "daily_returns": daily_returns_arr,
@@ -1153,6 +1216,26 @@ def main():
         f"数据维度: {factors_data.shape[0]}天 × {factors_data.shape[1]}只ETF × {factors_data.shape[2]}个因子"
     )
 
+    # 计算择时信号 (Light Timing)
+    logger.info("计算择时信号 (Light Timing)...")
+    timing_cfg = config.get("backtest", {}).get("timing", {})
+    threshold = timing_cfg.get("extreme_threshold", -0.4)
+    pos_ratio = timing_cfg.get("extreme_position", 0.3)
+    
+    timing_module = LightTimingModule(extreme_threshold=threshold, extreme_position=pos_ratio)
+    # 计算原始信号 (基于收盘价)
+    timing_series = timing_module.compute_position_ratios(ohlcv['close'])
+    # 关键：Shift(1) 以避免未来函数 (T-1的信号决定T的仓位)
+    timing_series = timing_series.shift(1).fillna(1.0)
+    timing_arr = timing_series.values
+    logger.info(f"择时信号已生成 (Defensive Days: {(timing_arr < 1.0).sum()}/{len(timing_arr)})")
+
+    # 读取V10止损配置
+    risk_cfg = config.get("backtest", {}).get("risk_control", {})
+    etf_stop_loss_cfg = risk_cfg.get("etf_stop_loss", 0.0) if risk_cfg.get("enabled", False) else 0.0
+    if etf_stop_loss_cfg > 0:
+        logger.info(f"⚙️  V10 止损机制已启用: ETF止损阈值 = {etf_stop_loss_cfg:.1%}")
+
     # ========== 读取WFO Top 100组合（最新 与 上一次） ==========
     logger.info("")
     logger.info("=" * 100)
@@ -1321,8 +1404,8 @@ def main():
 
         # 使用测试频率或WFO推荐频率
         rebalance_freq = test_freq if test_freq is not None else wfo_freq
-        # 使用测试持仓数或默认持仓数5
-        position_size = test_position_size if test_position_size is not None else 5
+        # 使用测试持仓数或默认持仓数3 (优化结论)
+        position_size = test_position_size if test_position_size is not None else 3
 
         # 解析因子名称
         factor_list = [f.strip() for f in combo_name.split("+")]
@@ -1358,6 +1441,8 @@ def main():
                 initial_capital=1_000_000.0,
                 factors_data_full=factors_data_shared,
                 factor_indices_for_cache=factor_indices,
+                timing_signal=timing_arr,  # 传入择时信号
+                etf_stop_loss=etf_stop_loss_cfg,  # V10 止损阈值
             )
 
             # 添加组合信息
@@ -1533,7 +1618,7 @@ def main():
             batches = _group_batches(tasks_raw)
 
             total_tasks = len(tasks_raw)
-            results_nested = Parallel(n_jobs=n_jobs, verbose=10)(
+            results_nested = Parallel(n_jobs=n_jobs, verbose=10, prefer="threads")(
                 delayed(_run_batch_wrapper)(batch, "all_param", total_tasks) for batch in batches
             )
             results = [r for batch in results_nested for r in batch]
@@ -1567,7 +1652,7 @@ def main():
                     ))
             batches = _group_batches(tasks_raw)
             total_tasks = len(tasks_raw)
-            results_nested = Parallel(n_jobs=n_jobs, verbose=10)(
+            results_nested = Parallel(n_jobs=n_jobs, verbose=10, prefer="threads")(
                 delayed(_run_batch_wrapper)(batch, "all_freq", total_tasks) for batch in batches
             )
             results = [r for batch in results_nested for r in batch]
@@ -1601,7 +1686,7 @@ def main():
                     ))
             batches = _group_batches(tasks_raw)
             total_tasks = len(tasks_raw)
-            results_nested = Parallel(n_jobs=n_jobs, verbose=10)(
+            results_nested = Parallel(n_jobs=n_jobs, verbose=10, prefer="threads")(
                 delayed(_run_batch_wrapper)(batch, "all_pos", total_tasks) for batch in batches
             )
             results = [r for batch in results_nested for r in batch]
@@ -1633,7 +1718,7 @@ def main():
                 ))
             batches = _group_batches(tasks_raw)
             total_tasks = len(tasks_raw)
-            results_nested = Parallel(n_jobs=n_jobs, verbose=10)(
+            results_nested = Parallel(n_jobs=n_jobs, verbose=10, prefer="threads")(
                 delayed(_run_batch_wrapper)(batch, "default", total_tasks) for batch in batches
             )
             results = [r for batch in results_nested for r in batch]

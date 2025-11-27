@@ -1,0 +1,12 @@
+{
+  "latest_run": "/home/sensen/dev/projects/-0927/etf_rotation_experiments/results/run_20251124_192912",
+  "config_file": "/home/sensen/dev/projects/-0927/etf_rotation_experiments/configs/combo_wfo_lagtest.yaml",
+  "top_source": "top100_by_ic",
+  "order_label": "IC_or_calibrated_default",
+  "slippage_bps": 0.0,
+  "count": 5,
+  "mean_annual_net": 0.022238464301674178,
+  "median_annual_net": 0.027421919596045008,
+  "mean_sharpe_net": 0.07467910867145719,
+  "median_sharpe_net": 0.09249525439602767
+}

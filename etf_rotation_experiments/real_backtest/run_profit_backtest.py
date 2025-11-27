@@ -298,12 +298,19 @@ def main():
     # Support None for "run all combos" - only use default 100 if RB_TOPK is explicitly set
     env_topk = os.environ.get("RB_TOPK", "").strip()
     default_topk = int(env_topk) if env_topk else None
+    env_commission = os.environ.get("RB_COMMISSION_RATE", "").strip()
+    env_stamp = os.environ.get("RB_STAMP_DUTY_RATE", "").strip()
+    env_slip_grid = os.environ.get("RB_SLIPPAGE_GRID", "").strip()
+
     parser.add_argument("--topk", type=int, default=default_topk, help="回测TopK（RB_TOPK）,不指定则跑全部")
     parser.add_argument("--all", action="store_true", help="回测全量组合（RB_BACKTEST_ALL=1 同效）")
-    parser.add_argument("--slippage-bps", type=float, default=float(os.environ.get("RB_SLIPPAGE_BPS", "0") or 0), help="滑点基点(双边等效)，如5表示0.05%%")
+    parser.add_argument("--slippage-bps", type=float, default=float(os.environ.get("RB_SLIPPAGE_BPS", "0") or 0), help="滑点基点(双边等效)，如5表示0.05%")
+    parser.add_argument("--slippage-grid", type=str, default=env_slip_grid, help="可选：逗号分隔滑点bps列表，依次执行各场景")
     parser.add_argument("--force-freq", type=int, default=int(os.environ.get("RB_FORCE_FREQ", "0") or 0), help="强制频率覆盖（0=不用）")
     parser.add_argument("--n-jobs", type=int, default=int(os.environ.get("RB_N_JOBS", "8") or 8), help="并行核数（当前用于WFO外的部分，回测仍逐个调用）")
     parser.add_argument("--ranking-file", type=str, default=os.environ.get("RB_RANKING_FILE", ""), help="可选：指定排序结果文件（parquet），优先于默认排序")
+    parser.add_argument("--commission-rate", type=float, default=float(env_commission) if env_commission else None, help="覆盖佣金费率（双边），示例: 0.002 即20bp")
+    parser.add_argument("--stamp-duty-rate", type=float, default=float(env_stamp) if env_stamp else None, help="覆盖印花税费率（简化为双边比率）")
     args = parser.parse_args()
 
     print("=" * 100)
@@ -320,13 +327,19 @@ def main():
     final_topk = args.topk if args.topk else config_top_n
     topk_source = "参数" if args.topk else ("配置文件" if config_top_n else "默认(全部)")
     topk_display = final_topk if final_topk else "全部"
-    
-    print(f"参数: TopK={topk_display} (来源: {topk_source}), 滑点={args.slippage_bps}bps, 强制频率={args.force_freq or '无'}")
+
+    if args.slippage_grid:
+        slippage_grid_values = [float(x.strip()) for x in args.slippage_grid.split(",") if x.strip()]
+    else:
+        slippage_grid_values = [float(args.slippage_bps)]
+    if not slippage_grid_values:
+        slippage_grid_values = [0.0]
+    slip_display = ", ".join(f"{v:g}" for v in slippage_grid_values)
+
+    print(f"参数: TopK={topk_display} (来源: {topk_source}), 滑点网格={slip_display}bps, 强制频率={args.force_freq or '无'}")
     print()
 
     print(f"✓ 配置文件: {cfg_path}")
-    slippage_rate = max(0.0, float(args.slippage_bps) / 10000.0)
-    print(f"✓ 滑点率: {slippage_rate:.4%}")
     print()
 
     # 1) 数据/因子/横截面（复用稳定仓）
@@ -470,9 +483,12 @@ def main():
 
     # 3) 调用稳定回测，逐组合叠加常数滑点
     commission_rate_cfg = cfg.get("backtest", {}).get("commission_rate", 0.00005)
+    stamp_duty_cfg = cfg.get("backtest", {}).get("stamp_duty_rate", 0.0)
+    commission_rate = args.commission_rate if args.commission_rate is not None else commission_rate_cfg
+    stamp_duty_rate = args.stamp_duty_rate if args.stamp_duty_rate is not None else stamp_duty_cfg
+    effective_commission_rate = commission_rate + stamp_duty_rate
     lookback_window = cfg.get("backtest", {}).get("lookback_window", 252)
     force_freq = int(args.force_freq) if int(args.force_freq) > 0 else None
-    results_rows: List[dict] = []
 
     invocation_ts = os.environ.get("RB_RESULT_TS") or datetime.now().strftime("%Y%m%d_%H%M%S")
     latest_ts = latest_run.name.replace("run_", "")
@@ -481,110 +497,132 @@ def main():
 
     print(f"开始回测 {len(top_df_cal)} 个组合...")
     print(f"输出目录: {out_dir}")
+    print(
+        f"佣金参数: commission={commission_rate:.4%}, stamp={stamp_duty_rate:.4%}, effective={effective_commission_rate:.4%}"
+    )
     print()
-    
-    for idx, row in tqdm(top_df_cal.iterrows(), total=len(top_df_cal), desc="回测进度"):
-        combo = str(row["combo"])
-        wfo_freq = int(row["best_rebalance_freq"])
-        freq = force_freq if force_freq is not None else wfo_freq
-        # 提取因子
-        factor_list = [s.strip() for s in combo.split("+")]
-        if any((f not in factor_names) for f in factor_list):
-            continue
-        fi = [factor_names.index(f) for f in factor_list]
-        factors_sel = factors_data[:, :, fi]
-        try:
-            base = backtest_no_lookahead(
-                factors_data=factors_sel,
-                returns=returns,
-                etf_names=etf_names,
-                rebalance_freq=freq,
-                lookback_window=lookback_window,
-                position_size=5,  # 与生产一致的默认TopN
-                commission_rate=commission_rate_cfg,
-                initial_capital=1_000_000.0,
-                factors_data_full=factors_data,
-                factor_indices_for_cache=np.asarray(fi, dtype=np.int64),
-            )
-            enriched = apply_slippage_to_nav(base, slippage_rate=slippage_rate, freq=freq)
-        except Exception as e:
-            # 跳过失败组合
+
+    success_any = False
+    for slip_bps in slippage_grid_values:
+        slippage_rate = max(0.0, float(slip_bps) / 10000.0)
+        print("=" * 100)
+        print(
+            f"🧮 成本场景 -> commission {commission_rate:.4%} + stamp {stamp_duty_rate:.4%} | 滑点 {slip_bps}bps ({slippage_rate:.4%})"
+        )
+        results_rows: List[dict] = []
+
+        for idx, row in tqdm(
+            top_df_cal.iterrows(),
+            total=len(top_df_cal),
+            desc=f"回测进度(slip={slip_bps}bps)",
+        ):
+            combo = str(row["combo"])
+            wfo_freq = int(row["best_rebalance_freq"])
+            freq = force_freq if force_freq is not None else wfo_freq
+            factor_list = [s.strip() for s in combo.split("+")]  # 提取因子
+            if any((f not in factor_names) for f in factor_list):
+                continue
+            fi = [factor_names.index(f) for f in factor_list]
+            factors_sel = factors_data[:, :, fi]
+            try:
+                base = backtest_no_lookahead(
+                    factors_data=factors_sel,
+                    returns=returns,
+                    etf_names=etf_names,
+                    rebalance_freq=freq,
+                    lookback_window=lookback_window,
+                    position_size=5,
+                    commission_rate=effective_commission_rate,
+                    initial_capital=1_000_000.0,
+                    factors_data_full=factors_data,
+                    factor_indices_for_cache=np.asarray(fi, dtype=np.int64),
+                )
+                enriched = apply_slippage_to_nav(base, slippage_rate=slippage_rate, freq=freq)
+            except Exception:
+                continue
+
+            rec = {
+                "rank": idx + 1,
+                "combo": combo,
+                "combo_size": int(row.get("combo_size", len(fi))),
+                "wfo_freq": wfo_freq,
+                "test_freq": freq,
+                "test_position_size": 5,
+                "freq": freq,
+                "wfo_ic": float(row.get("mean_oos_ic", np.nan)),
+                "wfo_score": float(row.get("stability_score", np.nan)),
+                "final_value": float(enriched["final"]),
+                "total_ret": float(enriched["total_ret"]),
+                "annual_ret": float(enriched["annual_ret"]),
+                "vol": float(enriched["vol"]),
+                "sharpe": float(enriched["sharpe"]),
+                "max_dd": float(enriched["max_dd"]),
+                "n_rebalance": int(enriched["n_rebalance"]),
+                "avg_turnover": float(enriched["avg_turnover"]),
+                "avg_n_holdings": float(enriched.get("avg_n_holdings", np.nan)),
+                "win_rate": float(enriched.get("win_rate", np.nan)),
+                "winning_days": int(enriched.get("winning_days", 0)),
+                "losing_days": int(enriched.get("losing_days", 0)),
+                "avg_win": float(enriched.get("avg_win", np.nan)),
+                "avg_loss": float(enriched.get("avg_loss", np.nan)),
+                "profit_factor": float(enriched.get("profit_factor", np.nan)),
+                "calmar_ratio": float(enriched.get("calmar_ratio", np.nan)),
+                "sortino_ratio": float(enriched.get("sortino_ratio", np.nan)),
+                "max_consecutive_wins": int(enriched.get("max_consecutive_wins", 0)),
+                "max_consecutive_losses": int(enriched.get("max_consecutive_losses", 0)),
+                "final_value_net": float(enriched["final_net"]),
+                "total_ret_net": float(enriched["total_ret_net"]),
+                "annual_ret_net": float(enriched["annual_ret_net"]),
+                "sharpe_net": float(enriched["sharpe_net"]),
+                "max_dd_net": float(enriched["max_dd_net"]),
+                "run_tag": f"{order_label}:{latest_run.name}:slip{slip_bps}bps",
+            }
+            if "calibrated_annual_pred" in top_df_cal.columns:
+                rec["calibrated_annual_pred"] = float(row["calibrated_annual_pred"])
+            results_rows.append(rec)
+
+        if not results_rows:
+            print(f"❌ 无可用回测结果 (slip={slip_bps}bps)")
             continue
 
-        rec = {
-            "rank": idx + 1,
-            "combo": combo,
-            "combo_size": int(row.get("combo_size", len(fi))),
-            "wfo_freq": wfo_freq,
-            "test_freq": freq,
-            "test_position_size": 5,
-            "freq": freq,
-            "wfo_ic": float(row.get("mean_oos_ic", np.nan)),
-            "wfo_score": float(row.get("stability_score", np.nan)),
-            # 基线（含佣金）
-            "final_value": float(enriched["final"]),
-            "total_ret": float(enriched["total_ret"]),
-            "annual_ret": float(enriched["annual_ret"]),
-            "vol": float(enriched["vol"]),
-            "sharpe": float(enriched["sharpe"]),
-            "max_dd": float(enriched["max_dd"]),
-            "n_rebalance": int(enriched["n_rebalance"]),
-            "avg_turnover": float(enriched["avg_turnover"]),
-            "avg_n_holdings": float(enriched.get("avg_n_holdings", np.nan)),
-            "win_rate": float(enriched.get("win_rate", np.nan)),
-            "winning_days": int(enriched.get("winning_days", 0)),
-            "losing_days": int(enriched.get("losing_days", 0)),
-            "avg_win": float(enriched.get("avg_win", np.nan)),
-            "avg_loss": float(enriched.get("avg_loss", np.nan)),
-            "profit_factor": float(enriched.get("profit_factor", np.nan)),
-            "calmar_ratio": float(enriched.get("calmar_ratio", np.nan)),
-            "sortino_ratio": float(enriched.get("sortino_ratio", np.nan)),
-            "max_consecutive_wins": int(enriched.get("max_consecutive_wins", 0)),
-            "max_consecutive_losses": int(enriched.get("max_consecutive_losses", 0)),
-            # 净值（佣金+滑点）
-            "final_value_net": float(enriched["final_net"]),
-            "total_ret_net": float(enriched["total_ret_net"]),
-            "annual_ret_net": float(enriched["annual_ret_net"]),
-            "sharpe_net": float(enriched["sharpe_net"]),
-            "max_dd_net": float(enriched["max_dd_net"]),
-            "run_tag": f"{order_label}:{latest_run.name}",
+        df = pd.DataFrame(results_rows).sort_values("sharpe_net", ascending=False).reset_index(drop=True)
+        slip_tag = str(slip_bps).replace(".", "p")
+        tag = (
+            f"profit_backtest_comm{int(round(commission_rate * 10000))}bp"
+            f"_stamp{int(round(stamp_duty_rate * 10000))}bp"
+            f"_slip{slip_tag}bps_{latest_ts}_{invocation_ts}"
+        )
+        out_file = out_dir / f"top{len(df)}_{tag}.csv"
+        df.to_csv(out_file, index=False)
+
+        summary = {
+            "latest_run": str(latest_run),
+            "config_file": str(cfg_path),
+            "top_source": src_label,
+            "order_label": order_label,
+            "commission_rate": float(commission_rate),
+            "stamp_duty_rate": float(stamp_duty_rate),
+            "effective_commission_rate": float(effective_commission_rate),
+            "slippage_bps": float(slip_bps),
+            "count": int(len(df)),
+            "mean_annual_net": float(df["annual_ret_net"].mean()),
+            "median_annual_net": float(df["annual_ret_net"].median()),
+            "mean_sharpe_net": float(df["sharpe_net"].mean()),
+            "median_sharpe_net": float(df["sharpe_net"].median()),
         }
-        # 若存在利润校准预测，附带
-        if "calibrated_annual_pred" in top_df_cal.columns:
-            rec["calibrated_annual_pred"] = float(row["calibrated_annual_pred"])
-        results_rows.append(rec)
+        with open(out_dir / f"SUMMARY_{tag}.json", "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
 
-    if not results_rows:
-        print("❌ 无可用回测结果")
+        print(f"✅ 盈利优先回测完成 | 排序: {order_label} | 滑点: {slip_bps} bps")
+        print(f"保存文件: {out_file.name}")
+        print(f"Top1年化(净): {df.loc[0,'annual_ret_net']:.2%} | Sharpe(净): {df.loc[0,'sharpe_net']:.3f}")
+        success_any = True
+
+    if not success_any:
+        print("❌ 所有成本场景均无回测结果")
         return
 
-    df = pd.DataFrame(results_rows).sort_values("sharpe_net", ascending=False).reset_index(drop=True)
-    # 保存
-    tag = f"profit_backtest_slip{int(args.slippage_bps)}bps_{latest_ts}_{invocation_ts}"
-    out_file = out_dir / f"top{len(df)}_{tag}.csv"
-    df.to_csv(out_file, index=False)
-
-    # 汇总
-    summary = {
-        "latest_run": str(latest_run),
-        "config_file": str(cfg_path),
-        "top_source": src_label,
-        "order_label": order_label,
-        "slippage_bps": float(args.slippage_bps),
-        "count": int(len(df)),
-        "mean_annual_net": float(df["annual_ret_net"].mean()),
-        "median_annual_net": float(df["annual_ret_net"].median()),
-        "mean_sharpe_net": float(df["sharpe_net"].mean()),
-        "median_sharpe_net": float(df["sharpe_net"].median()),
-    }
-    with open(out_dir / f"SUMMARY_{tag}.json", "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
-
-    print("=" * 100)
-    print(f"✅ 盈利优先回测完成 | 排序: {order_label} | 滑点: {args.slippage_bps} bps")
     print(f"输出目录: {out_dir}")
-    print(f"保存文件: {out_file.name}")
-    print(f"Top1年化(净): {df.loc[0,'annual_ret_net']:.2%} | Sharpe(净): {df.loc[0,'sharpe_net']:.3f}")
     print("=" * 100)
 
 

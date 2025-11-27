@@ -18,15 +18,21 @@
 #   - ML 模式依赖 ml_ranker/models/ltr_ranker 模型文件
 #   - 若 ML 模型缺失或加载失败, 系统会自动回退到 WFO 排序
 #   - 如需使用原始 WFO 排序, 只需将 method 改为 "wfo"
-#   - 定期 (每季度) 重训模型以适应市场变化: python run_ranking_pipeline.py
+#   - 定期 (每季度) 重训模型以适应市场变化: python applications/run_ranking_pipeline.py
 # =============================================================================
 ranking:
   method: "ml"  # 生产默认: "ml" (ML模型排序) | 备用: "wfo" (原始WFO排序)
   top_n: 2000   # 最终选择的组合数量
-  ml_model_path: "ml_ranker/models/ltr_ranker"  # ML模型路径 (无扩展名)
+  ml_model_path: "strategies/ml_ranker/models/ltr_ranker"  # ML模型路径 (无扩展名)
+
+compatibility:
+  legacy_optimized_mode: false
+  strict_validation: true
+  optimized_config_path: "../../etf_rotation_optimized/configs/combo_wfo_config.yaml"
+  notes: "迁移后保持与生产配置一致，必要时可切换 legacy 模式"
 
 backtest:
-  commission_rate: 0.000005  # 万0.5（真实ETF场内交易费率）
+  commission_rate: 0.00005  # 万0.5（真实ETF场内交易费率，来源于生产配置）
   initial_capital: 1000000
   lookback_window: 252
   rebalance_frequency: 21d
@@ -37,6 +43,49 @@ backtest:
   test_all_frequencies: false
   test_all_position_sizes: false  # 已验证最优值为4，无需再扫描
   position_size_range: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+# =============================================================================
+# 风控配置 (V10 止损机制)
+# =============================================================================
+# 设计原则：
+#   - 高胜率策略不需要过紧的止损（会产生过多误杀）
+#   - 止损的目的是防止单一持仓的灾难性下跌拖累组合
+#   - 已通过 WFO 滚动窗口验证，-5% 是收益/回撤的最优平衡点
+#
+# 参数说明：
+#   - etf_stop_loss: 单一ETF止损阈值（从入场价计算）
+#   - enabled: 是否启用止损机制
+#   - cooldown_days: 止损后冷却期（避免频繁进出）
+#
+# 注意事项：
+#   - 止损触发后，该ETF被移出组合（权重置0），不影响其他持仓
+#   - 下一个调仓日重新评估是否买入
+#   - 设置过紧（<3%）会导致大量误杀，严重损害胜率
+# =============================================================================
+risk_control:
+  enabled: true
+  etf_stop_loss: 0.05  # 5% 止损阈值（WFO验证最优值）
+  cooldown_days: 0      # 止损后冷却期（0=下一调仓日可重新买入）
+
+# =============================================================================
+# 择时配置 (Light Timing)
+# =============================================================================
+# 设计原则（来自 1126.md 验证）：
+#   - 仅做"防御性减仓"，不做"进攻性加仓"
+#   - 复合信号 = 0.4*MA + 0.4*Mom + 0.2*Gold
+#   - 阈值 -0.4 触发防御模式，仓位降至 30%
+#
+# 信号组成：
+#   - MA Signal: 沪深300 价格 > MA200 ? 1 : -1
+#   - Mom Signal: 沪深300 20日动量 > 0 ? 1 : -1
+#   - Gold Signal: 黄金ETF 价格 > MA200 ? 1 : -1
+# =============================================================================
+timing:
+  enabled: true
+  type: "light_timing"
+  extreme_threshold: -0.4  # 极端市场阈值（触发防御模式）
+  extreme_position: 0.3    # 防御模式下的目标仓位
+
 combo_wfo:
   combo_sizes:
   - 2
@@ -68,8 +117,8 @@ cross_section:
   winsorize_lower: 0.025
   winsorize_upper: 0.975
 data:
-  cache_dir: null
-  data_dir: null
+  cache_dir: .cache  # 默认指向 etf_rotation_experiments/.cache，支持环境变量 ETF_CACHE_DIR 覆盖
+  data_dir: ../raw/ETF/daily  # 相对路径，支持环境变量 ETF_DATA_DIR 覆盖
   end_date: '2025-10-14'
   start_date: '2020-01-01'
   symbols:

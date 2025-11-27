@@ -234,7 +234,7 @@ def load_multi_source_data(
         ValueError: 如果数据源列表为空或数据质量问题
         
     Example:
-        >>> from etf_rotation_experiments.strategies.ml_ranker.config import DatasetConfig
+        >>> from strategies.ml_ranker.config import DatasetConfig
         >>> config = DatasetConfig.from_yaml("configs/ranking_datasets.yaml")
         >>> merged_df, y, metadata = load_multi_source_data(config)
         >>> print(f"总样本数: {len(merged_df)}, 数据源数: {metadata['n_sources']}")

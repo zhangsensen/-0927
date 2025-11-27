@@ -21,7 +21,7 @@ import yaml
 
 from .cross_section_processor import CrossSectionProcessor
 from .data_loader import DataLoader
-from .direct_factor_wfo_optimizer import DirectFactorWFOOptimizer
+from strategies.wfo.direct_factor_wfo_optimizer import DirectFactorWFOOptimizer
 from .precise_factor_library_v2 import PreciseFactorLibrary
 
 logger = logging.getLogger(__name__)

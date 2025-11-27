@@ -38,7 +38,12 @@ class DataLoader:
             if data_dir is None:
                 project_root = Path(__file__).parent.parent.parent
                 data_dir = project_root / "raw" / "ETF" / "daily"
+        
+        # 支持相对路径：相对于 etf_rotation_experiments 目录
         self.data_dir = Path(data_dir)
+        if not self.data_dir.is_absolute():
+            self.data_dir = (Path(__file__).parent.parent / data_dir).resolve()
+        
         if not self.data_dir.exists():
             raise FileNotFoundError(f"数据目录不存在: {self.data_dir}")
 
@@ -49,7 +54,11 @@ class DataLoader:
             cache_dir = os.getenv("ETF_CACHE_DIR")
             if cache_dir is None:
                 cache_dir = Path(__file__).parent.parent / ".cache"
+        
         self.cache_dir = Path(cache_dir)
+        if not self.cache_dir.is_absolute():
+            self.cache_dir = (Path(__file__).parent.parent / cache_dir).resolve()
+        
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _generate_cache_key(self, etf_codes, start_date, end_date):

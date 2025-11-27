@@ -67,9 +67,16 @@ def expand_sequence_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     seq_features = pd.DataFrame(index=df.index)
     
+    # 边界检查：单样本时直接reshape避免vstack异常
+    if len(df) == 0:
+        return seq_features
+    
     # 1. 从 oos_ic_list 提取特征
     if "oos_ic_list" in df.columns:
-        ic_arr = np.vstack(df["oos_ic_list"].values)  # shape: (n_samples, n_windows)
+        if len(df) == 1:
+            ic_arr = np.array(df["oos_ic_list"].iloc[0]).reshape(1, -1)
+        else:
+            ic_arr = np.vstack(df["oos_ic_list"].values)
         
         seq_features["ic_seq_mean"] = np.nanmean(ic_arr, axis=1)
         seq_features["ic_seq_std"] = np.nanstd(ic_arr, axis=1)
@@ -98,7 +105,10 @@ def expand_sequence_features(df: pd.DataFrame) -> pd.DataFrame:
     
     # 2. 从 oos_sharpe_list 提取特征
     if "oos_sharpe_list" in df.columns:
-        sharpe_arr = np.vstack(df["oos_sharpe_list"].values)
+        if len(df) == 1:
+            sharpe_arr = np.array(df["oos_sharpe_list"].iloc[0]).reshape(1, -1)
+        else:
+            sharpe_arr = np.vstack(df["oos_sharpe_list"].values)
         
         seq_features["sharpe_seq_mean"] = np.nanmean(sharpe_arr, axis=1)
         seq_features["sharpe_seq_std"] = np.nanstd(sharpe_arr, axis=1)
@@ -114,7 +124,10 @@ def expand_sequence_features(df: pd.DataFrame) -> pd.DataFrame:
     
     # 3. 从 oos_ir_list 提取特征
     if "oos_ir_list" in df.columns:
-        ir_arr = np.vstack(df["oos_ir_list"].values)
+        if len(df) == 1:
+            ir_arr = np.array(df["oos_ir_list"].iloc[0]).reshape(1, -1)
+        else:
+            ir_arr = np.vstack(df["oos_ir_list"].values)
         
         seq_features["ir_seq_mean"] = np.nanmean(ir_arr, axis=1)
         seq_features["ir_seq_std"] = np.nanstd(ir_arr, axis=1)
@@ -122,7 +135,10 @@ def expand_sequence_features(df: pd.DataFrame) -> pd.DataFrame:
     
     # 4. 从 positive_rate_list 提取特征
     if "positive_rate_list" in df.columns:
-        pr_arr = np.vstack(df["positive_rate_list"].values)
+        if len(df) == 1:
+            pr_arr = np.array(df["positive_rate_list"].iloc[0]).reshape(1, -1)
+        else:
+            pr_arr = np.vstack(df["positive_rate_list"].values)
         
         seq_features["posrate_seq_mean"] = np.nanmean(pr_arr, axis=1)
         seq_features["posrate_seq_std"] = np.nanstd(pr_arr, axis=1)

@@ -1,0 +1,15 @@
+{
+  "latest_run": "/home/sensen/dev/projects/-0927/etf_rotation_experiments/results/run_20251124_212902",
+  "config_file": "/home/sensen/dev/projects/-0927/etf_rotation_experiments/configs/combo_wfo_config.yaml",
+  "top_source": "ML排序:ranking_ml_top2000.parquet",
+  "order_label": "ML (LTR 模型)",
+  "commission_rate": 5e-05,
+  "stamp_duty_rate": 0.0,
+  "effective_commission_rate": 5e-05,
+  "slippage_bps": 0.0,
+  "count": 2000,
+  "mean_annual_net": 0.19074047602002797,
+  "median_annual_net": 0.1904635528582368,
+  "mean_sharpe_net": 0.9409311421203695,
+  "median_sharpe_net": 0.9471941664155861
+}
