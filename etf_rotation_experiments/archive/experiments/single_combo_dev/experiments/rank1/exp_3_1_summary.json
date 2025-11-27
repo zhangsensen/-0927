@@ -1,7 +1,0 @@
-{
-  "ret_std": 0.01623763085218853,
-  "sharpe_std": 0.07217408279503189,
-  "dd_std": 0.00820172153568932,
-  "is_stable": true,
-  "criterion": "sharpe_std < 0.15 and ret_std < 3%"
-}
