@@ -1,301 +1,321 @@
-# 深度量化0927 - 量化交易研究平台
+# 深度量化0927 - ETF 轮动策略研究平台
 
-## 项目概述
+> **最后更新**: 2025-11-28  
+> **Python**: 3.11+  
+> **包管理**: [UV](https://docs.astral.sh/uv/) (v0.9+)
 
-本项目是一个专业级量化交易开发环境,包含多个独立子系统,每个系统专注于特定市场或策略类型。
+---
 
-**核心理念**: Linus Torvalds工程原则 - 消除特殊案例,提供实用解决方案,确保代码在实际市场中可靠运行。
+## 🎯 项目概述
 
-## 🎯 核心子系统
+本项目是专业级 **ETF 轮动策略研究平台**，采用三层引擎架构（WFO → VEC → BT），从因子挖掘到回测审计全流程覆盖。
 
-### 1. **ETF轮动系统** (`etf_rotation_optimized/`) ⭐ 主力系统
-- **状态**: ✅ 生产就绪
-- **市场**: 中国ETF市场 (43只核心ETF)
-- **策略**: 横截面因子轮动 + WFO优化
-- **特性**: 
-  - 18个精选因子 (趋势/动量/波动/资金流)
-  - IC加权 + 多策略枚举
-  - 交易级胜率计算
-  - 事件驱动组合构建
-- **文档**: [详见 etf_rotation_optimized/README.md](etf_rotation_optimized/README.md)
+| 状态 | 说明 |
+|------|------|
+| ✅ VEC/BT 对齐 | 差异 < 0.01 个百分点 |
+| ✅ 无前视偏差 | `shift_timing_signal` 保证 |
+| ✅ 生产就绪 | 43 只 ETF, 18 因子, 12,597 组合 |
 
-### 2. **FactorEngine统一框架** (`factor_system/`)
-- **状态**: 维护模式
-- **功能**: 154个技术指标 + 15个资金流因子
-- **市场**: A股、港股、ETF多市场支持
-- **特性**: 统一API、双重缓存、向量化计算
+---
 
-### 3. **A股策略** (`a_shares_strategy/`)
-- **状态**: 研发中
-- **市场**: A股市场
-- **特性**: T+1约束、资金流因子
+## ⚡ 环境配置（UV）
 
-### 4. **港股中频** (`hk_midfreq/`)
-- **状态**: 研发中  
-- **市场**: 港股市场 (276+股票)
-- **频率**: 1分钟到日线
+### 什么是 UV？
 
-### 5. **ETF数据管理** (`etf_download_manager/`)
-- **功能**: ETF数据下载和管理
-- **支持**: 自定义日期范围、增量更新
+[UV](https://docs.astral.sh/uv/) 是新一代 Python 包管理器，比 pip 快 10-100 倍，提供锁文件确保环境一致性。
 
-## ✅ 核心系统组件
-
-### 1. **FactorEngine 统一架构**
-- ✅ **API接口**: `factor_system/factor_engine/api.py` - 单一入口点
-- ✅ **核心引擎**: 支持双重缓存，高性能因子计算
-- ✅ **因子注册表**: 154个技术指标 + 15个资金流因子
-- ✅ **数据提供者**: Parquet、CSV、分钟数据、资金流数据
-
-### 2. **多市场支持**
-- ✅ **港股市场**: 276+股票，1分钟到日线数据
-- ✅ **A股市场**: 资金流因子系统，T+1执行约束
-- ✅ **ETF市场**: 19个核心ETF，2年历史数据
-
-### 3. **因子计算系统**
-- ✅ **154个技术指标**: 36核心 + 118增强指标
-- ✅ **15个资金流因子**: 8核心 + 4增强 + 3约束因子
-- ✅ **多时间框架**: 1min到monthly，自动重采样
-- ✅ **向量化实现**: >95%向量化率
-
-### 4. **专业因子筛选**
-- ✅ **5维度评估**: 预测力、稳定性、独立性、实用性、适应性
-- ✅ **统计严谨性**: Benjamini-Hochberg FDR校正，VIF分析
-- ✅ **成本建模**: 港股佣金、印花税、滑点模型
-
-### 5. **完整测试体系**
-- ✅ **单元测试**: 核心组件覆盖
-- ✅ **集成测试**: 多组件协作验证
-- ✅ **一致性测试**: FactorEngine vs factor_generation对齐
-
-## 📊 技术特性
-
-- **向量化计算**: 100%采用Pandas/NumPy向量化，无循环。
-- **统一口径**: 所有占比因子分母锁死为`turnover_amount`。
-- **无前视偏差**: 严格遵循14:30信号冻结，T+1执行。
-- **可交易性约束**: `tradability_mask`有效过滤不可交易样本。
-- **自动化测试**: 覆盖数据口径、因子计算、T+1执行等关键环节。
-- **多时间框架**: 支持 1min/5min/15min/30min/60min/120min/240min/daily/weekly/monthly
-
-### 支持的时间框架 (timeframes)
-
-| 时间框架 | 说明 | 用途 |
-|---------|------|------|
-| `1min` | 1分钟 | 高频策略 |
-| `5min` | 5分钟 | 中高频策略 |
-| `15min` | 15分钟 | 中频策略 |
-| `30min` | 30分钟 | 中频策略 |
-| `60min` | 60分钟 | 日内策略 |
-| `120min` | 2小时 | 日内策略 |
-| `240min` | 4小时 | 日内策略 |
-| `daily` | 日线 | 日频策略 |
-| `weekly` | 周线 | 周频策略 |
-| `monthly` | 月线 | 月频策略 |
-
-## 🚀 快速开始 - ETF轮动系统
-
-ETF轮动系统是当前主力系统,推荐从这里开始:
+### 安装 UV
 
 ```bash
-# 进入ETF轮动目录
-cd etf_rotation_optimized
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 安装依赖
-make install
-
-# 运行完整pipeline
-make run
+# 或使用 pip
+pip install uv
 ```
 
-详细文档: [etf_rotation_optimized/README.md](etf_rotation_optimized/README.md)
+### 初始化项目环境
+
+```bash
+# 克隆项目后，在项目根目录执行：
+uv sync              # 安装所有依赖（根据 uv.lock）
+uv sync --dev        # 包含开发依赖（pytest, black, etc.）
+```
+
+### ⚠️ 重要：运行命令规范
+
+**所有 Python 脚本必须使用 `uv run` 前缀**：
+
+```bash
+# ✅ 正确方式
+uv run python script.py
+uv run python -m pytest
+
+# ❌ 错误方式（不要使用）
+python script.py
+python3 script.py
+source .venv/bin/activate && python script.py
+```
+
+---
+
+## 🏗️ 三层引擎架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  WFO 筛选层                                                  │
+│  ├── 脚本: etf_rotation_optimized/run_unified_wfo.py        │
+│  ├── 功能: 高维因子组合空间搜索 (12,597 组合)                │
+│  ├── 速度: ~2.5 秒完成全量筛选                               │
+│  └── 输出: Top-N 候选组合 + 粗排序                          │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  VEC 复算层                                                  │
+│  ├── 脚本: scripts/batch_vec_backtest.py                    │
+│  ├── 功能: 共享规则下的高精度矢量化复算                      │
+│  ├── 对齐: 严格对齐 BT（< 0.01pp 差异）                      │
+│  └── 输出: 精确收益率、夏普比率、最大回撤                    │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  BT 审计层                                                   │
+│  ├── 脚本: scripts/batch_bt_backtest.py                     │
+│  ├── 功能: Backtrader 事件驱动 + 资金约束审计               │
+│  ├── 角色: 基准真相（Ground Truth）                          │
+│  └── 输出: 最终审计报告                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+> **设计哲学**：WFO 是"粗筛器"，数值可能与 VEC/BT 不同（如 234% vs 70%），这是正常的。真正需要严格对齐的是 VEC ↔ BT。
+
+---
+
+## 🚀 快速开始
+
+### 1. 环境安装
+
+```bash
+cd /path/to/project
+uv sync --dev              # 安装所有依赖
+```
+
+### 2. 完整工作流（推荐）
+
+```bash
+# Step 1: WFO 筛选 - 从 12,597 组合中筛选 Top-N
+uv run python etf_rotation_optimized/run_unified_wfo.py
+
+# Step 2: VEC 复算 - 对 Top-N 进行精确回测
+uv run python scripts/batch_vec_backtest.py
+
+# Step 3: BT 审计 - 事件驱动审计验证
+uv run python scripts/batch_bt_backtest.py
+
+# Step 4: 对齐验证 - 确认 VEC/BT 差异 < 0.01pp
+uv run python scripts/full_vec_bt_comparison.py
+```
+
+### 3. 使用 Makefile（简化命令）
+
+```bash
+make install       # 安装依赖 + pre-commit 钩子
+make test          # 运行测试
+make format        # 代码格式化（black + isort）
+make lint          # 代码检查（flake8 + mypy）
+make clean         # 清理缓存
+```
+
+---
 
 ## 📁 项目结构
 
 ```
-深度量化0927/
-├── README.md                      # 本文件
-├── zen_mcp_使用指南.md            # MCP工具使用指南
+.
+├── README.md                      # 📌 本文件
+├── AGENTS.md                      # AI Agent 指导规则
+├── pyproject.toml                 # 项目配置 + 依赖定义
+├── uv.lock                        # 依赖锁文件（确保环境一致）
+├── Makefile                       # 常用命令快捷方式
 │
-├── etf_rotation_optimized/        # ⭐ 主力系统: ETF轮动
-│   ├── core/                      # 核心引擎 (28个模块)
+├── etf_rotation_optimized/        # ⭐ 主力系统：ETF 轮动
+│   ├── run_unified_wfo.py         # WFO 入口脚本
+│   ├── core/                      # 核心引擎
+│   │   ├── backtester_vectorized.py   # VEC 回测引擎
+│   │   ├── wfo_engine.py              # WFO 优化引擎
+│   │   ├── precise_factor_library_v2.py  # 18 因子库
+│   │   └── shared_types.py            # 共享工具函数
 │   ├── configs/                   # 配置文件
-│   ├── docs/                      # 详细文档
-│   ├── tests/                     # 单元测试
 │   └── results/                   # 运行结果
 │
-├── factor_system/                 # FactorEngine框架 (维护)
-├── a_shares_strategy/             # A股策略 (研发中)
-├── hk_midfreq/                    # 港股中频 (研发中)
-├── etf_download_manager/          # ETF数据管理
+├── scripts/                       # 🔧 操作脚本
+│   ├── batch_vec_backtest.py      # VEC 批量回测
+│   ├── batch_bt_backtest.py       # BT 批量审计
+│   ├── full_vec_bt_comparison.py  # VEC/BT 对比验证
+│   ├── cache_cleaner.py           # 缓存清理
+│   └── ci_checks.py               # CI 检查
 │
-├── production/                    # 生产配置
-├── cache/                         # 缓存目录
-└── results/                       # 历史结果
+├── factor_system/                 # 因子计算框架
+│   ├── factor_engine/             # 统一因子引擎
+│   └── screening/                 # 因子筛选
+│
+├── docs/                          # 📚 文档
+│   ├── README.md                  # 项目总览
+│   ├── ARCHITECTURE.md            # 架构详解
+│   ├── DEVELOPMENT_NOTES.md       # 开发注意事项
+│   ├── ROADMAP.md                 # 改造计划
+│   └── VEC_BT_ALIGNMENT_*.md      # 对齐历史
+│
+├── configs/                       # 全局配置
+│   ├── etf_pools.yaml             # ETF 池定义
+│   └── default.yaml               # 默认参数
+│
+├── tests/                         # 测试套件
+├── raw/                           # 原始数据
+└── results/                       # 回测结果
 ```
+
+---
+
+## 🔧 核心脚本速查
+
+| 脚本 | 路径 | 功能 |
+|------|------|------|
+| **WFO 筛选** | `etf_rotation_optimized/run_unified_wfo.py` | 高速筛选 12,597 组合 |
+| **VEC 回测** | `scripts/batch_vec_backtest.py` | 向量化精确回测 |
+| **BT 审计** | `scripts/batch_bt_backtest.py` | Backtrader 事件驱动审计 |
+| **对齐验证** | `scripts/full_vec_bt_comparison.py` | 验证 VEC/BT 差异 |
+| **缓存清理** | `scripts/cache_cleaner.py` | 清理因子/回测缓存 |
+
+### 示例命令
+
+```bash
+# 运行 WFO 筛选
+uv run python etf_rotation_optimized/run_unified_wfo.py
+
+# 对指定组合运行 VEC 回测
+uv run python scripts/batch_vec_backtest.py --input results/wfo_top100.csv
+
+# 对指定组合运行 BT 审计
+uv run python scripts/batch_bt_backtest.py --input results/vec_results.csv
+
+# 清理所有缓存
+uv run python scripts/cache_cleaner.py --all
+```
+
+---
+
+## 📊 核心参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `FREQ` | 8 | 调仓频率（交易日） |
+| `POS_SIZE` | 3 | 持仓数量 |
+| `INITIAL_CAPITAL` | 1,000,000 | 初始资金 |
+| `COMMISSION` | 0.0002 | 手续费率 (2bp) |
+| `LOOKBACK` | 252 | 回看窗口（交易日） |
+
+---
+
+## 📈 18 因子列表
+
+| 类别 | 因子名 | 说明 |
+|------|--------|------|
+| **趋势** | `MA_CROSS_20_60` | 均线交叉 |
+| | `PRICE_MA_RATIO_20` | 价格/均线比 |
+| | `ADX_14` | 趋势强度 |
+| **动量** | `MOM_20` | 20 日动量 |
+| | `ROC_20` | 变化率 |
+| | `RSI_14` | 相对强弱 |
+| | `WILLR_14` | 威廉指标 |
+| | `STOCH_K_14` | 随机指标 |
+| | `CCI_20` | 商品通道 |
+| **波动** | `ATR_RATIO_14` | ATR 比率 |
+| | `VOLATILITY_20` | 20 日波动率 |
+| | `BB_WIDTH_20` | 布林带宽度 |
+| **资金流** | `MFI_14` | 资金流指标 |
+| | `OBV_SLOPE_20` | OBV 斜率 |
+| | `VOLUME_RATIO_5_20` | 量比 |
+| **混合** | `MACD_HIST` | MACD 柱 |
+| | `PPO_12_26` | 价格振荡器 |
+| | `TRIX_14` | 三重平滑 |
+
+---
+
+## 🔄 依赖管理
+
+### 添加新依赖
+
+```bash
+uv add pandas           # 添加运行时依赖
+uv add --dev pytest     # 添加开发依赖
+```
+
+### 更新依赖
+
+```bash
+uv sync --upgrade       # 更新所有依赖
+uv lock --upgrade       # 更新锁文件
+```
+
+### 导出 requirements.txt（兼容）
+
+```bash
+uv pip compile pyproject.toml -o requirements.txt
+```
+
+---
+
+## 🧪 测试
+
+```bash
+# 运行所有测试
+uv run pytest
+
+# 运行特定测试
+uv run pytest tests/test_factor_engine.py -v
+
+# 带覆盖率
+uv run pytest --cov=etf_rotation_optimized --cov-report=html
+```
+
+---
 
 ## 📖 文档导航
 
-### ETF轮动系统核心文档
-- [快速开始](etf_rotation_optimized/README.md) - 5分钟上手
-- [项目结构](etf_rotation_optimized/PROJECT_STRUCTURE.md) - 代码架构
-- [交易指南](etf_rotation_optimized/EVENT_DRIVEN_TRADING_GUIDE.md) - 事件驱动交易
-- [胜率功能](etf_rotation_optimized/DELIVERY_DOCUMENT.md) - 交易级胜率计算
-
-### 完整文档索引
-- [文档索引](etf_rotation_optimized/docs/INDEX.md) - 所有文档列表
-- [部署指南](etf_rotation_optimized/docs/DEPLOYMENT.md) - 生产部署
-- [运维手册](etf_rotation_optimized/docs/OPERATIONS.md) - 日常运维
-
-## 🔧 技术栈
-
-- **语言**: Python 3.11+
-- **数据处理**: Pandas, NumPy, Numba
-- **配置管理**: YAML
-- **测试**: pytest
-- **构建**: Make, uv
-
-## 📊 系统对比
-
-| 系统 | 状态 | 市场 | 策略类型 | 推荐度 |
-|------|------|------|----------|--------|
-| ETF轮动 | ✅ 生产 | ETF | 横截面轮动 | ⭐⭐⭐⭐⭐ |
-| FactorEngine | 🔧 维护 | A股/港股/ETF | 因子框架 | ⭐⭐⭐ |
-| A股策略 | 🚧 研发 | A股 | 资金流 | ⭐⭐ |
-| 港股中频 | 🚧 研发 | 港股 | 中高频 | ⭐⭐ |
-
-## 💡 开发建议
-
-1. **新用户**: 从ETF轮动系统开始,文档完善、代码清晰
-2. **策略研发**: 使用`etf_rotation_optimized/configs/experiments/`进行实验
-3. **因子开发**: 在`core/precise_factor_library_v2.py`添加新因子
-4. **回测验证**: 使用`vectorbt_backtest/`进行暴力回测
-
-## 🤝 贡献指南
-
-- 代码风格: 遵循PEP 8
-- 提交信息: 简洁明了,描述清晰
-- 测试要求: 新功能必须包含单元测试
-- 文档更新: 代码修改同步更新文档
+| 文档 | 描述 |
+|------|------|
+| [docs/README.md](docs/README.md) | 项目详细总览 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 三层引擎架构详解 |
+| [docs/DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md) | 开发注意事项、5 大陷阱 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 改造计划与路线图 |
+| [docs/VEC_BT_ALIGNMENT_HISTORY_AND_FIXES.md](docs/VEC_BT_ALIGNMENT_HISTORY_AND_FIXES.md) | VEC/BT 对齐问题历史 |
+| [etf_rotation_optimized/README.md](etf_rotation_optimized/README.md) | ETF 轮动系统详细文档 |
 
 ---
 
- 
-### 🧊 性能优化冻结声明
- 
-自 2025-11-09 起，ETF轮动主系统的低ROI长尾性能优化（如进一步微调滑点向量化、极端窗口前视校验再次降纳秒级开销等）已冻结。当前版本的：
- 
-1. 排序稳定性（平均排名法避免并列跳跃）
-2. 日度IC预计算 + memmap 加速
-3. 无前视自检容差 (rtol=0.016, atol=0.0025) 已固化于 `real_backtest/NO_LOOKAHEAD_TOL_FREEZE.json`
-4. 全量 12,597 组合 GBDT 校准排序已上线；生产不使用白名单/混合保留（Blended/whitelist 已弃用）
+## ⚠️ 开发注意事项
 
- 
-后续仅接受：
- 
-- 功能性需求（新增策略入口 / 风险管理规则）
-- 生产事故修复（异常退出、文件腐化）
-- 数据源结构性变化适配
+1. **Set 遍历不确定性**：使用 `sorted()` 确保有序
+2. **前视偏差**：使用 `shift_timing_signal` 滞后信号
+3. **调仓日程**：使用 `generate_rebalance_schedule` 统一
+4. **浮点精度**：比较时使用 0.01% 容差
+5. **资金时序**：BT 中使用卖出后现金计算
 
- 
-不再开展：
- 
-- 针对已验证路径的微观算力/毫秒级优化
-- 单指标 <1% 体感提速的复杂重构
-
-若需恢复性能攻坚，请在 `PROJECT_CLEANUP_FINAL.md` 中建立新章节并解锁冻结标签。
-
-**最后更新**: 2025-11-09（含冻结声明）
-**维护者**: 深度量化团队
-
-#### 2. 批量因子生成
-```bash
-# 港股单股票因子生成
-cd factor_system/factor_generation
-python run_single_stock.py 0700.HK
-
-# A股因子生成
-python a_shares_strategy/generate_a_share_factors.py 600036.SH --timeframe 5min
-
-# ETF数据处理
-python etf_download_manager/download_etf_final.py
-```
-
-#### 3. 因子筛选
-```bash
-# 专业5维度因子筛选
-cd factor_system/factor_screening
-python professional_factor_screener.py --symbol 0700.HK --timeframe 60min
-```
-
-### 系统验证
-```bash
-# 运行测试套件
-pytest -v
-
-# FactorEngine一致性验证
-python tests/test_factor_engine_consistency.py
-
-# 路径管理系统验证
-python -c "from factor_system.utils import get_project_root; print('✅ 系统正常')"
-```
-
-## 📁 项目结构
-
-```
-深度量化0927/
-├── factor_system/                # 核心因子系统
-│   ├── factor_engine/           # 统一因子计算引擎
-│   ├── factor_generation/       # 批量因子生成
-│   ├── factor_screening/        # 专业因子筛选
-│   └── utils/                   # 路径管理和工具
-├── a_shares_strategy/           # A股策略框架
-├── etf_download_manager/        # ETF数据管理
-├── hk_midfreq/                  # 港股中频策略
-├── examples/                    # 使用示例
-├── scripts/                     # 工具脚本
-├── tests/                       # 测试套件
-├── raw/                         # 原始数据存储
-└── docs/                        # 详细文档
-```
-
-## 🔧 开发环境
-
-### 代码质量工具
-```bash
-# 代码格式化
-black factor_system/
-isort factor_system/
-
-# 类型检查
-mypy factor_system/
-
-# 运行pre-commit钩子
-pre-commit run --all-files
-
-# 安装开发钩子
-pre-commit install
-```
-
-### 性能基准
-- **因子计算速度**: 300-800+ 因子/秒
-- **内存效率**: >70%利用率（Polars优化）
-- **缓存命中率**: >90%（智能预热）
-
-## 📚 相关文档
-
-- **核心指南**: `CLAUDE.md` - 完整项目指导
-- **A股系统**: `README_A_SHARES.md` - A股专门说明
-- **因子集**: `README_FACTOR_SETS.md` - 因子集管理
-- **ETF数据**: ETF下载和管理文档
-- **MCP设置**: `MCP_SETUP.md` - AI助手集成
-
-## 🎯 适用场景
-
-- **量化研究**: 154个技术指标 + 15个资金流因子
-- **策略开发**: 多市场、多时间框架支持
-- **因子筛选**: 5维度专业评估体系
-- **回测分析**: 与VectorBT深度集成
-- **生产部署**: 统一架构确保一致性
+详见 [docs/DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md)
 
 ---
-**维护者**: 量化工程团队 | **更新**: 2025-10-14 | **版本**: v3.0
+
+## 🧊 性能优化冻结声明
+
+自 2025-11-09 起，低 ROI 长尾性能优化已冻结：
+
+- ✅ 排序稳定性（平均排名法）
+- ✅ 日度 IC 预计算 + memmap 加速
+- ✅ 无前视自检容差已固化
+
+后续仅接受：功能性需求、生产事故修复、数据源适配
+
+---
+
+**维护者**: 深度量化团队 | **License**: MIT

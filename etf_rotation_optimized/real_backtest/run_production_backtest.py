@@ -56,6 +56,12 @@ from core.data_loader import DataLoader
 from core.ic_calculator_numba import compute_spearman_ic_numba
 from core.precise_factor_library_v2 import PreciseFactorLibrary
 from core.market_timing import LightTimingModule
+from core.utils.rebalance import (
+    compute_first_rebalance_index,
+    generate_rebalance_schedule,
+    ensure_price_views,
+    shift_timing_signal,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -412,9 +418,9 @@ def get_ic_weights_matrix_cached(
     """
     F_total = factors_data_full.shape[2]
     n_reb = len(rebalance_indices)
-    # 以rebalance_indices和lookback窗口构造缓存key
+    # === 关键修复: 缓存key必须包含F_total，避免不同因子数组合冲突 ===
     rebalance_key = rebalance_indices.tobytes()
-    key = (rebalance_key, int(lookback_window))
+    key = (rebalance_key, int(lookback_window), int(F_total))
 
     cache_entry = IC_CACHE.get(key)
     if cache_entry is None:
@@ -525,9 +531,11 @@ def backtest_no_lookahead(
     lookback_window=252,
     position_size=3,
     initial_capital=1_000_000.0,
-    commission_rate=0.00005,
+    commission_rate=0.0002,
     commission_min=0.0,
     *,
+    close_prices=None,
+    open_prices=None,
     factors_data_full=None,
     factor_indices_for_cache=None,
     timing_signal=None,
@@ -539,6 +547,8 @@ def backtest_no_lookahead(
     参数:
         factors_data: (T, N, F) 全部因子数据
         returns: (T, N) 全部收盘到收盘收益 (定义: close[t]/close[t-1]-1)
+        close_prices: (T, N) 收盘价矩阵（可选，若提供则启用 close_{t-1}→open_t→close_t 链）
+        open_prices: (T, N) 开盘价矩阵（可选，无则默认等于收盘价）
         etf_names: list, ETF名称
         rebalance_freq: int, 调仓频率(天)
         lookback_window: int, 计算权重的回看窗口
@@ -580,6 +590,30 @@ def backtest_no_lookahead(
     if factors_data_full is not None:
         factors_data_full = np.ascontiguousarray(factors_data_full)
 
+    price_chain_enabled = close_prices is not None
+    if price_chain_enabled:
+        close_prev_prices, open_today_prices, close_today_prices = ensure_price_views(
+            close_prices=np.asarray(close_prices, dtype=np.float64),
+            open_prices=None if open_prices is None else np.asarray(open_prices, dtype=np.float64),
+            min_valid_index=lookback_window + 1,
+        )
+        close_prev_prices = np.ascontiguousarray(close_prev_prices, dtype=np.float64)
+        open_today_prices = np.ascontiguousarray(open_today_prices, dtype=np.float64)
+        close_today_prices = np.ascontiguousarray(close_today_prices, dtype=np.float64)
+    else:
+        close_prev_prices = None
+        open_today_prices = None
+        close_today_prices = None
+
+    if timing_signal is None:
+        timing_signal_arr = np.ones(T, dtype=np.float64)
+    else:
+        timing_signal_arr = np.asarray(timing_signal, dtype=np.float64)
+        if timing_signal_arr.ndim != 1 or timing_signal_arr.shape[0] != T:
+            raise ValueError("timing_signal must be shape (T,)")
+        if np.any(~np.isfinite(timing_signal_arr)):
+            raise ValueError("timing_signal contains NaN/inf")
+
     # 优先级3：默认启用日级IC预计算+memmap（仅当可用，且不覆盖用户显式设置）
     os.environ.setdefault("RB_DAILY_IC_PRECOMP", "1")
     os.environ.setdefault("RB_DAILY_IC_MEMMAP", "1")
@@ -589,7 +623,17 @@ def backtest_no_lookahead(
 
     start_idx = lookback_window + 1  # +1 因 returns 第1天不可用
 
-    rebalance_indices = np.arange(start_idx, T, rebalance_freq, dtype=np.int32)
+    # === 关键修复: 对齐BT的调仓时机 ===
+    # BT使用 len(self) % freq == 0 来判断调仓
+    # 需要找到第一个 ≥ start_idx 且能被 freq 整除的 bar
+    first_rebalance = compute_first_rebalance_index(lookback_window, rebalance_freq)
+    rebalance_indices = generate_rebalance_schedule(
+        total_periods=T,
+        lookback_window=lookback_window,
+        freq=rebalance_freq,
+    )
+    if rebalance_indices.size:
+        first_rebalance = int(rebalance_indices[0])
     n_rebalance = len(rebalance_indices)
 
     profile_log(
@@ -601,11 +645,20 @@ def backtest_no_lookahead(
     ic_timer_start = time.perf_counter() if profile_enabled else None
     disable_cache = os.environ.get("RB_DISABLE_IC_CACHE", "0").strip().lower() in ("1", "true", "yes")
 
+    # === 关键修复: factor_indices_for_cache 必须基于 factors_data_full ===
     # 若未提供全量数组/因子索引，退化为使用当前输入（不改变语义，仅使预计算路径可用）
     if factors_data_full is None:
         factors_data_full = factors_data
-    if factor_indices_for_cache is None:
-        factor_indices_for_cache = np.arange(F, dtype=np.int64)
+        # 如果 factors_data_full 就是 factors_data，则 factor_indices 就是 [0, 1, ..., F-1]
+        if factor_indices_for_cache is None:
+            factor_indices_for_cache = np.arange(F, dtype=np.int64)
+    else:
+        # 如果提供了 factors_data_full，但没有提供 factor_indices_for_cache
+        # 说明 factors_data 是 factors_data_full 的子集，需要找到对应的索引
+        # 为简化，这里假设调用者会正确提供 factor_indices_for_cache
+        if factor_indices_for_cache is None:
+            # 退化：假设 factors_data 就是 factors_data_full 的前 F 列
+            factor_indices_for_cache = np.arange(F, dtype=np.int64)
 
     if not disable_cache:
         ic_weights_matrix = get_ic_weights_matrix_cached(
@@ -672,6 +725,27 @@ def backtest_no_lookahead(
     loop_timer_start = time.perf_counter() if profile_enabled else None
 
     for offset, day_idx in enumerate(range(start_idx, T)):
+        nav_prev_close = portfolio_values[offset]
+        nav_open = nav_prev_close
+        nav_after_cost = nav_open
+        if price_chain_enabled:
+            prev_close_row = close_prev_prices[day_idx]
+            open_row = open_today_prices[day_idx]
+            gap_ratio = np.divide(
+                open_row,
+                prev_close_row,
+                out=np.ones_like(open_row, dtype=np.float64),
+                where=prev_close_row > 0,
+            )
+            gap_ret = np.nan_to_num(gap_ratio - 1.0, nan=0.0)
+            gap_port_ret = float(np.nansum(current_weights * gap_ret))
+            if np.abs(1.0 + gap_port_ret) > 1e-12:
+                current_weights = current_weights * (1.0 + gap_ret) / (1.0 + gap_port_ret)
+            else:
+                current_weights = np.zeros_like(current_weights)
+            nav_open = nav_prev_close * (1.0 + gap_port_ret)
+            nav_after_cost = nav_open
+
         is_rebalance_day = (
             rebalance_counter < n_rebalance and day_idx == rebalance_indices[rebalance_counter]
         )
@@ -767,14 +841,50 @@ def backtest_no_lookahead(
                 target_weights[top_indices] = 1.0 / position_size
                 n_holdings_arr[idx_rb] = len(top_indices)
 
+            # === 关键修复: Net-New 调仓逻辑（对齐BT） ===
+            # 不再使用 Full Rebalance (current_weights = target_weights)
+            # 而是采用 Net-New: 保留旧仓位 + 只买新标的
+            
+            # 1. 识别需要卖出的标的（不在目标集合中）
+            target_set = set(np.where(target_weights > 0)[0])
+            current_holdings = set(np.where(current_weights > 0)[0])
+            to_sell = current_holdings - target_set
+            
+            # 2. 卖出不在目标集合中的仓位
+            for etf_idx in to_sell:
+                current_weights[etf_idx] = 0.0
+            
+            # 3. 计算保留仓位的价值
+            kept_holdings_value = np.sum(current_weights)
+            
+            # 4. 应用择时仓位控制，计算可用于新买入的资金
+            timing_ratio = timing_signal_arr[day_idx]
+            
+            target_exposure = timing_ratio  # 权重空间，总和=1
+            available_for_new = max(0.0, target_exposure - kept_holdings_value)
+            
+            # 5. 识别新买入的标的
+            to_buy = target_set - current_holdings
+            
+            # 6. 分配新资金到新标的（等权）
+            if len(to_buy) > 0 and available_for_new > 1e-10:
+                weight_per_new = available_for_new / len(to_buy)
+                for etf_idx in to_buy:
+                    current_weights[etf_idx] = weight_per_new
+            
+            # 7. 归一化到timing_ratio（处理浮点误差）
+            total_weight = np.sum(current_weights)
+            if total_weight > 1e-10:
+                current_weights = current_weights * (timing_ratio / total_weight)
+
             # 换手与成本（按调仓事件）
-            delta_weights = target_weights - prev_weights
+            delta_weights = current_weights - prev_weights
             buy_turnover = float(np.sum(delta_weights[delta_weights > 0]))
             sell_turnover = float(np.sum(-delta_weights[delta_weights < 0]))
             turnover = buy_turnover + sell_turnover
             turnover_arr[idx_rb] = turnover
 
-            portfolio_before_cost = portfolio_values[offset]
+            portfolio_before_cost = nav_open
             trade_notional = (buy_turnover + sell_turnover) * portfolio_before_cost
             commission_value = trade_notional * commission_rate
             if commission_min > 0 and turnover > 1e-12:
@@ -784,7 +894,7 @@ def backtest_no_lookahead(
             if portfolio_before_cost > 1e-12 and total_cost_amount > 0:
                 total_cost_amount = min(total_cost_amount, portfolio_before_cost)
                 cost_rate = total_cost_amount / portfolio_before_cost
-                portfolio_values[offset] = portfolio_before_cost - total_cost_amount
+                nav_after_cost = portfolio_before_cost - total_cost_amount
             else:
                 cost_rate = 0.0
                 total_cost_amount = 0.0
@@ -792,15 +902,27 @@ def backtest_no_lookahead(
             cost_rate_arr[idx_rb] = cost_rate
             cost_amount_arr[idx_rb] = total_cost_amount
 
-            current_weights = target_weights
-            # 记录新买入ETF的入场基准
-            new_positions = (target_weights > 0) & (prev_weights == 0)
+            # 记录新买入ETF的入场基准（用于V10止损）
+            new_positions = (current_weights > 0) & (prev_weights == 0)
             entry_cumret[new_positions] = etf_cumret[new_positions]
 
         # === 每日收益计算 ===
         # 显式使用收盘到收盘定义 (close[t]/close[t-1]-1)
         close_to_close_ret = returns[day_idx]  # 等价于 (close[t]/close[t-1]-1)
-        
+
+        if price_chain_enabled:
+            open_row = open_today_prices[day_idx]
+            close_row = close_today_prices[day_idx]
+            open_to_close_ratio = np.divide(
+                close_row,
+                open_row,
+                out=np.ones_like(close_row, dtype=np.float64),
+                where=open_row > 0,
+            )
+            open_to_close_ret = np.nan_to_num(open_to_close_ratio - 1.0, nan=0.0)
+        else:
+            open_to_close_ret = np.nan_to_num(close_to_close_ret, nan=0.0)
+
         # 更新每个ETF的累计收益（用于止损计算）
         etf_cumret = etf_cumret * (1 + np.nan_to_num(close_to_close_ret, nan=0.0))
 
@@ -819,7 +941,7 @@ def backtest_no_lookahead(
 
                     # 计算止损卖出的换手和成本
                     stop_turnover = np.sum(current_weights[stop_indices])
-                    stop_cost = stop_turnover * portfolio_values[offset] * commission_rate
+                    stop_cost = stop_turnover * nav_after_cost * commission_rate
 
                     # 记录止损事件
                     for idx in stop_indices:
@@ -838,18 +960,32 @@ def backtest_no_lookahead(
                     # 新逻辑: 保持 current_weights 不变 (总仓位降低)
 
                     # 扣除止损卖出成本
-                    portfolio_values[offset] = max(portfolio_values[offset] - stop_cost, 0.0)
+                    nav_after_cost = max(nav_after_cost - stop_cost, 0.0)
 
-        daily_ret = np.nansum(current_weights * close_to_close_ret)
-        
-        # 应用择时仓位控制
-        if timing_signal is not None:
-            pos_ratio = timing_signal[day_idx]
-            daily_ret *= pos_ratio
-            
-        daily_returns_arr[offset] = daily_ret
+        # === 每日收益计算 ===
+        # Net-New逻辑中已经在调仓时考虑了timing_ratio
+        # current_weights的总和已经等于timing_ratio，所以这里直接计算当期持仓收益即可
+        portfolio_period_ret = np.nansum(current_weights * open_to_close_ret)
 
-        portfolio_values[offset + 1] = portfolio_values[offset] * (1 + daily_ret)
+        nav_close = nav_after_cost * (1.0 + portfolio_period_ret)
+        daily_total_ret = (nav_close / nav_prev_close - 1.0) if nav_prev_close > 1e-12 else 0.0
+
+        daily_returns_arr[offset] = daily_total_ret
+
+        portfolio_values[offset + 1] = nav_close
+
+        # === 关键修复: 权重漂移 (Weight Drift) ===
+        # 在非调仓日，持仓权重会随资产涨跌而变化。
+        # 如果不更新权重，等同于假设每日自动再平衡(Daily Rebalancing)至目标权重，
+        # 这与实际的 Buy-and-Hold (持有份额不变) 逻辑不符，会导致与 Backtrader 的巨大偏差。
+        # 公式: w_i(t+1) = w_i(t) * (1 + r_i(t)) / (1 + R_p(t))
+        if np.abs(1 + portfolio_period_ret) > 1e-10:
+            # 注意: open_to_close_ret 包含 NaN，需处理
+            asset_ret = np.nan_to_num(open_to_close_ret, nan=0.0)
+            current_weights = current_weights * (1 + asset_ret) / (1 + portfolio_period_ret)
+        else:
+            # 极端情况：组合归零
+            current_weights = np.zeros_like(current_weights)
 
     if profile_enabled and loop_timer_start is not None:
         profile_data["time_main_loop"] = time.perf_counter() - loop_timer_start
@@ -1129,7 +1265,7 @@ def main():
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
     logger.info(f"使用配置文件: {config_path}")
-    commission_rate_cfg = config["backtest"].get("commission_rate", 0.00005)
+    commission_rate_cfg = config["backtest"].get("commission_rate", 0.0002)
 
     # 运行参数覆盖（通过环境变量，可不改配置快速切换批量规模与扫描模式）
     # RB_TOPK: 覆盖 combo_wfo.top_n，例如 1000
@@ -1224,10 +1360,9 @@ def main():
     
     timing_module = LightTimingModule(extreme_threshold=threshold, extreme_position=pos_ratio)
     # 计算原始信号 (基于收盘价)
-    timing_series = timing_module.compute_position_ratios(ohlcv['close'])
-    # 关键：Shift(1) 以避免未来函数 (T-1的信号决定T的仓位)
-    timing_series = timing_series.shift(1).fillna(1.0)
-    timing_arr = timing_series.values
+    timing_series_raw = timing_module.compute_position_ratios(ohlcv['close'])
+    # 关键：使用共享 helper shift_timing_signal 以避免未来函数 (T-1的信号决定T的仓位)
+    timing_arr = shift_timing_signal(timing_series_raw.values)
     logger.info(f"择时信号已生成 (Defensive Days: {(timing_arr < 1.0).sum()}/{len(timing_arr)})")
 
     # 读取V10止损配置
@@ -1553,7 +1688,11 @@ def main():
                 # 逐频率填充缓存
                 filled_pairs = 0
                 for freq_val in sorted(freq_candidates):
-                    rebalance_indices = np.arange(lookback_window + 1, factors_data.shape[0], freq_val, dtype=np.int32)
+                    rebalance_indices = generate_rebalance_schedule(
+                        total_periods=factors_data.shape[0],
+                        lookback_window=lookback_window,
+                        freq=freq_val,
+                    )
                     _ = get_ic_weights_matrix_cached(
                         factors_data_full=factors_data,
                         returns=returns,

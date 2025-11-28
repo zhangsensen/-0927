@@ -1,0 +1,62 @@
+# WFO Configuration for Standalone Project
+
+combo_wfo:
+  combo_sizes: [2, 3, 4, 5]  # Sizes of factor combinations to test
+  min_valid_days: 20         # Minimum days for valid IC calculation
+
+data:
+  # Paths relative to the script location or absolute
+  cache_dir: .cache
+  data_dir: raw/ETF/daily
+  start_date: '2020-01-01'
+  end_date: '2025-10-14'
+  symbols:
+  - '159801'
+  - '159819'
+  - '159859'
+  - '159883'
+  - '159915'
+  - '159920'
+  - '159928'
+  - '159949'
+  - '159992'
+  - '159995'
+  - '159998'
+  - '510050'
+  - '510300'
+  - '510500'
+  - '511010'
+  - '511260'
+  - '511380'
+  - '512010'
+  - '512100'
+  - '512400'
+  - '512480'
+  - '512660'
+  - '512690'
+  - '512720'
+  - '512800'
+  - '512880'
+  - '512980'
+  - '513050'
+  - '513100'
+  - '513130'
+  - '513500'
+  - '515030'
+  - '515180'
+  - '515210'
+  - '515650'
+  - '515790'
+  - '516090'
+  - '516160'
+  - '516520'
+  - '518850'
+  - '518880'
+  - '588000'
+  - '588200'
+
+cross_section:
+  winsorize_lower: 0.025
+  winsorize_upper: 0.975
+
+output_root: results_wfo

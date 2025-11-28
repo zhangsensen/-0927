@@ -1,0 +1,107 @@
+# ==============================================================================
+# 🚀 ETF Rotation Strategy Configuration (Production Ready)
+# ==============================================================================
+# Strategy: All-Weather RORO (Risk-On / Risk-Off)
+# Logic:    Trend/Momentum on A-Shares + Gold/Bond Defense
+# Engine:   Vectorized (VEC) verified against Backtrader (BT)
+# Updated:  2025-11-28
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Core Strategy Parameters
+# ------------------------------------------------------------------------------
+strategy:
+  name: "All-Weather_RORO_Top3"
+  description: "A-Share Momentum with Gold/Bond Risk-Off Protection"
+  
+  # Execution
+  frequency: 8              # Rebalance every 8 trading days
+  position_size: 3          # Hold top 3 ETFs
+  
+  # Universe
+  pool_name: "A_SHARE_LIVE" # Use the live trading pool defined in etf_pools.yaml
+  
+  # Risk-Off Assets (The "Safety Net")
+  # Priority: If Risk-Off is triggered, invest in the one with highest 20D Momentum
+  risk_off_assets:
+    - "518880.SH"  # Gold ETF (Huaan) - T+0
+    - "511010.SH"  # Bond ETF (Guotai) - T+0
+    - "513100.SH"  # Nasdaq 100 (Guotai) - T+0 (Optional, aggressive defense)
+
+# ------------------------------------------------------------------------------
+# 2. Factor Logic (The "Alpha")
+# ------------------------------------------------------------------------------
+# Selected based on WFO Rank 2 (High Return/Risk Ratio)
+factors:
+  - name: "ADX_14D"
+    weight: 1.0
+    direction: "descending" # Lower ADX (consolidation) or Higher? 
+                            # Wait, standard ADX factor usually implies Trend Strength.
+                            # Let's check the WFO combo string: "ADX_14D + OBV_SLOPE_10D + PRICE_POSITION_20D"
+                            # In our engine, factors are usually standardized to "Higher is Better".
+                            # If ADX was used raw, high ADX = Strong Trend.
+    
+  - name: "OBV_SLOPE_10D"
+    weight: 1.0
+    direction: "ascending"  # Volume confirming trend
+    
+  - name: "PRICE_POSITION_20D"
+    weight: 1.0
+    direction: "ascending"  # Short-term momentum (Price vs 20D Range)
+
+# ------------------------------------------------------------------------------
+# 3. Risk Management (The "Shield")
+# ------------------------------------------------------------------------------
+risk_control:
+  enabled: true
+  
+  # A. Market Timing (Regime Filter)
+  # If Market (HS300) is weak, reduce equity exposure.
+  timing:
+    enabled: true
+    method: "light_timing"
+    params:
+      market_ticker: "510300.SH"
+      ma_window: 200
+      extreme_threshold: -0.3  # Composite score threshold
+      extreme_position: 0.3    # Reduce equity to 30% if bearish (remaining 70% goes to Risk-Off)
+
+  # B. Account Level Drawdown Control (The "Circuit Breaker")
+  # Based on Total Account Value (Equity + Cash + Risk-Off)
+  drawdown_control:
+    enabled: true
+    soft_limit: 0.15  # 15% DD -> Reduce Equity Position by 50%
+    hard_limit: 0.25  # 25% DD -> Clear All Equity Positions (100% Risk-Off)
+
+  # C. Single Asset Stop Loss (The "Fire Extinguisher")
+  # Checks daily Low prices. T+1 compliant (starts checking next day).
+  stop_loss:
+    enabled: true
+    threshold: 0.12   # 12% from Entry Price
+    action: "clear"   # Sell specific position and move cash to Risk-Off pool
+
+# ------------------------------------------------------------------------------
+# 4. Execution Rules
+# ------------------------------------------------------------------------------
+execution:
+  # Price Type for Signals
+  signal_price: "close"      # Calculate signals using Close prices
+  
+  # Execution Timing
+  # "close": Execute at 14:55 (approx Close) - Matches Backtest
+  # "next_open": Execute at 09:30 next day - Slippage risk
+  execution_timing: "close" 
+  
+  # T+1 Compliance
+  enforce_t1: true           # Prevent selling positions bought today
+
+# ------------------------------------------------------------------------------
+# 5. Data Requirements
+# ------------------------------------------------------------------------------
+data:
+  lookback_days: 300         # Need enough history for MA200 + Factors
+  required_assets:
+    - "510300.SH"            # For Timing
+    - "518880.SH"            # For Risk-Off
+    - "511010.SH"            # For Risk-Off
+

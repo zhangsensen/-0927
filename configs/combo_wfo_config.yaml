@@ -1,5 +1,5 @@
 backtest:
-  commission_rate: 0.00005
+  commission_rate: 0.0002
   initial_capital: 1000000
   lookback_window: 252
   rebalance_frequency: 21d

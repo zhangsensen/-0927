@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
-统一规则 WFO 优化
+WFO 因子组合优化器（IC/ICIR 排序）
 
-核心原则：一套规则，从筛选到验证
-- 筛选标准 = 验证标准 = 真实回测收益
-- 无 IC，无中间层，无歧义
+核心原则：
+- WFO 负责因子质量评估（IC/ICIR 排序）
+- VEC/BT 负责收益评估（策略表现）
+- 职责分离，不重叠
 
-用法: uv run python run_unified_wfo.py
+排序逻辑：
+- 主指标：ICIR = IC_mean / IC_std（信息比率）
+- IC_mean：因子组合得分 vs 未来收益的 Spearman 相关系数均值
+- IC_std：IC 的标准差（稳定性）
+
+用法: uv run python etf_rotation_optimized/run_unified_wfo.py
 """
 
 import logging
@@ -21,12 +27,11 @@ import numpy as np
 import pandas as pd
 import yaml
 from tqdm import tqdm
-from numba import njit
+from numba import njit, prange
 
 from core.data_loader import DataLoader
 from core.precise_factor_library_v2 import PreciseFactorLibrary
 from core.cross_section_processor import CrossSectionProcessor
-from core.market_timing import LightTimingModule
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,186 +41,159 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# 核心参数（硬编码，无魔数）
+# 核心参数
 # ============================================================================
-FREQ = 8              # 换仓频率（天）
-POS_SIZE = 3          # 持仓数量
-INITIAL_CAPITAL = 1_000_000.0
-COMMISSION_RATE = 0.0002  # 2 bps
 LOOKBACK = 252        # 回测起点（跳过前252天热身）
+MIN_VALID_DAYS = 20   # IC 计算最少有效天数
 
 
 @njit(cache=True)
-def _backtest_combo_numba(
-    close_prices: np.ndarray,
+def _compute_spearman_ic_single_day(scores: np.ndarray, returns: np.ndarray) -> float:
+    """
+    计算单日的 Spearman IC
+    
+    Args:
+        scores: (N,) 因子组合得分
+        returns: (N,) 未来收益
+    
+    Returns:
+        IC 值（如果无效返回 NaN）
+    """
+    # 去除 NaN
+    mask = ~(np.isnan(scores) | np.isnan(returns))
+    n_valid = np.sum(mask)
+    
+    if n_valid < 3:
+        return np.nan
+    
+    s = scores[mask]
+    r = returns[mask]
+    
+    # 计算秩
+    s_rank = np.argsort(np.argsort(s)).astype(np.float64)
+    r_rank = np.argsort(np.argsort(r)).astype(np.float64)
+    
+    # Spearman 相关系数
+    s_mean = np.mean(s_rank)
+    r_mean = np.mean(r_rank)
+    
+    numerator = np.sum((s_rank - s_mean) * (r_rank - r_mean))
+    s_std = np.sqrt(np.sum((s_rank - s_mean) ** 2))
+    r_std = np.sqrt(np.sum((r_rank - r_mean) ** 2))
+    
+    if s_std > 0 and r_std > 0:
+        return numerator / (s_std * r_std)
+    return np.nan
+
+
+@njit(cache=True)
+def _compute_combo_ic_series(
     factors_3d: np.ndarray,
     factor_indices: np.ndarray,
-    timing_arr: np.ndarray,
-    freq: int,
-    pos_size: int,
-    initial_capital: float,
-    commission_rate: float,
+    forward_returns: np.ndarray,
     lookback: int,
+    min_valid_days: int,
 ) -> tuple:
     """
-    Numba 加速的单策略回测
+    计算单个因子组合的 IC 时间序列
     
-    返回: (total_return, win_rate, profit_factor, num_trades, max_dd)
+    Args:
+        factors_3d: (T, N, F) 因子数据
+        factor_indices: 因子索引数组
+        forward_returns: (T, N) 未来收益
+        lookback: 跳过的天数
+        min_valid_days: 最少有效天数
+    
+    Returns:
+        (ic_mean, ic_std, ic_ir, n_valid_days)
     """
-    T, N = close_prices.shape
+    T, N, _ = factors_3d.shape
     n_factors = len(factor_indices)
     
-    # 状态
-    cash = initial_capital
-    holdings = np.full(N, -1.0)  # -1 表示未持有
-    entry_prices = np.zeros(N)
-    
-    # 统计
-    wins = 0
-    losses = 0
-    total_win_pnl = 0.0
-    total_loss_pnl = 0.0
-    
-    # 净值曲线
-    equity_curve = np.zeros(T - lookback)
+    ic_values = np.zeros(T - lookback)
+    valid_count = 0
     
     for t in range(lookback, T):
-        # Mark to Market
-        current_value = cash
+        # 计算因子组合得分（T-1 时刻的因子值）
+        combo_score = np.zeros(N)
         for n in range(N):
-            if holdings[n] > 0:
-                current_value += holdings[n] * close_prices[t, n]
-        equity_curve[t - lookback] = current_value
+            score = 0.0
+            for i in range(n_factors):
+                f_idx = factor_indices[i]
+                val = factors_3d[t-1, n, f_idx]
+                if not np.isnan(val):
+                    score += val
+            combo_score[n] = score
         
-        if t % freq == 0:
-            # 信号来自 T-1（严格 T+1）
-            # 使用 nansum，与旧回测一致
-            combined_score = np.zeros(N)
-            for n in range(N):
-                score = 0.0
-                for i in range(n_factors):
-                    f_idx = factor_indices[i]
-                    val = factors_3d[t-1, n, f_idx]
-                    if not np.isnan(val):
-                        score += val
-                combined_score[n] = score
-            
-            # 有效性检查：得分非零且非NaN
-            valid_count = 0
-            for n in range(N):
-                if combined_score[n] != 0 and not np.isnan(combined_score[n]):
-                    valid_count += 1
-                else:
-                    combined_score[n] = -np.inf
-            
-            # 选 Top K
-            target_set = np.zeros(N, dtype=np.bool_)
-            buy_order = np.zeros(pos_size, dtype=np.int64)  # 按得分从高到低的买入顺序
-            buy_count = 0
-            if valid_count >= pos_size:
-                sorted_indices = np.argsort(combined_score)
-                for k in range(pos_size):
-                    idx = sorted_indices[-(k+1)]
-                    if combined_score[idx] > -np.inf:
-                        target_set[idx] = True
-                        buy_order[buy_count] = idx
-                        buy_count += 1
-            
-            timing_ratio = timing_arr[t]
-            
-            # 卖出
-            for n in range(N):
-                if holdings[n] > 0 and not target_set[n]:
-                    price = close_prices[t, n]
-                    proceeds = holdings[n] * price * (1 - commission_rate)
-                    cash += proceeds
-                    
-                    pnl = (price - entry_prices[n]) / entry_prices[n]
-                    if pnl > 0:
-                        wins += 1
-                        total_win_pnl += pnl
-                    else:
-                        losses += 1
-                        total_loss_pnl += abs(pnl)
-                    
-                    holdings[n] = -1.0
-                    entry_prices[n] = 0.0
-            
-            # 买入
-            current_value = cash
-            for n in range(N):
-                if holdings[n] > 0:
-                    current_value += holdings[n] * close_prices[t, n]
-            
-            target_count = 0
-            for n in range(N):
-                if target_set[n]:
-                    target_count += 1
-            
-            if target_count > 0:
-                target_pos_value = (current_value * timing_ratio) / target_count
-                
-                # 按得分从高到低买入（确定性顺序）
-                for k in range(buy_count):
-                    n = buy_order[k]
-                    if holdings[n] < 0:  # 未持有
-                        price = close_prices[t, n]
-                        if np.isnan(price) or price <= 0:
-                            continue
-                        
-                        shares = target_pos_value / price
-                        cost = shares * price * (1 + commission_rate)
-                        
-                        if cash >= cost:
-                            cash -= cost
-                            holdings[n] = shares
-                            entry_prices[n] = price
+        # 计算 IC（因子得分 vs 未来收益）
+        ic = _compute_spearman_ic_single_day(combo_score, forward_returns[t])
+        ic_values[t - lookback] = ic
+        if not np.isnan(ic):
+            valid_count += 1
     
-    # 清仓
-    final_value = cash
-    for n in range(N):
-        if holdings[n] > 0:
-            price = close_prices[-1, n]
-            if np.isnan(price):
-                price = entry_prices[n]
-            
-            final_value += holdings[n] * price * (1 - commission_rate)
-            
-            pnl = (price - entry_prices[n]) / entry_prices[n]
-            if pnl > 0:
-                wins += 1
-                total_win_pnl += pnl
-            else:
-                losses += 1
-                total_loss_pnl += abs(pnl)
+    # 计算统计量
+    if valid_count >= min_valid_days:
+        # 去除 NaN 计算均值和标准差
+        valid_ics = np.zeros(valid_count)
+        idx = 0
+        for i in range(len(ic_values)):
+            if not np.isnan(ic_values[i]):
+                valid_ics[idx] = ic_values[i]
+                idx += 1
+        
+        ic_mean = np.mean(valid_ics)
+        ic_std = np.std(valid_ics)
+        
+        if ic_std > 0.001:
+            ic_ir = ic_mean / ic_std
+        else:
+            ic_ir = 0.0
+        
+        return ic_mean, ic_std, ic_ir, valid_count
     
-    # 计算指标
-    num_trades = wins + losses
-    total_return = (final_value - initial_capital) / initial_capital
+    return 0.0, 0.0, 0.0, valid_count
+
+
+@njit(parallel=True, cache=True)
+def _compute_all_combo_ics(
+    factors_3d: np.ndarray,
+    all_combo_indices: np.ndarray,
+    combo_sizes: np.ndarray,
+    forward_returns: np.ndarray,
+    lookback: int,
+    min_valid_days: int,
+) -> np.ndarray:
+    """
+    并行计算所有因子组合的 IC/ICIR
     
-    if num_trades > 0:
-        win_rate = wins / num_trades
-    else:
-        win_rate = 0.0
+    Args:
+        factors_3d: (T, N, F) 因子数据
+        all_combo_indices: (n_combos, max_combo_size) 因子索引，-1 表示无效
+        combo_sizes: (n_combos,) 每个组合的实际大小
+        forward_returns: (T, N) 未来收益
+        lookback: 跳过的天数
+        min_valid_days: 最少有效天数
     
-    if losses > 0:
-        avg_win = total_win_pnl / max(wins, 1)
-        avg_loss = total_loss_pnl / losses
-        profit_factor = avg_win / max(avg_loss, 0.0001)
-    else:
-        profit_factor = 0.0
+    Returns:
+        (n_combos, 4) 数组，列为 [ic_mean, ic_std, ic_ir, n_valid]
+    """
+    n_combos = all_combo_indices.shape[0]
+    results = np.zeros((n_combos, 4))
     
-    # 最大回撤
-    max_dd = 0.0
-    peak = equity_curve[0]
-    for i in range(len(equity_curve)):
-        if equity_curve[i] > peak:
-            peak = equity_curve[i]
-        dd = (equity_curve[i] - peak) / peak
-        if dd < max_dd:
-            max_dd = dd
+    for i in prange(n_combos):
+        size = combo_sizes[i]
+        factor_indices = all_combo_indices[i, :size]
+        
+        ic_mean, ic_std, ic_ir, n_valid = _compute_combo_ic_series(
+            factors_3d, factor_indices, forward_returns, lookback, min_valid_days
+        )
+        
+        results[i, 0] = ic_mean
+        results[i, 1] = ic_std
+        results[i, 2] = ic_ir
+        results[i, 3] = n_valid
     
-    return total_return, win_rate, profit_factor, num_trades, max_dd
+    return results
 
 
 def run_unified_wfo():
@@ -223,9 +201,10 @@ def run_unified_wfo():
     start_time = datetime.now()
     
     logger.info("=" * 80)
-    logger.info("🎯 统一规则 WFO (Unified Rule WFO)")
+    logger.info("🎯 WFO 因子组合优化器（IC/ICIR 排序）")
     logger.info("=" * 80)
-    logger.info("核心原则: 筛选标准 = 验证标准 = 真实回测收益")
+    logger.info("核心原则: WFO 评估因子质量 → VEC/BT 评估策略收益")
+    logger.info("排序指标: ICIR = IC_mean / IC_std（信息比率）")
     logger.info("")
     
     # 1. 加载配置
@@ -267,64 +246,93 @@ def run_unified_wfo():
     etf_codes = first_factor.columns.tolist()
     
     factors_3d = np.stack([std_factors[f].values for f in factor_names], axis=-1)
-    close_prices = ohlcv["close"].values
+    close_prices = ohlcv["close"][etf_codes].ffill().bfill().values
     
-    # 市场择时
-    timing_module = LightTimingModule()
-    timing_series = timing_module.compute_position_ratios(ohlcv["close"])
-    timing_arr = timing_series.reindex(dates).fillna(1.0).values
+    # 6. 计算未来收益（T+1 收益，用于 IC 计算）
+    logger.info("📈 计算未来收益...")
+    forward_returns = np.zeros((T, N))
+    for t in range(T - 1):
+        for n in range(N):
+            if close_prices[t, n] > 0 and not np.isnan(close_prices[t + 1, n]):
+                forward_returns[t + 1, n] = (close_prices[t + 1, n] - close_prices[t, n]) / close_prices[t, n]
+            else:
+                forward_returns[t + 1, n] = np.nan
     
     logger.info(f"   数据: {T}天 × {N}只ETF × {len(factor_names)}个因子")
     
-    # 6. 生成所有组合
-    combo_sizes = config["combo_wfo"]["combo_sizes"]
+    # 7. 生成所有组合
+    combo_sizes_config = config["combo_wfo"]["combo_sizes"]
     all_combos = []
-    for size in combo_sizes:
+    for size in combo_sizes_config:
         combos = list(combinations(range(len(factor_names)), size))
-        all_combos.extend(combos)
+        all_combos.extend([(c, size) for c in combos])
         logger.info(f"   {size}-因子组合: {len(combos)}")
     logger.info(f"   总计: {len(all_combos)} 个组合")
     
-    # 7. 回测所有组合（单线程顺序，避免并行开销）
+    # 8. 准备 Numba 数据结构
+    max_combo_size = max(combo_sizes_config)
+    n_combos = len(all_combos)
+    all_combo_indices = np.full((n_combos, max_combo_size), -1, dtype=np.int64)
+    combo_sizes = np.zeros(n_combos, dtype=np.int64)
+    
+    for i, (combo, size) in enumerate(all_combos):
+        combo_sizes[i] = size
+        for j, idx in enumerate(combo):
+            all_combo_indices[i, j] = idx
+    
+    # 9. 计算所有组合的 IC/ICIR
     logger.info("")
-    logger.info("⚡ 回测所有组合 (统一规则: 真实收益)")
+    logger.info("⚡ 计算 IC/ICIR（因子质量评估）")
     logger.info("-" * 80)
     
+    # 预热 Numba
+    _ = _compute_all_combo_ics(
+        factors_3d[:100],
+        all_combo_indices[:10],
+        combo_sizes[:10],
+        forward_returns[:100],
+        50,
+        MIN_VALID_DAYS,
+    )
+    
+    # 正式计算
+    from tqdm import tqdm
+    import time
+    
+    logger.info("   并行计算中...")
+    t0 = time.time()
+    ic_results = _compute_all_combo_ics(
+        factors_3d,
+        all_combo_indices,
+        combo_sizes,
+        forward_returns,
+        LOOKBACK,
+        MIN_VALID_DAYS,
+    )
+    logger.info(f"   IC 计算完成，耗时: {time.time() - t0:.2f}秒")
+    
+    # 10. 构建结果 DataFrame
     results = []
-    for combo_indices in tqdm(all_combos, desc="回测进度", ncols=80):
-        factor_idx_arr = np.array(combo_indices, dtype=np.int64)
+    for i, (combo, size) in enumerate(all_combos):
+        combo_str = " + ".join([factor_names[idx] for idx in combo])
+        ic_mean, ic_std, ic_ir, n_valid = ic_results[i]
         
-        ret, wr, pf, trades, dd = _backtest_combo_numba(
-            close_prices,
-            factors_3d,
-            factor_idx_arr,
-            timing_arr,
-            FREQ,
-            POS_SIZE,
-            INITIAL_CAPITAL,
-            COMMISSION_RATE,
-            LOOKBACK,
-        )
-        
-        combo_str = " + ".join([factor_names[i] for i in combo_indices])
-        
-        if trades >= 10:  # 最少 10 笔交易
+        if n_valid >= MIN_VALID_DAYS:
             results.append({
                 "combo": combo_str,
-                "combo_size": len(combo_indices),
-                "total_return": ret,
-                "win_rate": wr,
-                "profit_factor": pf,
-                "trades": trades,
-                "max_drawdown": dd,
+                "combo_size": size,
+                "ic_mean": ic_mean,
+                "ic_std": ic_std,
+                "icir": ic_ir,
+                "n_valid_days": int(n_valid),
             })
     
-    # 8. 排序（唯一标准：收益）
+    # 11. 排序（主指标：ICIR）
     df = pd.DataFrame(results)
-    df = df.sort_values("total_return", ascending=False).reset_index(drop=True)
+    df = df.sort_values("icir", ascending=False).reset_index(drop=True)
     df["rank"] = range(1, len(df) + 1)
     
-    # 9. 保存结果
+    # 12. 保存结果
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = script_dir.parent / "results" / f"unified_wfo_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -342,41 +350,41 @@ def run_unified_wfo():
     # 保存配置
     run_config = {
         "timestamp": timestamp,
-        "rule": "UNIFIED (Return-based)",
+        "rule": "IC/ICIR-based (Factor Quality)",
+        "ranking_metric": "ICIR = IC_mean / IC_std",
         "parameters": {
-            "freq": FREQ,
-            "pos_size": POS_SIZE,
-            "commission_rate": COMMISSION_RATE,
             "lookback": LOOKBACK,
+            "min_valid_days": MIN_VALID_DAYS,
         },
         "data": config["data"],
+        "note": "WFO 评估因子质量，VEC/BT 评估策略收益",
     }
     with open(output_dir / "run_config.json", "w") as f:
         json.dump(run_config, f, indent=2)
     
-    # 10. 输出结果
+    # 13. 输出结果
     elapsed = (datetime.now() - start_time).total_seconds()
     
     logger.info("")
     logger.info("=" * 80)
-    logger.info(f"✅ 完成 | 耗时: {elapsed:.1f}秒 | 有效策略: {len(df)}")
+    logger.info(f"✅ 完成 | 耗时: {elapsed:.1f}秒 | 有效组合: {len(df)}")
     logger.info("=" * 80)
     logger.info("")
-    logger.info("🏆 TOP 20 策略 (唯一标准: 真实回测收益)")
+    logger.info("🏆 TOP 20 因子组合（按 ICIR 排序）")
     logger.info("-" * 80)
-    print(f"{'Rank':>4} | {'Return':>8} | {'WR':>6} | {'PF':>6} | {'MaxDD':>8} | {'Trades':>6} | Combo")
+    print(f"{'Rank':>4} | {'ICIR':>8} | {'IC_mean':>8} | {'IC_std':>8} | {'Days':>5} | Combo")
     print("-" * 100)
     
     for _, row in df.head(20).iterrows():
-        print(f"{row['rank']:>4} | {row['total_return']*100:>7.1f}% | "
-              f"{row['win_rate']*100:>5.1f}% | {row['profit_factor']:>6.2f} | "
-              f"{row['max_drawdown']*100:>7.1f}% | {row['trades']:>6} | "
-              f"{row['combo'][:45]}")
+        print(f"{row['rank']:>4} | {row['icir']:>8.4f} | "
+              f"{row['ic_mean']:>8.4f} | {row['ic_std']:>8.4f} | "
+              f"{row['n_valid_days']:>5} | {row['combo'][:50]}")
     
     logger.info("")
     logger.info(f"📁 输出目录: {output_dir}")
     logger.info("")
-    logger.info("💡 一套规则：筛选 = 验证 = 真实回测收益")
+    logger.info("💡 下一步: 用 VEC/BT 评估 Top-N 组合的策略收益")
+    logger.info("   uv run python scripts/batch_vec_backtest.py")
     
     return df, output_dir
 
