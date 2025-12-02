@@ -9,8 +9,8 @@ import yaml
 
 sys.path.append(os.getcwd())
 
-from etf_rotation_optimized.core.data_loader import DataLoader
-from etf_rotation_optimized.core.precise_factor_library_v2 import PreciseFactorLibrary
+from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 
 def check_vortex_bug():
     print("="*80)

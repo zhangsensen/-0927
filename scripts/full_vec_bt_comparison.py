@@ -8,21 +8,19 @@ from pathlib import Path
 import argparse
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT / "etf_rotation_optimized"))
 
 import yaml
 import pandas as pd
 import numpy as np
 import backtrader as bt
 
-from core.data_loader import DataLoader
-from core.precise_factor_library_v2 import PreciseFactorLibrary
-from core.cross_section_processor import CrossSectionProcessor
-from core.market_timing import LightTimingModule
-from core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule, ensure_price_views
+from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
+from etf_strategy.core.cross_section_processor import CrossSectionProcessor
+from etf_strategy.core.market_timing import LightTimingModule
+from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule, ensure_price_views
 
-FREQ = 8
-POS_SIZE = 3
+# 默认参数（可被命令行覆盖）
 INITIAL_CAPITAL = 1_000_000.0
 COMMISSION_RATE = 0.0002
 LOOKBACK = 252
@@ -34,7 +32,12 @@ parser.add_argument(
     default="CORRELATION_TO_MARKET_20D + MAX_DD_60D + RET_VOL_20D",
     help="Factor combo string (e.g. 'ADX_14D + CMF_20D + MAX_DD_60D + RET_VOL_20D')",
 )
+parser.add_argument("--freq", type=int, default=8, help="Rebalance frequency (default: 8)")
+parser.add_argument("--pos", type=int, default=3, help="Position size (default: 3)")
 args = parser.parse_args()
+
+FREQ = args.freq
+POS_SIZE = args.pos
 
 # 加载配置
 config_path = ROOT / "configs/combo_wfo_config.yaml"
@@ -124,7 +127,7 @@ for t in range(T):
     if t < LOOKBACK:
         continue
     
-    # ✅ 使用 rebalance_set 判断调仓日（与 batch_vec_backtest.py / run_unified_wfo.py 一致）
+    # ✅ 使用 rebalance_set 判断调仓日（与 batch_vec_backtest.py / run_combo_wfo.py 一致）
     if t in rebalance_set:
         # 计算综合得分 (使用 T-1)
         combined_vec = np.zeros(N)
@@ -170,7 +173,7 @@ for t in range(T):
             if vec_holdings[n] > 0:
                 current_value += vec_holdings[n] * close_prices[t, n]
         
-        # 买入 (Net-New Logic - 与 run_unified_wfo.py 一致)
+        # 买入 (Net-New Logic - 与 run_combo_wfo.py 一致)
         if len(buy_order) > 0:
             # 计算保留持仓的市值
             kept_value = 0.0

@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from etf_rotation_optimized.core.utils.rebalance import (
+from etf_strategy.core.utils.rebalance import (
     DEFAULT_TIMING_FILL,
     compute_first_rebalance_index,
     ensure_price_views,

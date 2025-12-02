@@ -14,7 +14,6 @@ from pathlib import Path
 
 # 确保项目根目录在路径中
 project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
 
 
 def print_section(title: str):
@@ -70,7 +69,7 @@ def benchmark_numba():
     returns = np.random.randn(T, N)
     
     # 导入 IC 计算函数
-    from etf_rotation_optimized.core.ic_calculator_numba import compute_spearman_ic_numba
+    from etf_strategy.core.ic_calculator_numba import compute_spearman_ic_numba
     
     # 预热 JIT 编译
     _ = compute_spearman_ic_numba(signals[:10], returns[:10])
@@ -89,7 +88,7 @@ def benchmark_numba():
     n_combos = 100
     all_signals = np.random.randn(n_combos, T, N)
     
-    from etf_rotation_optimized.core.ic_calculator_numba import compute_multiple_ics_numba
+    from etf_strategy.core.ic_calculator_numba import compute_multiple_ics_numba
     
     # 预热
     _ = compute_multiple_ics_numba(all_signals[:2], returns)

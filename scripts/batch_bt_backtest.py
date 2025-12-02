@@ -8,8 +8,6 @@ import argparse
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT / "etf_rotation_optimized"))
-sys.path.insert(0, str(ROOT))
 
 import yaml
 import pandas as pd
@@ -18,25 +16,28 @@ import backtrader as bt
 from tqdm import tqdm
 from datetime import datetime
 
-from core.data_loader import DataLoader
-from core.precise_factor_library_v2 import PreciseFactorLibrary
-from core.cross_section_processor import CrossSectionProcessor
-from core.market_timing import LightTimingModule
-from core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule
-from strategy_auditor.core.engine import GenericStrategy, PandasData
+from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
+from etf_strategy.core.cross_section_processor import CrossSectionProcessor
+from etf_strategy.core.market_timing import LightTimingModule
+from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule
+from etf_strategy.auditor.core.engine import GenericStrategy, PandasData
 
-FREQ = 8
-POS_SIZE = 3
-INITIAL_CAPITAL = 1_000_000.0
-COMMISSION_RATE = 0.0002
-LOOKBACK = 252
+# ✅ P0: 删除硬编码 - 所有参数必须从配置文件读取
+# FREQ = 8  # DELETED
+# POS_SIZE = 3  # DELETED
+# INITIAL_CAPITAL = 1_000_000.0  # DELETED
+# COMMISSION_RATE = 0.0002  # DELETED
+# LOOKBACK = 252  # DELETED
 
 
-def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, rebalance_schedule):
-    """单组合 BT 回测引擎"""
+def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, rebalance_schedule,
+                    freq, pos_size, initial_capital, commission_rate,
+                    target_vol=0.20, vol_window=20, dynamic_leverage_enabled=True):
+    """单组合 BT 回测引擎，返回收益和风险指标"""
     cerebro = bt.Cerebro()
-    cerebro.broker.setcash(INITIAL_CAPITAL)
-    cerebro.broker.setcommission(commission=COMMISSION_RATE, leverage=1.0)
+    cerebro.broker.setcash(initial_capital)
+    cerebro.broker.setcommission(commission=commission_rate, leverage=1.0)
     cerebro.broker.set_coc(True)
     cerebro.broker.set_checksubmit(False)
 
@@ -49,10 +50,24 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
         scores=combined_score_df, 
         timing=timing_series, 
         etf_codes=etf_codes, 
-        freq=FREQ, 
-        pos_size=POS_SIZE,
-        rebalance_schedule=rebalance_schedule
+        freq=freq, 
+        pos_size=pos_size,
+        rebalance_schedule=rebalance_schedule,
+        # ✅ P2: 动态降权参数
+        target_vol=target_vol,
+        vol_window=vol_window,
+        dynamic_leverage_enabled=dynamic_leverage_enabled,
     )
+    
+    # ✅ P0: 添加 Analyzers 计算风险指标
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', 
+                       timeframe=bt.TimeFrame.Days, compression=1,
+                       riskfreerate=0.0, annualize=True)
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+    cerebro.addanalyzer(bt.analyzers.AnnualReturn, _name='annual_return')
+    # ✅ P3: 添加 TradeAnalyzer 以获取交易详情
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
 
     start_val = cerebro.broker.getvalue()
     results = cerebro.run()
@@ -60,8 +75,75 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
     strat = results[0]
 
     bt_return = (end_val / start_val) - 1
+    
+    # ✅ P0: 提取风险指标
+    # DrawDown Analyzer
+    dd_analysis = strat.analyzers.drawdown.get_analysis()
+    max_drawdown = dd_analysis.get('max', {}).get('drawdown', 0.0) / 100.0  # 转换为小数
+    
+    # Sharpe Analyzer
+    sharpe_analysis = strat.analyzers.sharpe.get_analysis()
+    sharpe_ratio = sharpe_analysis.get('sharperatio', 0.0)
+    if sharpe_ratio is None:
+        sharpe_ratio = 0.0
+    
+    # Returns Analyzer
+    returns_analysis = strat.analyzers.returns.get_analysis()
+    
+    # Trade Analyzer
+    trade_analysis = strat.analyzers.trades.get_analysis()
+    total_trades = trade_analysis.get('total', {}).get('total', 0)
+    win_trades = trade_analysis.get('won', {}).get('total', 0)
+    loss_trades = trade_analysis.get('lost', {}).get('total', 0)
+    win_rate = win_trades / total_trades if total_trades > 0 else 0.0
+    
+    # Avg Holding Period (in bars/days)
+    len_stats = trade_analysis.get('len', {})
+    avg_len = len_stats.get('average', 0.0)
+    max_len = len_stats.get('max', 0)
+    min_len = len_stats.get('min', 0)
+    
+    # PnL Stats
+    pnl_stats = trade_analysis.get('pnl', {}).get('net', {})
+    avg_pnl = pnl_stats.get('average', 0.0)
+    total_pnl = pnl_stats.get('total', 0.0)
+    
+    # Profit Factor
+    won_pnl = trade_analysis.get('won', {}).get('pnl', {}).get('total', 0.0)
+    lost_pnl = abs(trade_analysis.get('lost', {}).get('pnl', {}).get('total', 0.0))
+    profit_factor = won_pnl / lost_pnl if lost_pnl > 0 else float('inf')
 
-    return bt_return, strat.margin_failures
+    # 计算年化收益（与 VEC 一致的计算方式）
+    trading_days = len(combined_score_df)
+    years = trading_days / 252.0 if trading_days > 0 else 1.0
+    annual_return = (1.0 + bt_return) ** (1.0 / years) - 1.0 if years > 0 else 0.0
+    
+    # 估算年化波动率：从 Sharpe 和年化收益反推
+    # sharpe = annual_return / annual_vol => annual_vol = annual_return / sharpe
+    if sharpe_ratio != 0.0 and abs(sharpe_ratio) > 0.0001:
+        annual_volatility = abs(annual_return / sharpe_ratio)
+    else:
+        annual_volatility = 0.0
+    
+    # Calmar Ratio
+    calmar_ratio = annual_return / max_drawdown if max_drawdown > 0.0001 else 0.0
+    
+    risk_metrics = {
+        "max_drawdown": max_drawdown,
+        "annual_return": annual_return,
+        "annual_volatility": annual_volatility,
+        "sharpe_ratio": sharpe_ratio,
+        "calmar_ratio": calmar_ratio,
+        # ✅ P3: 添加交易详情
+        "total_trades": total_trades,
+        "win_rate": win_rate,
+        "avg_len": avg_len,
+        "max_len": max_len,
+        "profit_factor": profit_factor,
+        "avg_pnl": avg_pnl,
+    }
+
+    return bt_return, strat.margin_failures, risk_metrics
 
 
 import multiprocessing as mp
@@ -70,7 +152,8 @@ from functools import partial
 # 全局变量，用于子进程共享数据 (Copy-on-Write)
 _shared_data = {}
 
-def init_worker(data_feeds, std_factors, timing_series, etf_codes):
+def init_worker(data_feeds, std_factors, timing_series, etf_codes, target_vol, vol_window, dynamic_leverage_enabled,
+                freq, pos_size, initial_capital, commission_rate, lookback):
     """子进程初始化：保存共享数据"""
     global _shared_data
     _shared_data['data_feeds'] = data_feeds
@@ -78,12 +161,23 @@ def init_worker(data_feeds, std_factors, timing_series, etf_codes):
     _shared_data['timing_series'] = timing_series
     _shared_data['etf_codes'] = etf_codes
     
+    # ✅ P2: 动态降权参数
+    _shared_data['target_vol'] = target_vol
+    _shared_data['vol_window'] = vol_window
+    _shared_data['dynamic_leverage_enabled'] = dynamic_leverage_enabled
+    
+    # ✅ P0: 保存配置参数
+    _shared_data['freq'] = freq
+    _shared_data['pos_size'] = pos_size
+    _shared_data['initial_capital'] = initial_capital
+    _shared_data['commission_rate'] = commission_rate
+    
     # ✅ 预计算调仓日程 (所有组合共享)
     T = len(timing_series)
     _shared_data['rebalance_schedule'] = generate_rebalance_schedule(
         total_periods=T,
-        lookback_window=LOOKBACK,
-        freq=FREQ,
+        lookback_window=lookback,
+        freq=freq,
     )
 
 import numpy as np
@@ -102,6 +196,17 @@ def process_combo(row_data):
     etf_codes = _shared_data['etf_codes']
     rebalance_schedule = _shared_data['rebalance_schedule']
     
+    # ✅ P2: 动态降权参数
+    target_vol = _shared_data['target_vol']
+    vol_window = _shared_data['vol_window']
+    dynamic_leverage_enabled = _shared_data['dynamic_leverage_enabled']
+    
+    # ✅ P0: 获取配置参数
+    freq = _shared_data['freq']
+    pos_size = _shared_data['pos_size']
+    initial_capital = _shared_data['initial_capital']
+    commission_rate = _shared_data['commission_rate']
+    
     factors = [f.strip() for f in combo_str.split(" + ")]
     dates = timing_series.index
 
@@ -112,55 +217,86 @@ def process_combo(row_data):
         combined_score_df = combined_score_df.add(std_factors[f], fill_value=0)
 
     # 运行回测
-    bt_return, margin_failures = run_bt_backtest(
-        combined_score_df, 
-        timing_series, 
-        etf_codes, 
-        data_feeds,
-        rebalance_schedule
+    bt_return, margin_failures, risk_metrics = run_bt_backtest(
+        combined_score_df, timing_series, etf_codes, data_feeds, rebalance_schedule,
+        freq, pos_size, initial_capital, commission_rate,
+        target_vol, vol_window, dynamic_leverage_enabled
     )
     
     return {
         "combo": combo_str,
         "bt_return": bt_return,
         "bt_margin_failures": margin_failures,
+        # ✅ P0: 风险指标
+        "bt_max_drawdown": risk_metrics["max_drawdown"],
+        "bt_annual_return": risk_metrics["annual_return"],
+        "bt_annual_volatility": risk_metrics["annual_volatility"],
+        "bt_sharpe_ratio": risk_metrics["sharpe_ratio"],
+        "bt_calmar_ratio": risk_metrics["calmar_ratio"],
+        # ✅ P3: 交易详情
+        "bt_total_trades": risk_metrics["total_trades"],
+        "bt_win_rate": risk_metrics["win_rate"],
+        "bt_avg_len": risk_metrics["avg_len"],
+        "bt_max_len": risk_metrics["max_len"],
+        "bt_profit_factor": risk_metrics["profit_factor"],
+        "bt_avg_pnl": risk_metrics["avg_pnl"],
     }
 
 def main():
     parser = argparse.ArgumentParser(description="批量 BT 回测 (支持 Top-K 筛选)")
     parser.add_argument("--topk", type=int, default=None, help="仅回测 VEC 收益最高的 Top-K 个组合")
     parser.add_argument("--sort-by", type=str, default="total_return", help="排序字段 (默认: total_return)")
+    parser.add_argument("--combos", type=str, default=None, help="指定组合文件路径 (parquet)")
     args = parser.parse_args()
 
     print("=" * 80)
     print("批量 BT 回测：多进程并行版 (Ryzen 9950X Optimized)")
-    if args.topk:
+    if args.combos:
+        print(f"🎯 指定组合文件: {args.combos}")
+    elif args.topk:
         print(f"🎯 筛选模式: Top {args.topk} (按 {args.sort_by} 排序)")
     else:
         print("⚙️ 全量模式: 回测所有组合")
     print("=" * 80)
 
-    # 1. 加载 WFO 结果
-    wfo_dirs = sorted((ROOT / "results").glob("unified_wfo_*"))
-    if not wfo_dirs:
-        print("❌ 未找到 WFO 结果目录")
-        return
-    latest_wfo = wfo_dirs[-1]
-    combos_path = latest_wfo / "all_combos.parquet"
-    if not combos_path.exists():
-        print(f"❌ 未找到 {combos_path}")
-        return
+    # 1. 加载 WFO 结果（优先 run_* 目录，兼容旧 unified_wfo_*）
+    if args.combos:
+        combos_path = Path(args.combos)
+        if not combos_path.exists():
+            print(f"❌ 错误: 文件不存在 {combos_path}")
+            sys.exit(1)
+        df_combos = pd.read_parquet(combos_path)
+    else:
+        results_root = ROOT / "results"
+        wfo_dirs = sorted(
+            [d for d in results_root.glob("run_*") if d.is_dir() and not d.is_symlink()]
+        )
+        if not wfo_dirs:
+            wfo_dirs = sorted(results_root.glob("unified_wfo_*") )
 
-    df_combos = pd.read_parquet(combos_path)
-    print(f"✅ 加载 WFO 结果：{len(df_combos)} 个组合")
+        if not wfo_dirs:
+            print("❌ 未找到 WFO 结果目录")
+            return
 
-    # 筛选 Top-K
-    if args.topk:
-        if args.sort_by not in df_combos.columns:
-            print(f"⚠️ 警告: 列 {args.sort_by} 不存在，无法排序。将使用原始顺序。")
-        else:
-            df_combos = df_combos.sort_values(args.sort_by, ascending=False).head(args.topk)
-            print(f"✅ 已筛选 Top {len(df_combos)} 组合 (Min {args.sort_by}: {df_combos[args.sort_by].min():.4f})")
+        latest_wfo = wfo_dirs[-1]
+        combos_path = latest_wfo / "top100_by_ic.parquet"
+        if not combos_path.exists():
+            combos_path = latest_wfo / "all_combos.parquet"
+
+        if not combos_path.exists():
+            print(f"❌ 未找到 {combos_path}")
+            return
+
+        df_combos = pd.read_parquet(combos_path)
+        print(f"✅ 加载 WFO 结果 ({latest_wfo.name})：{len(df_combos)} 个组合")
+
+        # 筛选 Top-K
+        if args.topk:
+            if args.sort_by not in df_combos.columns:
+                print(f"⚠️ 警告: 列 {args.sort_by} 不存在，无法排序。将使用原始顺序。")
+            else:
+                df_combos = df_combos.sort_values(args.sort_by, ascending=False).head(args.topk)
+                print(f"✅ 已筛选 Top {len(df_combos)} 组合 (Min {args.sort_by}: {df_combos[args.sort_by].min():.4f})")
 
     # 2. 加载数据
     config_path = ROOT / "configs/combo_wfo_config.yaml"
@@ -192,7 +328,33 @@ def main():
     dates = first_factor.index
     etf_codes = first_factor.columns.tolist()
 
-    timing_module = LightTimingModule()
+    # ✅ P0: 从配置文件读取回测参数
+    backtest_config = config.get("backtest", {})
+    freq = backtest_config.get("freq", 8)
+    pos_size = backtest_config.get("pos_size", 3)
+    initial_capital = float(backtest_config.get("initial_capital", 1_000_000.0))
+    commission_rate = float(backtest_config.get("commission_rate", 0.0002))
+    lookback = backtest_config.get("lookback", 252)
+    
+    print(f"✅ 回测参数: FREQ={freq}, POS={pos_size}, Capital={initial_capital}, Comm={commission_rate}")
+
+    # ✅ P1: 从配置文件读取择时参数
+    timing_config = config.get("backtest", {}).get("timing", {})
+    extreme_threshold = timing_config.get("extreme_threshold", -0.4)
+    extreme_position = timing_config.get("extreme_position", 0.3)
+    print(f"✅ 择时参数: threshold={extreme_threshold}, position={extreme_position}")
+
+    # ✅ P2: 从配置文件读取动态杠杆参数
+    dl_config = config.get("backtest", {}).get("risk_control", {}).get("dynamic_leverage", {})
+    dynamic_leverage_enabled = dl_config.get("enabled", False)
+    target_vol = dl_config.get("target_vol", 0.20)
+    vol_window = dl_config.get("vol_window", 20)
+    print(f"✅ 动态杠杆: enabled={dynamic_leverage_enabled}, target_vol={target_vol}, vol_window={vol_window}")
+    
+    timing_module = LightTimingModule(
+        extreme_threshold=extreme_threshold,
+        extreme_position=extreme_position,
+    )
     timing_series_raw = timing_module.compute_position_ratios(ohlcv["close"])
     # ✅ 使用 shift_timing_signal 做 t-1 shift，避免未来函数
     timing_arr_shifted = shift_timing_signal(timing_series_raw.reindex(dates).fillna(1.0).values)
@@ -217,8 +379,9 @@ def main():
     print(f"✅ 数据加载完成：{len(dates)} 天 × {len(etf_codes)} 只 ETF")
 
     # 4. 多进程回测
-    # Ryzen 9950X 有 16 核 32 线程。保留一点余量，使用 28-30 个进程。
-    num_workers = 30
+    # Ryzen 9950X: 16核32线程，使用 24 并发 (留 8 线程给系统)
+    # 有 200GB swap 支持，峰值内存 ~150GB 可缓冲到 swap
+    num_workers = 24
     print(f"🚀 启动多进程回测 (Workers: {num_workers})...")
 
     # 准备任务列表 (转换为 dict 列表以便传递)
@@ -227,7 +390,7 @@ def main():
     print(f"🚀 准备回测 {len(tasks)} 个组合...")
 
     results = []
-    with mp.Pool(processes=num_workers, initializer=init_worker, initargs=(data_feeds, std_factors, timing_series, etf_codes)) as pool:
+    with mp.Pool(processes=num_workers, initializer=init_worker, initargs=(data_feeds, std_factors, timing_series, etf_codes, target_vol, vol_window, dynamic_leverage_enabled, freq, pos_size, initial_capital, commission_rate, lookback)) as pool:
         # 使用 imap_unordered 获取实时进度
         for res in tqdm(pool.imap(process_combo, tasks), total=len(tasks), desc="BT 并行回测"):
             results.append(res)

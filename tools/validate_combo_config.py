@@ -11,8 +11,8 @@ from typing import Any, Iterable, Sequence
 
 import yaml
 
-DEFAULT_TARGET = Path("etf_rotation_experiments/configs/combo_wfo_config.yaml")
-DEFAULT_BASELINE = Path("etf_rotation_optimized/configs/combo_wfo_config.yaml")
+DEFAULT_TARGET = Path("configs/combo_wfo_config.yaml")
+DEFAULT_BASELINE = Path("configs/combo_wfo_config.yaml")
 KEY_PATHS: Sequence[Sequence[str]] = (
     ("backtest", "commission_rate"),
     ("backtest", "initial_capital"),

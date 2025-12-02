@@ -20,7 +20,7 @@ install-prod:  ## 仅安装生产依赖
 
 # ============ 核心工作流 ============
 wfo:  ## 运行 WFO 筛选（12,597 组合）
-	uv run python etf_rotation_optimized/run_unified_wfo.py
+	uv run python etf_rotation_optimized/run_combo_wfo.py
 
 vec:  ## 运行 VEC 批量回测
 	uv run python scripts/batch_vec_backtest.py

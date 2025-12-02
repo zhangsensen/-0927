@@ -6,7 +6,7 @@ and generate a live_strategies.csv with capital allocation and rebalance frequen
 
 Usage:
   python scripts/select_diverse_strategies.py \
-    --run-dir etf_rotation_optimized/results/run_YYYYMMDD_HHMMSS \
+    --run-dir etf_strategy/results/run_YYYYMMDD_HHMMSS \
     --target 12 --threshold 0.6 --capital 1000000 --cash-buffer 0.15 --rebalance-freq 8
 
 Outputs:

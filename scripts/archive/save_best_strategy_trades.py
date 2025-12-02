@@ -14,16 +14,16 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.getcwd())
 
 try:
-    from etf_rotation_optimized.core.data_loader import DataLoader
-    from etf_rotation_optimized.core.precise_factor_library_v2 import PreciseFactorLibrary
-    from etf_rotation_optimized.core.cross_section_processor import CrossSectionProcessor
-    from etf_rotation_optimized.core.market_timing import LightTimingModule
+    from etf_strategy.core.data_loader import DataLoader
+    from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
+    from etf_strategy.core.cross_section_processor import CrossSectionProcessor
+    from etf_strategy.core.market_timing import LightTimingModule
 except ImportError:
     sys.path.append(str(Path(os.getcwd()).parent))
-    from etf_rotation_optimized.core.data_loader import DataLoader
-    from etf_rotation_optimized.core.precise_factor_library_v2 import PreciseFactorLibrary
-    from etf_rotation_optimized.core.cross_section_processor import CrossSectionProcessor
-    from etf_rotation_optimized.core.market_timing import LightTimingModule
+    from etf_strategy.core.data_loader import DataLoader
+    from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
+    from etf_strategy.core.cross_section_processor import CrossSectionProcessor
+    from etf_strategy.core.market_timing import LightTimingModule
 
 # Rank 8983
 COMBO = "SHARPE_RATIO_20D + VORTEX_14D"

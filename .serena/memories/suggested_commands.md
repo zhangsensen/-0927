@@ -1,9 +1,23 @@
-# Suggested Commands
-- `cd etf_rotation_optimized && make install` – install dependencies for ETF rotation subsystem.
-- `cd etf_rotation_optimized && make run` – execute the end-to-end ETF rotation pipeline.
-- `pytest -v` – run repository-wide tests.
-- `black path/to/module` & `isort path/to/module` – format Python code.
-- `mypy path/to/module` – static type checks.
-- `pre-commit run --all-files` – run repository lint suite.
-- `python scripts/train_two_stage_ranker.py --help` – inspect ML ranking trainer options.
-- `python real_backtest/run_profit_backtest.py --help` – review live backtest entrypoint options.
+# Suggested Commands (v1.1)
+
+## Environment Setup
+- `uv sync --dev` – install all dependencies
+- `uv pip install -e .` – install project in editable mode (required for imports)
+
+## Production Workflow (reproduce 121% returns)
+- `uv run python src/etf_strategy/run_combo_wfo.py` – WFO screening (12,597 combos)
+- `uv run python scripts/batch_vec_backtest.py` – VEC batch backtest
+- `uv run python scripts/batch_bt_backtest.py` – BT audit (optional)
+
+## Testing & Quality
+- `uv run pytest tests/ -v` – run all tests (20 tests)
+- `make format` – format code (black + isort)
+- `make lint` – lint code (flake8 + mypy)
+
+## Utilities
+- `uv run python tools/validate_combo_config.py` – validate configuration
+- `uv run python scripts/full_vec_bt_comparison.py` – VEC/BT alignment check
+
+## Important Notes
+- All Python scripts MUST use `uv run python` prefix
+- DO NOT use `python` or `python3` directly

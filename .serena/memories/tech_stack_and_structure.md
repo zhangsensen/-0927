@@ -1,11 +1,16 @@
-# Tech Stack & Structure
-- Primary language: Python with pandas, numpy, numba, LightGBM; configuration via YAML.
+# Tech Stack & Structure (v1.1)
+- Primary language: Python 3.11+ with pandas, numpy, numba, LightGBM; configuration via YAML.
+- Package manager: UV (required); all scripts MUST use `uv run python <script>`
 - Build & env tools: Make, uv, pre-commit, pytest.
-- Key directories:
-  - `etf_rotation_optimized/`: production ETF rotation engine (core, configs, docs, tests).
-  - `etf_rotation_experiments/`: experimental ranking and backtest workflows for ETF strategies.
-  - `factor_system/`: shared factor computation framework.
-  - `real_backtest/`: production-grade profit backtest scripts.
-  - `results/` & `results_combo_wfo/`: generated artifacts and WFO backtests.
-  - `scripts/`: utility CLI scripts.
-- Data artifacts stored in parquet/csv under `results/` or subsystem-specific folders; large archives kept in `deployment_archive_*`.
+- Key directories (v1.1 src/ layout):
+  - `src/etf_strategy/`: 🎯 core ETF rotation engine (WFO + VEC + BT auditor)
+    - `src/etf_strategy/run_combo_wfo.py`: main WFO entry point
+    - `src/etf_strategy/core/`: core modules (🔒 do not modify)
+    - `src/etf_strategy/auditor/`: BT auditor module
+  - `src/etf_data/`: standalone data download tool (not used by main pipeline)
+  - `scripts/`: operational scripts (batch_vec_backtest.py, batch_bt_backtest.py, etc.)
+  - `configs/`: global configuration (combo_wfo_config.yaml, etf_pools.yaml)
+  - `results/`: generated artifacts and backtest results
+  - `.cache/`: OHLCV data cache
+- Data artifacts stored in parquet/csv under `results/`; best results in `ARCHIVE_*/`.
+- Import pattern: `from etf_strategy.core.xxx import yyy` (editable install via `uv pip install -e .`)

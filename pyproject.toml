@@ -199,6 +199,6 @@ Documentation = "https://github.com/zhangsensen/quant-factor-trading/blob/main/R
 Changelog = "https://github.com/zhangsensen/quant-factor-trading/releases"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["etf_rotation_optimized*", "etf_download_manager*", "etf_rotation_experiments*"]
+where = ["src"]
+include = ["etf_strategy*", "etf_data*"]
 exclude = ["tests*", "scripts*", "docs*", "config*", "configs*", "raw*", "results*", "untitled*"]

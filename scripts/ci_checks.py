@@ -15,9 +15,68 @@ from pathlib import Path
 
 import pandas as pd
 from path_utils import get_ci_thresholds, get_paths
+from vec_bt_alignment_check import compare_vec_bt_results
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
+
+BANNED_SIMPLIFIED_KEYWORDS = (
+    "run_unified",
+    "direct_factor",
+    "single-pass",
+    "single_pass",
+    "simple_wfo",
+    "simplified_wfo",
+    "_simple",
+    "_simplified",
+)
+
+ALLOWED_ARCHIVE_PREFIXES = (
+    ("scripts", "archive"),
+    ("docs", "archive"),
+    ("results",),
+    ("raw",),
+    ("etf_strategy", "docs", "archive"),
+    ("etf_strategy", "scripts", "archive"),
+    (".venv",),
+)
+
+
+def _has_allowed_prefix(parts, prefix):
+    lowered_parts = tuple(part.lower() for part in parts)
+    lowered_prefix = tuple(part.lower() for part in prefix)
+    plen = len(lowered_prefix)
+    for idx in range(len(lowered_parts) - plen + 1):
+        if lowered_parts[idx : idx + plen] == lowered_prefix:
+            return True
+    return False
+
+
+def _is_under_allowed_directory(parts):
+    if not parts:
+        return False
+    if parts[0].lower().startswith("backup_"):
+        return True
+    for prefix in ALLOWED_ARCHIVE_PREFIXES:
+        if _has_allowed_prefix(parts, prefix):
+            return True
+    return False
+
+
+def detect_simplified_artifacts(project_root: Path):
+    """Return a list of relative paths that violate the no-simplified policy."""
+
+    hits = []
+    for path in project_root.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(project_root)
+        if _is_under_allowed_directory(rel.parts):
+            continue
+        lowered = rel.as_posix().lower()
+        if any(keyword in lowered for keyword in BANNED_SIMPLIFIED_KEYWORDS):
+            hits.append(rel)
+    return hits
 
 
 def ci_checks(
@@ -26,6 +85,13 @@ def ci_checks(
     max_drawdown=-0.30,
     min_sharpe=0.50,
     min_winrate=0.45,
+    *,
+    results_root="results",
+    vec_results_pattern="vec_full_backtest_*",
+    bt_results_pattern="bt_backtest_full_*",
+    vec_bt_threshold_pp=0.05,
+    skip_vec_bt_check=False,
+    skip_simplified_scan=False,
 ):
     """CI检查
 
@@ -40,6 +106,18 @@ def ci_checks(
 
     output_dir = Path(output_dir)
     all_passed = True
+
+    if not skip_simplified_scan:
+        logger.info("\n0. 简化版/备份脚本扫描")
+        project_root = Path(__file__).resolve().parents[1]
+        hits = detect_simplified_artifacts(project_root)
+        if hits:
+            logger.error("   ❌ 发现违规命名的脚本/文件：")
+            for rel in hits:
+                logger.error(f"      - {rel}")
+            all_passed = False
+        else:
+            logger.info("   ✅ 未检测到违规命名")
 
     # 1. 静态扫描：强制shift(1)
     logger.info(f"\n1. 静态扫描：强制shift(1)")
@@ -235,6 +313,28 @@ def ci_checks(
         logger.error("   ❌ 元数据文件不存在")
         all_passed = False
 
+    # 9. VEC/BT 对齐检查
+    if not skip_vec_bt_check:
+        logger.info("\n9. VEC/BT 对齐检查（阈值 %.3f pp）", vec_bt_threshold_pp)
+        try:
+            summary = compare_vec_bt_results(
+                results_root=Path(results_root),
+                vec_pattern=vec_results_pattern,
+                bt_pattern=bt_results_pattern,
+                threshold_pp=vec_bt_threshold_pp,
+            )
+            logger.info("   ✅ 对齐通过：%s vs %s", summary.vec_dir.name, summary.bt_dir.name)
+            logger.info(
+                "   统计：avg=%.4fpp median=%.4fpp max=%.4fpp combos=%d",
+                summary.avg_abs_diff_pp,
+                summary.median_abs_diff_pp,
+                summary.max_abs_diff_pp,
+                summary.total_pairs,
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            logger.error("   ❌ %s", exc)
+            all_passed = False
+
     logger.info(f"\n{'=' * 80}")
     if all_passed:
         logger.info("✅ CI检查通过")
@@ -282,6 +382,40 @@ if __name__ == "__main__":
         default=thresholds["min_winrate"],
         help="月胜率最小阈值",
     )
+    parser.add_argument(
+        "--results-root",
+        type=str,
+        default="results",
+        help="VEC/BT 结果根目录",
+    )
+    parser.add_argument(
+        "--vec-pattern",
+        type=str,
+        default="vec_full_backtest_*",
+        help="VEC 结果目录匹配模式",
+    )
+    parser.add_argument(
+        "--bt-pattern",
+        type=str,
+        default="bt_backtest_full_*",
+        help="BT 结果目录匹配模式",
+    )
+    parser.add_argument(
+        "--vec-bt-threshold-pp",
+        type=float,
+        default=0.05,
+        help="VEC/BT 差异阈值（百分点）",
+    )
+    parser.add_argument(
+        "--skip-vec-bt-check",
+        action="store_true",
+        help="跳过 VEC/BT 对齐检查",
+    )
+    parser.add_argument(
+        "--skip-simplified-scan",
+        action="store_true",
+        help="跳过简化版/备份命名扫描",
+    )
     args = parser.parse_args()
 
     success = ci_checks(
@@ -290,5 +424,11 @@ if __name__ == "__main__":
         max_drawdown=args.max_drawdown,
         min_sharpe=args.min_sharpe,
         min_winrate=args.min_winrate,
+        results_root=args.results_root,
+        vec_results_pattern=args.vec_pattern,
+        bt_results_pattern=args.bt_pattern,
+        vec_bt_threshold_pp=args.vec_bt_threshold_pp,
+        skip_vec_bt_check=args.skip_vec_bt_check,
+        skip_simplified_scan=args.skip_simplified_scan,
     )
     sys.exit(0 if success else 1)

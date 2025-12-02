@@ -18,15 +18,14 @@ def load_wfo_results():
     """加载WFO结果"""
     import sys
 
-    sys.path.insert(0, str(PROJECT_ROOT / "etf_rotation_optimized"))
-    wfo_dir = PROJECT_ROOT / "etf_rotation_optimized/results/wfo/20251027_170352"
+    wfo_dir = PROJECT_ROOT / "etf_strategy/results/wfo/20251027_170352"
     with open(wfo_dir / "wfo_results.pkl", "rb") as f:
         return pickle.load(f)
 
 
 def load_backtest_results(ts="20251027_174911"):
     """加载回测结果"""
-    backtest_dir = PROJECT_ROOT / f"etf_rotation_optimized/results/backtest/{ts}"
+    backtest_dir = PROJECT_ROOT / f"etf_strategy/results/backtest/{ts}"
     return pd.read_csv(backtest_dir / "combination_performance.csv")
 
 

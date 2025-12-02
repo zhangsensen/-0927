@@ -211,7 +211,7 @@ timing = self.params.timing.loc[current_date]  # timing 已经是 shifted 版本
 ```
 
 **修复文件**:
-- `etf_rotation_optimized/core/utils/rebalance.py` (新增 helper)
+- `src/etf_strategy/core/utils/rebalance.py` (新增 helper)
 - `scripts/batch_vec_backtest.py` (调用 shift)
 - `strategy_auditor/core/engine.py` (使用 shifted timing)
 
@@ -277,7 +277,7 @@ if bar_index in self.rebalance_set:
 ```
 
 **修复文件**:
-- `etf_rotation_optimized/core/utils/rebalance.py` (新增 helper)
+- `src/etf_strategy/core/utils/rebalance.py` (新增 helper)
 - `scripts/batch_vec_backtest.py` (使用 helper)
 - `strategy_auditor/core/engine.py` (使用 helper)
 
@@ -321,7 +321,7 @@ LOOKBACK = 252              # 预热期（交易日）
 ### 共享工具位置
 
 ```
-etf_rotation_optimized/core/utils/rebalance.py
+src/etf_strategy/core/utils/rebalance.py
 ├── generate_rebalance_schedule()  # 调仓日程生成
 ├── shift_timing_signal()          # 择时信号偏移
 └── ensure_price_views()           # 价格数据验证

@@ -12,9 +12,9 @@ from datetime import datetime
 
 sys.path.append(os.getcwd())
 
-from etf_rotation_optimized.core.data_loader import DataLoader
-from etf_rotation_optimized.core.precise_factor_library_v2 import PreciseFactorLibrary
-from etf_rotation_optimized.core.cross_section_processor import CrossSectionProcessor
+from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
+from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 
 COMBO = "SHARPE_RATIO_20D + VORTEX_14D"
 FREQ = 8
