@@ -35,6 +35,7 @@ Requires-Dist: seaborn>=0.13.2
 Requires-Dist: mplfinance>=0.12.10b0
 Requires-Dist: plotly>=5.24.0
 Requires-Dist: pandas-vet>=2023.8.2
+Requires-Dist: akshare>=1.17.91
 Provides-Extra: web
 Requires-Dist: dash>=2.18.0; extra == "web"
 Requires-Dist: beautifulsoup4>=4.13.5; extra == "web"
@@ -70,19 +71,51 @@ Requires-Dist: quant-factor-trading[database,dev,scheduling,web]; extra == "all"
 
 # 深度量化0927 - ETF 轮动策略研究平台
 
-> **版本**: v1.1 (架构更新)  
-> **封板日期**: 2025-11-28 (策略逻辑)  
-> **架构更新**: 2025-11-30 (src 布局)  
-> **Python**: 3.11+  
+> **最新版本**: v3.0 (高频轮动 Alpha)
+> **发布日期**: 2025-12-01
+> **核心文档**: [STRATEGY_BLUEPRINT_V3.md](STRATEGY_BLUEPRINT_V3.md) (👈 **必读：新一代策略蓝图**)
+> **Python**: 3.11+
 > **包管理**: [UV](https://docs.astral.sh/uv/) (v0.9+)
 
 ---
 
-## 🏆 v1.0 封板声明
+## 🚀 v3.0 重大更新 (2025-12-01)
+
+**我们已从 v1.0 的"防御型"策略全面转向 v3.0 "高频进攻型"策略。**
+
+- **收益率**: 121% (v1.0) -> **237% (v3.0)**
+- **Calmar**: 0.66 (v1.0) -> **2.15 (v3.0)**
+- **核心逻辑**: 3日轮动 + Top 2 集中持仓 + 无止损
+- **详情请见**: [STRATEGY_BLUEPRINT_V3.md](STRATEGY_BLUEPRINT_V3.md)
+
+### ⚠️ 关键发现 (v3.1 审计)
+
+**现有 5 只 QDII 是策略的核心 Alpha 来源！**
+
+| QDII ETF | 名称 | 贡献 | 胜率 |
+|----------|------|------|------|
+| 513500 | 标普500 | +25.37% | 68.9% |
+| 513130 | 恒生科技(港元) | +23.69% | 53.3% |
+| 513100 | 纳指100 | +22.03% | 61.3% |
+| 159920 | 恒生指数 | +17.13% | 70.0% |
+| 513050 | 中概互联 | +2.01% | 44.4% |
+| **合计** | | **+90.23%** | **~60%** |
+
+- 移除 QDII → 收益从 237% 降至 177%（损失 60pp）
+- **详见**: [docs/ETF_POOL_ARCHITECTURE.md](docs/ETF_POOL_ARCHITECTURE.md)
+
+---
+
+## 🏆 v1.0 历史版本 (Legacy - 仅供参考)
+
+> ⚠️ **注意**: 以下为 v1.0 历史配置，**当前生产环境使用 v3.0 参数**
 
 **本项目 v1.0 版本已于 2025-11-28 封板**，核心策略已验证可复现。
 
-### 核心策略：43 ETF 统一轮动
+<details>
+<summary>📜 点击展开 v1.0 历史配置</summary>
+
+### v1.0 核心策略：43 ETF 统一轮动
 
 | 指标 | 数值 | 说明 |
 |------|------|------|
@@ -91,7 +124,10 @@ Requires-Dist: quant-factor-trading[database,dev,scheduling,web]; extra == "all"
 | **回测收益率** | **121.02%** | 2020-01-01 至 2025-10-14 |
 | **胜率** | 54.59% | 196 笔交易 |
 | **盈亏比** | 1.414 | - |
-| **可复现性** | ✅ 已验证 | 12,597 组合全量对比零差异 |
+| **FREQ** | 8 | ⚠️ 旧参数 |
+| **POS_SIZE** | 3 | ⚠️ 旧参数 |
+
+</details>
 
 ---
 
@@ -121,10 +157,10 @@ cd /path/to/project
 uv sync --dev              # 安装所有依赖
 ```
 
-### 2. 生产工作流（复现 121% 收益）
+### 2. 生产工作流（复现 237% 收益）
 
 ```bash
-# Step 1: WFO 筛选 - 从 12,597 组合中筛选
+# Step 1: WFO 筛选 - 从 12,597 组合中筛选 (FREQ=3)
 uv run python src/etf_strategy/run_combo_wfo.py
 
 # Step 2: VEC 复算 - 全量精确回测
@@ -136,13 +172,13 @@ uv run python scripts/batch_bt_backtest.py
 
 ### 3. 验证结果
 
-最佳策略应为：
+最佳策略应为（v3.0）：
 ```
-组合: CORRELATION_TO_MARKET_20D + MAX_DD_60D + PRICE_POSITION_120D + PRICE_POSITION_20D
-收益率: 121.02%
-胜率: 54.59%
-盈亏比: 1.414
-交易次数: 196
+组合: ADX_14D + MAX_DD_60D + PRICE_POSITION_120D + PRICE_POSITION_20D + SHARPE_RATIO_20D
+收益率: 237.45%
+胜率: 52.9%
+盈亏比: 2.16
+参数: FREQ=3, POS=2
 ```
 
 ### ⚠️ 运行命令规范
@@ -232,22 +268,24 @@ python3 script.py
 
 ---
 
-## 📊 核心参数（v1.0 固定）
+## 📊 核心参数（v3.0 生产配置）
 
-| 参数 | 值 | 说明 |
-|------|-----|------|
-| `FREQ` | 8 | 调仓频率（交易日） |
-| `POS_SIZE` | 3 | 持仓数量 |
-| `INITIAL_CAPITAL` | 1,000,000 | 初始资金 |
-| `COMMISSION` | 0.0002 | 手续费率 (2bp) |
-| `LOOKBACK` | 252 | 回看窗口（交易日） |
-| **ETF 数量** | 43 | 统一池 |
-| **因子数量** | 18 | PreciseFactorLibrary |
-| **组合数量** | 12,597 | C(18,2)+C(18,3)+C(18,4)+C(18,5) |
+| 参数 | v3.0 值 | v1.0 值 | 说明 |
+|------|---------|---------|------|
+| `FREQ` | **3** | 8 | 调仓频率（交易日）|
+| `POS_SIZE` | **2** | 3 | 持仓数量 |
+| `INITIAL_CAPITAL` | 1,000,000 | 同 | 初始资金 |
+| `COMMISSION` | 0.0002 | 同 | 手续费率 (2bp) |
+| `LOOKBACK` | 252 | 同 | 回看窗口（交易日） |
+| **ETF 数量** | **43** | 43 | 38 A股 + 5 QDII ⚠️ |
+| **因子数量** | 18 | 18 | PreciseFactorLibrary |
+| **最佳因子组合** | ADX + MAX_DD + PP_120D + PP_20D + SHARPE | CORR + MAX_DD + PP_120D + PP_20D | 5因子 vs 4因子 |
+
+> ⚠️ **关键**: 5 只 QDII 贡献 +90% 收益，禁止移除！详见 [docs/ETF_POOL_ARCHITECTURE.md](docs/ETF_POOL_ARCHITECTURE.md)
 
 ---
 
-## 🔒 v1.0 封板规则
+## 🔒 v3.0 封板规则
 
 ### ✅ 允许的修改
 
@@ -255,13 +293,15 @@ python3 script.py
 - 数据源适配
 - 文档完善
 - 性能优化（不改变结果）
+- 数据更新（新日期数据）
 
 ### ❌ 禁止的修改
 
 - 修改核心因子库
 - 修改回测引擎逻辑
-- 修改参数默认值
-- 修改 ETF 池定义
+- **修改参数默认值 (FREQ=3, POS=2)**
+- **修改 ETF 池定义（特别是 5 只 QDII）**
+- 删除 ARCHIVE 存档
 
 ## 🚫 「简化版 / 备份脚本」禁令
 
@@ -295,11 +335,13 @@ python3 script.py
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| **v1.1** | 2025-11-30 | 架构重构：统一 `src/` 布局，消除 `sys.path` hack |
-| **v1.0** | 2025-11-28 | 🔒 封板。统一策略 121.02% 收益率验证通过 |
+| **v3.1** | 2025-12-01 | 🔬 ETF 池深度审计：确认 5 只 QDII 贡献 90%+ 收益 |
+| **v3.0** | 2025-12-01 | 🚀 高频策略升级：FREQ=3, POS=2, 收益 237.45% |
+| v1.1 | 2025-11-30 | 架构重构：统一 `src/` 布局 |
+| v1.0 | 2025-11-28 | 🔒 统一策略 121.02% 验证通过 |
 | v0.9 | 2025-11-16 | VEC/BT 对齐完成 |
 | v0.8 | 2025-11-09 | 性能优化冻结 |
 
 ---
 
-**维护者**: 深度量化团队 | **License**: MIT
+**维护者**: 深度量化团队 | **License**: MIT | **🔒 v3.1 策略封板 | 237.45% 收益已验证**

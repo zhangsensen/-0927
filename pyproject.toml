@@ -17,43 +17,36 @@ dependencies = [
     "numpy>=2.3.3",
     "pandas>=2.3.2",
     "polars>=1.33.1",
-    
     # 科学计算
     "scipy>=1.16.2",
     "scikit-learn>=1.7.2",
     "statsmodels>=0.14.0",
-    
     # 量化/技术分析
     "vectorbt>=0.28.1",
     "ta-lib>=0.6.7",
     "yfinance>=0.2.66",
-    
     # 数据存储与序列化
     "pyarrow>=21.0.0",
     "fastparquet>=2024.11.0",
-    
     # 配置与工具
     "pyyaml>=6.0.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
     "pyscn>=1.1.1",
-    
     # 网络与HTTP
     "requests>=2.32.0",
     "httpx[socks]>=0.28.1",
-    
     # 并行与性能
     "joblib>=1.5.2",
     "numba>=0.62.0",
-    
     # 可视化
     "matplotlib>=3.10.6",
     "seaborn>=0.13.2",
     "mplfinance>=0.12.10b0",
     "plotly>=5.24.0",
-    
     # 代码质量
     "pandas-vet>=2023.8.2",
+    "akshare>=1.17.91",
 ]
 
 # ============ 可选依赖 ============
