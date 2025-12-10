@@ -95,10 +95,23 @@ def main():
         cache_dir=config["data"].get("cache_dir"),
     )
 
+    # 使用 training_end_date 如果设置了（Holdout验证模式）
+    data_end_date = config["data"].get("training_end_date") or config["data"]["end_date"]
+    
+    if config["data"].get("training_end_date"):
+        logger.info("=" * 100)
+        logger.info("🔬 HOLDOUT验证模式")
+        logger.info("=" * 100)
+        logger.info(f"训练集截止日期: {data_end_date}")
+        logger.info(f"完整数据截止日期: {config['data']['end_date']}")
+        logger.info(f"Holdout期: {data_end_date} 至 {config['data']['end_date']}")
+        logger.info("⚠️  注意: 当前仅使用训练集数据，Holdout期数据将用于最终验证")
+        logger.info("")
+
     ohlcv = loader.load_ohlcv(
         etf_codes=config["data"]["symbols"],
         start_date=config["data"]["start_date"],
-        end_date=config["data"]["end_date"],
+        end_date=data_end_date,  # 使用训练集截止日期
         use_cache=True,
     )
 

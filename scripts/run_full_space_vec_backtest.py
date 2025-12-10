@@ -51,6 +51,19 @@ def main():
 
     # 2. Load Data
     print("\nLoading Data...")
+    
+    # 使用 training_end_date 如果设置了（Holdout验证模式）
+    data_end_date = config["data"].get("training_end_date") or config["data"]["end_date"]
+    
+    if config["data"].get("training_end_date"):
+        print("=" * 80)
+        print("🔬 HOLDOUT验证模式")
+        print("=" * 80)
+        print(f"训练集截止日期: {data_end_date}")
+        print(f"完整数据截止日期: {config['data']['end_date']}")
+        print("⚠️  注意: 当前仅使用训练集数据，Holdout期数据将用于最终验证")
+        print("")
+
     loader = DataLoader(
         data_dir=config['data'].get('data_dir'),
         cache_dir=config['data'].get('cache_dir'),
@@ -58,7 +71,7 @@ def main():
     ohlcv = loader.load_ohlcv(
         etf_codes=config['data']['symbols'],
         start_date=config['data']['start_date'],
-        end_date=config['data']['end_date'],
+        end_date=data_end_date,  # 使用训练集截止日期
     )
 
     # 3. Compute Factors

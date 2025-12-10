@@ -177,8 +177,12 @@ class DataLoader:
             raise ValueError("没有加载到任何数据")
 
         all_dates = result["close"].index
+        # 确保列按字母顺序排序，保证 VEC/BT 对齐
+        sorted_cols = sorted(result["close"].columns)
+
         for col in result:
             result[col] = result[col].reindex(all_dates)
+            result[col] = result[col][sorted_cols]
 
         logger.info(
             f"加载完成: {len(result['close'].columns)} ETFs × {len(result['close'])} 日期"

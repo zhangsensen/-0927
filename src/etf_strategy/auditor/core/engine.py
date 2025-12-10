@@ -51,10 +51,17 @@ class GenericStrategy(bt.Strategy):
         self.position_costs = {}  # {ticker: total_cost}
         
         # ✅ 预计算调仓日集合
+        self.use_date_schedule = False
         if self.params.rebalance_schedule is not None:
-            self.rebalance_set = set(self.params.rebalance_schedule.tolist())
-        else:
-            self.rebalance_set = None
+            schedule = self.params.rebalance_schedule
+            if len(schedule) > 0 and (isinstance(schedule[0], str) or hasattr(schedule[0], 'date')):
+                # 如果是日期字符串或对象
+                self.rebalance_set = set(pd.to_datetime(d).date() for d in schedule)
+                self.use_date_schedule = True
+            else:
+                # 假设是整数索引
+                self.rebalance_set = set(schedule.tolist() if hasattr(schedule, 'tolist') else schedule)
+
         
         # ✅ P2: 动态降权 - 环形缓冲区存储日收益率
         self.returns_buffer = []
@@ -70,6 +77,8 @@ class GenericStrategy(bt.Strategy):
             if order.isbuy():
                 self.position_costs[ticker] = self.position_costs.get(ticker, 0) + executed_value
             
+            print(f"BT TRADE: {self.datas[0].datetime.date(0)} {ticker} {'BUY' if order.isbuy() else 'SELL'} Price: {order.executed.price:.3f}")
+
             self.orders.append({
                 'date': self.datas[0].datetime.date(0),
                 'ticker': ticker,
@@ -130,7 +139,11 @@ class GenericStrategy(bt.Strategy):
         # 调仓日
         should_rebalance = False
         if self.rebalance_set is not None:
-            should_rebalance = bar_index in self.rebalance_set
+            if self.use_date_schedule:
+                current_date = self.datas[0].datetime.date(0)
+                should_rebalance = current_date in self.rebalance_set
+            else:
+                should_rebalance = bar_index in self.rebalance_set
         else:
             should_rebalance = (bar_index % self.params.freq == 0)
 

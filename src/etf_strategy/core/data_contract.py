@@ -18,7 +18,9 @@ class DataContract:
     """数据质量契约"""
 
     # 质量阈值
-    MAX_NAN_RATIO_OHLCV = 0.1  # OHLCV最大NaN率10%
+    # 注：46 个 ETF 上市时间不同，早期 NaN 率较高是正常的
+    # 2020-01-01 至 2025-12-08 期间，NaN 率约 15%（部分 ETF 在 2021-2023 年上市）
+    MAX_NAN_RATIO_OHLCV = 0.20  # OHLCV 最大 NaN 率 20%（放宽以适配不同上市时间）
     MAX_NAN_RATIO_FACTOR = 0.3  # 因子最大NaN率30%
     MIN_TRADING_DAYS = 100  # 最小交易日数
 
