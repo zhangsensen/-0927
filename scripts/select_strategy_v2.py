@@ -20,7 +20,13 @@ import yaml
 import pandas as pd
 import numpy as np
 
+from etf_strategy.core.data_loader import DataLoader
+
 ROOT = Path(__file__).parent.parent
+
+# 近期震荡市窗口（Regime Fitness Filter）
+RECENT_START = pd.Timestamp("2025-01-01")
+RECENT_END = pd.Timestamp("2025-05-31")
 
 
 def load_latest_results():
@@ -149,6 +155,103 @@ def apply_ic_threshold(merged: pd.DataFrame, config: dict) -> pd.DataFrame:
     print(f"   过滤: {len(merged) - len(passed)} 个策略")
     
     return passed
+
+
+def _build_oos_windows(config: dict) -> list[pd.Interval]:
+    """根据配置构建 WFO 的 OOS 窗口日期区间。
+
+    返回值: list[pd.Interval]，长度应与 oos_return_list 对齐。
+    """
+    data_cfg = config.get("data", {})
+    start_date = data_cfg.get("start_date")
+    end_date = data_cfg.get("training_end_date") or data_cfg.get("end_date")
+
+    # 加载交易日索引（仅需 close 价格索引即可）
+    loader = DataLoader(
+        data_dir=data_cfg.get("data_dir"),
+        cache_dir=data_cfg.get("cache_dir"),
+    )
+    prices = loader.load_ohlcv(
+        etf_codes=data_cfg.get("symbols"),
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    dates = pd.to_datetime(prices["close"].index)
+
+    combo_cfg = config.get("combo_wfo", {})
+    is_period = combo_cfg.get("is_period", 252)
+    oos_period = combo_cfg.get("oos_period", 60)
+    step_size = combo_cfg.get("step_size", 60)
+
+    windows = []
+    idx = is_period
+    while idx + oos_period <= len(dates):
+        oos_slice = dates[idx : idx + oos_period]
+        if len(oos_slice) == 0:
+            break
+        windows.append(pd.Interval(left=oos_slice[0], right=oos_slice[-1], closed="both"))
+        idx += step_size
+
+    return windows
+
+
+def apply_regime_filter(merged: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """近期震荡市适应性过滤。
+
+    要求：
+      - 仅保留近 5 个月 (2025-01-01 ~ 2025-05-31) 区间收益为正的组合
+      - 仅保留该区间最大回撤不超过 8% 的组合
+    """
+
+    windows = _build_oos_windows(config)
+    if not windows:
+        print("⚠️ 未生成 OOS 窗口，跳过 Regime Fitness Filter")
+        merged["Recent_Ret_5M"] = np.nan
+        merged["Recent_MDD_5M"] = np.nan
+        return merged
+
+    # 找到落在目标区间内的窗口索引
+    recent_idx = [i for i, w in enumerate(windows) if (w.left >= RECENT_START and w.right <= RECENT_END)]
+    if not recent_idx:
+        print("⚠️ 未找到位于 2025-01-01~2025-05-31 的 OOS 窗口，跳过 Regime Fitness Filter")
+        merged["Recent_Ret_5M"] = np.nan
+        merged["Recent_MDD_5M"] = np.nan
+        return merged
+
+    def compute_recent_metrics(oos_returns) -> tuple[float, float]:
+        if oos_returns is None:
+            return np.nan, np.nan
+        if isinstance(oos_returns, str):
+            oos_returns = np.fromstring(oos_returns.replace("[", " ").replace("]", " "), sep=" ")
+        returns_arr = np.asarray(oos_returns, dtype=float)
+        if returns_arr.size != len(windows):
+            returns_arr = returns_arr[: len(windows)]
+        if len(returns_arr) < max(recent_idx) + 1:
+            return np.nan, np.nan
+        recent = returns_arr[recent_idx]
+        if recent.size == 0:
+            return np.nan, np.nan
+        equity = np.cumprod(1 + recent)
+        period_ret = equity[-1] - 1
+        peak = np.maximum.accumulate(equity)
+        dd = np.max((peak - equity) / peak) if equity.size > 0 else np.nan
+        return period_ret, dd
+
+    metrics = merged["oos_return_list"].apply(compute_recent_metrics)
+    merged["Recent_Ret_5M"] = metrics.apply(lambda x: x[0])
+    merged["Recent_MDD_5M"] = metrics.apply(lambda x: x[1])
+
+    # 硬性门槛
+    filtered = merged[(merged["Recent_Ret_5M"] >= 0.0) & (merged["Recent_MDD_5M"] <= 0.08)].copy()
+
+    print("\n🧭 Regime Fitness Filter (近期震荡市适应性)")
+    print(f"   近期窗口: {RECENT_START.date()} → {RECENT_END.date()}")
+    print(f"   门槛: 近期收益 >= 0%, 近期MaxDD <= 8%")
+    print(f"   通过: {len(filtered)} / {len(merged)} ({len(filtered)/len(merged)*100:.1f}%)")
+    print(f"   过滤: {len(merged) - len(filtered)} 个策略 (近期表现不佳)")
+
+    return filtered
 
 
 def compute_composite_score(df: pd.DataFrame, config: dict) -> pd.DataFrame:
@@ -377,9 +480,12 @@ def main():
     
     # Step 0 (P0): 过滤高风险因子组合
     safe_merged = filter_risky_combos(merged, RISKY_FACTORS)
+
+    # Step 0.5: 近期震荡市适应性过滤
+    regime_filtered = apply_regime_filter(safe_merged, config)
     
     # Step 1: IC 门槛过滤
-    qualified = apply_ic_threshold(safe_merged, config)
+    qualified = apply_ic_threshold(regime_filtered, config)
     
     # Step 2: 计算综合得分
     scored = compute_composite_score(qualified, config)

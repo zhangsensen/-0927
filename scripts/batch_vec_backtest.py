@@ -141,6 +141,7 @@ def vec_backtest_kernel(
     high_prices,  # ✅ 添加最高价 (用于止损)
     low_prices,   # ✅ 添加最低价 (用于止损)
     timing_arr,
+    vol_regime_arr, # ✅ v3.1: 波动率体制数组 (T,)
     factor_indices,
     rebalance_schedule,  # ✅ 改用预生成的调仓日程数组
     pos_size,
@@ -204,10 +205,24 @@ def vec_backtest_kernel(
     target_shares_total = 0.0
     filled_shares_total = 0.0
 
+    # ✅ P0: Daily Equity Curve (NEW RETURN VALUE)
+    # We need to return the equity curve for further analysis (e.g. Recent_Ret)
+    # But numba function can only return fixed tuple.
+    # Let's add equity_curve to return tuple.
+    # But wait, equity_curve is an array, others are scalars.
+    # Numba handles this fine.
+    
+    # Reconstruct equity curve from daily returns? No, we didn't store it.
+    # We need to store it.
+    # We have welford, but not the curve.
+    # Let's add equity_curve array.
+    
+    # Wait, the caller expects 20 values?
     # ✅ P0: Daily Equity 追踪 (用于 MaxDD, Sharpe, Vol 计算)
+    equity_curve = np.zeros(T) # ✅ NEW: Store equity curve
+    
     # Welford 在线算法变量（用于计算 daily return 的均值和方差）
     welford_count = 0
-    welford_mean = 0.0
     welford_m2 = 0.0
     
     # 历史最高净值（用于计算 MaxDD）
@@ -228,6 +243,12 @@ def vec_backtest_kernel(
     leverage_sum = 0.0  # 用于计算平均 leverage
     leverage_count = 0
 
+    # Welford stats initialization
+    welford_mean = 0.0
+    welford_m2 = 0.0
+    welford_count = 0
+    prev_equity = initial_capital
+
     # ✅ P0: 遍历每一天以追踪 daily equity（从 LOOKBACK 开始，与 rebalance_schedule 一致）
     start_day = rebalance_schedule[0] if len(rebalance_schedule) > 0 else 252
     
@@ -241,6 +262,8 @@ def vec_backtest_kernel(
                     current_equity += holdings[n] * price
         
         # 计算 daily return 并更新 Welford 统计量
+        equity_curve[t] = current_equity # ✅ NEW: Record equity
+        
         if t > start_day:
             daily_return = (current_equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
             welford_count += 1
@@ -338,7 +361,8 @@ def vec_backtest_kernel(
 
             # ✅ 改用 t-1 日择时信号 (timing_arr 已在 main 中 shift(1)，故此处用 t 即为 t-1 日信号)
             # ✅ P2: 应用动态 leverage
-            timing_ratio = timing_arr[t] * current_leverage
+            # ✅ v3.1: 应用波动率体制 (Vol Regime)
+            timing_ratio = timing_arr[t] * current_leverage * vol_regime_arr[t]
 
             # 卖出逻辑：仅正常调仓卖出（移除 MA20 强制卖出逻辑）
             # ⚠️ v3.0.1: MA20 只用于买入过滤，不强制卖出持仓
@@ -682,6 +706,8 @@ def vec_backtest_kernel(
 
                 target_pos_value = available_for_new / new_count / (1.0 + commission_rate)
 
+                target_pos_value = available_for_new / new_count / (1.0 + commission_rate)
+
                 if target_pos_value > 0.0:
                     for k in range(new_count):
                         idx = new_targets[k]
@@ -773,6 +799,7 @@ def vec_backtest_kernel(
     avg_leverage = leverage_sum / leverage_count if leverage_count > 0 else 1.0
 
     return (
+        equity_curve, # ✅ NEW: Return equity curve
         total_return,
         win_rate,
         profit_factor,
@@ -796,6 +823,7 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
                      # ✅ P0: 添加配置参数
                      freq, pos_size, initial_capital, commission_rate, lookback,
                      target_vol=0.20, vol_window=20, dynamic_leverage_enabled=False,
+                     vol_regime_arr=None, # ✅ v3.1: 波动率体制数组
                      # ✅ v1.2: ATR 动态止损参数
                      use_atr_stop=False,
                      trailing_stop_pct=0.0,
@@ -884,6 +912,10 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         lookback_window=lookback,  # 使用传入的 lookback
         freq=freq,  # 使用传入的 freq
     )
+    # ✅ v3.1: 处理 Vol Regime
+    if vol_regime_arr is None:
+        vol_regime_arr = np.ones(T, dtype=np.float64)
+
     (
         total_return,
         win_rate,
@@ -908,6 +940,7 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         high_arr,
         low_arr,
         timing_arr,
+        vol_regime_arr, # ✅ v3.1
         factor_indices_arr,
         rebalance_schedule,  # ✅ 传入调仓日程数组
         pos_size,  # 使用传入的 pos_size
@@ -1118,6 +1151,43 @@ def main():
     # ✅ 使用共享 helper shift_timing_signal: t 日调仓用 t-1 日的择时信号
     timing_arr = shift_timing_signal(timing_arr_raw)
     
+    # ═══════════════════════════════════════════════════════════════════════════
+    # ✅ v3.1: 波动率体制 (Vol Regime) 计算
+    # ═══════════════════════════════════════════════════════════════════════════
+    print("✅ 计算波动率体制 (Vol Regime)...")
+    if '510300' in etf_codes:
+        hs300_close = ohlcv['close']['510300']
+    else:
+        print("⚠️ 警告: 510300 未找到，使用第一只 ETF 作为波动率代理")
+        hs300_close = ohlcv['close'].iloc[:, 0]
+        
+    hs300_rets = hs300_close.pct_change()
+    hs300_hv = hs300_rets.rolling(window=20, min_periods=20).std() * np.sqrt(252) * 100
+    hs300_hv_5d = hs300_hv.shift(5)
+    regime_vol = (hs300_hv + hs300_hv_5d) / 2
+    regime_vol = regime_vol.reindex(dates).fillna(0.0)
+    
+    vol_regime_arr = np.ones(T, dtype=np.float64)
+    vol_vals = regime_vol.values
+    
+    # < 15%: 1.0
+    # 15-25%: 1.0
+    # 25-30%: 0.7
+    mask_yellow = (vol_vals >= 25) & (vol_vals < 30)
+    vol_regime_arr[mask_yellow] = 0.7
+    # 30-40%: 0.4
+    mask_orange = (vol_vals >= 30) & (vol_vals < 40)
+    vol_regime_arr[mask_orange] = 0.4
+    # > 40%: 0.1
+    mask_red = (vol_vals >= 40)
+    vol_regime_arr[mask_red] = 0.1
+    
+    print(f"   Vol Regime 分布: "
+          f"1.0: {(vol_regime_arr==1.0).mean():.1%}, "
+          f"0.7: {(vol_regime_arr==0.7).mean():.1%}, "
+          f"0.4: {(vol_regime_arr==0.4).mean():.1%}, "
+          f"0.1: {(vol_regime_arr==0.1).mean():.1%}")
+    
     print(f"✅ 数据加载完成：{T} 天 × {N} 只 ETF × {len(factor_names)} 个因子")
     
     # ✅ P2: 从配置文件读取动态降权参数 (已禁用 - 零杠杆原则)
@@ -1208,6 +1278,7 @@ def main():
             target_vol=target_vol,
             vol_window=vol_window,
             dynamic_leverage_enabled=dynamic_leverage_enabled,
+            vol_regime_arr=vol_regime_arr, # ✅ v3.1: 传入波动率体制
             # ✅ v1.2: ATR 动态止损参数
             use_atr_stop=use_atr_stop,
             trailing_stop_pct=trailing_stop_pct,

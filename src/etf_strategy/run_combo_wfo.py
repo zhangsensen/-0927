@@ -52,7 +52,7 @@ def main():
     logger.info("=" * 100)
     logger.info("")
 
-    config_path = Path("configs/combo_wfo_config.yaml")
+    config_path = Path(os.environ.get("WFO_CONFIG_PATH", "configs/combo_wfo_config.yaml"))
     if not config_path.exists():
         logger.error(f"配置文件不存在: {config_path}")
         sys.exit(1)
