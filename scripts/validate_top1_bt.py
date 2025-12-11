@@ -138,13 +138,20 @@ def main():
     cerebro = bt.Cerebro()
     
     # Add Data
+    # Fill NaNs to match VEC
+    close_df = ohlcv['close'].ffill().bfill()
+    open_df = ohlcv['open'].ffill().bfill()
+    high_df = ohlcv['high'].ffill().bfill()
+    low_df = ohlcv['low'].ffill().bfill()
+    vol_df = ohlcv['volume'].fillna(0)
+    
     for col in ohlcv['close'].columns:
         df = pd.DataFrame({
-            'open': ohlcv['open'][col],
-            'high': ohlcv['high'][col],
-            'low': ohlcv['low'][col],
-            'close': ohlcv['close'][col],
-            'volume': ohlcv['volume'][col]
+            'open': open_df[col],
+            'high': high_df[col],
+            'low': low_df[col],
+            'close': close_df[col],
+            'volume': vol_df[col]
         })
         data = bt.feeds.PandasData(dataname=df, name=col)
         cerebro.adddata(data)
