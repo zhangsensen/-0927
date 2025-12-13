@@ -24,6 +24,7 @@ from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule
 from etf_strategy.auditor.core.engine import GenericStrategy, PandasData
+from aligned_metrics import compute_aligned_metrics
 
 # ✅ P0: 删除硬编码 - 所有参数必须从配置文件读取
 # FREQ = 8  # DELETED
@@ -33,9 +34,10 @@ from etf_strategy.auditor.core.engine import GenericStrategy, PandasData
 # LOOKBACK = 252  # DELETED
 
 
-def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, rebalance_schedule,
+def run_bt_backtest(combined_score_df, timing_series, vol_regime_series, etf_codes, data_feeds, rebalance_schedule,
                     freq, pos_size, initial_capital, commission_rate,
-                    target_vol=0.20, vol_window=20, dynamic_leverage_enabled=True):
+                    target_vol=0.20, vol_window=20, dynamic_leverage_enabled=True,
+                    collect_daily_returns: bool = False):
     """单组合 BT 回测引擎，返回收益和风险指标"""
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(initial_capital)
@@ -51,6 +53,7 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
         GenericStrategy, 
         scores=combined_score_df, 
         timing=timing_series, 
+        vol_regime=vol_regime_series,
         etf_codes=etf_codes, 
         freq=freq, 
         pos_size=pos_size,
@@ -70,6 +73,8 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
     cerebro.addanalyzer(bt.analyzers.AnnualReturn, _name='annual_return')
     # ✅ P3: 添加 TradeAnalyzer 以获取交易详情
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+    if collect_daily_returns:
+        cerebro.addanalyzer(bt.analyzers.TimeReturn, _name='timereturn', timeframe=bt.TimeFrame.Days)
 
     start_val = cerebro.broker.getvalue()
     results = cerebro.run()
@@ -77,6 +82,16 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
     strat = results[0]
 
     bt_return = (end_val / start_val) - 1
+    daily_returns = []
+    if collect_daily_returns:
+        try:
+            tr_analysis = strat.analyzers.timereturn.get_analysis()
+            if isinstance(tr_analysis, dict):
+                daily_returns = list(tr_analysis.values())
+            else:
+                daily_returns = list(tr_analysis)
+        except Exception:
+            daily_returns = []
     
     # ✅ P0: 提取风险指标
     # DrawDown Analyzer
@@ -127,6 +142,17 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
     else:
         annual_volatility = 0.0
     
+    start_idx = rebalance_schedule[0] if len(rebalance_schedule) > 0 else 0
+    equity_curve = None
+    if daily_returns:
+        dr_arr = np.asarray(daily_returns, dtype=np.float64)
+        equity_curve = np.concatenate(
+            [np.array([initial_capital], dtype=np.float64), initial_capital * np.cumprod(1.0 + dr_arr)]
+        )
+    else:
+        equity_curve = np.array([start_val, end_val], dtype=np.float64)
+    aligned_metrics = compute_aligned_metrics(equity_curve, start_idx=start_idx)
+    
     # Calmar Ratio
     calmar_ratio = annual_return / max_drawdown if max_drawdown > 0.0001 else 0.0
     
@@ -136,6 +162,8 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
         "annual_volatility": annual_volatility,
         "sharpe_ratio": sharpe_ratio,
         "calmar_ratio": calmar_ratio,
+        "aligned_return": aligned_metrics["aligned_return"],
+        "aligned_sharpe": aligned_metrics["aligned_sharpe"],
         # ✅ P3: 添加交易详情
         "total_trades": total_trades,
         "win_rate": win_rate,
@@ -145,7 +173,7 @@ def run_bt_backtest(combined_score_df, timing_series, etf_codes, data_feeds, reb
         "avg_pnl": avg_pnl,
     }
 
-    return bt_return, strat.margin_failures, risk_metrics
+    return bt_return, strat.margin_failures, risk_metrics, daily_returns
 
 
 import multiprocessing as mp
@@ -154,13 +182,14 @@ from functools import partial
 # 全局变量，用于子进程共享数据 (Copy-on-Write)
 _shared_data = {}
 
-def init_worker(data_feeds, std_factors, timing_series, etf_codes, target_vol, vol_window, dynamic_leverage_enabled,
+def init_worker(data_feeds, std_factors, timing_series, vol_regime_series, etf_codes, target_vol, vol_window, dynamic_leverage_enabled,
                 freq, pos_size, initial_capital, commission_rate, lookback):
     """子进程初始化：保存共享数据"""
     global _shared_data
     _shared_data['data_feeds'] = data_feeds
     _shared_data['std_factors'] = std_factors
     _shared_data['timing_series'] = timing_series
+    _shared_data['vol_regime_series'] = vol_regime_series
     _shared_data['etf_codes'] = etf_codes
     
     # ✅ P2: 动态降权参数
@@ -195,6 +224,7 @@ def process_combo(row_data):
     data_feeds = _shared_data['data_feeds']
     std_factors = _shared_data['std_factors']
     timing_series = _shared_data['timing_series']
+    vol_regime_series = _shared_data['vol_regime_series']
     etf_codes = _shared_data['etf_codes']
     rebalance_schedule = _shared_data['rebalance_schedule']
     
@@ -219,10 +249,11 @@ def process_combo(row_data):
         combined_score_df = combined_score_df.add(std_factors[f], fill_value=0)
 
     # 运行回测
-    bt_return, margin_failures, risk_metrics = run_bt_backtest(
-        combined_score_df, timing_series, etf_codes, data_feeds, rebalance_schedule,
+    bt_return, margin_failures, risk_metrics, _ = run_bt_backtest(
+        combined_score_df, timing_series, vol_regime_series, etf_codes, data_feeds, rebalance_schedule,
         freq, pos_size, initial_capital, commission_rate,
-        target_vol, vol_window, dynamic_leverage_enabled
+        target_vol, vol_window, dynamic_leverage_enabled,
+        collect_daily_returns=True,
     )
     
     return {
@@ -235,6 +266,8 @@ def process_combo(row_data):
         "bt_annual_volatility": risk_metrics["annual_volatility"],
         "bt_sharpe_ratio": risk_metrics["sharpe_ratio"],
         "bt_calmar_ratio": risk_metrics["calmar_ratio"],
+        "bt_aligned_return": risk_metrics["aligned_return"],
+        "bt_aligned_sharpe": risk_metrics["aligned_sharpe"],
         # ✅ P3: 交易详情
         "bt_total_trades": risk_metrics["total_trades"],
         "bt_win_rate": risk_metrics["win_rate"],
@@ -268,6 +301,14 @@ def main():
             print(f"❌ 错误: 文件不存在 {combos_path}")
             sys.exit(1)
         df_combos = pd.read_parquet(combos_path)
+        # ✅ 支持 combos 模式下的 Top-K 筛选
+        if args.topk:
+            if args.sort_by not in df_combos.columns:
+                print(f"⚠️ 警告: 列 {args.sort_by} 不存在，无法排序。将使用原始顺序并截取 Top {args.topk}。")
+                df_combos = df_combos.head(args.topk)
+            else:
+                df_combos = df_combos.sort_values(args.sort_by, ascending=False).head(args.topk)
+                print(f"✅ 已筛选 Top {len(df_combos)} 组合 (Min {args.sort_by}: {df_combos[args.sort_by].min():.4f})")
     else:
         results_root = ROOT / "results"
         wfo_dirs = sorted(
@@ -362,6 +403,21 @@ def main():
     timing_arr_shifted = shift_timing_signal(timing_series_raw.reindex(dates).fillna(1.0).values)
     timing_series = pd.Series(timing_arr_shifted, index=dates)
 
+    # ✅ v3.1: 波动率体制 (与 VEC 保持一致)
+    if "510300" in ohlcv["close"].columns:
+        hs300 = ohlcv["close"]["510300"]
+    else:
+        hs300 = ohlcv["close"].iloc[:, 0]
+    rets = hs300.pct_change()
+    hv = rets.rolling(window=20, min_periods=20).std() * np.sqrt(252) * 100
+    hv_5d = hv.shift(5)
+    regime_vol = (hv + hv_5d) / 2
+    exposure_s = pd.Series(1.0, index=regime_vol.index)
+    exposure_s[regime_vol >= 25] = 0.7
+    exposure_s[regime_vol >= 30] = 0.4
+    exposure_s[regime_vol >= 40] = 0.1
+    vol_regime_series = exposure_s.reindex(dates).fillna(1.0)
+
     # 准备 data feeds
     data_feeds = {}
     for ticker in etf_codes:
@@ -392,7 +448,7 @@ def main():
     print(f"🚀 准备回测 {len(tasks)} 个组合...")
 
     results = []
-    with mp.Pool(processes=num_workers, initializer=init_worker, initargs=(data_feeds, std_factors, timing_series, etf_codes, target_vol, vol_window, dynamic_leverage_enabled, freq, pos_size, initial_capital, commission_rate, lookback)) as pool:
+    with mp.Pool(processes=num_workers, initializer=init_worker, initargs=(data_feeds, std_factors, timing_series, vol_regime_series, etf_codes, target_vol, vol_window, dynamic_leverage_enabled, freq, pos_size, initial_capital, commission_rate, lookback)) as pool:
         # 使用 imap_unordered 获取实时进度
         for res in tqdm(pool.imap(process_combo, tasks), total=len(tasks), desc="BT 并行回测"):
             results.append(res)
@@ -405,7 +461,7 @@ def main():
 
     df_results = pd.DataFrame(results)
     df_results.to_parquet(output_dir / "bt_results.parquet", index=False)
-    df_results.to_csv(output_dir / "bt_results.csv", index=False)
+    df_results.to_parquet(output_dir / "bt_results.parquet", index=False)
 
     print(f"\n✅ BT 批量回测完成")
     print(f"   输出目录: {output_dir}")

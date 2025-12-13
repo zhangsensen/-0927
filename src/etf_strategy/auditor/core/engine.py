@@ -30,6 +30,7 @@ class GenericStrategy(bt.Strategy):
     params = (
         ('scores', None),      # DataFrame of scores (index=date, columns=tickers)
         ('timing', None),      # Series of timing (index=date)
+        ('vol_regime', None),  # Series of vol regime multipliers (index=date)
         ('etf_codes', None),   # List of ETF codes
         ('freq', FREQ),
         ('pos_size', POS_SIZE),
@@ -49,6 +50,8 @@ class GenericStrategy(bt.Strategy):
         
         # ✅ 追踪每个标的的持仓成本 (用于计算 return_pct)
         self.position_costs = {}  # {ticker: total_cost}
+        # ✅ 阴影持仓，避免持仓状态滞后导致卖出缺失
+        self.shadow_holdings = {d._name: 0.0 for d in self.datas}
         
         # ✅ 预计算调仓日集合
         self.use_date_schedule = False
@@ -191,27 +194,27 @@ class GenericStrategy(bt.Strategy):
             timing_ratio = 1.0
             if self.params.timing is not None and current_date in self.params.timing.index:
                 timing_ratio = self.params.timing.loc[current_date]
+            # ✅ 应用波动率体制缩放，与 VEC 一致
+            if self.params.vol_regime is not None and current_date in self.params.vol_regime.index:
+                timing_ratio = timing_ratio * self.params.vol_regime.loc[current_date]
             
             # ✅ P2: 应用动态 leverage
             timing_ratio = timing_ratio * self.current_leverage
             
-            # 获取当前持仓
-            current_holdings = {}
-            for d in self.datas:
-                pos = self.getposition(d)
-                if pos.size > 0:
-                    current_holdings[d._name] = pos.size
+            # 获取当前持仓（使用阴影持仓，避免状态滞后）
+            current_holdings = dict(self.shadow_holdings)
             
             # 第一步：卖出非目标持仓（在 COC 模式下立即释放现金）
             kept_holdings_value = 0.0
             cash_after_sells = self.broker.getcash()
-            for ticker, shares in current_holdings.items():
+            for ticker, shares in list(current_holdings.items()):
                 data = self.etf_map[ticker]
                 price = data.close[0]
-                if ticker not in target_set:
+                if ticker not in target_set and shares > 0:
                     # 卖出会立即释放现金（COC 模式）
                     self.close(data)
                     cash_after_sells += shares * price * (1 - COMMISSION_RATE)
+                    self.shadow_holdings[ticker] = 0.0
                 else:
                     # 保留的持仓价值
                     kept_holdings_value += shares * price
@@ -223,7 +226,7 @@ class GenericStrategy(bt.Strategy):
             available_for_new = max(0.0, available_for_new)
             
             # 买入新仓位
-            new_tickers = [t for t in top_k if t not in current_holdings]
+            new_tickers = [t for t in top_k if current_holdings.get(t, 0.0) <= 0]
             new_count = len(new_tickers)
             
             if new_count > 0:
@@ -253,12 +256,14 @@ class GenericStrategy(bt.Strategy):
                     # 资金充足，提交所有订单
                     for ticker, data, shares, cost in buy_orders:
                         self.buy(data, size=shares)
+                        self.shadow_holdings[ticker] = self.shadow_holdings.get(ticker, 0.0) + shares
                 else:
                     # 资金不足，按比例缩减
                     scale_factor = (available_for_new * self.safety_margin) / total_cost
                     for ticker, data, shares, cost in buy_orders:
                         adjusted_shares = shares * scale_factor
                         self.buy(data, size=adjusted_shares)
+                        self.shadow_holdings[ticker] = self.shadow_holdings.get(ticker, 0.0) + adjusted_shares
                 
         except Exception as e:
             import traceback

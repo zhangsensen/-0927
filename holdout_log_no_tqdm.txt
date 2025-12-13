@@ -1,0 +1,27 @@
+================================================================================
+🔬 HOLDOUT VALIDATION - 冷数据验证
+================================================================================
+训练集结果: results/vec_from_wfo_20251214_000418/full_space_results.csv
+
+数据划分:
+  训练集: 2020-01-01 至 2025-04-30
+  Holdout: 2025-04-30 至 2025-10-14
+
+Backtest参数:
+  FREQ: 3, POS_SIZE: 2
+
+Loading Holdout Data...
+Computing Factors on Holdout Data...
+完整数据范围: 2020-01-02 00:00:00 至 2025-10-14 00:00:00 (1399 天)
+Holdout 期: 2025-04-30 至 2025-10-14
+Holdout 起始索引: 1289 / 1399 (从第 1290 天开始)
+有效交易起始索引: 252 (lookback=252)
+
+✅ 加载训练集结果: 62984 个组合
+Traceback (most recent call last):
+  File "/home/sensen/dev/projects/-0927/scripts/run_holdout_validation.py", line 329, in <module>
+    main()
+  File "/home/sensen/dev/projects/-0927/scripts/run_holdout_validation.py", line 148, in main
+    current_factor_indices = list(range(len(combo_indices)))
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

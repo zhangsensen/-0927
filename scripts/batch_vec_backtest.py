@@ -21,6 +21,7 @@ from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule, DualTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule, ensure_price_views
+from aligned_metrics import compute_aligned_metrics
 
 # ✅ P0: 删除硬编码 - 所有参数必须从配置文件读取
 # FREQ = 8  # DELETED
@@ -219,7 +220,7 @@ def vec_backtest_kernel(
     
     # Wait, the caller expects 20 values?
     # ✅ P0: Daily Equity 追踪 (用于 MaxDD, Sharpe, Vol 计算)
-    equity_curve = np.zeros(T) # ✅ NEW: Store equity curve
+    equity_curve = np.full(T, initial_capital, dtype=np.float64) # ✅ NEW: Store equity curve (init with capital)
     
     # Welford 在线算法变量（用于计算 daily return 的均值和方差）
     welford_count = 0
@@ -293,152 +294,6 @@ def vec_backtest_kernel(
         if rebal_ptr < len(rebalance_schedule) and rebalance_schedule[rebal_ptr] == t:
             is_rebalance_day = True
             rebal_ptr += 1
-        
-        # --- 1. 调仓逻辑 (Open时刻) ---
-        if is_rebalance_day:
-            # ✅ P2: 在调仓日计算动态 leverage
-            if dynamic_leverage_enabled and buffer_filled >= vol_window // 2:  # 至少有半窗口数据
-                # 计算缓冲区内的标准差
-                n_samples = buffer_filled
-                sum_val = 0.0
-                sum_sq = 0.0
-                for i in range(n_samples):
-                    val = returns_buffer[i]
-                    sum_val += val
-                    sum_sq += val * val
-                mean_ret = sum_val / n_samples
-                variance = (sum_sq / n_samples) - (mean_ret * mean_ret)
-                if variance > 0:
-                    daily_std = np.sqrt(variance)
-                    realized_vol = daily_std * np.sqrt(252.0)  # 年化
-                    if realized_vol > 0.0001:
-                        current_leverage = min(1.0, target_vol / realized_vol)
-                    else:
-                        current_leverage = 1.0
-                else:
-                    current_leverage = 1.0
-            else:
-                current_leverage = 1.0
-            
-            leverage_sum += current_leverage
-            leverage_count += 1
-
-            valid = 0
-            for n in range(N):
-                score = 0.0
-                has_value = False
-                for idx in factor_indices:
-                    val = factors_3d[t - 1, n, idx]
-                    if not np.isnan(val):
-                        score += val
-                        has_value = True
-
-                if has_value and score != 0.0:
-                    combined_score[n] = score
-                    valid += 1
-                else:
-                    combined_score[n] = -np.inf
-
-            for n in range(N):
-                target_set[n] = False
-
-            buy_count = 0
-            if valid >= pos_size:
-                # ✅ 使用稳定排序，确保 numba/Python 结果一致
-                top_indices = stable_topk_indices(combined_score, pos_size)
-                for k in range(len(top_indices)):
-                    idx = top_indices[k]
-                    if combined_score[idx] == -np.inf:
-                        break
-                    # ✅ v3.0: 个股趋势过滤 - 趋势不好不买入
-                    # 使用 t-1 日趋势信号 (避免前视偏差)
-                    if individual_trend_enabled and not individual_trend_arr[t - 1, idx]:
-                        # 趋势向下，跳过该标的，空出仓位 (不寻找替补)
-                        continue
-                    target_set[idx] = True
-                    buy_order[buy_count] = idx
-                    buy_count += 1
-
-            # ✅ 改用 t-1 日择时信号 (timing_arr 已在 main 中 shift(1)，故此处用 t 即为 t-1 日信号)
-            # ✅ P2: 应用动态 leverage
-            # ✅ v3.1: 应用波动率体制 (Vol Regime)
-            timing_ratio = timing_arr[t] * current_leverage * vol_regime_arr[t]
-
-            # 卖出逻辑：仅正常调仓卖出（移除 MA20 强制卖出逻辑）
-            # ⚠️ v3.0.1: MA20 只用于买入过滤，不强制卖出持仓
-            #    理由：强制卖出太激进，会频繁打断持仓，损害收益
-            for n in range(N):
-                should_sell = False
-                
-                if holdings[n] > 0.0:
-                    if not target_set[n]:
-                        # 正常调仓：不在目标集合中，卖出
-                        should_sell = True
-                
-                if should_sell:
-                    # ✅ 使用收盘价（与 BT Cheat-On-Close 模式对齐）
-                    price = close_prices[t, n]
-                    proceeds = holdings[n] * price * (1.0 - commission_rate)
-                    cash += proceeds
-
-                    pnl = (price - entry_prices[n]) / entry_prices[n]
-                    if pnl > 0.0:
-                        wins += 1
-                        total_win_pnl += pnl
-                    else:
-                        losses += 1
-                        total_loss_pnl += abs(pnl)
-
-                    holdings[n] = -1.0
-                    entry_prices[n] = 0.0
-                    high_water_marks[n] = 0.0
-
-            current_value = cash
-            kept_value = 0.0
-            for n in range(N):
-                if holdings[n] > 0.0:
-                    # ✅ 使用收盘价
-                    val = holdings[n] * close_prices[t, n]
-                    current_value += val
-                    kept_value += val
-
-            new_count = 0
-            for k in range(buy_count):
-                idx = buy_order[k]
-                if holdings[idx] < 0.0:
-                    new_targets[new_count] = idx
-                    new_count += 1
-
-            if new_count > 0:
-                target_exposure = current_value * timing_ratio
-                available_for_new = target_exposure - kept_value
-                if available_for_new < 0.0:
-                    available_for_new = 0.0
-
-                target_pos_value = available_for_new / new_count / (1.0 + commission_rate)
-
-                if target_pos_value > 0.0:
-                    for k in range(new_count):
-                        idx = new_targets[k]
-                        # ✅ 使用收盘价（与 BT Cheat-On-Close 模式对齐）
-                        price = close_prices[t, idx]
-                        if np.isnan(price) or price <= 0.0:
-                            continue
-
-                        shares = target_pos_value / price
-                        cost = shares * price * (1.0 + commission_rate)
-                        target_value_total += target_pos_value
-                        target_shares_total += shares
-
-                        if cash >= cost - 1e-5 and cost > 0.0:
-                            actual_cost = cost if cost <= cash else cash
-                            actual_shares = actual_cost / (price * (1.0 + commission_rate))
-                            filled_shares_total += actual_shares
-                            filled_value_total += actual_shares * price
-                            cash -= actual_cost
-                            holdings[idx] = shares
-                            entry_prices[idx] = price
-                            high_water_marks[idx] = price # 初始化高水位
 
         # --- 2. 日内止损逻辑 (High/Low时刻) ---
         # ✅ P3: 即使是调仓日，买入后也可能当天触发止损 (如果买入价是 Open/Close，这里假设 Close 买入则当天不触发，除非 Low < Close)
@@ -706,8 +561,6 @@ def vec_backtest_kernel(
 
                 target_pos_value = available_for_new / new_count / (1.0 + commission_rate)
 
-                target_pos_value = available_for_new / new_count / (1.0 + commission_rate)
-
                 if target_pos_value > 0.0:
                     for k in range(new_count):
                         idx = new_targets[k]
@@ -779,7 +632,14 @@ def vec_backtest_kernel(
     # 年化收益率（假设 252 交易日/年）
     trading_days = T - start_day
     years = trading_days / 252.0 if trading_days > 0 else 1.0
-    annual_return = (1.0 + total_return) ** (1.0 / years) - 1.0 if years > 0 else 0.0
+    
+    # 🛡️ Safety Check: Handle potential overflow or invalid values
+    try:
+        annual_return = (1.0 + total_return) ** (1.0 / years) - 1.0 if years > 0 else 0.0
+        if np.isinf(annual_return) or np.isnan(annual_return):
+            annual_return = -0.99
+    except:
+        annual_return = -0.99
     
     # 年化波动率（daily std * sqrt(252)）
     if welford_count > 1:
@@ -790,10 +650,19 @@ def vec_backtest_kernel(
         annual_volatility = 0.0
     
     # Sharpe Ratio（假设无风险利率为 0）
+    # 🛡️ Safety Check: Clamp Sharpe to reasonable range
     sharpe_ratio = annual_return / annual_volatility if annual_volatility > 0.0001 else 0.0
+    if np.isinf(sharpe_ratio) or np.isnan(sharpe_ratio):
+        sharpe_ratio = 0.0
+    elif sharpe_ratio > 20.0: # Cap extreme sharpe
+        sharpe_ratio = 20.0
+    elif sharpe_ratio < -20.0:
+        sharpe_ratio = -20.0
     
     # Calmar Ratio
     calmar_ratio = annual_return / max_drawdown if max_drawdown > 0.0001 else 0.0
+    if np.isinf(calmar_ratio) or np.isnan(calmar_ratio):
+        calmar_ratio = 0.0
     
     # ✅ P2: 平均动态 leverage
     avg_leverage = leverage_sum / leverage_count if leverage_count > 0 else 1.0
@@ -916,7 +785,10 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
     if vol_regime_arr is None:
         vol_regime_arr = np.ones(T, dtype=np.float64)
 
+    start_day = rebalance_schedule[0] if len(rebalance_schedule) > 0 else lookback
+
     (
+        equity_curve,
         total_return,
         win_rate,
         profit_factor,
@@ -980,6 +852,8 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         "filled_shares_total": filled_shares_total,
     }
     
+    aligned_metrics = compute_aligned_metrics(equity_curve, start_idx=start_day)
+
     # ✅ P0: 风险指标字典
     risk_metrics = {
         "max_drawdown": max_drawdown,
@@ -989,9 +863,12 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         "calmar_ratio": calmar_ratio,
         # ✅ P2: 动态降权诊断
         "avg_leverage": avg_leverage,
+        # ✅ 对齐后的统一指标
+        "aligned_return": aligned_metrics["aligned_return"],
+        "aligned_sharpe": aligned_metrics["aligned_sharpe"],
     }
 
-    return total_return, win_rate, profit_factor, num_trades, rounding_diag, risk_metrics
+    return equity_curve, total_return, win_rate, profit_factor, num_trades, rounding_diag, risk_metrics
 
 
 def main():
@@ -1266,7 +1143,7 @@ def main():
         total=len(combo_strings),
         desc="VEC 回测",
     ):
-        ret, wr, pf, trades, rounding, risk = run_vec_backtest(
+        _, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
             factors_3d, close_prices, open_prices, high_prices, low_prices, timing_arr, factor_indices,
             # ✅ P0: 传入配置参数
             freq=FREQ,
@@ -1313,6 +1190,8 @@ def main():
                 "vec_annual_volatility": risk["annual_volatility"],
                 "vec_sharpe_ratio": risk["sharpe_ratio"],
                 "vec_calmar_ratio": risk["calmar_ratio"],
+                "vec_aligned_return": risk["aligned_return"],
+                "vec_aligned_sharpe": risk["aligned_sharpe"],
                 # ✅ P2: 动态降权诊断
                 "vec_avg_leverage": risk["avg_leverage"],
                 # 诊断信息
@@ -1332,7 +1211,7 @@ def main():
 
     df_results = pd.DataFrame(results)
     df_results.to_parquet(output_dir / "vec_all_combos.parquet", index=False)
-    df_results.to_csv(output_dir / "vec_all_combos.csv", index=False)
+    df_results.to_parquet(output_dir / "vec_all_combos.parquet", index=False)
 
     print(f"\n✅ VEC 批量回测完成")
     print(f"   输出目录: {output_dir}")

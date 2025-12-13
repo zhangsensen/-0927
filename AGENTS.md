@@ -5,6 +5,8 @@
 > **Mode**: **Autonomous with Judgment** — Execute efficiently, but pause for critical risks  
 > **Version**: v3.1 | **更新日期**: 2025-12-01
 
+> **最新运营指引（2025-12-11）**：如非必要，暂停 BT 大规模审计，优先聚焦 WFO + VEC 的 Alpha 开发与对齐验证；仅在需要审计时跑小规模 BT（Top-N），否则不消耗资源。
+
 ---
 
 ## 🏆 v3.1 核心开发思想（策略筛选升级）
@@ -59,11 +61,14 @@ uv pip install -e .                                       # 安装项目（edita
 uv run python <script.py>                                 # 运行脚本
 
 # 生产工作流 v3.1（三步流程）
+# Step 0: 数据更新 (QMT Bridge)
+uv run python scripts/update_daily_from_qmt_bridge.py --all
+
 # Step 1: WFO 因子组合挖掘
 uv run python src/etf_strategy/run_combo_wfo.py
 
-# Step 2: 全量 VEC 回测（12597 个组合）
-uv run python scripts/run_full_space_vec_backtest.py
+# Step 2: VEC 精算（仅 WFO 输出组合，禁止全空间枚举）
+uv run python scripts/run_full_space_vec_backtest.py   # 自动读取最新 run_* WFO 结果
 
 # Step 3: 策略筛选（IC门槛 + 综合得分）
 uv run python scripts/select_strategy_v2.py
@@ -235,7 +240,47 @@ You have authority to act **EXCEPT** in these scenarios:
 
 ---
 
-## 🔒 SAFETY & QUALITY PROTOCOL
+## � DATA ACQUISITION (QMT BRIDGE)
+
+**Data Source**: QMT Trading Terminal (VM: \`192.168.122.132:8001\`)
+**Tool**: \`qmt-data-bridge\` SDK (Installed in venv)
+
+> 🛑 **CRITICAL RULE**: Do **NOT** manually construct HTTP requests (e.g., \`requests.get('http://...')\`).
+> **ALWAYS** use the \`QMTClient\` from \`qmt_bridge\` package.
+
+### Quick Commands
+\`\`\`bash
+# Update all ETFs (Incremental)
+uv run python scripts/update_daily_from_qmt_bridge.py --all
+
+# Verify Connection & Data Flow
+uv run python scripts/verify_qmt_connection_full.py
+\`\`\`
+
+### SDK Usage Pattern (Async)
+\`\`\`python
+from qmt_bridge import QMTClient, QMTClientConfig
+
+async def fetch_data():
+    # 1. Initialize
+    config = QMTClientConfig(host="192.168.122.132", port=8001)
+    client = QMTClient(config)
+
+    # 2. Fetch Data
+    # K-Line (Daily)
+    kline = await client.get_kline(code="510300.SH", period="1d", count=100)
+    
+    # Real-time Quote
+    tick = await client.get_tick(code="510300.SH")
+    
+    # Account Info
+    assets = await client.get_assets()
+    positions = await client.get_positions()
+\`\`\`
+
+---
+
+## �🔒 SAFETY & QUALITY PROTOCOL
 
 ### Before Editing
 \`\`\`bash

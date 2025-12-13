@@ -108,13 +108,20 @@ def _compute_combo_signal(factors: np.ndarray, weights: np.ndarray) -> np.ndarra
 
 @njit(cache=True)
 def _compute_rebalanced_ic(signal: np.ndarray, returns: np.ndarray, rebalance_freq: int) -> Tuple[float, float, float]:
+    """
+    使用 Signal(T-1) 评估未来 T→T+freq 的收益，避免同日偷价。
+
+    - 信号取自 start_idx-1（日 t-1 的收盘已知）
+    - 收益累积从 start_idx 开始（即 T 日的收益属于下一期）
+    - 循环从 rebalance_freq 开始以确保有上一日信号
+    """
     T, N = signal.shape
     ic_buffer = np.zeros(T)
     valid_periods = 0
-    
-    for start_idx in range(0, T - rebalance_freq, rebalance_freq):
+
+    for start_idx in range(rebalance_freq, T - rebalance_freq, rebalance_freq):
         end_idx = start_idx + rebalance_freq
-        sig = signal[start_idx]
+        sig = signal[start_idx - 1]
         cumret = np.ones(N)
         for t in range(start_idx, end_idx):
             ret = returns[t]
@@ -175,9 +182,11 @@ def _compute_rebalanced_return(
     equity = 1.0
     prev_positions = np.zeros(N, dtype=np.int64)  # 0/1 表示是否持仓
     
-    for start_idx in range(0, T - rebalance_freq, rebalance_freq):
+    # 从 rebalance_freq 开始，确保有上一日信号 (T-1)
+    for start_idx in range(rebalance_freq, T - rebalance_freq, rebalance_freq):
         end_idx = start_idx + rebalance_freq
-        sig = signal[start_idx]
+        # 使用 T-1 日信号决定 T 日开盘后的持仓
+        sig = signal[start_idx - 1]
         
         # 跳过无效信号
         valid_mask = ~np.isnan(sig)

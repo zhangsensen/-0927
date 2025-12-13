@@ -50,12 +50,18 @@ def load_latest_results():
     if not wfo_path.exists():
         raise FileNotFoundError(f"WFO 结果文件不存在: {wfo_path}")
     
-    vec_path = latest_vec / "full_space_results.csv"
+    vec_path = latest_vec / "full_space_results.parquet"
+    if not vec_path.exists():
+        # Backward-compat: older runs used CSV
+        vec_path = latest_vec / "full_space_results.csv"
     if not vec_path.exists():
         raise FileNotFoundError(f"VEC 结果文件不存在: {vec_path}")
     
     wfo = pd.read_parquet(wfo_path)
-    vec = pd.read_csv(vec_path)
+    if vec_path.suffix.lower() in {".parquet", ".pq"}:
+        vec = pd.read_parquet(vec_path)
+    else:
+        vec = pd.read_csv(vec_path)
     
     return wfo, vec, latest_wfo.name, latest_vec.name
 
@@ -412,11 +418,11 @@ def save_results(df: pd.DataFrame, output_dir: Path, top_n: int = 100):
     
     # 保存 Top N
     top_df = sorted_df.head(top_n)
-    top_df.to_csv(output_dir / f"top{top_n}_by_composite.csv", index=False)
+    top_df.to_parquet(output_dir / f"top{top_n}_by_composite.parquet", index=False)
     top_df.to_parquet(output_dir / f"top{top_n}_by_composite.parquet", index=False)
     
     # 保存完整结果
-    sorted_df.to_csv(output_dir / "all_combos_scored.csv", index=False)
+    sorted_df.to_parquet(output_dir / "all_combos_scored.parquet", index=False)
     sorted_df.to_parquet(output_dir / "all_combos_scored.parquet", index=False)
     
     print(f"\n✅ 结果已保存到: {output_dir}")

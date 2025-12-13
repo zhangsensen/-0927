@@ -1,11 +1,11 @@
 
 import sys
+import argparse
 from pathlib import Path
 import yaml
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from itertools import combinations
 import warnings
 
 # Add project root to path
@@ -25,9 +25,31 @@ from batch_vec_backtest import run_vec_backtest
 
 warnings.filterwarnings('ignore')
 
+def _load_latest_wfo_combos() -> Path:
+    """Return path to top100_by_ic.parquet from latest WFO run_* (pipeline enforcement)."""
+    wfo_dirs = sorted(
+        [d for d in (ROOT / "results").glob("run_*") if d.is_dir() and not d.is_symlink()]
+    )
+    if not wfo_dirs:
+        raise FileNotFoundError("未找到 WFO 结果目录 run_*，请先运行 run_combo_wfo.py")
+    latest = wfo_dirs[-1]
+    # 优先 top100_by_ic.parquet，其次 all_combos.parquet
+    candidates = [
+        latest / "top100_by_ic.parquet",
+        latest / "all_combos.parquet",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    raise FileNotFoundError(f"在 {latest} 未找到 top100_by_ic.parquet / all_combos.parquet")
+
+
 def main():
+    parser = argparse.ArgumentParser(description="VEC backtest using WFO outputs (pipeline enforced)")
+    parser.add_argument("--combos", type=str, default=None, help="指定 WFO 导出的组合文件（parquet，需含 combo 列），如 run_xxx/all_combos.parquet")
+    args = parser.parse_args()
     print('=' * 80)
-    print('🚀 FULL SPACE VECTORIZED BACKTEST (FREQ=3, POS=2)')
+    print('🚀 VEC BACKTEST (WFO -> VEC pipeline enforced, FREQ=3, POS=2)')
     print('=' * 80)
 
     # 1. Load Configuration
@@ -89,15 +111,7 @@ def main():
     dates = first_factor.index
     etf_codes = first_factor.columns.tolist()
     
-    # Stack all factors into a 3D array (Factors, Time, Assets)
-    # Note: run_vec_backtest expects (Time, Assets, Factors) or similar?
-    # Let's check batch_vec_backtest.py signature.
-    # It takes `factors_3d` which is usually (Time, Assets, Factors) or (Factors, Time, Assets)?
-    # In batch_vec_backtest.py:
-    # factors_3d = np.stack([std_factors[f].values for f in factor_names_in_combo], axis=-1)
-    # So it is (Time, Assets, Factors).
-    
-    # Here we will pre-compute the full stack of ALL factors: (Time, Assets, All_Factors)
+    # Stack all factors into a 3D array (Time, Assets, Factors)
     all_factors_stack = np.stack([std_factors[f].values for f in factor_names_list], axis=-1)
     
     close_prices = ohlcv['close'][etf_codes].ffill().bfill().values
@@ -114,35 +128,34 @@ def main():
     timing_arr_raw = timing_series.reindex(dates).fillna(1.0).values
     timing_arr = shift_timing_signal(timing_arr_raw)
 
-    # 6. Generate Combinations
-    print("\nGenerating Combinations...")
-    combos = []
-    for r in [2, 3, 4, 5]:
-        for c in combinations(range(len(factor_names_list)), r):
-            combos.append(c)
-    
-    print(f"Total Combinations: {len(combos)}")
+    # 6. Load combos from latest WFO (pipeline enforcement)
+    if args.combos:
+        combos_path = Path(args.combos)
+        if not combos_path.exists():
+            raise FileNotFoundError(f"指定的 combos 文件不存在: {combos_path}")
+        combos_df = pd.read_parquet(combos_path)
+        print(f"✅ 使用指定组合文件: {combos_path} ({len(combos_df)} 个组合)")
+    else:
+        combos_path = _load_latest_wfo_combos()
+        combos_df = pd.read_parquet(combos_path)
+        print(f"✅ 使用最新 WFO 结果: {len(combos_df)} 个组合 来自 {combos_path}")
 
-    # 7. Run Backtest Loop
     results = []
-    
-    # We can pass the full stack and just indices to the kernel?
-    # run_vec_backtest takes `factors_3d` which corresponds to the specific combo.
-    # To avoid memory allocation in loop, we can try to slice.
-    # But run_vec_backtest might expect the last dim to be exactly the factors in combo.
-    # Let's just slice it. It's fast enough.
-    
-    for combo_indices in tqdm(combos, desc="Running Backtests"):
-        # Slice the specific factors for this combo
-        # all_factors_stack is (T, N, F_total)
-        # We want (T, N, F_subset)
-        current_factors = all_factors_stack[..., list(combo_indices)]
-        
-        # We pass indices 0..k-1 because current_factors only has k factors
-        current_factor_indices = list(range(len(combo_indices)))
-        
+    factor_index_map = {name: idx for idx, name in enumerate(factor_names_list)}
+
+    for combo_str in tqdm(combos_df["combo"].tolist(), desc="Running Backtests"):
+        factors_in_combo = [f.strip() for f in combo_str.split(" + ")]
         try:
-            ret, wr, pf, trades, _, risk = run_vec_backtest(
+            combo_indices = [factor_index_map[f] for f in factors_in_combo]
+        except KeyError as e:
+            print(f"[WARN] combo {combo_str} 包含未知因子 {e}, 跳过")
+            continue
+
+        current_factors = all_factors_stack[..., combo_indices]
+        current_factor_indices = list(range(len(combo_indices)))
+
+        try:
+            _, ret, wr, pf, trades, _, risk = run_vec_backtest(
                 current_factors, close_prices, open_prices, high_prices, low_prices,
                 timing_arr, current_factor_indices,
                 freq=FREQ,
@@ -154,29 +167,29 @@ def main():
                 stop_on_rebalance_only=True,
             )
             
-            combo_name = " + ".join([factor_names_list[i] for i in combo_indices])
-            
             results.append({
-                'combo': combo_name,
+                'combo': combo_str,
                 'size': len(combo_indices),
                 'vec_return': ret,
                 'vec_max_drawdown': risk['max_drawdown'],
                 'vec_calmar_ratio': risk['calmar_ratio'],
                 'vec_sharpe_ratio': risk['sharpe_ratio'],
+                'vec_aligned_return': risk.get('aligned_return', ret),
+                'vec_aligned_sharpe': risk.get('aligned_sharpe', risk.get('sharpe_ratio', 0.0)),
                 'vec_trades': trades
             })
         except Exception as e:
-            # print(f"Error in combo {combo_indices}: {e}")
+            print(f"[WARN] combo {combo_str} failed: {e}")
             continue
 
-    # 8. Save and Report
+    # 7. Save and Report
     df = pd.DataFrame(results)
     timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = ROOT / 'results' / f'vec_full_space_{timestamp}'
+    output_dir = ROOT / 'results' / f'vec_from_wfo_{timestamp}'
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    output_path = output_dir / 'full_space_results.csv'
-    df.to_csv(output_path, index=False)
+    output_path = output_dir / 'full_space_results.parquet'
+    df.to_parquet(output_path, index=False)
     print(f"\nResults saved to: {output_path}")
     
     # Top 20 Analysis
@@ -190,7 +203,7 @@ def main():
     
     for i, (_, row) in enumerate(df_sorted.head(20).iterrows()):
         print(f"{i+1:<4} | {row['vec_return']*100:>7.2f}% | {row['vec_max_drawdown']*100:>7.2f}% | {row['vec_calmar_ratio']:>8.3f} | {row['vec_sharpe_ratio']:>8.3f} | {row['combo'][:50]}")
-
+    
     # Check specific target
     target_combo = 'CORRELATION_TO_MARKET_20D + MAX_DD_60D + PRICE_POSITION_120D + PRICE_POSITION_20D'
     target_row = df[df['combo'] == target_combo]

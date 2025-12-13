@@ -23,6 +23,7 @@ mplfinance>=0.12.10b0
 plotly>=5.24.0
 pandas-vet>=2023.8.2
 akshare>=1.17.91
+tushare>=1.4.0
 
 [all]
 quant-factor-trading[database,dev,scheduling,web]

@@ -36,6 +36,7 @@ Requires-Dist: mplfinance>=0.12.10b0
 Requires-Dist: plotly>=5.24.0
 Requires-Dist: pandas-vet>=2023.8.2
 Requires-Dist: akshare>=1.17.91
+Requires-Dist: tushare>=1.4.0
 Provides-Extra: web
 Requires-Dist: dash>=2.18.0; extra == "web"
 Requires-Dist: beautifulsoup4>=4.13.5; extra == "web"
