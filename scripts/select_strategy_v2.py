@@ -13,6 +13,7 @@
 3. 最后运行本脚本进行筛选: uv run python scripts/select_strategy_v2.py
 """
 
+import argparse
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -64,6 +65,38 @@ def load_latest_results():
         vec = pd.read_csv(vec_path)
     
     return wfo, vec, latest_wfo.name, latest_vec.name
+
+
+def _read_table(path: Path) -> pd.DataFrame:
+    """Read a table from parquet/csv (parquet preferred)."""
+    if not path.exists():
+        raise FileNotFoundError(path)
+    suffix = path.suffix.lower()
+    if suffix in {".parquet", ".pq"}:
+        return pd.read_parquet(path)
+    if suffix == ".csv":
+        return pd.read_csv(path)
+    raise ValueError(f"Unsupported table suffix: {suffix} ({path})")
+
+
+def _rolling_preset_thresholds(preset: str) -> dict[str, float] | None:
+    preset = (preset or "none").lower()
+    if preset in {"none", "off", "false", "0"}:
+        return None
+    if preset == "relaxed":
+        return {"all_pos_min": 0.55, "all_worst_ret_min": -0.10, "full_calmar_min": 0.60}
+    if preset == "medium":
+        return {"all_pos_min": 0.60, "all_worst_ret_min": -0.10, "full_calmar_min": 0.60}
+    if preset == "strict":
+        return {"all_pos_min": 0.60, "all_worst_ret_min": -0.08, "full_calmar_min": 0.80}
+    if preset == "ultra":
+        return {
+            "all_pos_min": 0.60,
+            "all_worst_ret_min": -0.08,
+            "full_calmar_min": 0.80,
+            "holdout_worst_ret_min": 0.00,
+        }
+    raise ValueError(f"Unknown rolling preset: {preset}")
 
 
 # ============================================================================
@@ -160,6 +193,75 @@ def apply_ic_threshold(merged: pd.DataFrame, config: dict) -> pd.DataFrame:
     print(f"   通过: {len(passed)} / {len(merged)} ({len(passed)/len(merged)*100:.1f}%)")
     print(f"   过滤: {len(merged) - len(passed)} 个策略")
     
+    return passed
+
+
+def apply_rolling_consistency_filter(
+    df: pd.DataFrame,
+    rolling_summary_path: Path,
+    preset: str,
+    *,
+    drop_missing: bool = True,
+) -> pd.DataFrame:
+    """Optional rolling OOS consistency gate.
+
+    This is an overfitting-rejection layer on top of IC threshold.
+    It only applies when `rolling_summary_path` is provided.
+    """
+    thresholds = _rolling_preset_thresholds(preset)
+    if thresholds is None:
+        return df
+
+    rolling = _read_table(rolling_summary_path)
+    if "combo" not in rolling.columns:
+        raise KeyError(f"Missing 'combo' in rolling summary: {rolling_summary_path}")
+
+    keep_cols = [
+        "combo",
+        "full_total_return",
+        "full_max_drawdown",
+        "full_sharpe_ratio",
+        "full_calmar_ratio",
+        "all_segment_positive_rate",
+        "all_segment_worst_return",
+        "all_segment_worst_calmar",
+        "holdout_segment_positive_rate",
+        "holdout_segment_worst_return",
+        "holdout_segment_worst_calmar",
+        "all_segment_count",
+        "holdout_segment_count",
+    ]
+    rolling = rolling[[c for c in keep_cols if c in rolling.columns]].copy()
+
+    merged = df.merge(rolling, on="combo", how="left", suffixes=("", "_rolling"))
+
+    missing = merged["all_segment_positive_rate"].isna().sum() if "all_segment_positive_rate" in merged.columns else len(merged)
+    if missing:
+        print(f"\n⚠️ Rolling summary missing for {missing} combos")
+        if drop_missing:
+            merged = merged.dropna(subset=["all_segment_positive_rate", "all_segment_worst_return", "full_calmar_ratio"]).copy()
+
+    mask = (
+        (merged["all_segment_positive_rate"] >= thresholds["all_pos_min"])
+        & (merged["all_segment_worst_return"] >= thresholds["all_worst_ret_min"])
+        & (merged["full_calmar_ratio"] >= thresholds["full_calmar_min"])
+    )
+    if "holdout_worst_ret_min" in thresholds:
+        mask = mask & (merged["holdout_segment_worst_return"] >= thresholds["holdout_worst_ret_min"])
+
+    passed = merged.loc[mask].copy()
+    print("\n📉 Rolling OOS 一致性过滤 (Overfitting Rejection)")
+    print(f"   summary: {rolling_summary_path}")
+    print(
+        "   gate: all_pos>=%.2f, all_worst_ret>=%.2f, full_calmar>=%.2f%s"
+        % (
+            thresholds["all_pos_min"],
+            thresholds["all_worst_ret_min"],
+            thresholds["full_calmar_min"],
+            "" if "holdout_worst_ret_min" not in thresholds else f", holdout_worst_ret>={thresholds['holdout_worst_ret_min']:.2f}",
+        )
+    )
+    print(f"   通过: {len(passed)} / {len(merged)} ({len(passed)/max(len(merged),1)*100:.2f}%)")
     return passed
 
 
@@ -433,6 +535,22 @@ def save_results(df: pd.DataFrame, output_dir: Path, top_n: int = 100):
 
 
 def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--rolling-summary",
+        type=str,
+        default="",
+        help="滚动一致性汇总表路径 (rolling_oos_summary.parquet/.csv). 未提供则跳过该过滤层。",
+    )
+    parser.add_argument(
+        "--rolling-preset",
+        type=str,
+        default="none",
+        choices=["none", "relaxed", "medium", "strict", "ultra"],
+        help="滚动一致性门槛预设：none/relaxed/medium/strict/ultra。",
+    )
+    args, _unknown = parser.parse_known_args()
+
     print("=" * 80)
     print("策略筛选 v2.0 - 基于新开发思想")
     print("=" * 80)
@@ -492,6 +610,15 @@ def main():
     
     # Step 1: IC 门槛过滤
     qualified = apply_ic_threshold(regime_filtered, config)
+
+    # Step 1.5: Rolling OOS 一致性过滤（可选）
+    if args.rolling_summary:
+        qualified = apply_rolling_consistency_filter(
+            qualified,
+            Path(args.rolling_summary),
+            args.rolling_preset,
+            drop_missing=True,
+        )
     
     # Step 2: 计算综合得分
     scored = compute_composite_score(qualified, config)

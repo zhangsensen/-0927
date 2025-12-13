@@ -1,0 +1,396 @@
+{
+  "version": "v3.2",
+  "date": "20251214",
+  "generated_at": "2025-12-14 01:56:20",
+  "git_commit": "41a74244482af041d254d5bc838b15cd918fae1e",
+  "source_paths": {
+    "final_candidates": "results/final_triple_validation_20251214_011753/final_candidates.parquet",
+    "bt_results": "results/bt_backtest_full_20251214_013635/bt_results.parquet",
+    "production_dir": "results/production_pack_20251214_014022"
+  },
+  "counts": {
+    "final_candidates": 152,
+    "bt_results": 152
+  },
+  "notes": {
+    "ground_truth": "BT (Backtrader) metrics are the production truth; VEC is screening only.",
+    "split": "Train/Holdout split at training_end_date from combo_wfo_config.yaml."
+  },
+  "files": [
+    {
+      "name": "final_candidates",
+      "source": "results/final_triple_validation_20251214_011753/final_candidates.parquet",
+      "sealed": "artifacts/final_candidates.parquet"
+    },
+    {
+      "name": "bt_results",
+      "source": "results/bt_backtest_full_20251214_013635/bt_results.parquet",
+      "sealed": "artifacts/bt_results.parquet"
+    },
+    {
+      "name": "production_top",
+      "source": "results/production_pack_20251214_014022/production_candidates.parquet",
+      "sealed": "artifacts/production_candidates.parquet"
+    },
+    {
+      "name": "production_all",
+      "source": "results/production_pack_20251214_014022/production_all_candidates.parquet",
+      "sealed": "artifacts/production_all_candidates.parquet"
+    },
+    {
+      "name": "production_report",
+      "source": "results/production_pack_20251214_014022/PRODUCTION_REPORT.md",
+      "sealed": "artifacts/PRODUCTION_REPORT.md"
+    },
+    {
+      "name": "combo_wfo_config",
+      "source": "/home/sensen/dev/projects/-0927/configs/combo_wfo_config.yaml",
+      "sealed": "locked/configs/combo_wfo_config.yaml"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/__init__.py",
+      "sealed": "locked/src/etf_data/__init__.py"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/config/__init__.py",
+      "sealed": "locked/src/etf_data/config/__init__.py"
+    },
+    {
+      "name": "src_etf_config.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/config/etf_config.py",
+      "sealed": "locked/src/etf_data/config/etf_config.py"
+    },
+    {
+      "name": "src_etf_config_manager.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/config/etf_config_manager.py",
+      "sealed": "locked/src/etf_data/config/etf_config_manager.py"
+    },
+    {
+      "name": "src_etf_config_standalone.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/config/etf_config_standalone.py",
+      "sealed": "locked/src/etf_data/config/etf_config_standalone.py"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/core/__init__.py",
+      "sealed": "locked/src/etf_data/core/__init__.py"
+    },
+    {
+      "name": "src_config.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/core/config.py",
+      "sealed": "locked/src/etf_data/core/config.py"
+    },
+    {
+      "name": "src_data_manager.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/core/data_manager.py",
+      "sealed": "locked/src/etf_data/core/data_manager.py"
+    },
+    {
+      "name": "src_downloader.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/core/downloader.py",
+      "sealed": "locked/src/etf_data/core/downloader.py"
+    },
+    {
+      "name": "src_etf_list.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/core/etf_list.py",
+      "sealed": "locked/src/etf_data/core/etf_list.py"
+    },
+    {
+      "name": "src_models.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/core/models.py",
+      "sealed": "locked/src/etf_data/core/models.py"
+    },
+    {
+      "name": "src_README.md",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/docs/README.md",
+      "sealed": "locked/src/etf_data/docs/README.md"
+    },
+    {
+      "name": "src_download_etf_with_custom_dates.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/download_etf_with_custom_dates.py",
+      "sealed": "locked/src/etf_data/download_etf_with_custom_dates.py"
+    },
+    {
+      "name": "src_etf_download_dates.json",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/etf_download_dates.json",
+      "sealed": "locked/src/etf_data/etf_download_dates.json"
+    },
+    {
+      "name": "src_high_priority_etfs.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/high_priority_etfs.txt",
+      "sealed": "locked/src/etf_data/high_priority_etfs.txt"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/scripts/__init__.py",
+      "sealed": "locked/src/etf_data/scripts/__init__.py"
+    },
+    {
+      "name": "src_batch_download.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/scripts/batch_download.py",
+      "sealed": "locked/src/etf_data/scripts/batch_download.py"
+    },
+    {
+      "name": "src_download_etf_manager.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/scripts/download_etf_manager.py",
+      "sealed": "locked/src/etf_data/scripts/download_etf_manager.py"
+    },
+    {
+      "name": "src_maintain_etf_config.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/scripts/maintain_etf_config.py",
+      "sealed": "locked/src/etf_data/scripts/maintain_etf_config.py"
+    },
+    {
+      "name": "src_quick_download.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/scripts/quick_download.py",
+      "sealed": "locked/src/etf_data/scripts/quick_download.py"
+    },
+    {
+      "name": "src_test_etf_manager.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/test_etf_manager.py",
+      "sealed": "locked/src/etf_data/test_etf_manager.py"
+    },
+    {
+      "name": "src_全部ETF下载清单_43只.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/全部ETF下载清单_43只.txt",
+      "sealed": "locked/src/etf_data/全部ETF下载清单_43只.txt"
+    },
+    {
+      "name": "src_高优先级ETF下载清单.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/高优先级ETF下载清单.txt",
+      "sealed": "locked/src/etf_data/高优先级ETF下载清单.txt"
+    },
+    {
+      "name": "src_高优先级ETF下载清单_43只.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_data/高优先级ETF下载清单_43只.txt",
+      "sealed": "locked/src/etf_data/高优先级ETF下载清单_43只.txt"
+    },
+    {
+      "name": "src_ohlcv_6e6718b7c01c10264285fc2e15f6b833.pkl",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/.cache/ohlcv_6e6718b7c01c10264285fc2e15f6b833.pkl",
+      "sealed": "locked/src/etf_strategy/.cache/ohlcv_6e6718b7c01c10264285fc2e15f6b833.pkl"
+    },
+    {
+      "name": "src_ohlcv_74ea0d8e6a5cc042fb7ad0ad3cddfbfe.pkl",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/.cache/ohlcv_74ea0d8e6a5cc042fb7ad0ad3cddfbfe.pkl",
+      "sealed": "locked/src/etf_strategy/.cache/ohlcv_74ea0d8e6a5cc042fb7ad0ad3cddfbfe.pkl"
+    },
+    {
+      "name": "src_ohlcv_9c38f11fcbdf42dfc5230f7fec962771.pkl",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/.cache/ohlcv_9c38f11fcbdf42dfc5230f7fec962771.pkl",
+      "sealed": "locked/src/etf_strategy/.cache/ohlcv_9c38f11fcbdf42dfc5230f7fec962771.pkl"
+    },
+    {
+      "name": "src_ohlcv_a166fcd8853e5f2a0a63bcb167e57f94.pkl",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/.cache/ohlcv_a166fcd8853e5f2a0a63bcb167e57f94.pkl",
+      "sealed": "locked/src/etf_strategy/.cache/ohlcv_a166fcd8853e5f2a0a63bcb167e57f94.pkl"
+    },
+    {
+      "name": "src_ohlcv_c38d522b7f538eb8d9bd080af1a9928a.pkl",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/.cache/ohlcv_c38d522b7f538eb8d9bd080af1a9928a.pkl",
+      "sealed": "locked/src/etf_strategy/.cache/ohlcv_c38d522b7f538eb8d9bd080af1a9928a.pkl"
+    },
+    {
+      "name": "src_ohlcv_ddf996535aa95bddd5f87b816fb96c0c.pkl",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/.cache/ohlcv_ddf996535aa95bddd5f87b816fb96c0c.pkl",
+      "sealed": "locked/src/etf_strategy/.cache/ohlcv_ddf996535aa95bddd5f87b816fb96c0c.pkl"
+    },
+    {
+      "name": "src_ohlcv_fcad6e7aa9e87bd9a72a77adb0fec2a4.pkl",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/.cache/ohlcv_fcad6e7aa9e87bd9a72a77adb0fec2a4.pkl",
+      "sealed": "locked/src/etf_strategy/.cache/ohlcv_fcad6e7aa9e87bd9a72a77adb0fec2a4.pkl"
+    },
+    {
+      "name": "src_README.md",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/README.md",
+      "sealed": "locked/src/etf_strategy/README.md"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/auditor/__init__.py",
+      "sealed": "locked/src/etf_strategy/auditor/__init__.py"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/auditor/core/__init__.py",
+      "sealed": "locked/src/etf_strategy/auditor/core/__init__.py"
+    },
+    {
+      "name": "src_engine.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/auditor/core/engine.py",
+      "sealed": "locked/src/etf_strategy/auditor/core/engine.py"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/auditor/runners/__init__.py",
+      "sealed": "locked/src/etf_strategy/auditor/runners/__init__.py"
+    },
+    {
+      "name": "src_parallel_audit.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/auditor/runners/parallel_audit.py",
+      "sealed": "locked/src/etf_strategy/auditor/runners/parallel_audit.py"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/__init__.py",
+      "sealed": "locked/src/etf_strategy/core/__init__.py"
+    },
+    {
+      "name": "src_category_factors.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/category_factors.py",
+      "sealed": "locked/src/etf_strategy/core/category_factors.py"
+    },
+    {
+      "name": "src_combo_wfo_optimizer.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/combo_wfo_optimizer.py",
+      "sealed": "locked/src/etf_strategy/core/combo_wfo_optimizer.py"
+    },
+    {
+      "name": "src_cross_section_processor.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/cross_section_processor.py",
+      "sealed": "locked/src/etf_strategy/core/cross_section_processor.py"
+    },
+    {
+      "name": "src_data_contract.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/data_contract.py",
+      "sealed": "locked/src/etf_strategy/core/data_contract.py"
+    },
+    {
+      "name": "src_data_loader.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/data_loader.py",
+      "sealed": "locked/src/etf_strategy/core/data_loader.py"
+    },
+    {
+      "name": "src_factor_stability_tester.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/factor_stability_tester.py",
+      "sealed": "locked/src/etf_strategy/core/factor_stability_tester.py"
+    },
+    {
+      "name": "src_ic_calculator_numba.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/ic_calculator_numba.py",
+      "sealed": "locked/src/etf_strategy/core/ic_calculator_numba.py"
+    },
+    {
+      "name": "src_market_timing.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/market_timing.py",
+      "sealed": "locked/src/etf_strategy/core/market_timing.py"
+    },
+    {
+      "name": "src_precise_factor_library_v2.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/precise_factor_library_v2.py",
+      "sealed": "locked/src/etf_strategy/core/precise_factor_library_v2.py"
+    },
+    {
+      "name": "src_regime_detector.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/regime_detector.py",
+      "sealed": "locked/src/etf_strategy/core/regime_detector.py"
+    },
+    {
+      "name": "src___init__.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/utils/__init__.py",
+      "sealed": "locked/src/etf_strategy/core/utils/__init__.py"
+    },
+    {
+      "name": "src_rebalance.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/utils/rebalance.py",
+      "sealed": "locked/src/etf_strategy/core/utils/rebalance.py"
+    },
+    {
+      "name": "src_wfo_realbt_calibrator.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/core/wfo_realbt_calibrator.py",
+      "sealed": "locked/src/etf_strategy/core/wfo_realbt_calibrator.py"
+    },
+    {
+      "name": "src_run_combo_wfo.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/run_combo_wfo.py",
+      "sealed": "locked/src/etf_strategy/run_combo_wfo.py"
+    },
+    {
+      "name": "src_run_robust_combo_wfo.py",
+      "source": "/home/sensen/dev/projects/-0927/src/etf_strategy/run_robust_combo_wfo.py",
+      "sealed": "locked/src/etf_strategy/run_robust_combo_wfo.py"
+    },
+    {
+      "name": "src_run_daily_strategy.py",
+      "source": "/home/sensen/dev/projects/-0927/src/live/run_daily_strategy.py",
+      "sealed": "locked/src/live/run_daily_strategy.py"
+    },
+    {
+      "name": "src_PKG-INFO",
+      "source": "/home/sensen/dev/projects/-0927/src/quant_factor_trading.egg-info/PKG-INFO",
+      "sealed": "locked/src/quant_factor_trading.egg-info/PKG-INFO"
+    },
+    {
+      "name": "src_SOURCES.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/quant_factor_trading.egg-info/SOURCES.txt",
+      "sealed": "locked/src/quant_factor_trading.egg-info/SOURCES.txt"
+    },
+    {
+      "name": "src_dependency_links.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/quant_factor_trading.egg-info/dependency_links.txt",
+      "sealed": "locked/src/quant_factor_trading.egg-info/dependency_links.txt"
+    },
+    {
+      "name": "src_requires.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/quant_factor_trading.egg-info/requires.txt",
+      "sealed": "locked/src/quant_factor_trading.egg-info/requires.txt"
+    },
+    {
+      "name": "src_top_level.txt",
+      "source": "/home/sensen/dev/projects/-0927/src/quant_factor_trading.egg-info/top_level.txt",
+      "sealed": "locked/src/quant_factor_trading.egg-info/top_level.txt"
+    },
+    {
+      "name": "pyproject.toml",
+      "source": "/home/sensen/dev/projects/-0927/pyproject.toml",
+      "sealed": "locked/pyproject.toml"
+    },
+    {
+      "name": "uv.lock",
+      "source": "/home/sensen/dev/projects/-0927/uv.lock",
+      "sealed": "locked/uv.lock"
+    },
+    {
+      "name": "Makefile",
+      "source": "/home/sensen/dev/projects/-0927/Makefile",
+      "sealed": "locked/Makefile"
+    },
+    {
+      "name": "batch_bt_backtest.py",
+      "source": "/home/sensen/dev/projects/-0927/scripts/batch_bt_backtest.py",
+      "sealed": "locked/scripts/batch_bt_backtest.py"
+    },
+    {
+      "name": "generate_production_pack.py",
+      "source": "/home/sensen/dev/projects/-0927/scripts/generate_production_pack.py",
+      "sealed": "locked/scripts/generate_production_pack.py"
+    },
+    {
+      "name": "final_triple_validation.py",
+      "source": "/home/sensen/dev/projects/-0927/scripts/final_triple_validation.py",
+      "sealed": "locked/scripts/final_triple_validation.py"
+    },
+    {
+      "name": "PRODUCTION_STRATEGIES_V3_2.md",
+      "source": "/home/sensen/dev/projects/-0927/docs/PRODUCTION_STRATEGIES_V3_2.md",
+      "sealed": "locked/docs/PRODUCTION_STRATEGIES_V3_2.md"
+    },
+    {
+      "name": "PRODUCTION_STRATEGY_LIST_V3_2.md",
+      "source": "/home/sensen/dev/projects/-0927/docs/PRODUCTION_STRATEGY_LIST_V3_2.md",
+      "sealed": "locked/docs/PRODUCTION_STRATEGY_LIST_V3_2.md"
+    },
+    {
+      "name": "RELEASE_NOTES_V3_2.md",
+      "source": "/home/sensen/dev/projects/-0927/docs/RELEASE_NOTES_V3_2.md",
+      "sealed": "locked/docs/RELEASE_NOTES_V3_2.md"
+    },
+    {
+      "name": "QUICK_REFERENCE.md",
+      "source": "/home/sensen/dev/projects/-0927/docs/QUICK_REFERENCE.md",
+      "sealed": "locked/docs/QUICK_REFERENCE.md"
+    }
+  ]
+}

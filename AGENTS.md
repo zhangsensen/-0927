@@ -76,6 +76,15 @@ uv run python scripts/select_strategy_v2.py
 # BT 审计（可选）
 uv run python scripts/batch_bt_backtest.py                # BT 审计 (Top 10)
 
+# 封板归档（强烈建议：每次可交付版本都做一次）
+# 输出目录：sealed_strategies/<version>_<yyyymmdd>/
+uv run python scripts/seal_release.py \
+    --version v3.2 --date 20251214 \
+    --final-candidates results/final_triple_validation_20251214_011753/final_candidates.parquet \
+    --bt-results results/bt_backtest_full_20251214_013635/bt_results.parquet \
+    --production-dir results/production_pack_20251214_014022 \
+    --force
+
 # 代码质量
 make format                                               # black + isort
 make lint                                                 # flake8 + mypy

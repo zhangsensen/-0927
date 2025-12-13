@@ -1,5 +1,10 @@
 # v3.1 高频轮动策略 实盘执行与风控规则说明
 
+> **v3.2 备注（2025-12-14）**：策略交易规则未变，但审计口径已升级为 BT 分段收益，并已交付 Production Pack：
+> - `results/production_pack_20251214_014022/production_candidates.parquet`
+> - `results/production_pack_20251214_014022/PRODUCTION_REPORT.md`
+> - `docs/PRODUCTION_STRATEGIES_V3_2.md`
+
 > 适用对象：43 ETF 高频轮动 v3.1 主策略（WFO + VEC + BT 已完成三重验证）
 > 目标：在保证长期收益曲线不被破坏的前提下，安全、可控地上线小资金实盘，并通过量化监控决定何时加仓 / 减仓。
 

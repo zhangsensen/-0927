@@ -1,141 +1,46 @@
-# 项目现状速览（2025-12-11 深度诊断完成）
+# 项目现状速览（v3.2 已交付 | 2025-12-14）
 
-## 🚨 核心发现：训练期排序完全失效
+## ✅ 交付结论（你只需要看这一段）
 
-**震撼结论**：按训练期综合得分排序的Top1000组合，在Holdout期的表现**劣于随机选择**！
+- 已交付一批“可审计、不可质疑”的稳定策略清单：**Top 120**（来自 152 条无泄漏候选）。
+- 生产口径统一为 **BT（Backtrader）Ground Truth**，并按 Train / Holdout 分段输出收益。
+- Rolling 稳定性 gate 使用 **train-only summary**，已规避 holdout 泄漏。
 
-| 关键指标 | 数值 | 说明 |
-|---------|------|------|
-| **Spearman秩相关** | **-0.26** | 🚨 负相关！训练排序与Holdout表现反向 |
-| 训练Top10 Holdout收益 | -1.0% | 训练最优组合在Holdout亏损 |
-| 训练Top1000 Holdout收益 | 0.5% | 几乎为0，正收益占比仅49.3% |
-| 全量62,985 Holdout收益 | **6.3%** | 随机选择反而更好！正收益占比73.9% |
+## 🔒 封板范围（v3.2）
 
-## ✅ 已完成深度诊断
+- 交易规则锁死：FREQ=3、POS=2、commission=0.0002；不止损、不 cash（按现有引擎规则）。
+- 允许：数据更新、bugfix（不改逻辑）、性能优化（不改结果）、文档与审计增强。
+- 禁止：修改核心回测引擎逻辑、修改 ETF 池定义（尤其禁止移除任何 QDII）。
 
-### 1. 过拟合根源分析
-- **因子失效**：ADX_14D (训练75.7% → Holdout 6.0%，下降70%)
-- **新兴因子**：CMF_20D (训练12.8% → Holdout 79.8%，上升67%)
-- **复杂度陷阱**：6-7因子组合收益衰减57-66%，严重过拟合
-- **市场环境变化**：Holdout期是牛市（Sharpe 0.27→1.72），但训练Top1000在牛市中仍亏损
+## 📦 v3.2 关键产物（可追溯、可复现）
 
-### 2. 市场环境对比（训练 vs Holdout）
-| 指标 | 训练期 (5年) | Holdout期 (7个月) |
-|------|-------------|-----------------|
-| 平均收益率 | 12.6% | **24.9%** ⬆️ |
-| 平均Sharpe | 0.27 | **1.72** ⬆️ |
-| 正收益ETF占比 | 58.1% | **93.0%** ⬆️ |
-| 平均最大回撤 | -48.6% | **-11.6%** ⬆️ |
+### 1) 无泄漏候选（Triple Validation）
+- `results/final_triple_validation_20251214_011753/final_candidates.parquet`（152）
 
-**结论**：Holdout期市场环境**远好于**训练期，训练Top1000在牛市中仍表现极差，证明严重过拟合。
+### 2) BT 审计（含分段收益）
+- `results/bt_backtest_full_20251214_013635/bt_results.parquet`（152，含 `bt_train_return` / `bt_holdout_return`）
 
-### 3. 因子频率变化（训练Top1000 vs Holdout Top500）
-| 因子 | 变化 | 方向 |
-|------|------|------|
-| ADX_14D | -69.7% | 📉 崩溃 |
-| CMF_20D | +67.0% | 📈 新兴 |
-| MAX_DD_60D | +40.5% | 📈 稳定 |
-| SHARPE_RATIO_20D | -39.5% | 📉 失效 |
-| MOM_20D | -39.8% | 📉 失效 |
+### 3) Production Pack（交付）
+- `results/production_pack_20251214_014022/production_candidates.parquet`（Top 120）
+- `results/production_pack_20251214_014022/production_all_candidates.parquet`（All 152）
+- `results/production_pack_20251214_014022/PRODUCTION_REPORT.md`
 
-## 📋 最新产出
+## 📚 v3.2 文档
 
-### 诊断脚本
-1. `scripts/deep_overfitting_diagnosis.py` - 深度过拟合诊断
-2. `scripts/analyze_market_regime_shift.py` - 市场环境变化分析
-3. `scripts/dual_gate_filter.py` - 双重挡板+约束筛选
+- `docs/PRODUCTION_STRATEGIES_V3_2.md`
+- `docs/PRODUCTION_STRATEGY_LIST_V3_2.md`
+- `docs/RELEASE_NOTES_V3_2.md`
 
-### 诊断报告
-- `docs/OVERFITTING_DIAGNOSIS_REPORT.md` - 完整诊断报告（16页）
+## 🔁 可复现命令
 
-### 筛选结果
-- **双重挡板筛选** (70%训练 + 80%Holdout)：2,829个
-- **+ 回撤约束** (MaxDD < 15%)：541个
-- **+ 复杂度约束** (阶数 ≤ 5)：160个
-- **+ 黑名单** (禁止ADX_14D)：138个
-- **+ 白名单** (必含MAX_DD_60D)：**56个** ✅
-
-### BT审计清单
-📄 `results/vec_from_wfo_20251211_205649/filtered_top50_for_bt.csv`
-
-| 指标 | 数值 |
-|------|------|
-| 组合数 | 56个 (输出Top50) |
-| 阶数分布 | 3因子(2), 4因子(16), 5因子(38) |
-| 训练期收益 | 均值40.9%, 中位38.7% |
-| **Holdout收益** | **均值28.6%, 中位26.7%** |
-| Holdout Sharpe | 均值1.54, 中位1.46 |
-| Holdout MaxDD | 均值13.3%, 中位13.3% |
-
-### Top5 筛选后组合
-1. **CMF + CORR_TO_MARKET + MAX_DD + RET_VOL + VOL_RATIO_60D** (5因子)
-   - Holdout: **65.9%**, Sharpe 3.04, MaxDD 14.2%
-
-2. **CMF + CORR_TO_MARKET + MAX_DD + RET_VOL + SLOPE** (5因子)
-   - Holdout: **52.1%**, Sharpe 2.35, MaxDD 14.0%
-
-3. **CMF + MAX_DD + PRICE_POS_20D + RET_VOL + VOL_RATIO_60D** (5因子)
-   - Holdout: **42.3%**, Sharpe 2.33, MaxDD 13.1%
-
-## 🎯 核心结论
-
-### ❌ 禁止使用
-1. **训练期Top排序** - 与Holdout负相关，完全失效
-2. **ADX_14D因子** - 训练期过拟合，Holdout期崩溃
-3. **6-7因子组合** - 复杂度过高，衰减57-66%
-
-### ✅ 建议方案
-1. **使用双重挡板** - 训练合格 ∩ Holdout合格
-2. **必含因子** - MAX_DD_60D (100%), CMF_20D (23%)
-3. **阶数约束** - 限制≤5因子
-4. **回撤约束** - MaxDD ≤ 15%
-
-## 📊 因子可靠性评级
-
-| 评级 | 因子 | Holdout Top500占比 | 说明 |
-|------|------|-------------------|------|
-| 🟢 S级 | MAX_DD_60D | 88.2% | 风险控制核心 |
-| 🟢 A级 | CMF_20D | 79.8% | 资金流指标 |
-| 🟢 A级 | CORRELATION_TO_MARKET_20D | 69.0% | 相关性 |
-| 🟡 B级 | RET_VOL_20D | 41.6% | 波动率 |
-| 🟡 B级 | VOL_RATIO_60D | 38.6% | 成交量 |
-| 🔴 F级 | ADX_14D | 6.0% | 严重失效 |
-| 🔴 F级 | MOM_20D | 13.6% | 趋势失效 |
-| 🔴 F级 | SHARPE_RATIO_20D | 22.4% | 过拟合 |
-
-## 🚀 下一步行动
-
-### 立即可执行
 ```bash
-# 1. 检查筛选结果
-cat results/vec_from_wfo_20251211_205649/filtered_top50_for_bt.csv | head -20
+# BT 审计（会输出 bt_train_return / bt_holdout_return）
+uv run python scripts/batch_bt_backtest.py \
+  --combos results/final_triple_validation_20251214_011753/final_candidates.parquet
 
-# 2. BT小规模审计 (可选)
-# uv run python scripts/batch_bt_backtest.py --input results/vec_from_wfo_20251211_205649/filtered_top50_for_bt.csv
-
-# 3. 查看完整诊断报告
-cat docs/OVERFITTING_DIAGNOSIS_REPORT.md
+# 生产包（Top 120）
+uv run python scripts/generate_production_pack.py \
+  --candidates results/final_triple_validation_20251214_011753/final_candidates.parquet \
+  --bt-results results/bt_backtest_full_20251214_013635/bt_results.parquet \
+  --top-n 120
 ```
-
-### 中长期改进
-1. 重构WFO逻辑：引入regime感知，分牛熊震荡训练
-2. 降阶约束：强制限制组合阶数≤5
-3. 在线学习：每月重新评估因子权重
-4. 因子稳定性测试：淘汰方差大的因子
-
-## ⚠️ 重要警告
-
-**不要再使用训练期排序！**
-- 训练Top10在Holdout亏损1%
-- 训练Top1000在Holdout仅赚0.5%
-- 全量随机选择在Holdout赚6.3%
-
-**训练期排序 = 反向指标**
-
----
-
-**诊断完成时间**: 2025-12-11  
-**诊断脚本**: 3个  
-**分析样本**: 62,985个组合  
-**最终筛选**: 56个稳定组合  
-**Holdout期**: 2025-05-01 ~ 2025-12-08 (7个月牛市) 

@@ -30,6 +30,7 @@ import sys
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+import os
 from typing import Any
 
 import numpy as np
@@ -51,6 +52,20 @@ from etf_strategy.core.utils.rebalance import shift_timing_signal
 from batch_vec_backtest import run_vec_backtest
 
 warnings.filterwarnings("ignore")
+
+
+def _resolve_n_jobs(n_jobs: int) -> int:
+    """Resolve a safe worker count.
+
+    We avoid using all logical CPUs by default because this workstation may run
+    a VM (qemu) and other services, and maxing out all cores can cause thermal
+    throttling or instability.
+    """
+    if int(n_jobs) > 0:
+        return int(n_jobs)
+    cpu = os.cpu_count() or 1
+    # Use ~60% cores, capped at 16, minimum 1.
+    return max(1, min(16, int(cpu * 0.6)))
 
 
 def _read_table(path: str | Path) -> pd.DataFrame:
@@ -322,9 +337,20 @@ def main() -> None:
         help="Only evaluate Top-N by vec_calmar_ratio (descending). Default: all rows.",
     )
     parser.add_argument("--segment", type=str, default="Q", choices=["M", "Q", "Y"], help="Calendar segmentation: M/Q/Y")
-    parser.add_argument("--n-jobs", type=int, default=-1, help="Parallel workers")
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=-1,
+        help="Parallel workers. -1 means safe default (not all cores).",
+    )
     parser.add_argument("--prefer", type=str, default="threads", choices=["threads", "processes"], help="joblib backend")
     parser.add_argument("--write-segments", action="store_true", help="Write per-segment table (can be large)")
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        default=None,
+        help="Override data end date for evaluation (YYYY-MM-DD). Use training_end_date to avoid holdout leakage.",
+    )
     args = parser.parse_args()
 
     print("=" * 80)
@@ -346,7 +372,8 @@ def main() -> None:
     EXTREME_POSITION = 0.1
 
     training_end = config.get("data", {}).get("training_end_date", None)
-    full_end = config["data"]["end_date"]
+    full_end_cfg = config["data"]["end_date"]
+    full_end = args.end_date or full_end_cfg
 
     # Load results table
     df_in = _read_table(args.input)
@@ -402,7 +429,10 @@ def main() -> None:
     factor_index_map = {name: idx for idx, name in enumerate(factor_names_list)}
 
     # Parallel evaluation
-    parallel_results = Parallel(n_jobs=int(args.n_jobs), prefer=args.prefer, verbose=5, batch_size=64)(
+    n_jobs = _resolve_n_jobs(int(args.n_jobs))
+    print(f"Workers: {n_jobs} (requested: {args.n_jobs})")
+
+    parallel_results = Parallel(n_jobs=n_jobs, prefer=args.prefer, verbose=5, batch_size=64)(
         delayed(process_combo)(
             combo_str,
             factor_index_map,
