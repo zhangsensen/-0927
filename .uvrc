@@ -1,0 +1,23 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🔒 UV 项目配置（强制执行）
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 更新日期: 2025-12-15
+# 
+# 此项目统一使用 UV 管理依赖和虚拟环境
+# 项目已配置 uv.lock，所有依赖由 UV 管理
+# 
+# ✅ 正确的命令：
+#   uv sync --dev          # 同步开发依赖
+#   uv run python <script> # 运行脚本（自动激活环境）
+#   uv pip install -e .    # 安装项目（editable）
+#   uv add <package>       # 添加依赖
+#   uv remove <package>    # 移除依赖
+#
+# ❌ 绝对禁止使用：
+#   pip install <package>        # 会破坏 uv.lock
+#   python -m venv .venv         # UV 自动管理虚拟环境
+#   source .venv/bin/activate    # 不需要手动激活
+#   python <script.py>           # 必须用 uv run python
+#
+# 📖 详细说明：请查看 AGENTS.md 文件顶部的 UV 使用指南
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

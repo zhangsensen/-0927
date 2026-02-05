@@ -25,9 +25,11 @@ graph TD
     B --> C[横截面标准化]
     C --> D[WFO优化]
     D --> E[VEC批量回测]
-    E --> F[策略筛选]
-    F --> G[Holdout验证]
-    G --> H[生产部署]
+    E --> F[Rolling一致性验证]
+    F --> G[Holdout冷数据验证]
+    G --> H[BT事件驱动审计(Ground Truth)]
+    H --> I[封板归档(Sealed Release)]
+    I --> J[生产部署]
 
     style A fill:#e1f5fe
     style B fill:#e1f5fe
@@ -36,13 +38,22 @@ graph TD
     style E fill:#fff3e0
     style F fill:#fff8e1
     style G fill:#ffebee
-    style H fill:#e8f5e8
+    style H fill:#ffebee
+    style I fill:#e8f5e8
+    style J fill:#e8f5e8
 ```
 
 **核心原则**:
 - 🔒 **锁死交易规则**: FREQ=3, POS=2, 不止损, 不cash
 - 🎯 **IC门槛过滤**: IC > 0.05 OR positive_rate > 55%
 - 📊 **综合得分排序**: OOS收益(40%) + Sharpe(30%) + 回撤(30%)
+
+**交付标准（v3.2 起）**：策略对外交付必须通过 **VEC + Rolling + Holdout + BT** 四重验证，且通过后必须封板归档。
+- **VEC（Screening）**：用于快速精算与筛选，不作为最终对外口径。
+- **Rolling（Stability）**：滚动一致性 gate 必须使用 train-only summary，禁止混入 holdout 信息。
+- **Holdout（Cold Data）**：冷数据表现必须单独输出并作为门槛之一。
+- **BT（Ground Truth）**：事件驱动审计输出为最终对外口径，并输出 Train/Holdout 分段收益。
+- **封板（Seal）**：冻结产物 + 配置 + 关键脚本 + 源码快照 + 依赖锁定，并生成 sha256 校验。
 
 ---
 
@@ -161,6 +172,18 @@ graph TD
 - IC稳定性
 - 因子衰减分析
 
+### 8. BT 审计（Ground Truth）🧾
+**输入**: final candidates + 完整 OHLCV 数据
+**输出**: BT 审计结果（包含 Train/Holdout 分段收益）
+
+**原则**:
+- 最终收益/回撤等“对外口径”以 BT 为准。
+- 必须输出 `bt_train_return` / `bt_holdout_return`，避免跨区间对比争议。
+
+### 9. 封板归档（Sealed Release）🔒
+**输入**: final candidates / BT results / production pack
+**输出**: sealed_strategies/<version>_<yyyymmdd>/（含 MANIFEST.json + CHECKSUMS.sha256 + locked 代码快照）
+
 ---
 
 ## 📊 组合数量统计
@@ -215,6 +238,15 @@ graph TD
 - [ ] **样本外表现**: Holdout收益 > 0
 - [ ] **因子稳定性**: IC衰减 < 50%
 - [ ] **过拟合检查**: 训练集过高估计
+
+### BT审计层验证（交付真值）
+- [ ] **审计口径**: 收益/回撤/交易统计由 BT 输出
+- [ ] **分段收益**: Train/Holdout 分段字段齐全
+- [ ] **资金约束**: margin failure/交易次数等审计字段合理
+
+### 封板验证（可复现与防篡改）
+- [ ] **快照完整**: 产物 + 配置 + 关键脚本 + 源码快照 + 依赖锁定
+- [ ] **校验通过**: sha256sum -c CHECKSUMS.sha256 全部 OK
 
 ---
 

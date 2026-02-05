@@ -1,0 +1,224 @@
+{
+  "version": "v3.4_20251216",
+  "seal_date": "2025-12-16T16:00:00+08:00",
+  "type": "震荡市精选双策略",
+  "status": "production_ready",
+  
+  "strategies": [
+    {
+      "id": "strategy_1",
+      "name": "ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D",
+      "factors": ["ADX_14D", "OBV_SLOPE_10D", "SHARPE_RATIO_20D", "SLOPE_20D"],
+      "factor_count": 4,
+      "performance": {
+        "total_return": 136.52,
+        "sharpe_ratio": 1.26,
+        "max_drawdown": 15.47,
+        "win_rate": 50.79,
+        "trades": 252,
+        "avg_hold_days": 9.2,
+        "recent_60d": -0.23
+      }
+    },
+    {
+      "id": "strategy_2",
+      "name": "ADX_14D + OBV_SLOPE_10D + PRICE_POSITION_120D + SHARPE_RATIO_20D + SLOPE_20D",
+      "factors": ["ADX_14D", "OBV_SLOPE_10D", "PRICE_POSITION_120D", "SHARPE_RATIO_20D", "SLOPE_20D"],
+      "factor_count": 5,
+      "performance": {
+        "total_return": 129.85,
+        "sharpe_ratio": 1.22,
+        "max_drawdown": 13.93,
+        "win_rate": 49.42,
+        "trades": 257,
+        "avg_hold_days": 9.0,
+        "recent_60d": -0.23
+      }
+    }
+  ],
+  
+  "portfolio_performance": {
+    "avg_return": 133.19,
+    "avg_sharpe": 1.24,
+    "avg_max_drawdown": 14.70,
+    "avg_win_rate": 50.11,
+    "avg_trades": 254.5,
+    "avg_hold_days": 9.1,
+    "recent_60d": -0.23
+  },
+  
+  "backtest_config": {
+    "start_date": "2020-01-01",
+    "end_date": "2025-12-12",
+    "period_years": 5.95,
+    "rebalance_freq": 3,
+    "position_size": 2,
+    "initial_capital": 1000000,
+    "commission": 0.0002,
+    "etf_pool_size": 43
+  },
+  
+  "etf_pool": {
+    "total": 43,
+    "categories": {
+      "domestic_equity": 12,
+      "domestic_sector": 15,
+      "overseas": 5,
+      "commodities": 6,
+      "bonds": 5
+    },
+    "qdii_codes": ["513100", "513500", "159920", "513050", "513130"]
+  },
+  
+  "risk_controls": {
+    "strategy_stop_loss": -0.20,
+    "portfolio_stop_loss": -0.15,
+    "daily_circuit_breaker": -0.03,
+    "qdii_max_position": 0.50,
+    "sync_drop_threshold": -0.02
+  },
+  
+  "key_features": [
+    "震荡市优化：近 60 天收益 -0.23%（vs 其他策略 -5% ~ -9%）",
+    "避开陷阱：10-20 成功避开军工坑（512400），抓住纳指反弹（513100）",
+    "简洁因子：4-5 因子组合，对假突破敏感度低",
+    "高度同质化：因子重合 80%，持仓重合 >80%（伪多样性）",
+    "QDII 依赖：近期 40% 交易为海外科技 ETF"
+  ],
+  
+  "artifacts": {
+    "production_candidates": "artifacts/production_candidates.csv",
+    "production_report": "artifacts/PRODUCTION_REPORT.md",
+    "quick_reference": "artifacts/QUICK_REFERENCE.md",
+    "deployment_guide": "artifacts/DEPLOYMENT_GUIDE.md"
+  },
+  
+  "locked_files": {
+    "configs": [
+      "locked/configs/combo_wfo_config.yaml",
+      "locked/configs/etf_pools.yaml",
+      "locked/configs/etf_config.yaml",
+      "locked/configs/cn_holidays.txt"
+    ],
+    "scripts": [
+      "locked/scripts/batch_bt_backtest.py",
+      "locked/scripts/update_daily_from_qmt_bridge.py",
+      "locked/scripts/run_full_space_vec_backtest.py",
+      "locked/scripts/final_triple_validation.py"
+    ],
+    "src_modules": [
+      "locked/src/etf_strategy/",
+      "locked/src/etf_data/"
+    ],
+    "dependencies": [
+      "locked/pyproject.toml",
+      "locked/Makefile"
+    ]
+  },
+  
+  "documentation": [
+    "README.md",
+    "REPRODUCE.md",
+    "RELEASE_NOTES.md",
+    "CHECKSUMS.sha256"
+  ],
+  
+  "reproducibility": {
+    "level": "full",
+    "checksum_file": "CHECKSUMS.sha256",
+    "checksum_count": 54,
+    "virtual_env_included": false,
+    "reason": "策略包轻量化原则：严禁包含虚拟环境 (.venv)。用户需在本地运行 `uv sync` 自动构建环境。"
+  },
+  
+  "changes_from_v3_3": {
+    "strategies_removed": 3,
+    "strategies_kept": 2,
+    "reason": "基于最近 60 天交易记录深度分析，剔除拖油瓶策略",
+    "removed_strategies": [
+      {
+        "name": "Strategy #1 (v3.3)",
+        "recent_60d": -5.44,
+        "reason": "踩军工坑（512400）"
+      },
+      {
+        "name": "Strategy #3 (v3.3)",
+        "recent_60d": -9.17,
+        "reason": "反复抄底黄金（518880），被震荡绞杀"
+      },
+      {
+        "name": "Strategy #5 (v3.3)",
+        "recent_60d": -5.76,
+        "reason": "同样踩军工坑 + 黄金假突破"
+      }
+    ],
+    "new_tools": [
+      "scripts/analyze_recent_divergence.py"
+    ],
+    "enhanced_docs": [
+      "artifacts/PRODUCTION_REPORT.md (新增交易日志分析)",
+      "artifacts/DEPLOYMENT_GUIDE.md (强化风控建议)",
+      "artifacts/QUICK_REFERENCE.md (新建)"
+    ]
+  },
+  
+  "validation": {
+    "vec_bt_alignment": {
+      "strategy_1_diff": 0.00,
+      "strategy_2_diff": 0.00,
+      "status": "perfect"
+    },
+    "unit_tests": {
+      "total": 20,
+      "passed": 20,
+      "coverage": "core modules"
+    },
+    "data_integrity": {
+      "etf_count": 43,
+      "date_range": "2020-01-01 to 2025-12-12",
+      "missing_dates": 0
+    }
+  },
+  
+  "deployment_readiness": {
+    "status": "ready",
+    "checklist": {
+      "environment_setup": true,
+      "data_integrity_verified": true,
+      "backtest_validated": true,
+      "risk_controls_configured": true,
+      "monitoring_configured": true,
+      "documentation_complete": true
+    }
+  },
+  
+  "warnings": [
+    "⚠️ 高度同质化：因子重合 80%，持仓重合 >80%，不是真实分散",
+    "⚠️ QDII 依赖：近期 40% 交易为海外科技 ETF，美股暴跌会同步重创",
+    "⚠️ 震荡市优化：在强趋势市（如 2020H2）可能跑输单策略",
+    "⚠️ 短周期高频：平均持有 9 天，交易成本敏感"
+  ],
+  
+  "support": {
+    "documentation": [
+      "README.md",
+      "REPRODUCE.md",
+      "RELEASE_NOTES.md",
+      "artifacts/PRODUCTION_REPORT.md",
+      "artifacts/QUICK_REFERENCE.md",
+      "artifacts/DEPLOYMENT_GUIDE.md"
+    ],
+    "source_code": "locked/src/etf_strategy/",
+    "tests": "locked/tests/",
+    "emergency_contact": "立即停止自动交易 → 手动清仓 → 联系技术支持"
+  },
+  
+  "metadata": {
+    "sealed_by": "Quant Team",
+    "seal_timestamp": "2025-12-16T16:00:00+08:00",
+    "python_version": "3.11+",
+    "package_manager": "UV (0.1.0+)",
+    "expected_reproduction_time": "15-30 minutes",
+    "checksum_algorithm": "SHA256"
+  }
+}

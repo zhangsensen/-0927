@@ -314,6 +314,14 @@ wheels = [
 ]
 
 [[package]]
+name = "backtrader"
+version = "1.9.78.123"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/ef/328c6ec332435f63b3e18febd263686b8ba07e990676a862cc8522ba38f5/backtrader-1.9.78.123-py2.py3-none-any.whl", hash = "sha256:9a07a516b0de9155539a35c56e9404d8711dd7020b3d37b30495e83e1b9d5dfd", size = 419517, upload-time = "2023-04-19T14:13:18.842Z" },
+]
+
+[[package]]
 name = "bandit"
 version = "1.8.6"
 source = { registry = "https://pypi.org/simple" }
@@ -3733,6 +3741,7 @@ version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "akshare" },
+    { name = "backtrader" },
     { name = "fastparquet" },
     { name = "httpx", extra = ["socks"] },
     { name = "joblib" },
@@ -3762,37 +3771,27 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "bandit" },
     { name = "beautifulsoup4" },
-    { name = "black" },
     { name = "dash" },
-    { name = "flake8" },
     { name = "flask" },
-    { name = "ipython" },
-    { name = "isort" },
-    { name = "jupyterlab" },
-    { name = "line-profiler" },
-    { name = "memory-profiler" },
-    { name = "mypy" },
-    { name = "notebook" },
-    { name = "pandas-stubs" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
     { name = "redis" },
-    { name = "ruff" },
-    { name = "safety" },
     { name = "schedule" },
     { name = "sqlalchemy" },
-    { name = "types-psutil" },
-    { name = "types-pyyaml" },
-    { name = "types-seaborn" },
-    { name = "vulture" },
 ]
 database = [
     { name = "redis" },
     { name = "sqlalchemy" },
 ]
+scheduling = [
+    { name = "schedule" },
+]
+web = [
+    { name = "beautifulsoup4" },
+    { name = "dash" },
+    { name = "flask" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "bandit" },
     { name = "black" },
@@ -3815,56 +3814,33 @@ dev = [
     { name = "types-seaborn" },
     { name = "vulture" },
 ]
-scheduling = [
-    { name = "schedule" },
-]
-web = [
-    { name = "beautifulsoup4" },
-    { name = "dash" },
-    { name = "flask" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "akshare", specifier = ">=1.17.91" },
-    { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.8.6" },
+    { name = "backtrader", specifier = ">=1.9.78.123" },
     { name = "beautifulsoup4", marker = "extra == 'web'", specifier = ">=4.13.5" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=25.9.0" },
     { name = "dash", marker = "extra == 'web'", specifier = ">=2.18.0" },
     { name = "fastparquet", specifier = ">=2024.11.0" },
-    { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.3.0" },
     { name = "flask", marker = "extra == 'web'", specifier = ">=3.0.0" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.28.1" },
-    { name = "ipython", marker = "extra == 'dev'", specifier = ">=9.5.0" },
-    { name = "isort", marker = "extra == 'dev'", specifier = ">=6.0.1" },
     { name = "joblib", specifier = ">=1.5.2" },
-    { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.4.9" },
-    { name = "line-profiler", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "matplotlib", specifier = ">=3.10.6" },
-    { name = "memory-profiler", marker = "extra == 'dev'", specifier = ">=0.61.0" },
     { name = "mplfinance", specifier = ">=0.12.10b0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.18.2" },
-    { name = "notebook", marker = "extra == 'dev'", specifier = ">=7.3.0" },
     { name = "numba", specifier = ">=0.62.0" },
     { name = "numpy", specifier = ">=2.3.3" },
     { name = "pandas", specifier = ">=2.3.2" },
-    { name = "pandas-stubs", marker = "extra == 'dev'", specifier = ">=2.3.2.250926" },
     { name = "pandas-vet", specifier = ">=2023.8.2" },
     { name = "plotly", specifier = ">=5.24.0" },
     { name = "polars", specifier = ">=1.33.1" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.3.0" },
     { name = "pyarrow", specifier = ">=21.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pyscn", specifier = ">=1.1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.2" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "quant-factor-trading", extras = ["web", "database", "scheduling", "dev"], marker = "extra == 'all'" },
+    { name = "quant-factor-trading", extras = ["web", "database", "scheduling"], marker = "extra == 'all'" },
     { name = "redis", marker = "extra == 'database'", specifier = ">=5.0.0" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.13.2" },
-    { name = "safety", marker = "extra == 'dev'", specifier = ">=3.6.2" },
     { name = "schedule", marker = "extra == 'scheduling'", specifier = ">=1.2.0" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "scipy", specifier = ">=1.16.2" },
@@ -3873,14 +3849,34 @@ requires-dist = [
     { name = "statsmodels", specifier = ">=0.14.0" },
     { name = "ta-lib", specifier = ">=0.6.7" },
     { name = "tushare", specifier = ">=1.4.0" },
-    { name = "types-psutil", marker = "extra == 'dev'", specifier = ">=7.0.0.20251001" },
-    { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12.20250915" },
-    { name = "types-seaborn", marker = "extra == 'dev'", specifier = ">=0.13.2.20250914" },
     { name = "vectorbt", specifier = ">=0.28.1" },
-    { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.14" },
     { name = "yfinance", specifier = ">=0.2.66" },
 ]
-provides-extras = ["web", "database", "scheduling", "dev", "all"]
+provides-extras = ["web", "database", "scheduling", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "bandit", specifier = ">=1.8.6" },
+    { name = "black", specifier = ">=25.9.0" },
+    { name = "flake8", specifier = ">=7.3.0" },
+    { name = "ipython", specifier = ">=9.5.0" },
+    { name = "isort", specifier = ">=6.0.1" },
+    { name = "jupyterlab", specifier = ">=4.4.9" },
+    { name = "line-profiler", specifier = ">=5.0.0" },
+    { name = "memory-profiler", specifier = ">=0.61.0" },
+    { name = "mypy", specifier = ">=1.18.2" },
+    { name = "notebook", specifier = ">=7.3.0" },
+    { name = "pandas-stubs", specifier = ">=2.3.2.250926" },
+    { name = "pre-commit", specifier = ">=4.3.0" },
+    { name = "pytest", specifier = ">=9.0.1" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "ruff", specifier = ">=0.14.5" },
+    { name = "safety", specifier = ">=3.6.2" },
+    { name = "types-psutil", specifier = ">=7.0.0.20251001" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
+    { name = "types-seaborn", specifier = ">=0.13.2.20250914" },
+    { name = "vulture", specifier = ">=2.14" },
+]
 
 [[package]]
 name = "redis"

@@ -48,6 +48,7 @@ dependencies = [
     "pandas-vet>=2023.8.2",
     "akshare>=1.17.91",
     "tushare>=1.4.0",
+    "backtrader>=1.9.78.123",
 ]
 
 # ============ 可选依赖 ============
@@ -70,52 +71,15 @@ scheduling = [
     "schedule>=1.2.0",
 ]
 
-# 开发与测试工具
-dev = [
-    # 单元测试
-    "pytest>=8.4.2",
-    "pytest-cov>=7.0.0",
-    
-    # 代码格式化与检查
-    "black>=25.9.0",
-    "isort>=6.0.1",
-    "flake8>=7.3.0",
-    "ruff>=0.13.2",
-    "mypy>=1.18.2",
-    
-    # 安全扫描
-    "bandit>=1.8.6",
-    "safety>=3.6.2",
-    
-    # 性能分析
-    "line-profiler>=5.0.0",
-    "memory-profiler>=0.61.0",
-    "vulture>=2.14",
-    
-    # Git钩子
-    "pre-commit>=4.3.0",
-    
-    # 交互式开发
-    "ipython>=9.5.0",
-    "jupyterlab>=4.4.9",
-    "notebook>=7.3.0",
-    
-    # 类型检查
-    "pandas-stubs>=2.3.2.250926",
-    "types-psutil>=7.0.0.20251001",
-    "types-pyyaml>=6.0.12.20250915",
-    "types-seaborn>=0.13.2.20250914",
-]
-
 # 所有可选依赖
 all = [
-    "quant-factor-trading[web,database,scheduling,dev]",
+    "quant-factor-trading[web,database,scheduling]",
 ]
 
 # ============ 工具配置 ============
 [tool.black]
 line-length = 88
-target-version = ['py310', 'py311', 'py312']
+target-version = ['py311', 'py312', 'py313']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -143,11 +107,11 @@ skip_glob = ["*/migrations/*", ".venv/*", "_archive/*"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 exclude = [".venv", "_archive", "build", "dist", ".git"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 check_untyped_defs = true
@@ -168,7 +132,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["etf_rotation_optimized", "a_shares_strategy", "etf_download_manager"]
+source = ["etf_strategy"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
@@ -196,3 +160,34 @@ Changelog = "https://github.com/zhangsensen/quant-factor-trading/releases"
 where = ["src"]
 include = ["etf_strategy*", "etf_data*"]
 exclude = ["tests*", "scripts*", "docs*", "config*", "configs*", "raw*", "results*", "untitled*"]
+
+[dependency-groups]
+dev = [
+    # 单元测试
+    "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
+    # 代码格式化与检查
+    "black>=25.9.0",
+    "isort>=6.0.1",
+    "flake8>=7.3.0",
+    "ruff>=0.14.5",
+    "mypy>=1.18.2",
+    # 安全扫描
+    "bandit>=1.8.6",
+    "safety>=3.6.2",
+    # 性能分析
+    "line-profiler>=5.0.0",
+    "memory-profiler>=0.61.0",
+    "vulture>=2.14",
+    # Git钩子
+    "pre-commit>=4.3.0",
+    # 交互式开发
+    "ipython>=9.5.0",
+    "jupyterlab>=4.4.9",
+    "notebook>=7.3.0",
+    # 类型检查
+    "pandas-stubs>=2.3.2.250926",
+    "types-psutil>=7.0.0.20251001",
+    "types-pyyaml>=6.0.12.20250915",
+    "types-seaborn>=0.13.2.20250914",
+]

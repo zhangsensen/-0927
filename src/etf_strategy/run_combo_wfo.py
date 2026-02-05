@@ -58,7 +58,9 @@ def main():
     logger.info("=" * 100)
     logger.info("")
 
-    config_path = Path(os.environ.get("WFO_CONFIG_PATH", "configs/combo_wfo_config.yaml"))
+    config_path = Path(
+        os.environ.get("WFO_CONFIG_PATH", "configs/combo_wfo_config.yaml")
+    )
     if not config_path.exists():
         logger.error(f"配置文件不存在: {config_path}")
         sys.exit(1)
@@ -105,8 +107,10 @@ def main():
     )
 
     # 使用 training_end_date 如果设置了（Holdout验证模式）
-    data_end_date = config["data"].get("training_end_date") or config["data"]["end_date"]
-    
+    data_end_date = (
+        config["data"].get("training_end_date") or config["data"]["end_date"]
+    )
+
     if config["data"].get("training_end_date"):
         logger.info("=" * 100)
         logger.info("🔬 HOLDOUT验证模式")
@@ -173,7 +177,7 @@ def main():
     factors_data = np.stack(factor_arrays, axis=-1)
 
     # 准备收益率
-    returns_df = ohlcv["close"].pct_change(fill_method=None)
+    returns_df = ohlcv["close"].pct_change()
     returns = returns_df.values
 
     # Regime gate（作为交易规则的一部分进入 WFO：用于 OOS 收益模拟）
@@ -191,7 +195,7 @@ def main():
             stats["min"],
             stats["max"],
         )
-    
+
     logger.info(f"✅ 数据准备完成")
     logger.info(
         f"  - 数据维度: {factors_data.shape[0]}天 × {factors_data.shape[1]}只ETF × {factors_data.shape[2]}个因子"
@@ -246,6 +250,7 @@ def main():
     pending_dir = results_root / f"pending_run_{timestamp}"
     if pending_dir.exists():
         import shutil
+
         logger.warning(f"清理残留的临时目录: {pending_dir}")
         shutil.rmtree(pending_dir, ignore_errors=True)
     pending_dir.mkdir(parents=True, exist_ok=True)
@@ -309,7 +314,9 @@ def main():
         },
     }
 
-    with open(pending_dir / "factor_selection_summary.json", "w", encoding="utf-8") as f:
+    with open(
+        pending_dir / "factor_selection_summary.json", "w", encoding="utf-8"
+    ) as f:
         json.dump(factor_selection_summary, f, indent=2, ensure_ascii=False)
 
     logger.info(f"✅ 因子汇总已保存: {pending_dir}/factor_selection_summary.json")
@@ -322,14 +329,26 @@ def main():
         "total_combos": len(all_combos_df),
         "significant_combos": len(significant_combos),
         "mean_ic": float(all_combos_df["mean_oos_ic"].mean()),
-        "mean_oos_return": float(all_combos_df["mean_oos_return"].mean()) if "mean_oos_return" in all_combos_df.columns else 0.0,
+        "mean_oos_return": (
+            float(all_combos_df["mean_oos_return"].mean())
+            if "mean_oos_return" in all_combos_df.columns
+            else 0.0
+        ),
         "best_combo": {
             "combo": top_combos.iloc[0]["combo"],
             "ic": float(top_combos.iloc[0]["mean_oos_ic"]),
             "score": float(top_combos.iloc[0]["stability_score"]),
             "freq": int(top_combos.iloc[0]["best_rebalance_freq"]),
-            "mean_oos_return": float(top_combos.iloc[0]["mean_oos_return"]) if "mean_oos_return" in top_combos.columns else 0.0,
-            "cum_oos_return": float(top_combos.iloc[0]["cum_oos_return"]) if "cum_oos_return" in top_combos.columns else 0.0,
+            "mean_oos_return": (
+                float(top_combos.iloc[0]["mean_oos_return"])
+                if "mean_oos_return" in top_combos.columns
+                else 0.0
+            ),
+            "cum_oos_return": (
+                float(top_combos.iloc[0]["cum_oos_return"])
+                if "cum_oos_return" in top_combos.columns
+                else 0.0
+            ),
         },
         "config": {
             "is_period": config["combo_wfo"]["is_period"],
@@ -348,6 +367,7 @@ def main():
     try:
         if final_dir.exists():
             import shutil
+
             logger.warning(f"目标目录已存在，将被替换: {final_dir}")
             shutil.rmtree(final_dir, ignore_errors=True)
         pending_dir.rename(final_dir)
@@ -382,7 +402,9 @@ def main():
     logger.info(f'  - 稳定性得分: {summary["best_combo"]["score"]:.2f}')
     logger.info(f'  - 最优换仓频率: {summary["best_combo"]["freq"]}天')
     if "best_trailing_stop" in top_combos.iloc[0]:
-        logger.info(f'  - 最优动态止损: {top_combos.iloc[0]["best_trailing_stop"]*100:.1f}%')
+        logger.info(
+            f'  - 最优动态止损: {top_combos.iloc[0]["best_trailing_stop"]*100:.1f}%'
+        )
     logger.info("")
     logger.info("📈 整体统计:")
     logger.info(f'  - 平均OOS Sharpe: {summary["mean_ic"]:.4f}')

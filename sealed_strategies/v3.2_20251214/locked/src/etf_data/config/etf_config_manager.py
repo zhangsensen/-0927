@@ -47,7 +47,9 @@ class ETFConfigManager:
         """
         if config_path is None:
             # Use project root configs directory
-            config_path = Path(__file__).resolve().parents[3] / "configs" / "etf_config.yaml"
+            config_path = (
+                Path(__file__).resolve().parents[3] / "configs" / "etf_config.yaml"
+            )
 
         self.config_path = Path(config_path)
         self.config = None

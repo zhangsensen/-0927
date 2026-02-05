@@ -38,9 +38,10 @@ def real_config():
 # 1. 冻结值正确性
 # ---------------------------------------------------------------------------
 
+
 class TestFrozenValues:
     def test_current_version(self):
-        assert CURRENT_VERSION == "v3.4"
+        assert CURRENT_VERSION == "v4.0"
 
     def test_backtest_defaults(self):
         p = FrozenBacktestParams()
@@ -86,6 +87,7 @@ class TestFrozenValues:
 # 2. 不可变性
 # ---------------------------------------------------------------------------
 
+
 class TestImmutability:
     def test_backtest_immutable(self):
         p = FrozenBacktestParams()
@@ -108,6 +110,7 @@ class TestImmutability:
 # 3. 真实配置校验
 # ---------------------------------------------------------------------------
 
+
 class TestRealConfigValidation:
     def test_strict_passes(self, real_config):
         frozen = load_frozen_config(
@@ -115,7 +118,7 @@ class TestRealConfigValidation:
             config_path=str(CONFIG_PATH),
             strictness=StrictnessMode.STRICT,
         )
-        assert frozen.version == "v3.4"
+        assert frozen.version == "v4.0"
         assert frozen.config_sha256 is not None
 
     def test_returns_frozen_config(self, real_config):
@@ -124,10 +127,25 @@ class TestRealConfigValidation:
         assert frozen.backtest.freq == 3
         assert frozen.etf_pool.total_count == 43
 
+    def test_v34_still_accessible(self, real_config):
+        """v3.4 config should remain accessible for rollback.
+
+        YAML now reflects v4.0 (7 bounded_factors vs v3.4's 4), so use WARN
+        mode — the important thing is that the version entry still exists.
+        """
+        frozen = load_frozen_config(
+            real_config,
+            config_path=str(CONFIG_PATH),
+            version="v3.4",
+            strictness=StrictnessMode.WARN,
+        )
+        assert frozen.version == "v3.4"
+
 
 # ---------------------------------------------------------------------------
 # 4. 篡改检测
 # ---------------------------------------------------------------------------
+
 
 class TestTamperDetection:
     def test_freq_tampered(self, real_config):
@@ -175,6 +193,7 @@ class TestTamperDetection:
 # 5. ETF 池篡改检测
 # ---------------------------------------------------------------------------
 
+
 class TestETFPoolTamper:
     def test_qdii_removed(self, real_config):
         bad = copy.deepcopy(real_config)
@@ -196,13 +215,14 @@ class TestETFPoolTamper:
 # 6. WARN 模式
 # ---------------------------------------------------------------------------
 
+
 class TestWarnMode:
     def test_warn_does_not_raise(self, real_config):
         bad = copy.deepcopy(real_config)
         bad["backtest"]["freq"] = 8
         # Should not raise
         frozen = load_frozen_config(bad, strictness=StrictnessMode.WARN)
-        assert frozen.version == "v3.4"
+        assert frozen.version == "v4.0"
 
     def test_env_var_warn(self, real_config, monkeypatch):
         monkeypatch.setenv("FROZEN_PARAMS_MODE", "warn")
@@ -210,46 +230,64 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise due to env var
         frozen = load_frozen_config(bad)
-        assert frozen.version == "v3.4"
+        assert frozen.version == "v4.0"
 
 
 # ---------------------------------------------------------------------------
 # 7. 操作性参数不校验
 # ---------------------------------------------------------------------------
 
+
 class TestOperationalParamsIgnored:
     def test_data_dir_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["data"]["data_dir"] = "/some/other/path"
         # Should pass without error
-        frozen = load_frozen_config(
-            modified, strictness=StrictnessMode.STRICT
-        )
-        assert frozen.version == "v3.4"
+        frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
+        assert frozen.version == "v4.0"
 
     def test_n_jobs_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["combo_wfo"]["n_jobs"] = 1
-        frozen = load_frozen_config(
-            modified, strictness=StrictnessMode.STRICT
-        )
-        assert frozen.version == "v3.4"
+        frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
+        assert frozen.version == "v4.0"
 
     def test_start_end_date_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["data"]["start_date"] = "2021-01-01"
         modified["data"]["end_date"] = "2026-01-01"
-        frozen = load_frozen_config(
-            modified, strictness=StrictnessMode.STRICT
-        )
-        assert frozen.version == "v3.4"
+        frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
+        assert frozen.version == "v4.0"
 
 
 # ---------------------------------------------------------------------------
 # 8. 版本注册
 # ---------------------------------------------------------------------------
 
+
 class TestVersionRegistry:
     def test_unknown_version_raises(self, real_config):
         with pytest.raises(KeyError, match="未知的冻结参数版本"):
             load_frozen_config(real_config, version="v99.0")
+
+    def test_v40_registered(self, real_config):
+        frozen = load_frozen_config(
+            real_config, version="v4.0", strictness=StrictnessMode.STRICT
+        )
+        assert frozen.version == "v4.0"
+
+    def test_v34_and_v40_share_base_params(self, real_config):
+        """v4.0 shares core backtest/pool/wfo params with v3.4."""
+        v34 = load_frozen_config(
+            real_config, version="v3.4", strictness=StrictnessMode.WARN
+        )
+        v40 = load_frozen_config(
+            real_config, version="v4.0", strictness=StrictnessMode.STRICT
+        )
+        assert v34.backtest == v40.backtest
+        assert v34.etf_pool == v40.etf_pool
+        assert v34.wfo == v40.wfo
+        # cross_section differs: v4.0 has 7 bounded_factors vs v3.4's 4
+        assert v34.cross_section != v40.cross_section
+        assert len(v40.cross_section.bounded_factors) == 7
+        assert len(v34.cross_section.bounded_factors) == 4

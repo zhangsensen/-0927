@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def compute_spearman_ic_numba(signals: np.ndarray, returns: np.ndarray) -> float:
     """
     Numba加速的Spearman IC计算（单个信号）
-    
+
     注: parallel=False 因为单次调用数据量小 (252×43)，并行开销大于收益
 
     Args:
@@ -74,7 +74,7 @@ def compute_multiple_ics_numba(
 ) -> np.ndarray:
     """
     Numba加速的批量IC计算（多个信号）
-    
+
     优化: parallel=True 启用多核并行 (AMD Ryzen 9 9950X, 16核心)
 
     Args:

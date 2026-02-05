@@ -221,7 +221,7 @@ A 股熊市 → 选美股/港股 ETF → 避险 + 赚外盘收益
 如需进行 ETF 池调整实验，必须：
 1. 创建独立分支
 2. 使用隔离的配置文件（如 `combo_wfo_config_experimental.yaml`）
-3. 完整运行 WFO + VEC + BT 三层验证
+3. 完整运行验证流水线：WFO（探索）+ VEC（精算）+ Rolling（稳定性）+ Holdout（冷数据）+ BT（审计真值）
 4. 生成对比报告
 5. 获得团队审批后才能合并
 

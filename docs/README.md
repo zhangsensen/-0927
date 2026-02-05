@@ -2,7 +2,7 @@
 
 > **版本**: 3.1  
 > **最后更新**: 2025-12-01  
-> **状态**: ✅ 生产就绪 | 🔒 v3.0 策略封板
+> **状态**: ✅ 生产就绪 | 🔒 v3.2 交付已封板
 
 ---
 
@@ -11,7 +11,7 @@
 本项目是一个专业级 **ETF 轮动策略** 研究与验证平台，核心目标是：
 
 1. **因子挖掘与组合优化** - 从 18 个精选因子中筛选最优组合
-2. **严格回测验证** - 通过三层引擎确保结果可靠
+2. **严格回测验证** - 以 VEC + Rolling + Holdout + BT 四重验证作为交付标准，并在通过后封板归档
 3. **贴近实盘** - 无前视偏差，T+1 执行约束
 
 ### 核心特点
@@ -29,7 +29,7 @@
 
 ---
 
-## 三层引擎架构
+## 引擎与交付架构（v3.2）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -40,14 +40,26 @@
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                    VEC 复算层                                │
-│  batch_vec_backtest.py - 向量化高精度复算                    │
-│  职责：统一规则下验证，与 BT 严格对齐 (< 0.01pp)             │
+│  run_full_space_vec_backtest.py - 向量化高精度复算           │
+│  职责：统一规则下精算（Screening），用于高效筛选             │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│               Rolling + Holdout 验证层                        │
+│  final_triple_validation.py - 无泄漏与一致性验证             │
+│  职责：Rolling gate 使用 train-only summary；Holdout 单独输出  │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                    BT 审计层                                 │
 │  batch_bt_backtest.py - Backtrader 事件驱动                  │
-│  职责：资金约束兜底审计，基准真相                            │
+│  职责：资金约束兜底审计（Ground Truth），输出 Train/Holdout 分段收益│
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    封板归档层                                 │
+│  seal_release.py - 冻结产物+脚本+配置+源码快照+依赖锁定       │
+│  职责：可搬走、可复现、可校验（CHECKSUMS.sha256）             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -111,11 +123,17 @@ uv pip install -e .
 # 步骤 1: WFO 筛选（12,597 组合 → Top 100）
 uv run python src/etf_strategy/run_combo_wfo.py
 
-# 步骤 2: VEC 复算 Top 100
-uv run python scripts/batch_vec_backtest.py
+# 步骤 2: VEC 精算（Screening，仅 WFO 输出候选）
+uv run python scripts/run_full_space_vec_backtest.py
 
-# 步骤 3: BT 审计 Top 10
+# 步骤 3: Rolling + Holdout（无泄漏候选）
+uv run python scripts/final_triple_validation.py
+
+# 步骤 4: BT 审计（Ground Truth，含分段收益）
 uv run python scripts/batch_bt_backtest.py
+
+# 步骤 5: 封板归档（强烈建议每次交付都执行）
+uv run python scripts/seal_release.py --help
 
 # 可选: VEC/BT 对比验证单个组合
 uv run python scripts/full_vec_bt_comparison.py --combo "ADX_14D + CMF_20D + ..."
@@ -147,7 +165,7 @@ python scripts/cache_cleaner.py
 
 ## 相关文档
 
-- [架构与引擎对齐](ARCHITECTURE.md) - 三层引擎详细说明
+- [架构与引擎对齐](ARCHITECTURE.md) - 引擎对齐与执行口径说明
 - [最佳策略 v3.0](BEST_STRATEGY_43ETF_UNIFIED.md) - 237.45% 收益策略详情
 - [ETF 池架构](ETF_POOL_ARCHITECTURE.md) - 43 ETF 池设计与 QDII 重要性
 - [开发注意事项](DEVELOPMENT_NOTES.md) - 开发规范与陷阱

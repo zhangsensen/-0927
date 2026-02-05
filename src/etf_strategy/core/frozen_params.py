@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Strictness mode
 # ---------------------------------------------------------------------------
 
+
 class StrictnessMode(Enum):
     STRICT = "strict"
     WARN = "warn"
@@ -48,6 +49,7 @@ class FrozenParamViolation(Exception):
 # ---------------------------------------------------------------------------
 # Frozen dataclasses (全部 frozen=True)
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class FrozenBacktestParams:
@@ -131,18 +133,56 @@ class FrozenCrossSectionParams:
 @dataclass(frozen=True)
 class FrozenETFPool:
     symbols: Tuple[str, ...] = (
-        "159801", "159819", "159859", "159883", "159915",
-        "159920", "159928", "159949", "159992", "159995",
-        "159998", "510050", "510300", "510500", "511010",
-        "511260", "511380", "512010", "512100", "512400",
-        "512480", "512660", "512690", "512720", "512800",
-        "512880", "512980", "513050", "513100", "513130",
-        "513500", "515030", "515180", "515210", "515650",
-        "515790", "516090", "516160", "516520", "518850",
-        "518880", "588000", "588200",
+        "159801",
+        "159819",
+        "159859",
+        "159883",
+        "159915",
+        "159920",
+        "159928",
+        "159949",
+        "159992",
+        "159995",
+        "159998",
+        "510050",
+        "510300",
+        "510500",
+        "511010",
+        "511260",
+        "511380",
+        "512010",
+        "512100",
+        "512400",
+        "512480",
+        "512660",
+        "512690",
+        "512720",
+        "512800",
+        "512880",
+        "512980",
+        "513050",
+        "513100",
+        "513130",
+        "513500",
+        "515030",
+        "515180",
+        "515210",
+        "515650",
+        "515790",
+        "516090",
+        "516160",
+        "516520",
+        "518850",
+        "518880",
+        "588000",
+        "588200",
     )
     qdii_codes: Tuple[str, ...] = (
-        "159920", "513050", "513100", "513130", "513500",
+        "159920",
+        "513050",
+        "513100",
+        "513130",
+        "513500",
     )
 
     @property
@@ -198,8 +238,52 @@ _V3_4_CONFIG = FrozenProductionConfig(
         FrozenStrategy(
             name="strategy_2",
             factors=(
-                "ADX_14D", "OBV_SLOPE_10D", "PRICE_POSITION_120D",
-                "SHARPE_RATIO_20D", "SLOPE_20D",
+                "ADX_14D",
+                "OBV_SLOPE_10D",
+                "PRICE_POSITION_120D",
+                "SHARPE_RATIO_20D",
+                "SLOPE_20D",
+            ),
+        ),
+    ),
+)
+
+_V4_0_CROSS_SECTION = FrozenCrossSectionParams(
+    bounded_factors=(
+        "ADX_14D",
+        "CMF_20D",
+        "CORRELATION_TO_MARKET_20D",
+        "PRICE_POSITION_20D",
+        "PRICE_POSITION_120D",
+        "PV_CORR_20D",
+        "RSI_14",
+    ),
+)
+
+_V4_0_CONFIG = FrozenProductionConfig(
+    version="v4.0",
+    config_sha256=None,
+    backtest=FrozenBacktestParams(),
+    timing=FrozenTimingParams(),
+    regime_gate=FrozenRegimeGateParams(),
+    risk_control=FrozenRiskControlParams(),
+    wfo=FrozenWFOParams(),
+    scoring=FrozenScoringParams(),
+    cross_section=_V4_0_CROSS_SECTION,
+    etf_pool=FrozenETFPool(),
+    strategies=(
+        FrozenStrategy(
+            name="strategy_1",
+            factors=("ADX_14D", "OBV_SLOPE_10D", "SHARPE_RATIO_20D", "SLOPE_20D"),
+        ),
+        FrozenStrategy(
+            name="strategy_2",
+            factors=(
+                "ADX_14D",
+                "OBV_SLOPE_10D",
+                "PRICE_POSITION_120D",
+                "SHARPE_RATIO_20D",
+                "SLOPE_20D",
             ),
         ),
     ),
@@ -207,20 +291,32 @@ _V3_4_CONFIG = FrozenProductionConfig(
 
 _VERSION_REGISTRY: Dict[str, FrozenProductionConfig] = {
     "v3.4": _V3_4_CONFIG,
+    "v4.0": _V4_0_CONFIG,
 }
 
-CURRENT_VERSION = "v3.4"
+CURRENT_VERSION = "v4.0"
 
 # 操作性参数 (不校验)
-_OPERATIONAL_KEYS = frozenset({
-    "data_dir", "cache_dir", "start_date", "end_date", "training_end_date",
-    "n_jobs", "verbose", "max_workers", "save_all_results", "output_root",
-})
+_OPERATIONAL_KEYS = frozenset(
+    {
+        "data_dir",
+        "cache_dir",
+        "start_date",
+        "end_date",
+        "training_end_date",
+        "n_jobs",
+        "verbose",
+        "max_workers",
+        "save_all_results",
+        "output_root",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # 校验辅助
 # ---------------------------------------------------------------------------
+
 
 def _compute_file_sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -250,9 +346,7 @@ def _compare_values(frozen_val: Any, config_val: Any, path: str) -> List[str]:
 
     if isinstance(frozen_val, float) and isinstance(config_val, (int, float)):
         if not _floats_close(frozen_val, float(config_val)):
-            violations.append(
-                f"{path}: frozen={frozen_val}, config={config_val}"
-            )
+            violations.append(f"{path}: frozen={frozen_val}, config={config_val}")
     elif isinstance(frozen_val, tuple) and isinstance(config_val, tuple):
         if len(frozen_val) != len(config_val):
             violations.append(
@@ -278,9 +372,7 @@ def _validate_backtest(frozen: FrozenBacktestParams, cfg: dict) -> List[str]:
     }
     for key, frozen_val in mapping.items():
         if key in cfg:
-            violations.extend(
-                _compare_values(frozen_val, cfg[key], f"backtest.{key}")
-            )
+            violations.extend(_compare_values(frozen_val, cfg[key], f"backtest.{key}"))
     return violations
 
 
@@ -354,7 +446,8 @@ def _validate_regime_gate(frozen: FrozenRegimeGateParams, cfg: dict) -> List[str
         if key in vol_cfg:
             violations.extend(
                 _compare_values(
-                    frozen_val, vol_cfg[key],
+                    frozen_val,
+                    vol_cfg[key],
                     f"backtest.regime_gate.volatility.{key}",
                 )
             )
@@ -445,14 +538,14 @@ def _validate_scoring(frozen: FrozenScoringParams, cfg: dict) -> List[str]:
             if wk in frozen_dict:
                 violations.extend(
                     _compare_values(
-                        frozen_dict[wk], wv,
+                        frozen_dict[wk],
+                        wv,
                         f"combo_wfo.scoring.vec_score_weights.{wk}",
                     )
                 )
             else:
                 violations.append(
-                    f"combo_wfo.scoring.vec_score_weights.{wk}: "
-                    f"不在冻结参数中"
+                    f"combo_wfo.scoring.vec_score_weights.{wk}: " f"不在冻结参数中"
                 )
         # Check for missing keys in config
         for wk in frozen_dict:
@@ -472,13 +565,20 @@ def _validate_cross_section(frozen: FrozenCrossSectionParams, cfg: dict) -> List
         return violations
 
     if "bounded_factors" in cs_cfg:
-        violations.extend(
-            _compare_values(
-                frozen.bounded_factors,
-                cs_cfg["bounded_factors"],
-                "cross_section.bounded_factors",
-            )
-        )
+        # Compare as sets — order is not semantically meaningful
+        frozen_set = set(frozen.bounded_factors)
+        config_set = set(cs_cfg["bounded_factors"])
+        if frozen_set != config_set:
+            missing = frozen_set - config_set
+            extra = config_set - frozen_set
+            if missing:
+                violations.append(
+                    f"cross_section.bounded_factors: 缺少 {sorted(missing)}"
+                )
+            if extra:
+                violations.append(
+                    f"cross_section.bounded_factors: 多出 {sorted(extra)}"
+                )
     if "winsorize_lower" in cs_cfg:
         violations.extend(
             _compare_values(
@@ -519,9 +619,7 @@ def _validate_etf_pool(frozen: FrozenETFPool, cfg: dict) -> List[str]:
                 f"data.symbols: 缺少 {len(missing)} 个ETF: {sorted(missing)}"
             )
         if extra:
-            violations.append(
-                f"data.symbols: 多出 {len(extra)} 个ETF: {sorted(extra)}"
-            )
+            violations.append(f"data.symbols: 多出 {len(extra)} 个ETF: {sorted(extra)}")
 
         # 特别检查 QDII
         qdii_set = set(frozen.qdii_codes)
@@ -537,6 +635,7 @@ def _validate_etf_pool(frozen: FrozenETFPool, cfg: dict) -> List[str]:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def load_frozen_config(
     raw_config: dict,

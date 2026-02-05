@@ -4,7 +4,12 @@
 > **发布日期**: 2025-12-01
 > **核心文档**: [STRATEGY_BLUEPRINT_V3.md](STRATEGY_BLUEPRINT_V3.md) (👈 **必读：新一代策略蓝图**)
 > **Python**: 3.11+
-> **包管理**: [UV](https://docs.astral.sh/uv/) (v0.9+)
+> **包管理**: [UV](https://docs.astral.sh/uv/) (v0.9+) **🔒 强制使用**
+
+> **🚨 环境要求**：本项目强制使用 UV 包管理器（2025-12-15 更新）
+> - ✅ **必须**: `uv run python <script>`
+> - ❌ **禁止**: `pip install`, `python -m venv`, `source .venv/bin/activate`
+> - 📖 **详见**: [AGENTS.md](AGENTS.md) 顶部说明
 
 ---
 
@@ -62,7 +67,7 @@
 
 ## 🎯 项目概述
 
-本项目是专业级 **ETF 轮动策略研究平台**，采用三层引擎架构（WFO → VEC → BT），从因子挖掘到回测审计全流程覆盖。
+本项目是专业级 **ETF 轮动策略研究平台**，以 WFO 为探索入口，并采用 **VEC + Rolling + Holdout + BT** 的四重验证交付标准（通过后封板归档），从因子挖掘到审计交付全流程覆盖。
 
 | 状态 | 说明 |
 |------|------|
@@ -89,14 +94,23 @@ uv sync --dev              # 安装所有依赖
 ### 2. 生产工作流（复现 237% 收益）
 
 ```bash
-# Step 1: WFO 筛选 - 从 12,597 组合中筛选 (FREQ=3)
+# Step 1: WFO 筛选 - 从 12,597 组合中粗筛 (IC 仅做门槛)
 uv run python src/etf_strategy/run_combo_wfo.py
 
-# Step 2: VEC 复算 - 全量精确回测
-uv run python scripts/batch_vec_backtest.py
+# Step 2: VEC 精算 - 对 WFO 输出候选做向量化复算
+uv run python scripts/run_full_space_vec_backtest.py
 
-# Step 3: BT 审计（可选）- 事件驱动审计验证
+# Step 3: Rolling + Holdout - 无泄漏与一致性验证（产出 final_candidates）
+uv run python scripts/final_triple_validation.py
+
+# Step 4: BT 审计（Ground Truth）- 事件驱动审计，输出 Train/Holdout 分段收益
 uv run python scripts/batch_bt_backtest.py
+
+# Step 5: 生产包（交付口径统一用 BT）
+uv run python scripts/generate_production_pack.py
+
+# Step 6: 封板归档（冻结产物+脚本+配置+源码快照）
+uv run python scripts/seal_release.py --help
 ```
 
 ### 3. 验证结果
@@ -125,30 +139,42 @@ python3 script.py
 
 ---
 
-## 🏗️ 三层引擎架构
+## 🏗️ 引擎与交付架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  WFO 筛选层（粗筛器）                                        │
+│  WFO（探索入口，粗筛）                                       │
 │  ├── 脚本: src/etf_strategy/run_combo_wfo.py                │
-│  ├── 功能: IC/ICIR 评估因子质量 (12,597 组合)               │
-│  ├── 速度: ~3 秒完成全量筛选                                 │
-│  └── 注意: WFO 排名 ≠ VEC 收益排名（这是正常的）            │
+│  ├── 功能: 快速探索 + IC 门槛过滤（不做最终排序依据）        │
+│  └── 输出: 候选组合（供后续精算/验证）                       │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  VEC 复算层（精算器）                                        │
-│  ├── 脚本: scripts/batch_vec_backtest.py                    │
-│  ├── 功能: Numba 向量化高速回测                              │
-│  ├── 对齐: 严格对齐 BT（< 0.01pp 差异）                      │
-│  └── 输出: 精确收益率、胜率、盈亏比                          │
+│  VEC（复算层，精算器）                                       │
+│  ├── 脚本: scripts/run_full_space_vec_backtest.py           │
+│  ├── 功能: 向量化精算收益/风险，用于高效筛选                 │
+│  └── 注意: VEC 属于 Screening，不是对外最终口径              │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  BT 审计层（基准真相）                                       │
+│  Rolling + Holdout（稳定性与无泄漏验证）                     │
+│  ├── 脚本: scripts/final_triple_validation.py               │
+│  ├── 规则: Rolling gate 必须使用 train-only summary          │
+│  └── 输出: final_candidates（无泄漏候选）                    │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  BT（审计层，Ground Truth）                                  │
 │  ├── 脚本: scripts/batch_bt_backtest.py                     │
-│  ├── 功能: Backtrader 事件驱动 + 资金约束审计               │
-│  └── 输出: 最终审计报告                                      │
+│  ├── 功能: 事件驱动审计 + 资金约束，输出 Train/Holdout 分段收益│
+│  └── 输出: bt_results（生产口径统一以 BT 为准）              │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  封板（Sealed Release）                                      │
+│  ├── 工具: scripts/seal_release.py                          │
+│  ├── 冻结: 产物 + 配置 + 关键脚本 + 源码快照 + 依赖锁定       │
+│  └── 校验: CHECKSUMS.sha256（防篡改）                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 

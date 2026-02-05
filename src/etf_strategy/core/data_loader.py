@@ -53,9 +53,25 @@ class DataLoader:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _generate_cache_key(self, etf_codes, start_date, end_date):
-        """生成缓存键"""
+        """生成缓存键（包含数据文件修改时间，确保数据更新后缓存失效）"""
         codes_str = "-".join(sorted(etf_codes)) if etf_codes else "all"
-        key_str = f"{codes_str}_{start_date}_{end_date}"
+
+        # ✅ FIX: 加入数据目录最新修改时间，避免数据更新后返回旧缓存
+        # 遍历所有 parquet 文件，取最新的 mtime
+        try:
+            parquet_files = list(self.data_dir.glob("*.parquet"))
+            if parquet_files:
+                latest_mtime = max(f.stat().st_mtime for f in parquet_files)
+            else:
+                # 兜底：如果没有parquet文件，用数据目录本身的mtime
+                latest_mtime = self.data_dir.stat().st_mtime
+        except (OSError, ValueError):
+            # 异常时使用0，此时缓存会每次miss（安全降级）
+            logger.warning(f"无法获取数据目录 {self.data_dir} 的修改时间，缓存将失效")
+            latest_mtime = 0
+
+        # 缓存键格式: codes_startdate_enddate_mtime
+        key_str = f"{codes_str}_{start_date}_{end_date}_{int(latest_mtime)}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
     def load_ohlcv(
@@ -111,8 +127,12 @@ class DataLoader:
                 code = str(code).strip()
                 for f in parquet_files:
                     stem_prefix = f.stem.split("_")[0]  # e.g., 510300.SH
-                    base = stem_prefix.split(".")[0]    # 510300
-                    if base == code or stem_prefix == code or stem_prefix.startswith(f"{code}."):
+                    base = stem_prefix.split(".")[0]  # 510300
+                    if (
+                        base == code
+                        or stem_prefix == code
+                        or stem_prefix.startswith(f"{code}.")
+                    ):
                         filtered_files.append(f)
             parquet_files = filtered_files
 

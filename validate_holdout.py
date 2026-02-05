@@ -19,7 +19,12 @@ from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule
-from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule, ensure_price_views
+from etf_strategy.core.utils.rebalance import (
+    shift_timing_signal,
+    generate_rebalance_schedule,
+    ensure_price_views,
+)
+
 
 # 从batch_vec_backtest.py复制核心函数
 def vec_backtest_kernel(
@@ -64,18 +69,29 @@ def vec_backtest_kernel(
             target_weight = 1.0 / len(top_indices) if len(top_indices) > 0 else 0
 
             # 计算调仓
-            current_positions = positions[rebalance_idx - 1] if rebalance_idx > 0 else np.zeros(N)
+            current_positions = (
+                positions[rebalance_idx - 1] if rebalance_idx > 0 else np.zeros(N)
+            )
             target_positions = np.zeros(N)
-            target_positions[top_indices] = target_weight * portfolio_value[rebalance_idx] / close_prices[rebalance_idx, top_indices]
+            target_positions[top_indices] = (
+                target_weight
+                * portfolio_value[rebalance_idx]
+                / close_prices[rebalance_idx, top_indices]
+            )
 
             # 计算交易量和手续费
-            trade_volume = np.abs(target_positions - current_positions) * close_prices[rebalance_idx]
+            trade_volume = (
+                np.abs(target_positions - current_positions)
+                * close_prices[rebalance_idx]
+            )
             commission = np.sum(trade_volume) * commission_rate
             trades += np.sum(target_positions != current_positions)
 
             # 更新持仓和现金
             positions[rebalance_idx] = target_positions
-            cash[rebalance_idx] = cash[rebalance_idx - 1] if rebalance_idx > 0 else initial_capital
+            cash[rebalance_idx] = (
+                cash[rebalance_idx - 1] if rebalance_idx > 0 else initial_capital
+            )
             cash[rebalance_idx] -= commission
 
             # 前向填充持仓
@@ -96,10 +112,17 @@ def vec_backtest_kernel(
 
     total_return = (portfolio_value[-1] - initial_capital) / initial_capital
     win_rate = np.mean(returns > 0)
-    profit_factor = np.sum(returns[returns > 0]) / abs(np.sum(returns[returns < 0])) if np.any(returns < 0) else np.inf
-    max_drawdown = np.max(np.maximum.accumulate(portfolio_value) - portfolio_value) / np.max(portfolio_value)
+    profit_factor = (
+        np.sum(returns[returns > 0]) / abs(np.sum(returns[returns < 0]))
+        if np.any(returns < 0)
+        else np.inf
+    )
+    max_drawdown = np.max(
+        np.maximum.accumulate(portfolio_value) - portfolio_value
+    ) / np.max(portfolio_value)
 
     return total_return, win_rate, profit_factor, max_drawdown, trades
+
 
 def main():
     print("🔬 Holdout验证：测试最佳策略在2025-06-01至2025-12-08期间的表现")
@@ -111,8 +134,8 @@ def main():
         config = yaml.safe_load(f)
 
     # Holdout期参数
-    holdout_start = '2025-06-01'
-    holdout_end = '2025-12-08'
+    holdout_start = "2025-06-01"
+    holdout_end = "2025-12-08"
 
     print(f"📅 Holdout期间: {holdout_start} → {holdout_end}")
 
@@ -128,7 +151,9 @@ def main():
         start_date=holdout_start,
         end_date=holdout_end,
     )
-    print(f"✅ 数据加载完成: {len(ohlcv_data['close'])} 日期 × {len(config['data']['symbols'])} 只ETF")
+    print(
+        f"✅ 数据加载完成: {len(ohlcv_data['close'])} 日期 × {len(config['data']['symbols'])} 只ETF"
+    )
 
     # 计算因子
     print("🔧 计算因子...")
@@ -148,7 +173,13 @@ def main():
     print("✅ 标准化完成")
 
     # 最佳策略因子
-    target_factors = ['ADX_14D', 'MAX_DD_60D', 'PRICE_POSITION_120D', 'PRICE_POSITION_20D', 'SHARPE_RATIO_20D']
+    target_factors = [
+        "ADX_14D",
+        "MAX_DD_60D",
+        "PRICE_POSITION_120D",
+        "PRICE_POSITION_20D",
+        "SHARPE_RATIO_20D",
+    ]
     print(f"🎯 最佳策略因子: {target_factors}")
 
     # 检查因子是否存在
@@ -162,11 +193,11 @@ def main():
     print(f"✅ 因子得分计算完成: 形状 {factor_scores.shape}")
 
     # 获取价格数据
-    close_prices = ohlcv_data['close'].values  # (T, N)
+    close_prices = ohlcv_data["close"].values  # (T, N)
     print(f"✅ 价格数据: 形状 {close_prices.shape}")
 
     # 生成调仓日程 (每3天)
-    dates = pd.date_range(start=holdout_start, end=holdout_end, freq='D')
+    dates = pd.date_range(start=holdout_start, end=holdout_end, freq="D")
     trading_days = dates[dates.weekday < 5]  # 周一到周五
     rebalance_dates = np.arange(0, len(trading_days), 3)  # 每3个交易日
     print(f"✅ 调仓日程: {len(rebalance_dates)} 次调仓")
@@ -212,6 +243,7 @@ def main():
         print("⚠️ 小幅亏损！策略表现不佳，需要调整")
     else:
         print("✅ 表现尚可，但需要与训练集对比")
+
 
 if __name__ == "__main__":
     main()

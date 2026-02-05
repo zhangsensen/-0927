@@ -5,6 +5,11 @@
 > **Mode**: **Autonomous with Judgment** — Execute efficiently, but pause for critical risks  
 > **Version**: v3.1 | **更新日期**: 2025-12-01
 
+> **🚨 CRITICAL: 本项目强制使用 UV 包管理器** (更新日期: 2025-12-15)  
+> **绝对禁止**: `pip install`, `python -m venv`, `source .venv/bin/activate`  
+> **必须使用**: `uv run python <script>`, `uv sync`, `uv add/remove`  
+> 项目已配置 `uv.lock`，所有依赖由 UV 管理。不遵循此规则将导致环境不一致。
+
 > **最新运营指引（2025-12-11）**：如非必要，暂停 BT 大规模审计，优先聚焦 WFO + VEC 的 Alpha 开发与对齐验证；仅在需要审计时跑小规模 BT（Top-N），否则不消耗资源。
 
 ---
@@ -54,27 +59,43 @@ IC: 0.1495 (第 96 百分位)
 
 ## ⚡ QUICK REFERENCE
 
+> **🔒 环境管理规则（2025-12-15 强制执行）**
+> - ✅ **必须**: 使用 UV 管理所有依赖和环境
+> - ❌ **禁止**: `pip install`、`python -m venv`、手动 `activate`
+> - 📋 **原因**: 项目使用 `uv.lock` 锁定依赖，确保环境一致性
+
 ```bash
 # 环境（必须使用 UV）
-uv sync --dev                                             # 安装依赖
+uv sync --dev                                             # 安装/同步依赖
 uv pip install -e .                                       # 安装项目（editable 模式）
-uv run python <script.py>                                 # 运行脚本
+uv run python <script.py>                                 # 运行脚本（自动使用正确环境）
+uv add <package>                                          # 添加新依赖
+uv remove <package>                                       # 移除依赖
 
-# 生产工作流 v3.1（三步流程）
+# ❌ 绝对禁止使用以下命令 ❌
+# pip install <package>                                   # 会破坏 uv.lock
+# python -m venv .venv                                    # UV 自动管理虚拟环境
+# source .venv/bin/activate                               # 不需要手动激活
+# python <script.py>                                      # 必须用 uv run python
+
+# 生产工作流（v3.2：四重验证 + 封板交付）
 # Step 0: 数据更新 (QMT Bridge)
 uv run python scripts/update_daily_from_qmt_bridge.py --all
 
 # Step 1: WFO 因子组合挖掘
 uv run python src/etf_strategy/run_combo_wfo.py
 
-# Step 2: VEC 精算（仅 WFO 输出组合，禁止全空间枚举）
+# Step 2: VEC 精算（Screening，仅 WFO 输出组合，禁止全空间枚举）
 uv run python scripts/run_full_space_vec_backtest.py   # 自动读取最新 run_* WFO 结果
 
-# Step 3: 策略筛选（IC门槛 + 综合得分）
-uv run python scripts/select_strategy_v2.py
+# Step 3: Rolling + Holdout（无泄漏与一致性验证，产出 final_candidates）
+uv run python scripts/final_triple_validation.py
 
-# BT 审计（可选）
-uv run python scripts/batch_bt_backtest.py                # BT 审计 (Top 10)
+# Step 4: BT 审计（Ground Truth，对外交付口径，含 Train/Holdout 分段收益）
+uv run python scripts/batch_bt_backtest.py                # 建议 Top-N（按需）
+
+# Step 5: 生产包（交付清单：Top-N + 全量候选）
+uv run python scripts/generate_production_pack.py
 
 # 封板归档（强烈建议：每次可交付版本都做一次）
 # 输出目录：sealed_strategies/<version>_<yyyymmdd>/
@@ -192,7 +213,7 @@ You have authority to act **EXCEPT** in these scenarios:
 
 ---
 
-## 🛠️ THREE-TIER ENGINE ARCHITECTURE
+## 🛠️ DELIVERY PIPELINE (v3.2)
 
 \`\`\`
 ┌──────────────────────────────────────────────────────┐
@@ -204,9 +225,16 @@ You have authority to act **EXCEPT** in these scenarios:
                          ↓
 ┌──────────────────────────────────────────────────────┐
 │  VEC (复算层)                                         │
-│  ├── Script: scripts/batch_vec_backtest.py           │
+│  ├── Script: scripts/run_full_space_vec_backtest.py  │
 │  ├── Alignment: MUST match BT (avg 0.06pp, MAX_DD 0.01pp) │
 │  └── Output: Precise returns, Sharpe, MDD            │
+└──────────────────────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────┐
+│  Rolling + Holdout（稳定性与无泄漏验证）               │
+│  ├── Script: scripts/final_triple_validation.py      │
+│  ├── Rule: Rolling gate uses train-only summary      │
+│  └── Output: final_candidates (no leakage)           │
 └──────────────────────────────────────────────────────┘
                          ↓
 ┌──────────────────────────────────────────────────────┐
@@ -214,6 +242,13 @@ You have authority to act **EXCEPT** in these scenarios:
 │  ├── Script: scripts/batch_bt_backtest.py            │
 │  ├── Engine: Backtrader (event-driven)               │
 │  └── Output: Final audit report                      │
+└──────────────────────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────┐
+│  Seal（封板归档）                                      │
+│  ├── Script: scripts/seal_release.py                 │
+│  ├── Freeze: artifacts + configs + scripts + src + uv.lock │
+│  └── Verify: CHECKSUMS.sha256                         │
 └──────────────────────────────────────────────────────┘
 \`\`\`
 
@@ -406,10 +441,12 @@ grep -r "from etf_strategy\|import etf_strategy" --include="*.py"
 ## 📝 CODING STANDARDS
 
 - **Python**: 3.11+, 4-space indent, PEP 8
+- **Package Manager**: **UV ONLY** (见文件顶部警告)
 - **Naming**: snake_case (modules/files), lowercase-hyphen (configs)
 - **Docs**: Docstrings 聚焦交易意图 + 假设
-- **Format**: 提交前运行 \`make format && make lint\`
-- **Import**: 使用绝对导入 \`from etf_strategy.core.xxx import\`
+- **Format**: 提交前运行 `make format && make lint`
+- **Import**: 使用绝对导入 `from etf_strategy.core.xxx import`
+- **Dependencies**: 添加依赖必须用 `uv add`，禁止直接修改 `pyproject.toml`
 
 ---
 

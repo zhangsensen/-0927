@@ -1,0 +1,7 @@
+# UV Configuration (CRITICAL)
+uv.lock linguist-generated=false
+pyproject.toml linguist-language=TOML
+.uvrc linguist-language=Shell
+
+# Mark UV files as important
+uv.lock export-ignore=false

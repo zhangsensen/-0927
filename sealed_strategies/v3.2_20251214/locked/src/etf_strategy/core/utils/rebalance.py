@@ -1,4 +1,5 @@
 """Shared helpers for rebalance scheduling, timing shifts, and price views."""
+
 from __future__ import annotations
 
 from typing import Tuple
@@ -116,7 +117,9 @@ def ensure_price_views(
         segment = slice(min_valid_index, None)
         opens_view = open_arr[segment]
         if np.any(~np.isfinite(opens_view)):
-            raise ValueError("open_prices contains NaN/inf entries beyond warmup region")
+            raise ValueError(
+                "open_prices contains NaN/inf entries beyond warmup region"
+            )
         if np.any(opens_view <= 0):
             raise ValueError("open_prices must be positive beyond warmup region")
 
