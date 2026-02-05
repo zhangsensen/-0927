@@ -15,14 +15,23 @@ import numpy as np
 from tqdm import tqdm
 from datetime import datetime
 from numba import njit
+from joblib import Parallel, delayed
 
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.frozen_params import load_frozen_config
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule, DualTimingModule
-from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule, ensure_price_views
+from etf_strategy.core.utils.rebalance import (
+    shift_timing_signal,
+    generate_rebalance_schedule,
+    ensure_price_views,
+)
 from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
+from etf_strategy.core.utils.position_sizing import (
+    parse_dynamic_pos_config,
+    resolve_pos_size_for_day,
+)
 from aligned_metrics import compute_aligned_metrics
 
 # ✅ P0: 删除硬编码 - 所有参数必须从配置文件读取
@@ -33,24 +42,27 @@ from aligned_metrics import compute_aligned_metrics
 # LOOKBACK = 252  # DELETED
 
 
-def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, window: int = 14) -> np.ndarray:
+@njit(cache=True)
+def calculate_atr(
+    high: np.ndarray, low: np.ndarray, close: np.ndarray, window: int = 14
+) -> np.ndarray:
     """计算 ATR (Average True Range) 使用 Wilder 平滑法。
-    
+
     ATR = Wilder Smoothed(TR)
     TR = max(High - Low, |High - PrevClose|, |Low - PrevClose|)
-    
+
     Args:
         high: (T, N) 最高价矩阵
         low: (T, N) 最低价矩阵
         close: (T, N) 收盘价矩阵
         window: ATR 周期，默认 14
-    
+
     Returns:
         (T, N) ATR 矩阵，前 window 行为 NaN
     """
     T, N = high.shape
     atr = np.full((T, N), np.nan)
-    
+
     # True Range 计算
     tr = np.zeros((T, N))
     for t in range(1, T):
@@ -58,17 +70,17 @@ def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, window: 
             h = high[t, n]
             l = low[t, n]
             prev_c = close[t - 1, n]
-            
+
             if np.isnan(h) or np.isnan(l) or np.isnan(prev_c):
                 tr[t, n] = np.nan
             else:
                 tr[t, n] = max(h - l, abs(h - prev_c), abs(l - prev_c))
-    
+
     # Wilder 平滑 (指数平滑)
     # 初始 ATR = 前 window 个 TR 的简单平均
     # 后续 ATR = (prev_ATR * (window-1) + TR) / window
     alpha = 1.0 / window
-    
+
     for n in range(N):
         # 找到第一个有效的 TR 开始位置
         first_valid = -1
@@ -76,10 +88,10 @@ def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, window: 
             if not np.isnan(tr[t, n]):
                 first_valid = t
                 break
-        
+
         if first_valid < 0 or first_valid + window > T:
             continue  # 数据不足
-        
+
         # 初始 ATR: 简单平均
         initial_sum = 0.0
         count = 0
@@ -87,13 +99,13 @@ def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, window: 
             if not np.isnan(tr[t, n]):
                 initial_sum += tr[t, n]
                 count += 1
-        
+
         if count < window // 2:
             continue  # 有效数据不足
-        
+
         prev_atr = initial_sum / count
         atr[first_valid + window - 1, n] = prev_atr
-        
+
         # Wilder 平滑
         for t in range(first_valid + window, T):
             if np.isnan(tr[t, n]):
@@ -103,14 +115,14 @@ def calculate_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, window: 
                 curr_atr = prev_atr + alpha * (tr[t, n] - prev_atr)
                 atr[t, n] = curr_atr
                 prev_atr = curr_atr
-    
+
     return atr
 
 
 @njit(cache=True)
 def stable_topk_indices(scores, k):
     """稳定排序：按 score 降序，score 相同时按 ETF 索引升序（tie-breaker）。
-    
+
     返回 top-k 的索引数组。这确保 numba 和 Python 行为一致。
     """
     N = len(scores)
@@ -118,14 +130,16 @@ def stable_topk_indices(scores, k):
     # Numba 不支持复杂排序，手动实现选择排序（k 很小，O(kN) 可接受）
     result = np.empty(k, dtype=np.int64)
     used = np.zeros(N, dtype=np.bool_)
-    
+
     for i in range(k):
         best_idx = -1
         best_score = -np.inf
         for n in range(N):
             if used[n]:
                 continue
-            if scores[n] > best_score or (scores[n] == best_score and (best_idx < 0 or n < best_idx)):
+            if scores[n] > best_score or (
+                scores[n] == best_score and (best_idx < 0 or n < best_idx)
+            ):
                 best_score = scores[n]
                 best_idx = n
         if best_idx < 0 or best_score == -np.inf:
@@ -142,12 +156,14 @@ def vec_backtest_kernel(
     close_prices,
     open_prices,  # ✅ 添加开盘价
     high_prices,  # ✅ 添加最高价 (用于止损)
-    low_prices,   # ✅ 添加最低价 (用于止损)
+    low_prices,  # ✅ 添加最低价 (用于止损)
     timing_arr,
-    vol_regime_arr, # ✅ v3.1: 波动率体制数组 (T,)
+    vol_regime_arr,  # ✅ v3.1: 波动率体制数组 (T,)
     factor_indices,
     rebalance_schedule,  # ✅ 改用预生成的调仓日程数组
     pos_size,
+    # ✅ v4.0: 动态持仓数组 (len=rebalance_schedule), -1表示使用固定pos_size
+    dynamic_pos_size_arr,
     initial_capital,
     commission_rate,
     # ✅ P2: 动态降权参数 (已禁用 - 零杠杆原则)
@@ -155,26 +171,26 @@ def vec_backtest_kernel(
     vol_window,
     dynamic_leverage_enabled,
     # ✅ P3: 止损模式选择
-    use_atr_stop,          # True = ATR 动态止损, False = 固定百分比止损
-    trailing_stop_pct,     # Fixed 模式使用
-    atr_arr,               # ATR 矩阵 (T, N)，ATR 模式使用
-    atr_multiplier,        # ATR 倍数，ATR 模式使用
+    use_atr_stop,  # True = ATR 动态止损, False = 固定百分比止损
+    trailing_stop_pct,  # Fixed 模式使用
+    atr_arr,  # ATR 矩阵 (T, N)，ATR 模式使用
+    atr_multiplier,  # ATR 倍数，ATR 模式使用
     stop_on_rebalance_only,  # ✅ NEW: True = 仅在调仓日检查止损
     # ✅ v3.0: 个股趋势过滤 (MA20)
-    individual_trend_arr,    # ✅ NEW: Boolean 矩阵 (T, N)，True=趋势OK可买入
+    individual_trend_arr,  # ✅ NEW: Boolean 矩阵 (T, N)，True=趋势OK可买入
     individual_trend_enabled,  # ✅ NEW: 是否启用个股趋势过滤
     # ✅ P4: 阶梯止盈参数 (最多支持 3 级阶梯)
     profit_ladder_thresholds,  # shape (3,): [0.15, 0.30, inf]
-    profit_ladder_stops,       # shape (3,): [0.05, 0.03, 0.08] (Fixed 模式)
-    profit_ladder_multipliers, # shape (3,): [2.0, 1.5, 3.0] (ATR 模式)
+    profit_ladder_stops,  # shape (3,): [0.05, 0.03, 0.08] (Fixed 模式)
+    profit_ladder_multipliers,  # shape (3,): [2.0, 1.5, 3.0] (ATR 模式)
     # ✅ P5: 熔断机制参数
-    circuit_breaker_day,       # 单日最大跌幅 (e.g. 0.05)
-    circuit_breaker_total,     # 总最大回撤 (e.g. 0.20)
-    circuit_recovery_days,     # 熔断后冷却天数
+    circuit_breaker_day,  # 单日最大跌幅 (e.g. 0.05)
+    circuit_breaker_total,  # 总最大回撤 (e.g. 0.20)
+    circuit_recovery_days,  # 熔断后冷却天数
     # ✅ P6: 止损冷却期
-    cooldown_days,             # 单标的止损后冷却天数
+    cooldown_days,  # 单标的止损后冷却天数
     # ✅ P7: 杠杆上限（零杠杆原则）
-    leverage_cap,              # 最大仓位上限 (1.0 = 无杠杆)
+    leverage_cap,  # 最大仓位上限 (1.0 = 无杠杆)
 ):
     T, N, _ = factors_3d.shape
 
@@ -182,15 +198,15 @@ def vec_backtest_kernel(
     holdings = np.full(N, -1.0)
     entry_prices = np.zeros(N)
     high_water_marks = np.zeros(N)  # ✅ 追踪持仓最高价
-    
+
     # ✅ P4: 阶梯止盈 - 追踪当前生效的止损率/倍数
     current_stop_pcts = np.full(N, trailing_stop_pct)  # Fixed 模式: 百分比
-    current_atr_mults = np.full(N, atr_multiplier)     # ATR 模式: 倍数
-    
+    current_atr_mults = np.full(N, atr_multiplier)  # ATR 模式: 倍数
+
     # ✅ P5: 熔断机制状态
     circuit_breaker_active = False
     circuit_breaker_countdown = 0
-    
+
     # ✅ P6: 冷却期追踪 (每个标的的剩余冷却天数)
     cooldown_remaining = np.zeros(N, dtype=np.int64)
 
@@ -214,30 +230,32 @@ def vec_backtest_kernel(
     # Let's add equity_curve to return tuple.
     # But wait, equity_curve is an array, others are scalars.
     # Numba handles this fine.
-    
+
     # Reconstruct equity curve from daily returns? No, we didn't store it.
     # We need to store it.
     # We have welford, but not the curve.
     # Let's add equity_curve array.
-    
+
     # Wait, the caller expects 20 values?
     # ✅ P0: Daily Equity 追踪 (用于 MaxDD, Sharpe, Vol 计算)
-    equity_curve = np.full(T, initial_capital, dtype=np.float64) # ✅ NEW: Store equity curve (init with capital)
-    
+    equity_curve = np.full(
+        T, initial_capital, dtype=np.float64
+    )  # ✅ NEW: Store equity curve (init with capital)
+
     # Welford 在线算法变量（用于计算 daily return 的均值和方差）
     welford_count = 0
     welford_m2 = 0.0
-    
+
     # 历史最高净值（用于计算 MaxDD）
     peak_equity = initial_capital
     max_drawdown = 0.0
-    
+
     # 前一日净值（用于计算 daily return）
     prev_equity = initial_capital
-    
+
     # 调仓日索引指针
     rebal_ptr = 0
-    
+
     # ✅ P2: 动态降权 - 环形缓冲区存储滚动日收益率
     returns_buffer = np.zeros(vol_window)
     buffer_ptr = 0
@@ -254,7 +272,7 @@ def vec_backtest_kernel(
 
     # ✅ P0: 遍历每一天以追踪 daily equity（从 LOOKBACK 开始，与 rebalance_schedule 一致）
     start_day = rebalance_schedule[0] if len(rebalance_schedule) > 0 else 252
-    
+
     for t in range(start_day, T):
         # 计算当日净值（开盘时刻）
         current_equity = cash
@@ -263,34 +281,38 @@ def vec_backtest_kernel(
                 price = close_prices[t - 1, n]  # 用前一日收盘价估算当日开盘净值
                 if not np.isnan(price):
                     current_equity += holdings[n] * price
-        
+
         # 计算 daily return 并更新 Welford 统计量
-        equity_curve[t] = current_equity # ✅ NEW: Record equity
-        
+        equity_curve[t] = current_equity  # ✅ NEW: Record equity
+
         if t > start_day:
-            daily_return = (current_equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
+            daily_return = (
+                (current_equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
+            )
             welford_count += 1
             delta = daily_return - welford_mean
             welford_mean += delta / welford_count
             delta2 = daily_return - welford_mean
             welford_m2 += delta * delta2
-            
+
             # ✅ P2: 更新环形缓冲区
             if dynamic_leverage_enabled:
                 returns_buffer[buffer_ptr] = daily_return
                 buffer_ptr = (buffer_ptr + 1) % vol_window
                 if buffer_filled < vol_window:
                     buffer_filled += 1
-        
+
         # 更新历史最高净值和最大回撤
         if current_equity > peak_equity:
             peak_equity = current_equity
-        current_dd = (peak_equity - current_equity) / peak_equity if peak_equity > 0 else 0.0
+        current_dd = (
+            (peak_equity - current_equity) / peak_equity if peak_equity > 0 else 0.0
+        )
         if current_dd > max_drawdown:
             max_drawdown = current_dd
-        
+
         prev_equity = current_equity
-        
+
         # 检查是否为调仓日
         is_rebalance_day = False
         if rebal_ptr < len(rebalance_schedule) and rebalance_schedule[rebal_ptr] == t:
@@ -306,11 +328,11 @@ def vec_backtest_kernel(
         #   2. 买入新的 (Close)
         #   这意味着调仓日的 High/Low 无法用于新持仓的止损（因为是在 Close 买入的）。
         #   但对于旧持仓（如果没卖出），或者非调仓日的持仓，需要检查止损。
-        
+
         # 如果是调仓日，且持仓被卖出了，holdings[n] 已经是 -1，不会触发止损。
         # 如果是调仓日，且持仓保留了，holdings[n] > 0，需要检查止损。
         # 如果是非调仓日，holdings[n] > 0，需要检查止损。
-        
+
         # 关键点：调仓日的执行价格是 Close。
         # 如果我们在 Close 买入，那么当天的 High/Low 对新持仓无效。
         # 如果我们在 Close 卖出，那么当天的 High/Low 对旧持仓有效吗？
@@ -323,23 +345,27 @@ def vec_backtest_kernel(
         # 2. 然后执行调仓逻辑。如果止损卖出了，调仓逻辑可能会再次买入（如果它还在 Top K）。
         #    这符合逻辑：止损是风险控制，如果信号依然强，可能会买回（但通常有冷却期，这里暂不实现冷却）。
         #    或者，如果止损了，当天就不买回？
-        
+
         # 让我们把止损逻辑放在调仓逻辑之前。
-        
+
         # 修正循环结构：
         # for t in range(start_day, T):
         #    1. Update Equity (Open)
         #    2. Check Stop Loss (High/Low) -> Sell if triggered
         #    3. Check Rebalance (Close) -> Sell/Buy
-        
+
         # 但是 VEC 原有逻辑是混合的。
         # 让我们在调仓逻辑 *之前* 插入止损检查。
-        
+
         # ✅ P5: 熔断检查 - 单日跌幅和总回撤
         if circuit_breaker_day > 0.0 or circuit_breaker_total > 0.0:
             # 计算单日跌幅
             if t > start_day:
-                day_return = (current_equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
+                day_return = (
+                    (current_equity - prev_equity) / prev_equity
+                    if prev_equity > 0
+                    else 0.0
+                )
                 # 单日熔断检查
                 if circuit_breaker_day > 0.0 and day_return < -circuit_breaker_day:
                     circuit_breaker_active = True
@@ -348,26 +374,28 @@ def vec_backtest_kernel(
                 if circuit_breaker_total > 0.0 and current_dd > circuit_breaker_total:
                     circuit_breaker_active = True
                     circuit_breaker_countdown = circuit_recovery_days
-            
+
             # 熔断恢复倒计时
             if circuit_breaker_active:
                 if circuit_breaker_countdown > 0:
                     circuit_breaker_countdown -= 1
                 else:
                     circuit_breaker_active = False
-        
+
         # ✅ P6: 冷却期倒计时
         for n in range(N):
             if cooldown_remaining[n] > 0:
                 cooldown_remaining[n] -= 1
-        
+
         # ✅ P3/P4: 动态止损 + 阶梯止盈
         # 🔧 修复1: HWM 滞后更新 - 止损检查使用昨日 HWM，避免前视偏差
         # 🔧 修复2: 精确执行价 - 使用止损价或开盘价（如跳空低开）
         # ✅ v1.2: 支持 ATR 动态止损模式
         # ✅ v1.3: 支持仅在调仓日检查止损（与策略节奏一致）
-        should_check_stop = (use_atr_stop and atr_multiplier > 0.0) or (not use_atr_stop and trailing_stop_pct > 0.0)
-        
+        should_check_stop = (use_atr_stop and atr_multiplier > 0.0) or (
+            not use_atr_stop and trailing_stop_pct > 0.0
+        )
+
         # ⚠️ 核心修改: 只在调仓日检查止损（如启用）
         if should_check_stop and (not stop_on_rebalance_only or is_rebalance_day):
             for n in range(N):
@@ -375,21 +403,35 @@ def vec_backtest_kernel(
                     # 🔧 修复1: 先用昨日 HWM 计算止损线，再更新 HWM
                     # 这样避免"先跌后涨"导致的未来函数问题
                     prev_hwm = high_water_marks[n]  # 昨日 HWM
-                    
+
                     # ✅ P4: 阶梯止盈 - 根据收益率动态调整止损参数
                     # 使用昨日 HWM 计算收益率
-                    current_return = (prev_hwm - entry_prices[n]) / entry_prices[n] if entry_prices[n] > 0 else 0.0
+                    current_return = (
+                        (prev_hwm - entry_prices[n]) / entry_prices[n]
+                        if entry_prices[n] > 0
+                        else 0.0
+                    )
                     for ladder_idx in range(3):
                         if current_return >= profit_ladder_thresholds[ladder_idx]:
                             # ATR 模式: 收紧倍数
                             if use_atr_stop:
-                                if profit_ladder_multipliers[ladder_idx] < current_atr_mults[n]:
-                                    current_atr_mults[n] = profit_ladder_multipliers[ladder_idx]
+                                if (
+                                    profit_ladder_multipliers[ladder_idx]
+                                    < current_atr_mults[n]
+                                ):
+                                    current_atr_mults[n] = profit_ladder_multipliers[
+                                        ladder_idx
+                                    ]
                             # Fixed 模式: 收紧百分比
                             else:
-                                if profit_ladder_stops[ladder_idx] < current_stop_pcts[n]:
-                                    current_stop_pcts[n] = profit_ladder_stops[ladder_idx]
-                    
+                                if (
+                                    profit_ladder_stops[ladder_idx]
+                                    < current_stop_pcts[n]
+                                ):
+                                    current_stop_pcts[n] = profit_ladder_stops[
+                                        ladder_idx
+                                    ]
+
                     # ✅ 计算止损价 (ATR 模式 vs Fixed 模式)
                     if use_atr_stop:
                         # ATR 模式: stop_price = HWM - (multiplier × ATR)
@@ -398,17 +440,20 @@ def vec_backtest_kernel(
                         if np.isnan(prev_atr) or prev_atr <= 0.0:
                             # ATR 无效时跳过止损检查
                             curr_high = high_prices[t, n]
-                            if not np.isnan(curr_high) and curr_high > high_water_marks[n]:
+                            if (
+                                not np.isnan(curr_high)
+                                and curr_high > high_water_marks[n]
+                            ):
                                 high_water_marks[n] = curr_high
                             continue
                         stop_price = prev_hwm - (current_atr_mults[n] * prev_atr)
                     else:
                         # Fixed 模式: stop_price = HWM × (1 - stop_pct)
                         stop_price = prev_hwm * (1.0 - current_stop_pcts[n])
-                    
+
                     curr_low = low_prices[t, n]
                     curr_open = open_prices[t, n]
-                    
+
                     if not np.isnan(curr_low) and curr_low < stop_price:
                         # 触发止损
                         # 🔧 修复2: 精确执行价格
@@ -418,14 +463,14 @@ def vec_backtest_kernel(
                             exec_price = curr_open  # 跳空低开，按开盘价止损
                         else:
                             exec_price = stop_price  # 盘中触发，按止损价执行
-                        
+
                         # 确保执行价不低于 Low (防止数据异常)
                         if not np.isnan(curr_low):
                             exec_price = max(exec_price, curr_low)
-                        
+
                         proceeds = holdings[n] * exec_price * (1.0 - commission_rate)
                         cash += proceeds
-                        
+
                         pnl = (exec_price - entry_prices[n]) / entry_prices[n]
                         if pnl > 0.0:
                             wins += 1
@@ -433,12 +478,12 @@ def vec_backtest_kernel(
                         else:
                             losses += 1
                             total_loss_pnl += abs(pnl)
-                        
+
                         holdings[n] = -1.0
                         entry_prices[n] = 0.0
                         high_water_marks[n] = 0.0
                         current_stop_pcts[n] = trailing_stop_pct  # 重置止损率
-                        current_atr_mults[n] = atr_multiplier     # 重置 ATR 倍数
+                        current_atr_mults[n] = atr_multiplier  # 重置 ATR 倍数
                         # ✅ P6: 设置冷却期
                         cooldown_remaining[n] = cooldown_days
                     else:
@@ -450,7 +495,9 @@ def vec_backtest_kernel(
         # --- 3. 调仓逻辑 (Close时刻) ---
         if is_rebalance_day:
             # ✅ P2: 在调仓日计算动态 leverage
-            if dynamic_leverage_enabled and buffer_filled >= vol_window // 2:  # 至少有半窗口数据
+            if (
+                dynamic_leverage_enabled and buffer_filled >= vol_window // 2
+            ):  # 至少有半窗口数据
                 # 计算缓冲区内的标准差
                 n_samples = buffer_filled
                 sum_val = 0.0
@@ -472,7 +519,7 @@ def vec_backtest_kernel(
                     current_leverage = 1.0
             else:
                 current_leverage = 1.0
-            
+
             leverage_sum += current_leverage
             leverage_count += 1
 
@@ -495,10 +542,15 @@ def vec_backtest_kernel(
             for n in range(N):
                 target_set[n] = False
 
+            # ✅ v4.0: 动态持仓数
+            effective_pos_size = pos_size
+            if dynamic_pos_size_arr[rebal_ptr - 1] > 0:
+                effective_pos_size = dynamic_pos_size_arr[rebal_ptr - 1]
+
             buy_count = 0
-            if valid >= pos_size:
+            if valid >= effective_pos_size:
                 # ✅ 使用稳定排序，确保 numba/Python 结果一致
-                top_indices = stable_topk_indices(combined_score, pos_size)
+                top_indices = stable_topk_indices(combined_score, effective_pos_size)
                 for k in range(len(top_indices)):
                     idx = top_indices[k]
                     if combined_score[idx] == -np.inf:
@@ -512,7 +564,7 @@ def vec_backtest_kernel(
             # ✅ P7: 零杠杆原则 - 确保不超过 leverage_cap
             effective_leverage = min(current_leverage, leverage_cap)
             timing_ratio = timing_arr[t] * effective_leverage
-            
+
             # ✅ P5: 如果熔断激活，不允许新建仓位（只允许平仓）
             if circuit_breaker_active:
                 timing_ratio = 0.0  # 清空目标仓位
@@ -536,7 +588,7 @@ def vec_backtest_kernel(
                     entry_prices[n] = 0.0
                     high_water_marks[n] = 0.0
                     current_stop_pcts[n] = trailing_stop_pct  # 重置止损率
-                    current_atr_mults[n] = atr_multiplier     # 重置 ATR 倍数
+                    current_atr_mults[n] = atr_multiplier  # 重置 ATR 倍数
 
             current_value = cash
             kept_value = 0.0
@@ -561,7 +613,9 @@ def vec_backtest_kernel(
                 if available_for_new < 0.0:
                     available_for_new = 0.0
 
-                target_pos_value = available_for_new / new_count / (1.0 + commission_rate)
+                target_pos_value = (
+                    available_for_new / new_count / (1.0 + commission_rate)
+                )
 
                 if target_pos_value > 0.0:
                     for k in range(new_count):
@@ -578,7 +632,9 @@ def vec_backtest_kernel(
 
                         if cash >= cost - 1e-5 and cost > 0.0:
                             actual_cost = cost if cost <= cash else cash
-                            actual_shares = actual_cost / (price * (1.0 + commission_rate))
+                            actual_shares = actual_cost / (
+                                price * (1.0 + commission_rate)
+                            )
                             filled_shares_total += actual_shares
                             filled_value_total += actual_shares * price
                             cash -= actual_cost
@@ -586,7 +642,7 @@ def vec_backtest_kernel(
                             entry_prices[idx] = price
                             high_water_marks[idx] = price
                             current_stop_pcts[idx] = trailing_stop_pct  # 初始化止损率
-                            current_atr_mults[idx] = atr_multiplier     # 初始化 ATR 倍数
+                            current_atr_mults[idx] = atr_multiplier  # 初始化 ATR 倍数
     final_value = cash
     for n in range(N):
         if holdings[n] > 0.0:
@@ -611,7 +667,7 @@ def vec_backtest_kernel(
         welford_mean += delta / welford_count
         delta2 = daily_return - welford_mean
         welford_m2 += delta * delta2
-    
+
     # 更新最终的 peak 和 MaxDD
     if final_value > peak_equity:
         peak_equity = final_value
@@ -628,21 +684,24 @@ def vec_backtest_kernel(
         avg_loss = total_loss_pnl / losses
         profit_factor = avg_win / max(avg_loss, 0.0001)
     else:
-        profit_factor = 0.0
+        # ✅ P3: Semantically correct — infinite profit factor when no losses
+        profit_factor = np.inf
 
     # ✅ P0: 计算风险指标
     # 年化收益率（假设 252 交易日/年）
     trading_days = T - start_day
     years = trading_days / 252.0 if trading_days > 0 else 1.0
-    
+
     # 🛡️ Safety Check: Handle potential overflow or invalid values
     try:
-        annual_return = (1.0 + total_return) ** (1.0 / years) - 1.0 if years > 0 else 0.0
+        annual_return = (
+            (1.0 + total_return) ** (1.0 / years) - 1.0 if years > 0 else 0.0
+        )
         if np.isinf(annual_return) or np.isnan(annual_return):
             annual_return = -0.99
     except:
         annual_return = -0.99
-    
+
     # 年化波动率（daily std * sqrt(252)）
     if welford_count > 1:
         daily_variance = welford_m2 / (welford_count - 1)
@@ -650,27 +709,29 @@ def vec_backtest_kernel(
         annual_volatility = daily_std * np.sqrt(252.0)
     else:
         annual_volatility = 0.0
-    
+
     # Sharpe Ratio（假设无风险利率为 0）
     # 🛡️ Safety Check: Clamp Sharpe to reasonable range
-    sharpe_ratio = annual_return / annual_volatility if annual_volatility > 0.0001 else 0.0
+    sharpe_ratio = (
+        annual_return / annual_volatility if annual_volatility > 0.0001 else 0.0
+    )
     if np.isinf(sharpe_ratio) or np.isnan(sharpe_ratio):
         sharpe_ratio = 0.0
-    elif sharpe_ratio > 20.0: # Cap extreme sharpe
+    elif sharpe_ratio > 20.0:  # Cap extreme sharpe
         sharpe_ratio = 20.0
     elif sharpe_ratio < -20.0:
         sharpe_ratio = -20.0
-    
+
     # Calmar Ratio
     calmar_ratio = annual_return / max_drawdown if max_drawdown > 0.0001 else 0.0
     if np.isinf(calmar_ratio) or np.isnan(calmar_ratio):
         calmar_ratio = 0.0
-    
+
     # ✅ P2: 平均动态 leverage
     avg_leverage = leverage_sum / leverage_count if leverage_count > 0 else 1.0
 
     return (
-        equity_curve, # ✅ NEW: Return equity curve
+        equity_curve,  # ✅ NEW: Return equity curve
         total_return,
         win_rate,
         profit_factor,
@@ -690,30 +751,48 @@ def vec_backtest_kernel(
     )
 
 
-def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_prices, timing_arr, factor_indices,
-                     # ✅ P0: 添加配置参数
-                     freq, pos_size, initial_capital, commission_rate, lookback,
-                     target_vol=0.20, vol_window=20, dynamic_leverage_enabled=False,
-                     vol_regime_arr=None, # ✅ v3.1: 波动率体制数组
-                     # ✅ v1.2: ATR 动态止损参数
-                     use_atr_stop=False,
-                     trailing_stop_pct=0.0,
-                     atr_arr=None,           # ATR 矩阵 (T, N)
-                     atr_multiplier=3.0,
-                     stop_on_rebalance_only=False,  # ✅ v1.3: 仅在调仓日检查止损
-                     # ✅ v3.0: 个股趋势过滤参数
-                     individual_trend_arr=None,     # ✅ NEW: 趋势状态矩阵 (T, N)
-                     individual_trend_enabled=False,  # ✅ NEW: 是否启用个股趋势过滤
-                     # ✅ P4: 阶梯止盈参数
-                     profit_ladders=None,
-                     # ✅ P5: 熔断机制参数
-                     circuit_breaker_day=0.0, circuit_breaker_total=0.0, circuit_recovery_days=5,
-                     # ✅ P6: 冷却期参数
-                     cooldown_days=0,
-                     # ✅ P7: 杠杆上限
-                     leverage_cap=1.0):
+def run_vec_backtest(
+    factors_3d,
+    close_prices,
+    open_prices,
+    high_prices,
+    low_prices,
+    timing_arr,
+    factor_indices,
+    # ✅ P0: 添加配置参数
+    freq,
+    pos_size,
+    initial_capital,
+    commission_rate,
+    lookback,
+    target_vol=0.20,
+    vol_window=20,
+    dynamic_leverage_enabled=False,
+    vol_regime_arr=None,  # ✅ v3.1: 波动率体制数组
+    # ✅ v4.0: 动态持仓
+    dynamic_pos_size_arr=None,
+    # ✅ v1.2: ATR 动态止损参数
+    use_atr_stop=False,
+    trailing_stop_pct=0.0,
+    atr_arr=None,  # ATR 矩阵 (T, N)
+    atr_multiplier=3.0,
+    stop_on_rebalance_only=False,  # ✅ v1.3: 仅在调仓日检查止损
+    # ✅ v3.0: 个股趋势过滤参数
+    individual_trend_arr=None,  # ✅ NEW: 趋势状态矩阵 (T, N)
+    individual_trend_enabled=False,  # ✅ NEW: 是否启用个股趋势过滤
+    # ✅ P4: 阶梯止盈参数
+    profit_ladders=None,
+    # ✅ P5: 熔断机制参数
+    circuit_breaker_day=0.0,
+    circuit_breaker_total=0.0,
+    circuit_recovery_days=5,
+    # ✅ P6: 冷却期参数
+    cooldown_days=0,
+    # ✅ P7: 杠杆上限
+    leverage_cap=1.0,
+):
     """运行单个策略的 VEC 回测，并返回舍入诊断信息和风险指标。
-    
+
     ✅ P0 修正: 所有策略参数从外部传入，不使用默认值
     ✅ v1.2: 支持 ATR 动态止损 (use_atr_stop=True) 和固定百分比止损 (use_atr_stop=False)
     ✅ v1.3: 支持仅在调仓日检查止损 (stop_on_rebalance_only=True)，与 8 天调仓节奏一致
@@ -725,27 +804,31 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
     """
     factor_indices_arr = np.array(factor_indices, dtype=np.int64)
     T, N = factors_3d.shape[:2]
-    
+
     # ✅ v1.2: 处理 ATR 矩阵
     if atr_arr is None:
         # 如果没有传入 ATR，创建一个全零矩阵 (不会被使用，因为 use_atr_stop=False)
         atr_arr_internal = np.zeros((T, N), dtype=np.float64)
     else:
         atr_arr_internal = atr_arr
-    
+
     # ✅ v3.0: 处理个股趋势矩阵
     if individual_trend_arr is None:
         # 如果没有传入，创建全 True 矩阵（所有标的都可买入）
         individual_trend_arr_internal = np.ones((T, N), dtype=np.bool_)
     else:
         individual_trend_arr_internal = individual_trend_arr
-    
+
     # ✅ P4: 处理阶梯止盈参数 (最多支持 3 级)
     if profit_ladders is None or len(profit_ladders) == 0:
         # 默认不启用阶梯止盈
         profit_ladder_thresholds = np.array([np.inf, np.inf, np.inf], dtype=np.float64)
-        profit_ladder_stops = np.array([trailing_stop_pct, trailing_stop_pct, trailing_stop_pct], dtype=np.float64)
-        profit_ladder_multipliers = np.array([atr_multiplier, atr_multiplier, atr_multiplier], dtype=np.float64)
+        profit_ladder_stops = np.array(
+            [trailing_stop_pct, trailing_stop_pct, trailing_stop_pct], dtype=np.float64
+        )
+        profit_ladder_multipliers = np.array(
+            [atr_multiplier, atr_multiplier, atr_multiplier], dtype=np.float64
+        )
     else:
         thresholds = []
         stops = []
@@ -762,7 +845,7 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         profit_ladder_thresholds = np.array(thresholds, dtype=np.float64)
         profit_ladder_stops = np.array(stops, dtype=np.float64)
         profit_ladder_multipliers = np.array(multipliers, dtype=np.float64)
-    
+
     # ✅ 使用 ensure_price_views 验证和回退 open_prices
     _, open_arr, close_arr = ensure_price_views(
         close_prices,
@@ -772,11 +855,11 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         validate=True,
         min_valid_index=lookback,  # 使用传入的 lookback
     )
-    
+
     # 简单的视图确保 (High/Low)
     high_arr = high_prices
     low_arr = low_prices
-    
+
     # ✅ 使用共享 helper 生成调仓日程（与 BT 引擎一致）
     rebalance_schedule = generate_rebalance_schedule(
         total_periods=T,
@@ -788,6 +871,17 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         vol_regime_arr = np.ones(T, dtype=np.float64)
 
     start_day = rebalance_schedule[0] if len(rebalance_schedule) > 0 else lookback
+
+    # ✅ v4.0: 动态持仓数组
+    if dynamic_pos_size_arr is None:
+        # 全部使用 -1 表示使用固定 pos_size
+        dynamic_pos_size_arr_internal = np.full(
+            len(rebalance_schedule), -1, dtype=np.int64
+        )
+    else:
+        dynamic_pos_size_arr_internal = np.asarray(
+            dynamic_pos_size_arr, dtype=np.int64
+        )
 
     (
         equity_curve,
@@ -814,10 +908,11 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         high_arr,
         low_arr,
         timing_arr,
-        vol_regime_arr, # ✅ v3.1
+        vol_regime_arr,  # ✅ v3.1
         factor_indices_arr,
         rebalance_schedule,  # ✅ 传入调仓日程数组
         pos_size,  # 使用传入的 pos_size
+        dynamic_pos_size_arr_internal,  # ✅ v4.0: 动态持仓
         initial_capital,  # 使用传入的 initial_capital
         commission_rate,  # 使用传入的 commission_rate
         # ✅ P2: 动态降权参数 (已禁用 - 零杠杆原则)
@@ -853,7 +948,7 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         "target_shares_total": target_shares_total,
         "filled_shares_total": filled_shares_total,
     }
-    
+
     aligned_metrics = compute_aligned_metrics(equity_curve, start_idx=start_day)
 
     # ✅ P0: 风险指标字典
@@ -870,7 +965,15 @@ def run_vec_backtest(factors_3d, close_prices, open_prices, high_prices, low_pri
         "aligned_sharpe": aligned_metrics["aligned_sharpe"],
     }
 
-    return equity_curve, total_return, win_rate, profit_factor, num_trades, rounding_diag, risk_metrics
+    return (
+        equity_curve,
+        total_return,
+        win_rate,
+        profit_factor,
+        num_trades,
+        rounding_diag,
+        risk_metrics,
+    )
 
 
 def main():
@@ -893,11 +996,11 @@ def main():
     LOOKBACK = backtest_config.get("lookback")
     INITIAL_CAPITAL = float(backtest_config.get("initial_capital"))
     COMMISSION_RATE = float(backtest_config.get("commission_rate"))
-    
+
     # 验证必需参数
     if FREQ is None or POS_SIZE is None or LOOKBACK is None:
         raise ValueError("配置文件缺少必需参数: freq, pos_size, lookback")
-    
+
     print(f"✅ 回测参数 (从配置读取):")
     print(f"   FREQ: {FREQ}")
     print(f"   POS_SIZE: {POS_SIZE}")
@@ -907,21 +1010,27 @@ def main():
 
     # 1. 加载 WFO 结果
     # ✅ 优先查找 run_* 目录 (True WFO)，排除 symlink
-    wfo_dirs = sorted([d for d in (ROOT / "results").glob("run_*") if d.is_dir() and not d.is_symlink()])
-    
+    wfo_dirs = sorted(
+        [
+            d
+            for d in (ROOT / "results").glob("run_*")
+            if d.is_dir() and not d.is_symlink()
+        ]
+    )
+
     if not wfo_dirs:
         wfo_dirs = sorted((ROOT / "results").glob("unified_wfo_*"))
-        
+
     if not wfo_dirs:
         print("❌ 未找到 WFO 结果目录")
         return
     latest_wfo = wfo_dirs[-1]
-    
+
     # 优先加载 top100_by_ic.parquet (WFO 输出)，其次 all_combos.parquet
     combos_path = latest_wfo / "top100_by_ic.parquet"
     if not combos_path.exists():
         combos_path = latest_wfo / "all_combos.parquet"
-        
+
     if not combos_path.exists():
         print(f"❌ 未找到 {combos_path}")
         return
@@ -957,11 +1066,13 @@ def main():
     T, N = first_factor.shape
 
     factors_3d = np.stack([std_factors[f].values for f in factor_names], axis=-1)
-    # 价格数据处理：先 ffill 再 bfill，确保无 NaN
-    close_prices = ohlcv["close"][etf_codes].ffill().bfill().values
-    open_prices = ohlcv["open"][etf_codes].ffill().bfill().values
-    high_prices = ohlcv["high"][etf_codes].ffill().bfill().values
-    low_prices = ohlcv["low"][etf_codes].ffill().bfill().values
+    # 价格数据处理：仅 ffill（bfill 会将未来价格回填到过去，造成 lookahead bias）
+    # ✅ FIX: 部分 ETF 在 lookback 后才上市，ffill 无法填充上市前的 NaN
+    # 用 1.0 兜底填充（上市前 ETF 的 factor score 也是 NaN，不会被选中交易，填充值不影响结果）
+    close_prices = ohlcv["close"][etf_codes].ffill().fillna(1.0).values
+    open_prices = ohlcv["open"][etf_codes].ffill().fillna(1.0).values
+    high_prices = ohlcv["high"][etf_codes].ffill().fillna(1.0).values
+    low_prices = ohlcv["low"][etf_codes].ffill().fillna(1.0).values
 
     # ✅ P1: 从配置文件读取择时参数
     # ═══════════════════════════════════════════════════════════════════════════
@@ -969,50 +1080,60 @@ def main():
     # ═══════════════════════════════════════════════════════════════════════════
     timing_config = config.get("backtest", {}).get("timing", {})
     timing_type = timing_config.get("type", "light_timing")
-    
+
     # 旧版参数 (兼容 light_timing)
     extreme_threshold = timing_config.get("extreme_threshold", -0.4)
     extreme_position = timing_config.get("extreme_position", 0.3)
-    
+
     # ✅ v3.0: 双重择时参数
     index_timing_config = timing_config.get("index_timing", {})
     individual_timing_config = timing_config.get("individual_timing", {})
-    
+
     index_timing_enabled = index_timing_config.get("enabled", False)
     individual_timing_enabled = individual_timing_config.get("enabled", False)
-    
-    if timing_type == "dual_timing" and (index_timing_enabled or individual_timing_enabled):
+
+    if timing_type == "dual_timing" and (
+        index_timing_enabled or individual_timing_enabled
+    ):
         # ✅ 使用双重择时模块
         print(f"✅ 择时模式: dual_timing (大盘 + 个股)")
-        
+
         dual_timing = DualTimingModule(
             index_ma_window=index_timing_config.get("window", 200),
             bear_position=index_timing_config.get("bear_position", 0.1),
             index_symbol=index_timing_config.get("symbol", "market_avg"),
             individual_ma_window=individual_timing_config.get("window", 20),
         )
-        
+
         # 计算所有择时信号
         timing_signals = dual_timing.compute_all_signals(ohlcv["close"])
-        
+
         # 层级 1: 大盘择时 (仓位系数)
         if index_timing_enabled:
-            timing_arr_raw = timing_signals["index_timing"].reindex(dates).fillna(1.0).values
+            timing_arr_raw = (
+                timing_signals["index_timing"].reindex(dates).fillna(1.0).values
+            )
             stats = timing_signals["stats"]
-            print(f"   大盘择时 (MA{index_timing_config.get('window', 200)}): "
-                  f"熊市 {stats['bear_days']:.0f} 天 ({stats['bear_ratio']:.1f}%), "
-                  f"熊市仓位 {index_timing_config.get('bear_position', 0.1)*100:.0f}%")
+            print(
+                f"   大盘择时 (MA{index_timing_config.get('window', 200)}): "
+                f"熊市 {stats['bear_days']:.0f} 天 ({stats['bear_ratio']:.1f}%), "
+                f"熊市仓位 {index_timing_config.get('bear_position', 0.1)*100:.0f}%"
+            )
         else:
             timing_arr_raw = np.ones(T, dtype=np.float64)
             print(f"   大盘择时: 禁用")
-        
+
         # 层级 2: 个股趋势 (状态矩阵)
         if individual_timing_enabled:
             individual_trend_df = timing_signals["individual_trend"].reindex(dates)
-            individual_trend_arr = individual_trend_df[etf_codes].values.astype(np.bool_)
+            individual_trend_arr = individual_trend_df[etf_codes].values.astype(
+                np.bool_
+            )
             trend_ok_pct = timing_signals["stats"]["avg_trend_ok_pct"]
-            print(f"   个股趋势 (MA{individual_timing_config.get('window', 20)}): "
-                  f"平均 {trend_ok_pct:.1f}% 标的趋势良好")
+            print(
+                f"   个股趋势 (MA{individual_timing_config.get('window', 20)}): "
+                f"平均 {trend_ok_pct:.1f}% 标的趋势良好"
+            )
         else:
             individual_trend_arr = None
             individual_timing_enabled = False
@@ -1021,89 +1142,71 @@ def main():
         # ✅ 兼容旧版 light_timing
         print(f"✅ 择时模式: light_timing (旧版兼容)")
         print(f"   参数: threshold={extreme_threshold}, position={extreme_position}")
-        
+
         timing_module = LightTimingModule(
             extreme_threshold=extreme_threshold,
             extreme_position=extreme_position,
         )
-        timing_arr_raw = timing_module.compute_position_ratios(ohlcv["close"]).reindex(dates).fillna(1.0).values
+        timing_arr_raw = (
+            timing_module.compute_position_ratios(ohlcv["close"])
+            .reindex(dates)
+            .fillna(1.0)
+            .values
+        )
         individual_trend_arr = None
         individual_timing_enabled = False
-    
+
     # ✅ 使用共享 helper shift_timing_signal: t 日调仓用 t-1 日的择时信号
     timing_arr = shift_timing_signal(timing_arr_raw)
 
     # ✅ v3.2: Regime gate（可选），通过缩放 timing_arr 实现统一降仓/停跑
-    gate_arr = compute_regime_gate_arr(ohlcv["close"], dates, backtest_config=config.get("backtest", {}))
-    timing_arr = (timing_arr.astype(np.float64) * gate_arr.astype(np.float64)).astype(np.float64)
+    gate_arr = compute_regime_gate_arr(
+        ohlcv["close"], dates, backtest_config=config.get("backtest", {})
+    )
+    timing_arr = (timing_arr.astype(np.float64) * gate_arr.astype(np.float64)).astype(
+        np.float64
+    )
     if bool(config.get("backtest", {}).get("regime_gate", {}).get("enabled", False)):
         s = gate_stats(gate_arr)
-        print(f"✅ Regime gate enabled: mean={s['mean']:.2f}, min={s['min']:.2f}, max={s['max']:.2f}")
-    
-    # ═══════════════════════════════════════════════════════════════════════════
-    # ✅ v3.1: 波动率体制 (Vol Regime) 计算
-    # ═══════════════════════════════════════════════════════════════════════════
-    print("✅ 计算波动率体制 (Vol Regime)...")
-    if '510300' in etf_codes:
-        hs300_close = ohlcv['close']['510300']
-    else:
-        print("⚠️ 警告: 510300 未找到，使用第一只 ETF 作为波动率代理")
-        hs300_close = ohlcv['close'].iloc[:, 0]
-        
-    hs300_rets = hs300_close.pct_change()
-    hs300_hv = hs300_rets.rolling(window=20, min_periods=20).std() * np.sqrt(252) * 100
-    hs300_hv_5d = hs300_hv.shift(5)
-    regime_vol = (hs300_hv + hs300_hv_5d) / 2
-    regime_vol = regime_vol.reindex(dates).fillna(0.0)
-    
-    vol_regime_arr = np.ones(T, dtype=np.float64)
-    vol_vals = regime_vol.values
-    
-    # < 15%: 1.0
-    # 15-25%: 1.0
-    # 25-30%: 0.7
-    mask_yellow = (vol_vals >= 25) & (vol_vals < 30)
-    vol_regime_arr[mask_yellow] = 0.7
-    # 30-40%: 0.4
-    mask_orange = (vol_vals >= 30) & (vol_vals < 40)
-    vol_regime_arr[mask_orange] = 0.4
-    # > 40%: 0.1
-    mask_red = (vol_vals >= 40)
-    vol_regime_arr[mask_red] = 0.1
-    
-    print(f"   Vol Regime 分布: "
-          f"1.0: {(vol_regime_arr==1.0).mean():.1%}, "
-          f"0.7: {(vol_regime_arr==0.7).mean():.1%}, "
-          f"0.4: {(vol_regime_arr==0.4).mean():.1%}, "
-          f"0.1: {(vol_regime_arr==0.1).mean():.1%}")
-    
+        print(
+            f"✅ Regime gate enabled: mean={s['mean']:.2f}, min={s['min']:.2f}, max={s['max']:.2f}"
+        )
+
+    # ✅ v3.2: vol_regime 已由 compute_regime_gate_arr() 统一处理并融入 timing_arr
+    # 不再单独计算 vol_regime_arr（kernel 从未读取该参数），避免维护两套相同逻辑
+    vol_regime_arr = None  # run_vec_backtest 默认填充 ones
+
     print(f"✅ 数据加载完成：{T} 天 × {N} 只 ETF × {len(factor_names)} 个因子")
-    
+
     # ✅ P2: 从配置文件读取动态降权参数 (已禁用 - 零杠杆原则)
     risk_config = config.get("backtest", {}).get("risk_control", {})
     dyn_lev_config = risk_config.get("dynamic_leverage", {})
     dynamic_leverage_enabled = dyn_lev_config.get("enabled", False)
     target_vol = dyn_lev_config.get("target_vol", 0.20)
     vol_window = dyn_lev_config.get("vol_window", 20)
-    
+
     # ✅ v1.2: 止损模式选择 ("atr" 或 "fixed")
     stop_method = risk_config.get("stop_method", "fixed")
-    use_atr_stop = (stop_method == "atr")
-    
+    use_atr_stop = stop_method == "atr"
+
     # Fixed 模式参数
     trailing_stop_pct = risk_config.get("trailing_stop_pct", 0.08)
-    
+
     # ATR 模式参数
     atr_window = risk_config.get("atr_window", 14)
     atr_multiplier = risk_config.get("atr_multiplier", 3.0)
-    
+
     # ✅ v1.3: 调仓日止损标志
     stop_on_rebalance_only = risk_config.get("stop_check_on_rebalance_only", False)
-    
+
     # ✅ v1.2: 计算 ATR 矩阵 (如果使用 ATR 模式)
     if use_atr_stop:
-        print(f"✅ 止损模式: ATR 动态 (window={atr_window}, multiplier={atr_multiplier}x)")
-        atr_arr = calculate_atr(high_prices, low_prices, close_prices, window=atr_window)
+        print(
+            f"✅ 止损模式: ATR 动态 (window={atr_window}, multiplier={atr_multiplier}x)"
+        )
+        atr_arr = calculate_atr(
+            high_prices, low_prices, close_prices, window=atr_window
+        )
         # 统计 ATR 有效率
         valid_atr_pct = np.sum(~np.isnan(atr_arr)) / atr_arr.size * 100
         avg_atr = np.nanmean(atr_arr)
@@ -1111,35 +1214,69 @@ def main():
     else:
         print(f"✅ 止损模式: Fixed 百分比 ({trailing_stop_pct*100:.1f}%)")
         atr_arr = None
-    
+
     # ✅ v1.3: 显示止损检查时机
     print(f"✅ 止损检查时机: {'仅调仓日' if stop_on_rebalance_only else '每日'}")
-    
+
     # ✅ P4: 从配置文件读取阶梯止盈参数
     profit_ladders = risk_config.get("profit_ladders", [])
-    
+
     # ✅ P5: 从配置文件读取熔断机制参数
     circuit_breaker_config = risk_config.get("circuit_breaker", {})
     circuit_breaker_day = circuit_breaker_config.get("max_drawdown_day", 0.0)
     circuit_breaker_total = circuit_breaker_config.get("max_drawdown_total", 0.0)
     circuit_recovery_days = circuit_breaker_config.get("recovery_days", 5)
-    
+
     # ✅ P6: 从配置文件读取冷却期参数
     cooldown_days = risk_config.get("cooldown_days", 0)
-    
+
     # ✅ P7: 从配置文件读取杠杆上限 (零杠杆原则)
     leverage_cap = risk_config.get("leverage_cap", 1.0)
-    
-    print(f"✅ 动态降权: enabled={dynamic_leverage_enabled}, target_vol={target_vol}, vol_window={vol_window}")
+
+    print(
+        f"✅ 动态降权: enabled={dynamic_leverage_enabled}, target_vol={target_vol}, vol_window={vol_window}"
+    )
     print(f"✅ 阶梯止盈: {len(profit_ladders)} 级")
     for i, ladder in enumerate(profit_ladders):
         if use_atr_stop:
-            print(f"   [{i+1}] 收益>{ladder.get('threshold', 0)*100:.0f}% → ATR倍数={ladder.get('new_multiplier', atr_multiplier):.1f}x")
+            print(
+                f"   [{i+1}] 收益>{ladder.get('threshold', 0)*100:.0f}% → ATR倍数={ladder.get('new_multiplier', atr_multiplier):.1f}x"
+            )
         else:
-            print(f"   [{i+1}] 收益>{ladder.get('threshold', 0)*100:.0f}% → 止损={ladder.get('new_stop', 0)*100:.1f}%")
-    print(f"✅ 熔断机制: 单日={circuit_breaker_day*100:.1f}%, 总回撤={circuit_breaker_total*100:.1f}%, 恢复={circuit_recovery_days}天")
+            print(
+                f"   [{i+1}] 收益>{ladder.get('threshold', 0)*100:.0f}% → 止损={ladder.get('new_stop', 0)*100:.1f}%"
+            )
+    print(
+        f"✅ 熔断机制: 单日={circuit_breaker_day*100:.1f}%, 总回撤={circuit_breaker_total*100:.1f}%, 恢复={circuit_recovery_days}天"
+    )
     print(f"✅ 冷却期: {cooldown_days} 天")
     print(f"✅ 杠杆上限: {leverage_cap} (零杠杆原则)")
+
+    # ✅ v4.0: 动态持仓数组
+    dps_config = parse_dynamic_pos_config(backtest_config)
+    if dps_config["enabled"]:
+        # Pre-compute dynamic pos_size for each rebalance day
+        _rebalance_schedule = generate_rebalance_schedule(T, LOOKBACK, FREQ)
+        # gate_arr has been computed and applied to timing_arr already;
+        # we need the raw gate values (before shift/multiply) for pos sizing.
+        # Recompute raw gate for position sizing lookup.
+        _raw_gate = compute_regime_gate_arr(
+            ohlcv["close"], dates, backtest_config=config.get("backtest", {})
+        )
+        dynamic_pos_size_arr = np.array(
+            [
+                resolve_pos_size_for_day(dps_config, float(_raw_gate[rb_idx]))
+                for rb_idx in _rebalance_schedule
+            ],
+            dtype=np.int64,
+        )
+        print(
+            f"✅ 动态持仓: enabled, pos_size分布: "
+            f"{dict(zip(*np.unique(dynamic_pos_size_arr, return_counts=True)))}"
+        )
+    else:
+        dynamic_pos_size_arr = None
+        print(f"✅ 动态持仓: disabled (固定 pos_size={POS_SIZE})")
 
     # 4. 批量回测
     results = []
@@ -1150,13 +1287,16 @@ def main():
         for combo in combo_strings
     ]
 
-    for combo_str, factor_indices in tqdm(
-        zip(combo_strings, combo_indices),
-        total=len(combo_strings),
-        desc="VEC 回测",
-    ):
+    # 定义单个combo回测函数（闭包捕获共享数据）
+    def _backtest_one_combo(combo_str, factor_indices):
         _, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
-            factors_3d, close_prices, open_prices, high_prices, low_prices, timing_arr, factor_indices,
+            factors_3d,
+            close_prices,
+            open_prices,
+            high_prices,
+            low_prices,
+            timing_arr,
+            factor_indices,
             # ✅ P0: 传入配置参数
             freq=FREQ,
             pos_size=POS_SIZE,
@@ -1167,7 +1307,9 @@ def main():
             target_vol=target_vol,
             vol_window=vol_window,
             dynamic_leverage_enabled=dynamic_leverage_enabled,
-            vol_regime_arr=vol_regime_arr, # ✅ v3.1: 传入波动率体制
+            vol_regime_arr=vol_regime_arr,  # ✅ v3.1: 传入波动率体制
+            # ✅ v4.0: 动态持仓
+            dynamic_pos_size_arr=dynamic_pos_size_arr,
             # ✅ v1.2: ATR 动态止损参数
             use_atr_stop=use_atr_stop,
             trailing_stop_pct=trailing_stop_pct,
@@ -1188,33 +1330,44 @@ def main():
             # ✅ P7: 杠杆上限
             leverage_cap=leverage_cap,
         )
+        return {
+            "combo": combo_str,
+            "vec_return": ret,
+            "vec_win_rate": wr,
+            "vec_profit_factor": pf,
+            "vec_trades": trades,
+            # ✅ P0: 风险指标
+            "vec_max_drawdown": risk["max_drawdown"],
+            "vec_annual_return": risk["annual_return"],
+            "vec_annual_volatility": risk["annual_volatility"],
+            "vec_sharpe_ratio": risk["sharpe_ratio"],
+            "vec_calmar_ratio": risk["calmar_ratio"],
+            "vec_aligned_return": risk["aligned_return"],
+            "vec_aligned_sharpe": risk["aligned_sharpe"],
+            # ✅ P2: 动态降权诊断
+            "vec_avg_leverage": risk["avg_leverage"],
+            # 诊断信息
+            "vec_target_value": rounding["target_value_total"],
+            "vec_filled_value": rounding["filled_value_total"],
+            "vec_target_shares": rounding["target_shares_total"],
+            "vec_filled_shares": rounding["filled_shares_total"],
+            "vec_value_gap": rounding["target_value_total"]
+            - rounding["filled_value_total"],
+            "vec_share_gap": rounding["target_shares_total"]
+            - rounding["filled_shares_total"],
+        }
 
-        results.append(
-            {
-                "combo": combo_str,
-                "vec_return": ret,
-                "vec_win_rate": wr,
-                "vec_profit_factor": pf,
-                "vec_trades": trades,
-                # ✅ P0: 风险指标
-                "vec_max_drawdown": risk["max_drawdown"],
-                "vec_annual_return": risk["annual_return"],
-                "vec_annual_volatility": risk["annual_volatility"],
-                "vec_sharpe_ratio": risk["sharpe_ratio"],
-                "vec_calmar_ratio": risk["calmar_ratio"],
-                "vec_aligned_return": risk["aligned_return"],
-                "vec_aligned_sharpe": risk["aligned_sharpe"],
-                # ✅ P2: 动态降权诊断
-                "vec_avg_leverage": risk["avg_leverage"],
-                # 诊断信息
-                "vec_target_value": rounding["target_value_total"],
-                "vec_filled_value": rounding["filled_value_total"],
-                "vec_target_shares": rounding["target_shares_total"],
-                "vec_filled_shares": rounding["filled_shares_total"],
-                "vec_value_gap": rounding["target_value_total"] - rounding["filled_value_total"],
-                "vec_share_gap": rounding["target_shares_total"] - rounding["filled_shares_total"],
-            }
+    # ✅ 并行回测（Numba JIT 释放 GIL，线程池避免序列化开销）
+    n_combos = len(combo_strings)
+    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合")
+    results = Parallel(n_jobs=-1, prefer="threads")(
+        delayed(_backtest_one_combo)(cs, fi)
+        for cs, fi in tqdm(
+            zip(combo_strings, combo_indices),
+            total=n_combos,
+            desc="VEC 回测",
         )
+    )
 
     # 5. 保存结果
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1222,7 +1375,6 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     df_results = pd.DataFrame(results)
-    df_results.to_parquet(output_dir / "vec_all_combos.parquet", index=False)
     df_results.to_parquet(output_dir / "vec_all_combos.parquet", index=False)
 
     print(f"\n✅ VEC 批量回测完成")

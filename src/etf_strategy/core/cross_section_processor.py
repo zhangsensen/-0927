@@ -65,12 +65,15 @@ class CrossSectionProcessor:
         processing_report (Dict): 处理报告
     """
 
-    # 有界因子名单
+    # 有界因子名单（必须与 precise_factor_library_v2.py 的 bounded=True 保持同步）
     BOUNDED_FACTORS = {
         "PRICE_POSITION_20D",
         "PRICE_POSITION_120D",
         "PV_CORR_20D",
         "RSI_14",
+        "ADX_14D",
+        "CMF_20D",
+        "CORRELATION_TO_MARKET_20D",
     }
 
     # 有界因子的值域
@@ -79,6 +82,9 @@ class CrossSectionProcessor:
         "PRICE_POSITION_120D": (0.0, 1.0),
         "PV_CORR_20D": (-1.0, 1.0),
         "RSI_14": (0.0, 100.0),
+        "ADX_14D": (0.0, 100.0),
+        "CMF_20D": (-1.0, 1.0),
+        "CORRELATION_TO_MARKET_20D": (-1.0, 1.0),
     }
 
     def __init__(
@@ -341,7 +347,13 @@ class CrossSectionProcessor:
         processed_factors = {}
 
         factor_items = list(factors_dict.items())
-        for factor_name, factor_data in tqdm(factor_items, desc="横截面标准化", unit="因子", ncols=80, disable=not self.verbose):
+        for factor_name, factor_data in tqdm(
+            factor_items,
+            desc="横截面标准化",
+            unit="因子",
+            ncols=80,
+            disable=not self.verbose,
+        ):
             if self.verbose:
                 print(f"\n📊 处理因子: {factor_name}")
 
@@ -437,6 +449,96 @@ class CrossSectionProcessor:
     def get_factor_bounds(self, factor_name: str) -> Optional[Tuple[float, float]]:
         """获取有界因子的值域"""
         return self.FACTOR_BOUNDS.get(factor_name)
+
+    def process_all_factors_split_pool(
+        self,
+        factors_dict: Dict[str, pd.DataFrame],
+        pool_definitions: Dict[str, list],
+    ) -> Dict[str, pd.DataFrame]:
+        """Process factors with per-pool normalization.
+
+        Instead of normalizing across all symbols, normalize WITHIN each pool.
+        This prevents QDII ETFs from always dominating unbounded factor rankings.
+
+        Parameters
+        ----------
+        factors_dict : dict
+            Same as ``process_all_factors``.
+        pool_definitions : dict
+            Mapping of pool_name -> list of symbol codes.
+            Example: {"qdii": ["513100", ...], "a_share": ["510300", ...]}
+
+        Returns
+        -------
+        dict : processed factors with per-pool normalization applied.
+        """
+        self.processing_report["timestamp"] = datetime.now().isoformat()
+
+        if self.verbose:
+            print("\n" + "=" * 70)
+            print("跨截面标准化处理 | Split-Pool Cross-Section (向量化)")
+            print("=" * 70)
+            for pool_name, symbols in pool_definitions.items():
+                print(f"  Pool '{pool_name}': {len(symbols)} symbols")
+
+        processed_factors = {}
+
+        for factor_name, factor_data in factors_dict.items():
+            if self.verbose:
+                print(f"\n📊 处理因子: {factor_name}")
+
+            if factor_name in self.BOUNDED_FACTORS:
+                processed_factors[factor_name] = factor_data
+                if self.verbose:
+                    print(f"  ✓ {factor_name:20s} [有界] 直接透传")
+                continue
+
+            # Per-pool Z-score + Winsorize, then merge back
+            result_df = factor_data.copy()
+            result_df[:] = np.nan  # Start with NaN
+
+            for pool_name, pool_symbols in pool_definitions.items():
+                # Select only columns present in factor_data
+                pool_cols = [s for s in pool_symbols if s in factor_data.columns]
+                if len(pool_cols) < 2:
+                    # Not enough symbols for cross-section normalization
+                    if pool_cols:
+                        result_df[pool_cols] = factor_data[pool_cols]
+                    continue
+
+                pool_data = factor_data[pool_cols]
+
+                # Z-score within pool (axis=1)
+                mean_cs = pool_data.mean(axis=1, skipna=True)
+                std_cs = pool_data.std(axis=1, skipna=True)
+                std_cs = std_cs.replace(0, np.nan)
+
+                standardized = pool_data.sub(mean_cs, axis=0).div(std_cs, axis=0)
+
+                # Winsorize within pool
+                lower_bound = standardized.quantile(
+                    self.lower_percentile / 100, axis=1
+                )
+                upper_bound = standardized.quantile(
+                    self.upper_percentile / 100, axis=1
+                )
+                winsorized = standardized.clip(
+                    lower=lower_bound, upper=upper_bound, axis=0
+                )
+
+                result_df[pool_cols] = winsorized
+
+            processed_factors[factor_name] = result_df
+
+            if self.verbose:
+                print(f"  ✓ {factor_name:20s} Split-pool Z-score + Winsorize")
+
+        if self.verbose:
+            print("\n" + "=" * 70)
+            print(f"✅ Split-pool 处理完成: {len(processed_factors)} 个因子")
+            print("=" * 70 + "\n")
+
+        return processed_factors
 
     def get_report(self) -> Dict:
         """获取处理报告"""
