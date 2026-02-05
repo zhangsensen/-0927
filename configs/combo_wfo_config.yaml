@@ -35,7 +35,7 @@ backtest:
       enabled: false
       window: 20
   regime_gate:
-    enabled: false
+    enabled: true
     mode: volatility
     volatility:
       proxy_symbol: '510300'
@@ -138,9 +138,6 @@ combo_wfo:
   verbose: true
 cross_section:
   bounded_factors:
-  - ADX_14D
-  - CMF_20D
-  - CORRELATION_TO_MARKET_20D
   - PRICE_POSITION_20D
   - PRICE_POSITION_120D
   - PV_CORR_20D
@@ -211,6 +208,29 @@ data:
   - '518880'
   - '588000'
   - '588200'
+# 正交因子集 v2: 15→16, 基于 factor_mining 10维质检结论
+# 变更 (2026-02-05):
+#   +UP_DOWN_VOL_RATIO_20D  (score=4.5, IC=+0.017**, 单调=1.0, roll+=72%, 正交)
+#   +GK_VOL_RATIO_20D       (score=2.5, IC=-0.017**, autocorr=0.86, 正交, roll+=31%需观察)
+#   -SPREAD_PROXY            (score=1.5, 质检未通过: 单调=0.5, roll+=33%)
+# 修改此列表即可扩缩搜索空间，无需改代码
+active_factors:
+  - ADX_14D
+  - AMIHUD_ILLIQUIDITY
+  - BREAKOUT_20D
+  - CALMAR_RATIO_60D
+  - CORRELATION_TO_MARKET_20D
+  - GK_VOL_RATIO_20D
+  - MAX_DD_60D
+  - MOM_20D
+  - PRICE_POSITION_20D
+  - PRICE_POSITION_120D
+  - PV_CORR_20D
+  - SHARPE_RATIO_20D
+  - SLOPE_20D
+  - UP_DOWN_VOL_RATIO_20D
+  - VOL_RATIO_20D
+  - VORTEX_14D
 output_root: results_combo_wfo
 run_id: COMBO_WFO_DEEP_MINING
 selection:
