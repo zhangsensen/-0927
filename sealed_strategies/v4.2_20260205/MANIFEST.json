@@ -1,0 +1,148 @@
+{
+  "version": "v4.2_20260205",
+  "seal_date": "2026-02-05T21:30:00+08:00",
+  "type": "Post-bugfix clean validation (16-factor orthogonal set)",
+  "status": "production_ready",
+
+  "strategies": [
+    {
+      "id": "strategy_1",
+      "name": "ADX_14D + AMIHUD_ILLIQUIDITY + GK_VOL_RATIO_20D + PRICE_POSITION_20D + PV_CORR_20D + SHARPE_RATIO_20D",
+      "factors": ["ADX_14D", "AMIHUD_ILLIQUIDITY", "GK_VOL_RATIO_20D", "PRICE_POSITION_20D", "PV_CORR_20D", "SHARPE_RATIO_20D"],
+      "factor_count": 6,
+      "performance": {
+        "bt_return": 134.8,
+        "bt_sharpe": 0.97,
+        "bt_max_drawdown": 18.0,
+        "bt_holdout_return": 23.0,
+        "rolling_win_rate": 61,
+        "bt_win_rate": null
+      },
+      "highlight": "Best composite: highest holdout + high Sharpe + reasonable MDD"
+    },
+    {
+      "id": "strategy_2",
+      "name": "AMIHUD_ILLIQUIDITY + CALMAR_RATIO_60D + CORRELATION_TO_MARKET_20D + MAX_DD_60D + PV_CORR_20D + SHARPE_RATIO_20D + VOL_RATIO_20D",
+      "factors": ["AMIHUD_ILLIQUIDITY", "CALMAR_RATIO_60D", "CORRELATION_TO_MARKET_20D", "MAX_DD_60D", "PV_CORR_20D", "SHARPE_RATIO_20D", "VOL_RATIO_20D"],
+      "factor_count": 7,
+      "performance": {
+        "bt_return": 156.5,
+        "bt_sharpe": 0.88,
+        "bt_max_drawdown": 22.9,
+        "bt_holdout_return": 8.2,
+        "rolling_win_rate": 67,
+        "bt_win_rate": null
+      },
+      "highlight": "Highest absolute BT return"
+    },
+    {
+      "id": "strategy_3",
+      "name": "ADX_14D + SHARPE_RATIO_20D + SLOPE_20D + VORTEX_14D",
+      "factors": ["ADX_14D", "SHARPE_RATIO_20D", "SLOPE_20D", "VORTEX_14D"],
+      "factor_count": 4,
+      "performance": {
+        "bt_return": 118.5,
+        "bt_sharpe": 0.98,
+        "bt_max_drawdown": 18.5,
+        "bt_holdout_return": 4.3,
+        "rolling_win_rate": 61,
+        "bt_win_rate": null
+      },
+      "highlight": "Simplest combo (4 factors), highest Sharpe"
+    },
+    {
+      "id": "strategy_4",
+      "name": "ADX_14D + PRICE_POSITION_120D + SLOPE_20D + VOL_RATIO_20D",
+      "factors": ["ADX_14D", "PRICE_POSITION_120D", "SLOPE_20D", "VOL_RATIO_20D"],
+      "factor_count": 4,
+      "performance": {
+        "bt_return": 73.1,
+        "bt_sharpe": 0.86,
+        "bt_max_drawdown": 10.4,
+        "bt_holdout_return": 10.4,
+        "rolling_win_rate": 61,
+        "bt_win_rate": null
+      },
+      "highlight": "Lowest MDD (10.4%), good holdout"
+    },
+    {
+      "id": "strategy_5",
+      "name": "BREAKOUT_20D + CALMAR_RATIO_60D + PV_CORR_20D + SHARPE_RATIO_20D + SLOPE_20D + VOL_RATIO_20D + VORTEX_14D",
+      "factors": ["BREAKOUT_20D", "CALMAR_RATIO_60D", "PV_CORR_20D", "SHARPE_RATIO_20D", "SLOPE_20D", "VOL_RATIO_20D", "VORTEX_14D"],
+      "factor_count": 7,
+      "performance": {
+        "bt_return": 97.2,
+        "bt_sharpe": 0.91,
+        "bt_max_drawdown": 14.5,
+        "bt_holdout_return": 10.6,
+        "rolling_win_rate": 61,
+        "bt_win_rate": null
+      },
+      "highlight": "Best risk-adjusted: low MDD + double-digit holdout"
+    }
+  ],
+
+  "validation": {
+    "pipeline": "WFO(26316) -> VEC(26316) -> BT(Top200) -> Rolling OOS -> Holdout -> Triple Validation",
+    "gold_standard_count": 55,
+    "production_count": 5,
+    "rolling_gate": "positive_rate >= 60%, worst_quarter >= -8%, calmar >= 0.8",
+    "holdout_gate": "return > 0",
+    "leakage_control": "Rolling uses train-only data; holdout remains unseen"
+  },
+
+  "backtest_config": {
+    "start_date": "2020-01-01",
+    "end_date": "2025-12-12",
+    "training_end_date": "2025-04-30",
+    "holdout_period": "2025-05-01 to 2025-12-12",
+    "period_years": 5.95,
+    "rebalance_freq": 3,
+    "position_size": 2,
+    "initial_capital": 1000000,
+    "commission": 0.0002,
+    "etf_pool_size": 43,
+    "regime_gate": true
+  },
+
+  "factor_pool": {
+    "total_library": 38,
+    "active_factors": 16,
+    "orthogonal_version": "v2",
+    "factors": [
+      "ADX_14D", "AMIHUD_ILLIQUIDITY", "BREAKOUT_20D", "CALMAR_RATIO_60D",
+      "CORRELATION_TO_MARKET_20D", "GK_VOL_RATIO_20D", "MAX_DD_60D", "MOM_20D",
+      "PRICE_POSITION_20D", "PRICE_POSITION_120D", "PV_CORR_20D",
+      "SHARPE_RATIO_20D", "SLOPE_20D", "UP_DOWN_VOL_RATIO_20D",
+      "VOL_RATIO_20D", "VORTEX_14D"
+    ],
+    "new_in_v42": ["UP_DOWN_VOL_RATIO_20D", "GK_VOL_RATIO_20D"],
+    "removed_vs_v34": ["OBV_SLOPE_10D", "SPREAD_PROXY"]
+  },
+
+  "bug_fixes_since_v34": [
+    "P0: BT engine defaults fixed (FREQ=3, POS_SIZE=2, was 8/3)",
+    "P0: Removed .shift(-1) lookahead in WFO IC calculation",
+    "P0: Removed BT double regime gate",
+    "P0: Added ADX/CMF/CORR_MKT to BOUNDED_FACTORS",
+    "P0: Regime gate added to generate_today_signal.py",
+    "P0: EXCLUDE_FACTORS restored in final_triple_validation.py",
+    "P0: IC loop off-by-one fixed",
+    "P1: Factor cache layer + WFO joblib parallelization",
+    "P2: Multiple minor fixes (deprecated fill_method, duplicate writes, etc.)"
+  ],
+
+  "artifacts": {
+    "production_candidates": "artifacts/production_candidates.parquet",
+    "all_gold_standard": "artifacts/all_gold_standard.parquet",
+    "bt_results": "artifacts/bt_results.parquet",
+    "triple_validation_report": "artifacts/FINAL_TRIPLE_VALIDATION_REPORT.md"
+  },
+
+  "metadata": {
+    "sealed_by": "Quant Team + Claude",
+    "seal_timestamp": "2026-02-05T21:30:00+08:00",
+    "python_version": "3.13+",
+    "package_manager": "UV"
+  }
+}
