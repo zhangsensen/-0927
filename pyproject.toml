@@ -71,9 +71,16 @@ scheduling = [
     "schedule>=1.2.0",
 ]
 
+# GPU加速 (RTX 5070 Ti 16GB, Blackwell sm_120, CUDA 12.8)
+# 注意: 需要手动安装 PyTorch nightly:
+#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
+gpu = [
+    "torch>=2.0.0",
+]
+
 # 所有可选依赖
 all = [
-    "quant-factor-trading[web,database,scheduling]",
+    "quant-factor-trading[web,database,scheduling,gpu]",
 ]
 
 # ============ 工具配置 ============

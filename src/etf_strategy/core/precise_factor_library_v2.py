@@ -160,6 +160,303 @@ def _rolling_calmar_batch(prices_2d: np.ndarray, window: int) -> np.ndarray:
 
 
 # ============================================================================
+# v4.2 新增 Numba 加速函数
+# ============================================================================
+
+
+@njit(cache=True)
+def _rolling_ulcer_index_numba(prices: np.ndarray, window: int) -> np.ndarray:
+    """
+    Numba加速的滑窗 Ulcer Index 计算
+
+    参数:
+        prices: 1D价格序列
+        window: 窗口长度
+
+    返回:
+        1D Ulcer Index 序列
+    """
+    n = len(prices)
+    result = np.full(n, np.nan)
+
+    for i in range(window - 1, n):
+        window_prices = prices[i - window + 1 : i + 1]
+
+        # 检查NaN
+        if np.any(np.isnan(window_prices)):
+            result[i] = np.nan
+            continue
+
+        # 计算窗口内回撤百分比的均方根
+        running_max = window_prices[0]
+        sum_sq = 0.0
+        for j in range(window):
+            if window_prices[j] > running_max:
+                running_max = window_prices[j]
+            dd_pct = (window_prices[j] / running_max - 1.0) * 100.0
+            sum_sq += dd_pct * dd_pct
+
+        result[i] = np.sqrt(sum_sq / window)
+
+    return result
+
+
+@njit(cache=True, parallel=True)
+def _rolling_ulcer_index_batch(prices_2d: np.ndarray, window: int) -> np.ndarray:
+    """批量滑窗 Ulcer Index（prange 并行逐列）"""
+    T, N = prices_2d.shape
+    result = np.empty((T, N))
+    for j in numba.prange(N):
+        result[:, j] = _rolling_ulcer_index_numba(prices_2d[:, j], window)
+    return result
+
+
+@njit(cache=True)
+def _dd_duration_numba(prices: np.ndarray, window: int) -> np.ndarray:
+    """
+    Numba加速的回撤持续天数计算
+
+    从每个时点回溯，计算连续未创新高的天数 / window
+
+    参数:
+        prices: 1D价格序列
+        window: 归一化窗口 (60)
+
+    返回:
+        1D DD_DURATION 序列 [0, 1]
+    """
+    n = len(prices)
+    result = np.full(n, np.nan)
+
+    for i in range(1, n):
+        if np.isnan(prices[i]):
+            continue
+
+        # 向前回溯找最近一次创新高的天数
+        duration = 0
+        peak = prices[i]
+        for k in range(i - 1, -1, -1):
+            if np.isnan(prices[k]):
+                break
+            if prices[k] >= peak:
+                break
+            duration += 1
+
+        result[i] = min(duration / window, 1.0)
+
+    return result
+
+
+@njit(cache=True, parallel=True)
+def _dd_duration_batch(prices_2d: np.ndarray, window: int) -> np.ndarray:
+    """批量回撤持续天数（prange 并行逐列）"""
+    T, N = prices_2d.shape
+    result = np.empty((T, N))
+    for j in numba.prange(N):
+        result[:, j] = _dd_duration_numba(prices_2d[:, j], window)
+    return result
+
+
+@njit(cache=True)
+def _permutation_entropy_numba(series: np.ndarray, window: int, m: int, delay: int) -> np.ndarray:
+    """
+    Numba加速的滑窗排列熵计算
+
+    参数:
+        series: 1D序列 (收益率)
+        window: 滑窗长度
+        m: embedding dimension (3)
+        delay: time delay (1)
+
+    返回:
+        1D 排列熵序列 [0, 1] (归一化)
+    """
+    n = len(series)
+    result = np.full(n, np.nan)
+    # m=3 时有 3!=6 种排列模式
+    n_perms = 1
+    for k in range(1, m + 1):
+        n_perms *= k
+    max_entropy = np.log(n_perms)
+
+    if max_entropy < 1e-10:
+        return result
+
+    for i in range(window - 1, n):
+        seg = series[i - window + 1 : i + 1]
+
+        if np.any(np.isnan(seg)):
+            result[i] = np.nan
+            continue
+
+        # 统计排列模式频率
+        counts = np.zeros(n_perms, dtype=np.float64)
+        n_patterns = 0
+
+        for t in range(len(seg) - (m - 1) * delay):
+            # 提取子序列并获得排列模式索引
+            # m=3: 比较 3 个元素的相对大小
+            vals = np.empty(m)
+            for k in range(m):
+                vals[k] = seg[t + k * delay]
+
+            # 将排列模式编码为整数索引 (Lehmer code)
+            idx = 0
+            for a in range(m):
+                rank = 0
+                for b in range(a + 1, m):
+                    if vals[b] < vals[a]:
+                        rank += 1
+                # 乘以阶乘
+                fac = 1
+                for f in range(1, m - a):
+                    fac *= f
+                idx += rank * fac
+
+            counts[idx] += 1.0
+            n_patterns += 1
+
+        if n_patterns == 0:
+            continue
+
+        # 计算 Shannon 熵
+        entropy = 0.0
+        for k in range(n_perms):
+            if counts[k] > 0:
+                p = counts[k] / n_patterns
+                entropy -= p * np.log(p)
+
+        # 归一化到 [0, 1]
+        result[i] = entropy / max_entropy
+
+    return result
+
+
+@njit(cache=True, parallel=True)
+def _permutation_entropy_batch(series_2d: np.ndarray, window: int, m: int, delay: int) -> np.ndarray:
+    """批量滑窗排列熵（prange 并行逐列）"""
+    T, N = series_2d.shape
+    result = np.empty((T, N))
+    for j in numba.prange(N):
+        result[:, j] = _permutation_entropy_numba(series_2d[:, j], window, m, delay)
+    return result
+
+
+@njit(cache=True)
+def _hurst_rs_numba(series: np.ndarray, window: int) -> np.ndarray:
+    """
+    Numba加速的滑窗 Hurst 指数 (R/S 分析法)
+
+    参数:
+        series: 1D收益率序列
+        window: 滑窗长度 (60)
+
+    返回:
+        1D Hurst 指数序列 [0, 1]
+    """
+    n = len(series)
+    result = np.full(n, np.nan)
+
+    # 使用 2 个子区间长度进行 R/S 估计: window/4, window/2
+    # 简化版: 直接用整个窗口的 R/S 比较理论值
+    for i in range(window - 1, n):
+        seg = series[i - window + 1 : i + 1]
+
+        if np.any(np.isnan(seg)):
+            result[i] = np.nan
+            continue
+
+        # 对 2-3 个不同子区间长度计算 R/S
+        log_n_vals = np.empty(3)
+        log_rs_vals = np.empty(3)
+        valid_count = 0
+
+        for div_idx, n_div in enumerate([2, 4, 8]):
+            sub_len = window // n_div
+            if sub_len < 4:
+                continue
+
+            rs_sum = 0.0
+            rs_count = 0
+
+            for d in range(n_div):
+                start = d * sub_len
+                end = start + sub_len
+                if end > window:
+                    break
+
+                sub = seg[start:end]
+                mean_val = 0.0
+                for k in range(sub_len):
+                    mean_val += sub[k]
+                mean_val /= sub_len
+
+                # 计算累计偏差
+                cum_dev = 0.0
+                max_dev = -1e30
+                min_dev = 1e30
+                for k in range(sub_len):
+                    cum_dev += sub[k] - mean_val
+                    if cum_dev > max_dev:
+                        max_dev = cum_dev
+                    if cum_dev < min_dev:
+                        min_dev = cum_dev
+
+                r = max_dev - min_dev
+
+                # 标准差
+                var_sum = 0.0
+                for k in range(sub_len):
+                    var_sum += (sub[k] - mean_val) ** 2
+                s = np.sqrt(var_sum / sub_len)
+
+                if s > 1e-10:
+                    rs_sum += r / s
+                    rs_count += 1
+
+            if rs_count > 0:
+                avg_rs = rs_sum / rs_count
+                if avg_rs > 0:
+                    log_n_vals[valid_count] = np.log(sub_len)
+                    log_rs_vals[valid_count] = np.log(avg_rs)
+                    valid_count += 1
+
+        if valid_count >= 2:
+            # 简单线性回归 log(R/S) = H * log(n) + c
+            sum_x = 0.0
+            sum_y = 0.0
+            sum_xy = 0.0
+            sum_xx = 0.0
+            for k in range(valid_count):
+                sum_x += log_n_vals[k]
+                sum_y += log_rs_vals[k]
+                sum_xy += log_n_vals[k] * log_rs_vals[k]
+                sum_xx += log_n_vals[k] * log_n_vals[k]
+
+            denom = valid_count * sum_xx - sum_x * sum_x
+            if abs(denom) > 1e-10:
+                h = (valid_count * sum_xy - sum_x * sum_y) / denom
+                # 截断到 [0, 1]
+                if h < 0.0:
+                    h = 0.0
+                elif h > 1.0:
+                    h = 1.0
+                result[i] = h
+
+    return result
+
+
+@njit(cache=True, parallel=True)
+def _hurst_rs_batch(series_2d: np.ndarray, window: int) -> np.ndarray:
+    """批量滑窗 Hurst 指数（prange 并行逐列）"""
+    T, N = series_2d.shape
+    result = np.empty((T, N))
+    for j in numba.prange(N):
+        result[:, j] = _hurst_rs_numba(series_2d[:, j], window)
+    return result
+
+
+# ============================================================================
 # 因子类定义
 # ============================================================================
 
@@ -177,6 +474,7 @@ class FactorMetadata:
     direction: str  # 'high_is_good', 'low_is_good', 'neutral'
     production_ready: bool = True  # 是否可用于生产策略 (默认 True)
     risk_note: str = ""  # 风险说明
+    orthogonal_v1: bool = True  # 是否在正交因子集 v1 中 (15/25)
 
 
 class PreciseFactorLibrary:
@@ -242,6 +540,7 @@ class PreciseFactorLibrary:
                 window=20,
                 bounded=False,
                 direction="low_is_good",
+                orthogonal_v1=False,  # 被 SPREAD_PROXY(0.81)+MAX_DD(0.70) 覆盖
             ),
             "MAX_DD_60D": FactorMetadata(
                 name="MAX_DD_60D",
@@ -269,6 +568,7 @@ class PreciseFactorLibrary:
                 window=60,
                 bounded=False,
                 direction="high_is_good",
+                orthogonal_v1=False,  # 已在 EXCLUDE_FACTORS，Top2 -32%
             ),
             "PV_CORR_20D": FactorMetadata(
                 name="PV_CORR_20D",
@@ -287,6 +587,7 @@ class PreciseFactorLibrary:
                 window=14,
                 bounded=True,  # [0,100]有界
                 direction="neutral",
+                orthogonal_v1=False,  # corr=0.93 VORTEX, IC 不显著
             ),
             # ============ 第1批新增：资金流因子 ============
             # ✅ OBV_SLOPE_10D: Currently used in v3.4 production strategies
@@ -303,6 +604,7 @@ class PreciseFactorLibrary:
                 direction="high_is_good",
                 production_ready=True,  # ✅ Used in v3.4 production (136.52% + 129.85% returns)
                 risk_note="42.2% NaN rate due to early-period data; ranking divergence 5% vs non-OBV combos",
+                orthogonal_v1=False,  # 42% NaN, IC 不显著, 已在 EXCLUDE_FACTORS
             ),
             # ⚠️ CMF_20D: 2025-12-01 BT审计发现 VEC/BT 差异达 35pp，不可用于生产
             "CMF_20D": FactorMetadata(
@@ -315,6 +617,7 @@ class PreciseFactorLibrary:
                 direction="high_is_good",
                 production_ready=False,  # ❌ BT审计不通过
                 risk_note="VEC/BT差异35pp，疑似计算不一致",
+                orthogonal_v1=False,  # production_ready=False, 35pp VEC/BT 漂移
             ),
             # ============ 第2批新增：风险调整动量 ============
             "SHARPE_RATIO_20D": FactorMetadata(
@@ -363,6 +666,7 @@ class PreciseFactorLibrary:
                 window=20,
                 bounded=False,
                 direction="high_is_good",
+                orthogonal_v1=False,  # ≡ MOM_20D (corr=1.000)
             ),
             "CORRELATION_TO_MARKET_20D": FactorMetadata(
                 name="CORRELATION_TO_MARKET_20D",
@@ -382,6 +686,7 @@ class PreciseFactorLibrary:
                 window=60,
                 bounded=False,
                 direction="high_is_good",
+                orthogonal_v1=False,  # corr=0.87 CALMAR, IC 不显著
             ),
             "TSMOM_120D": FactorMetadata(
                 name="TSMOM_120D",
@@ -391,6 +696,7 @@ class PreciseFactorLibrary:
                 window=120,
                 bounded=False,
                 direction="high_is_good",
+                orthogonal_v1=False,  # IC 不显著, 0/4 候选出现
             ),
             "BREAKOUT_20D": FactorMetadata(
                 name="BREAKOUT_20D",
@@ -409,6 +715,8 @@ class PreciseFactorLibrary:
                 window=20,
                 bounded=False,
                 direction="high_is_good",
+                production_ready=False,  # ❌ 无效因子: LS_Sharpe=-0.56, 评分0
+                orthogonal_v1=False,  # IC 不显著, Top2 仅+1%
             ),
             "REALIZED_VOL_20D": FactorMetadata(
                 name="REALIZED_VOL_20D",
@@ -418,6 +726,7 @@ class PreciseFactorLibrary:
                 window=20,
                 bounded=False,
                 direction="low_is_good",
+                orthogonal_v1=False,  # ≡ RET_VOL_20D (corr=1.000, 仅差 √252 缩放)
             ),
             "AMIHUD_ILLIQUIDITY": FactorMetadata(
                 name="AMIHUD_ILLIQUIDITY",
@@ -436,6 +745,150 @@ class PreciseFactorLibrary:
                 window=5,
                 bounded=False,
                 direction="low_is_good",
+            ),
+            # ============ [v4.2] 因子扩展研究：15个新因子候选 ============
+            # P0: 高阶矩 — 收益分布形状
+            "SKEW_20D": FactorMetadata(
+                name="SKEW_20D",
+                description="20日收益偏度",
+                dimension="高阶矩",
+                required_columns=["close"],
+                window=20,
+                bounded=False,
+                direction="low_is_good",
+                orthogonal_v1=False,
+            ),
+            "KURT_20D": FactorMetadata(
+                name="KURT_20D",
+                description="20日收益超额峰度",
+                dimension="高阶矩",
+                required_columns=["close"],
+                window=20,
+                bounded=False,
+                direction="low_is_good",
+                orthogonal_v1=False,
+            ),
+            # P0: 动量质量 — Frog in the Pan
+            "INFO_DISCRETE_20D": FactorMetadata(
+                name="INFO_DISCRETE_20D",
+                description="20日信息离散度（动量质量）",
+                dimension="动量质量",
+                required_columns=["close"],
+                window=20,
+                bounded=True,  # [-1, 1]
+                direction="low_is_good",
+                orthogonal_v1=False,
+            ),
+            # P1: 均值回复
+            "IBS": FactorMetadata(
+                name="IBS",
+                description="内部柱强度（单日均值回复）",
+                dimension="均值回复",
+                required_columns=["close", "high", "low"],
+                window=1,
+                bounded=True,  # [0, 1]
+                direction="high_is_good",
+                orthogonal_v1=False,
+            ),
+            "MEAN_REV_RATIO_20D": FactorMetadata(
+                name="MEAN_REV_RATIO_20D",
+                description="20日均值回复比率",
+                dimension="均值回复",
+                required_columns=["close"],
+                window=20,
+                bounded=False,
+                direction="low_is_good",
+                production_ready=False,  # ❌ 无效因子: LS_Sharpe=-0.29, 评分0
+                orthogonal_v1=False,
+            ),
+            # P1: 量能方向性
+            "UP_DOWN_VOL_RATIO_20D": FactorMetadata(
+                name="UP_DOWN_VOL_RATIO_20D",
+                description="20日上涨/下跌日成交量比率",
+                dimension="量能方向性",
+                required_columns=["close", "volume"],
+                window=20,
+                bounded=False,
+                direction="high_is_good",
+                orthogonal_v1=False,
+            ),
+            "ABNORMAL_VOLUME_20D": FactorMetadata(
+                name="ABNORMAL_VOLUME_20D",
+                description="异常成交量（5日/60日比率）",
+                dimension="量能方向性",
+                required_columns=["volume"],
+                window=60,
+                bounded=False,
+                direction="neutral",
+                production_ready=False,  # ❌ 无效因子: LS_Sharpe=-0.10, 评分0.5
+                orthogonal_v1=False,
+            ),
+            # P1: 回撤恢复
+            "ULCER_INDEX_20D": FactorMetadata(
+                name="ULCER_INDEX_20D",
+                description="20日 Ulcer Index（回撤深度×持续时间）",
+                dimension="回撤恢复",
+                required_columns=["close"],
+                window=20,
+                bounded=False,
+                direction="low_is_good",
+                orthogonal_v1=False,
+            ),
+            "DD_DURATION_60D": FactorMetadata(
+                name="DD_DURATION_60D",
+                description="60日回撤持续天数比率",
+                dimension="回撤恢复",
+                required_columns=["close"],
+                window=60,
+                bounded=True,  # [0, 1]
+                direction="low_is_good",
+                orthogonal_v1=False,
+            ),
+            # P2: 波动率微结构
+            "GK_VOL_RATIO_20D": FactorMetadata(
+                name="GK_VOL_RATIO_20D",
+                description="20日 Garman-Klass/CC 波动率比率",
+                dimension="波动率微结构",
+                required_columns=["open", "high", "low", "close"],
+                window=20,
+                bounded=False,
+                direction="neutral",
+                orthogonal_v1=False,
+            ),
+            # P2: 复杂度/熵
+            "PERM_ENTROPY_20D": FactorMetadata(
+                name="PERM_ENTROPY_20D",
+                description="20日排列熵（序列复杂度）",
+                dimension="复杂度/熵",
+                required_columns=["close"],
+                window=20,
+                bounded=True,  # [0, 1]
+                direction="low_is_good",
+                production_ready=False,  # ❌ 无效因子: LS_Sharpe=-0.19, 评分0
+                orthogonal_v1=False,
+            ),
+            # P3: Hurst 指数
+            "HURST_60D": FactorMetadata(
+                name="HURST_60D",
+                description="60日 Hurst 指数（趋势/均值回复体制）",
+                dimension="长期记忆",
+                required_columns=["close"],
+                window=60,
+                bounded=True,  # [0, 1]
+                direction="neutral",
+                production_ready=False,  # ❌ 无效因子: LS_Sharpe=-0.11, 评分0.5
+                orthogonal_v1=False,
+            ),
+            # P3: 下行偏差
+            "DOWNSIDE_DEV_20D": FactorMetadata(
+                name="DOWNSIDE_DEV_20D",
+                description="20日下行偏差（非对称风险）",
+                dimension="非对称风险",
+                required_columns=["close"],
+                window=20,
+                bounded=False,
+                direction="low_is_good",
+                orthogonal_v1=False,
             ),
         }
 
@@ -594,6 +1047,59 @@ class PreciseFactorLibrary:
         # 相对强度 = etf累计收益 - 市场累计收益
         relative_strength = etf_cum.sub(market_cum, axis=0)
         return relative_strength
+
+    # =========================================================================
+    # v4.2 批量方法：15个新因子
+    # =========================================================================
+
+    def _ulcer_index_20d_batch(self, close_df: pd.DataFrame) -> pd.DataFrame:
+        """批量计算 ULCER_INDEX_20D（Numba prange 并行逐列）"""
+        result = _rolling_ulcer_index_batch(close_df.values, window=20)
+        return pd.DataFrame(result, index=close_df.index, columns=close_df.columns)
+
+    def _dd_duration_60d_batch(self, close_df: pd.DataFrame) -> pd.DataFrame:
+        """批量计算 DD_DURATION_60D（Numba prange 并行逐列）"""
+        result = _dd_duration_batch(close_df.values, window=60)
+        return pd.DataFrame(result, index=close_df.index, columns=close_df.columns)
+
+    def _perm_entropy_20d_batch(self, returns_df: pd.DataFrame) -> pd.DataFrame:
+        """批量计算 PERM_ENTROPY_20D（Numba prange 并行逐列）"""
+        result = _permutation_entropy_batch(returns_df.values, window=20, m=3, delay=1)
+        return pd.DataFrame(result, index=returns_df.index, columns=returns_df.columns)
+
+    def _hurst_60d_batch(self, returns_df: pd.DataFrame) -> pd.DataFrame:
+        """批量计算 HURST_60D（Numba prange 并行逐列）"""
+        result = _hurst_rs_batch(returns_df.values, window=60)
+        return pd.DataFrame(result, index=returns_df.index, columns=returns_df.columns)
+
+    def _gk_vol_ratio_20d_batch(
+        self,
+        open_df: pd.DataFrame,
+        high_df: pd.DataFrame,
+        low_df: pd.DataFrame,
+        close_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """批量计算 GK_VOL_RATIO_20D（Garman-Klass / Close-to-Close 波动率比率）"""
+        eps = 1e-10
+
+        # Garman-Klass 日内方差: 0.5 * ln(H/L)^2 - (2*ln2 - 1) * ln(C/O)^2
+        log_hl = np.log(high_df / (low_df + eps))
+        log_co = np.log(close_df / (open_df + eps))
+        gk_var = 0.5 * log_hl**2 - (2 * np.log(2) - 1) * log_co**2
+
+        # Close-to-Close 方差
+        returns = close_df.pct_change()
+        cc_var = returns**2
+
+        # 20日滚动均值
+        gk_mean = gk_var.rolling(window=20, min_periods=20).mean()
+        cc_mean = cc_var.rolling(window=20, min_periods=20).mean()
+
+        # 比率 (sqrt 使单位一致)
+        ratio = np.sqrt(gk_mean.abs() / (cc_mean + eps))
+        ratio = ratio.where(cc_mean >= eps, np.nan)
+
+        return ratio
 
     # =========================================================================
     # 维度 1：趋势/动量 (2个)
@@ -1554,6 +2060,54 @@ class PreciseFactorLibrary:
         # 维度16：日内价差代理
         spread_proxy = ((high - low) / (close + eps)).rolling(window=5, min_periods=5).mean() * 100
 
+        # ========== v4.2: 15个新因子候选 ==========
+
+        # 高阶矩
+        skew_20d = returns.rolling(window=20, min_periods=20).skew()
+        kurt_20d = returns.rolling(window=20, min_periods=20).kurt()
+
+        # 动量质量 (Frog in the Pan)
+        sign_mom = np.sign(mom_20d)
+        pos_days = (returns > 0).rolling(window=20, min_periods=20).sum() / 20
+        neg_days = (returns < 0).rolling(window=20, min_periods=20).sum() / 20
+        info_discrete_20d = sign_mom * (neg_days - pos_days)
+
+        # 均值回复
+        ibs = (close - low) / (high - low + eps)
+        ibs = ibs.where((high - low).abs() > eps, 0.5)
+        ibs = ibs.clip(0, 1)
+
+        mean_rev_ratio_20d = (close / close.rolling(window=20, min_periods=20).mean() - 1) * 100
+
+        # 量能方向性
+        up_vol = volume.where(returns > 0, 0.0).rolling(window=20, min_periods=20).sum()
+        dn_vol = volume.where(returns <= 0, 0.0).rolling(window=20, min_periods=20).sum()
+        up_down_vol_ratio_20d = up_vol / (dn_vol + eps)
+        up_down_vol_ratio_20d = up_down_vol_ratio_20d.where(dn_vol >= eps, np.nan)
+
+        vol_ma5_abn = volume.rolling(window=5, min_periods=5).mean()
+        vol_ma60_abn = volume.rolling(window=60, min_periods=60).mean()
+        abnormal_volume_20d = (vol_ma5_abn / (vol_ma60_abn + eps) - 1) * 100
+        abnormal_volume_20d = abnormal_volume_20d.where(vol_ma60_abn >= eps, np.nan)
+
+        # 回撤恢复
+        ulcer_index_20d = self._ulcer_index_20d_batch(close)
+        dd_duration_60d = self._dd_duration_60d_batch(close)
+
+        # 波动率微结构
+        open_df = prices.get("open", close)  # fallback to close if no open
+        gk_vol_ratio_20d = self._gk_vol_ratio_20d_batch(open_df, high, low, close)
+
+        # 复杂度/熵
+        perm_entropy_20d = self._perm_entropy_20d_batch(returns)
+
+        # Hurst 指数
+        hurst_60d = self._hurst_60d_batch(returns)
+
+        # 下行偏差
+        neg_ret = returns.clip(upper=0)
+        downside_dev_20d = np.sqrt((neg_ret**2).rolling(window=20, min_periods=20).mean()) * np.sqrt(252) * 100
+
         # ========== 使用pd.concat构建多层索引，一次性组装 ==========
         # 每个因子是一个(T, N)的DataFrame，keys为因子名
         factor_dfs = {
@@ -1583,6 +2137,20 @@ class PreciseFactorLibrary:
             "REALIZED_VOL_20D": realized_vol_20d,
             "AMIHUD_ILLIQUIDITY": amihud_illiquidity,
             "SPREAD_PROXY": spread_proxy,
+            # v4.2: 15个新因子候选
+            "SKEW_20D": skew_20d,
+            "KURT_20D": kurt_20d,
+            "INFO_DISCRETE_20D": info_discrete_20d,
+            "IBS": ibs,
+            "MEAN_REV_RATIO_20D": mean_rev_ratio_20d,
+            "UP_DOWN_VOL_RATIO_20D": up_down_vol_ratio_20d,
+            "ABNORMAL_VOLUME_20D": abnormal_volume_20d,
+            "ULCER_INDEX_20D": ulcer_index_20d,
+            "DD_DURATION_60D": dd_duration_60d,
+            "GK_VOL_RATIO_20D": gk_vol_ratio_20d,
+            "PERM_ENTROPY_20D": perm_entropy_20d,
+            "HURST_60D": hurst_60d,
+            "DOWNSIDE_DEV_20D": downside_dev_20d,
         }
 
         # 一次性拼接：columns=(factor, symbol)

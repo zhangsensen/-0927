@@ -18,7 +18,9 @@ import backtrader as bt
 from tqdm import tqdm
 from datetime import datetime
 
+from etf_strategy.core.utils.run_meta import write_step_meta
 from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.factor_cache import FactorCache
 from etf_strategy.core.frozen_params import load_frozen_config
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
@@ -42,6 +44,7 @@ from aligned_metrics import compute_aligned_metrics
 def run_bt_backtest(
     combined_score_df,
     timing_series,
+    vol_regime_series,
     etf_codes,
     data_feeds,
     rebalance_schedule,
@@ -69,7 +72,7 @@ def run_bt_backtest(
         GenericStrategy,
         scores=combined_score_df,
         timing=timing_series,
-        vol_regime=None,  # ✅ regime gate 已融入 timing_series，不再重复应用
+        vol_regime=vol_regime_series,
         etf_codes=etf_codes,
         freq=freq,
         pos_size=pos_size,
@@ -214,6 +217,7 @@ def init_worker(
     data_feeds,
     std_factors,
     timing_series,
+    vol_regime_series,
     etf_codes,
     target_vol,
     vol_window,
@@ -230,6 +234,7 @@ def init_worker(
     _shared_data["data_feeds"] = data_feeds
     _shared_data["std_factors"] = std_factors
     _shared_data["timing_series"] = timing_series
+    _shared_data["vol_regime_series"] = vol_regime_series
     _shared_data["etf_codes"] = etf_codes
 
     # ✅ P2: 动态降权参数
@@ -267,6 +272,7 @@ def process_combo(row_data):
     data_feeds = _shared_data["data_feeds"]
     std_factors = _shared_data["std_factors"]
     timing_series = _shared_data["timing_series"]
+    vol_regime_series = _shared_data["vol_regime_series"]
     etf_codes = _shared_data["etf_codes"]
     rebalance_schedule = _shared_data["rebalance_schedule"]
     training_end_ts = _shared_data.get("training_end_date")
@@ -295,6 +301,7 @@ def process_combo(row_data):
     bt_return, margin_failures, risk_metrics, daily_returns_s = run_bt_backtest(
         combined_score_df,
         timing_series,
+        vol_regime_series,
         etf_codes,
         data_feeds,
         rebalance_schedule,
@@ -477,15 +484,14 @@ def main():
         end_date=config["data"]["end_date"],
     )
 
-    # 3. 计算因子
-    factor_lib = PreciseFactorLibrary()
-    raw_factors_df = factor_lib.compute_all_factors(ohlcv)
-
-    factor_names_list = raw_factors_df.columns.get_level_values(0).unique().tolist()
-    raw_factors = {fname: raw_factors_df[fname] for fname in factor_names_list}
-
-    processor = CrossSectionProcessor(verbose=False)
-    std_factors = processor.process_all_factors(raw_factors)
+    # 3. 计算因子 (带缓存)
+    factor_cache = FactorCache(cache_dir=Path(config["data"].get("cache_dir") or ".cache"))
+    cached = factor_cache.get_or_compute(
+        ohlcv=ohlcv,
+        config=config,
+        data_dir=loader.data_dir,
+    )
+    std_factors = cached["std_factors"]
 
     factor_names = sorted(std_factors.keys())
     first_factor = std_factors[factor_names[0]]
@@ -543,8 +549,20 @@ def main():
             f"✅ Regime gate enabled: mean={s['mean']:.2f}, min={s['min']:.2f}, max={s['max']:.2f}"
         )
 
-    # ✅ v3.2: vol_regime 已由 compute_regime_gate_arr() 统一处理并融入 timing_series
-    # 不再单独计算 vol_regime_series，避免 BT 重复应用 regime 缩仓
+    # ✅ v3.1: 波动率体制 (与 VEC 保持一致)
+    if "510300" in ohlcv["close"].columns:
+        hs300 = ohlcv["close"]["510300"]
+    else:
+        hs300 = ohlcv["close"].iloc[:, 0]
+    rets = hs300.pct_change()
+    hv = rets.rolling(window=20, min_periods=20).std() * np.sqrt(252) * 100
+    hv_5d = hv.shift(5)
+    regime_vol = (hv + hv_5d) / 2
+    exposure_s = pd.Series(1.0, index=regime_vol.index)
+    exposure_s[regime_vol >= 25] = 0.7
+    exposure_s[regime_vol >= 30] = 0.4
+    exposure_s[regime_vol >= 40] = 0.1
+    vol_regime_series = exposure_s.reindex(dates).fillna(1.0)
 
     # 准备 data feeds
     data_feeds = {}
@@ -565,9 +583,9 @@ def main():
     print(f"✅ 数据加载完成：{len(dates)} 天 × {len(etf_codes)} 只 ETF")
 
     # 4. 多进程回测
-    # Ryzen 9950X: 16核32线程，使用 24 并发 (留 8 线程给系统)
-    # 有 200GB swap 支持，峰值内存 ~150GB 可缓冲到 swap
-    num_workers = 24
+    # 自动检测: 物理核心数 (16), compute-bound BT 任务 SMT 收益 <5%
+    import os as _os
+    num_workers = int(_os.environ.get("BT_NUM_WORKERS", min((_os.cpu_count() or 8) // 2, 16)))
     print(f"🚀 启动多进程回测 (Workers: {num_workers})...")
 
     # 准备任务列表 (转换为 dict 列表以便传递)
@@ -583,6 +601,7 @@ def main():
             data_feeds,
             std_factors,
             timing_series,
+            vol_regime_series,
             etf_codes,
             target_vol,
             vol_window,
@@ -609,6 +628,8 @@ def main():
 
     df_results = pd.DataFrame(results)
     df_results.to_parquet(output_dir / "bt_results.parquet", index=False)
+
+    write_step_meta(output_dir, step="bt", inputs={"combos": str(args.combos)}, config=str(args.config or "default"), extras={"combo_count": len(df_results), "topk": args.topk})
 
     print(f"\n✅ BT 批量回测完成")
     print(f"   输出目录: {output_dir}")

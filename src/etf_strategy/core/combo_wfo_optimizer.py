@@ -23,16 +23,38 @@ from .ic_calculator_numba import compute_spearman_ic_numba, compute_multiple_ics
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 import os
+import time as _time
 
 
 def _get_optimal_n_jobs() -> int:
-    """获取最优并行核心数 (优先使用物理核心数，避免 SMT 竞争)"""
+    """获取最优并行核心数 (单CCD内8核共享L3，避免跨CCD延迟)"""
     env_jobs = os.getenv("JOBLIB_N_JOBS")
     if env_jobs:
         return int(env_jobs)
-    # 默认使用物理核心数 (16) 而非逻辑核心数 (32)
+    # 9950X 双CCD: 单CCD 8核共享32MB L3, 跨CCD有额外延迟
     cpu_count = os.cpu_count() or 8
-    return min(cpu_count // 2, 16)  # 物理核心数，最大 16
+    physical_cores = cpu_count // 2
+    return min(physical_cores, 8)
+
+
+def warmup_numba_kernels() -> None:
+    """用微型 dummy 数据预热所有 @njit 函数的 JIT 编译 (仅首次运行受益)"""
+    t0 = _time.time()
+    T, N, F = 10, 5, 3
+    dummy_factors = np.random.randn(T, N, F).astype(np.float64)
+    dummy_signal = np.random.randn(T, N).astype(np.float64)
+    dummy_returns = np.random.randn(T, N).astype(np.float64)
+    dummy_weights = np.ones(F, dtype=np.float64) / F
+    dummy_exposures = np.ones(T, dtype=np.float64)
+
+    _compute_combo_signal(dummy_factors, dummy_weights)
+    _compute_rebalanced_ic(dummy_signal, dummy_returns, 3)
+    _compute_rebalanced_return(dummy_signal, dummy_returns, dummy_exposures, 3, 2, 0.0002)
+    compute_spearman_ic_numba(dummy_signal, dummy_returns)
+    compute_multiple_ics_numba(dummy_factors.transpose(2, 0, 1), dummy_returns)
+
+    elapsed = _time.time() - t0
+    logger.info(f"Numba warmup completed in {elapsed:.1f}s")
 
 
 @dataclass
@@ -90,8 +112,10 @@ def _compute_rebalanced_ic(
     ic_buffer = np.zeros(T)
     valid_periods = 0
 
-    for start_idx in range(rebalance_freq, T - rebalance_freq, rebalance_freq):
-        end_idx = start_idx + rebalance_freq
+    for start_idx in range(rebalance_freq, T, rebalance_freq):
+        end_idx = min(start_idx + rebalance_freq, T)
+        if end_idx - start_idx < 2:  # 至少2天才有意义
+            continue
         sig = signal[start_idx - 1]
         cumret = np.ones(N)
         for t in range(start_idx, end_idx):
@@ -159,8 +183,10 @@ def _compute_rebalanced_return(
     prev_positions = np.zeros(N, dtype=np.int64)  # 0/1 表示是否持仓
 
     # 从 rebalance_freq 开始，确保有上一日信号 (T-1)
-    for start_idx in range(rebalance_freq, T - rebalance_freq, rebalance_freq):
-        end_idx = start_idx + rebalance_freq
+    for start_idx in range(rebalance_freq, T, rebalance_freq):
+        end_idx = min(start_idx + rebalance_freq, T)
+        if end_idx - start_idx < 2:  # 至少2天才有意义
+            continue
         # 使用 T-1 日信号决定 T 日开盘后的持仓
         sig = signal[start_idx - 1]
 
@@ -389,6 +415,26 @@ class ComboWFOOptimizer:
             "oos_return_list": oos_return_list,  # 新增
         }
 
+    def _test_combo_batch(
+        self,
+        combo_batch,
+        factors_data,
+        returns,
+        exposures,
+        windows,
+        pos_size: int = 2,
+        commission_rate: float = 0.0002,
+        precomputed_ics: np.ndarray | None = None,
+    ):
+        """批量处理多个 combo，减少 joblib IPC 开销"""
+        return [
+            self._test_combo_impl(
+                combo, factors_data, returns, exposures,
+                windows, pos_size, commission_rate, precomputed_ics,
+            )
+            for combo in combo_batch
+        ]
+
     def _calc_stability_score(
         self, oos_ic_list, oos_ir_list, positive_rate_list, combo_size
     ):
@@ -473,10 +519,20 @@ class ComboWFOOptimizer:
             precomputed_ics[w_idx] = compute_multiple_ics_numba(all_factor_signals, returns_is)
         logger.info(f"Pre-computed {n_windows} x {F} = {n_windows * F} factor ICs")
 
-        # 恢复 joblib 进程池并行
-        results = Parallel(n_jobs=self.config.n_jobs, verbose=0)(
-            delayed(self._test_combo_impl)(
-                combo,
+        # joblib 批处理: 减少 IPC 次数 (12,597 → ~126 批)
+        BATCH_SIZE = 100
+        combo_batches = [
+            all_combos[i : i + BATCH_SIZE]
+            for i in range(0, len(all_combos), BATCH_SIZE)
+        ]
+        logger.info(
+            f"Parallel: n_jobs={self.config.n_jobs}, "
+            f"batches={len(combo_batches)} (batch_size={BATCH_SIZE})"
+        )
+
+        results_nested = Parallel(n_jobs=self.config.n_jobs, verbose=0)(
+            delayed(self._test_combo_batch)(
+                batch,
                 factors_data,
                 returns,
                 exposures,
@@ -485,8 +541,9 @@ class ComboWFOOptimizer:
                 commission_rate,
                 precomputed_ics,
             )
-            for combo in tqdm(all_combos, desc="WFO组合评估", unit="combo", ncols=80)
+            for batch in tqdm(combo_batches, desc="WFO组合评估", unit="batch", ncols=80)
         )
+        results = [r for batch_results in results_nested for r in batch_results]
         records = []
         for res in results:
             combo_indices = res["combo_indices"]

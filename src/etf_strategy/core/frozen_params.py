@@ -260,6 +260,16 @@ _V4_0_CROSS_SECTION = FrozenCrossSectionParams(
     ),
 )
 
+# v4.1: 回退到 v3.4 的 bounded_factors (4个), 与 cross_section_processor.py 保持一致
+_V4_1_CROSS_SECTION = FrozenCrossSectionParams(
+    bounded_factors=(
+        "PRICE_POSITION_20D",
+        "PRICE_POSITION_120D",
+        "PV_CORR_20D",
+        "RSI_14",
+    ),
+)
+
 _V4_0_CONFIG = FrozenProductionConfig(
     version="v4.0",
     config_sha256=None,
@@ -289,12 +299,27 @@ _V4_0_CONFIG = FrozenProductionConfig(
     ),
 )
 
+_V4_1_CONFIG = FrozenProductionConfig(
+    version="v4.1",
+    config_sha256=None,
+    backtest=FrozenBacktestParams(),
+    timing=FrozenTimingParams(),
+    regime_gate=FrozenRegimeGateParams(enabled=True),  # v3.4 兼容: Gate ON
+    risk_control=FrozenRiskControlParams(),
+    wfo=FrozenWFOParams(),
+    scoring=FrozenScoringParams(),
+    cross_section=_V4_1_CROSS_SECTION,
+    etf_pool=FrozenETFPool(),
+    strategies=(),  # 正交化后新候选待定
+)
+
 _VERSION_REGISTRY: Dict[str, FrozenProductionConfig] = {
     "v3.4": _V3_4_CONFIG,
     "v4.0": _V4_0_CONFIG,
+    "v4.1": _V4_1_CONFIG,
 }
 
-CURRENT_VERSION = "v4.0"
+CURRENT_VERSION = "v4.1"
 
 # 操作性参数 (不校验)
 _OPERATIONAL_KEYS = frozenset(

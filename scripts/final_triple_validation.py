@@ -10,11 +10,17 @@ Performs the ultimate cross-check:
 Outputs the final "Gold Standard" strategy list.
 """
 
+import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from datetime import datetime
 import argparse
+
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from etf_strategy.core.utils.run_meta import write_step_meta
 
 # === CONFIGURATION ===
 # Input Paths (Updated for Full Space Run 2025-12-15)
@@ -41,10 +47,20 @@ GATE_HOLDOUT_MIN_RET = 0.0  # Must be profitable in holdout
 # =====================
 
 # Risk filter (per recent audit): exclude unstable/low-trust factors
+# + orthogonal_v1 cleanup: remove redundant/insignificant factors
 EXCLUDE_FACTORS = {
+    # 原有排除
     "OBV_SLOPE_10D",
     "CMF_20D",
     "VOL_RATIO_60D",
+    # 正交化 v1 新增排除
+    "REALIZED_VOL_20D",  # ≡ RET_VOL_20D (corr=1.000)
+    "RELATIVE_STRENGTH_VS_MARKET_20D",  # ≡ MOM_20D (corr=1.000)
+    "RET_VOL_20D",  # 被 SPREAD_PROXY+MAX_DD 覆盖
+    "RSI_14",  # corr=0.93 VORTEX, IC 不显著
+    "TSMOM_60D",  # corr=0.87 CALMAR, IC 不显著
+    "TSMOM_120D",  # IC 不显著, 0/4 候选出现
+    "TURNOVER_ACCEL_5_20",  # IC 不显著, Top2 仅+1%
 }
 EXCLUDE_FACTOR_PAIRS = [
     ("VOL_RATIO_20D", "VOL_RATIO_60D"),
@@ -305,6 +321,8 @@ def main():
             )
 
     print(f"Report generated: {report_path}")
+
+    write_step_meta(OUTPUT_DIR, step="final", inputs={"vec": str(args.vec), "rolling": str(args.rolling), "holdout": str(args.holdout)}, extras={"final_candidates": len(final_candidates)})
 
 
 if __name__ == "__main__":

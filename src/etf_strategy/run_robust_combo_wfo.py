@@ -28,6 +28,8 @@ from pathlib import Path
 import yaml
 import logging
 from datetime import datetime
+
+from etf_strategy.core.utils.run_meta import write_step_meta
 import numpy as np
 import pandas as pd
 
@@ -162,6 +164,22 @@ def main():
         ),
     )
 
+    # 7.5 正交因子集过滤
+    active_factors_cfg = config.get("active_factors")
+    if active_factors_cfg:
+        active_set = set(active_factors_cfg)
+        all_factor_set = set(processed_factors.keys())
+        missing = active_set - all_factor_set
+        if missing:
+            raise ValueError(f"active_factors 中指定了不存在的因子: {sorted(missing)}")
+        excluded = sorted(all_factor_set - active_set)
+        processed_factors = {
+            k: v for k, v in processed_factors.items() if k in active_set
+        }
+        all_factors = sorted(processed_factors.keys())
+        print(f"✅ 正交因子集: {len(all_factors)}/{len(all_factor_set)} 个因子已激活")
+        print(f"  已排除: {excluded}")
+
     # 8. 转换为 (T, N, F) 数组
     print(f"\n🔄 转换因子为3D数组...")
     factor_list = list(processed_factors.values())
@@ -231,6 +249,8 @@ def main():
     print(f"  完整结果: {full_output_file}")
     print(f"  Top组合: {top_output_file}")
     print(f"  组合总数: {len(results_df)}, Top-N: {len(top_combos)}")
+
+    write_step_meta(output_dir, step="wfo", config=str(config_path), extras={"combo_count": len(results_df), "top_n": len(top_combos)})
 
     # 12. 输出Top20
     print(f"\n🏆 Top20 组合 (按IC排序)")

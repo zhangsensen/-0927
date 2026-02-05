@@ -43,6 +43,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
+from etf_strategy.core.utils.run_meta import write_step_meta
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
@@ -585,6 +586,8 @@ def main() -> None:
 
     _write_report(out_dir, merged)
     print(f"Saved report: {out_dir / 'rolling_oos_report.md'}")
+
+    write_step_meta(out_dir, step="rolling", inputs={"vec_results": str(args.input)}, config=str(args.config or "default"), extras={"combo_count": len(merged), "segment": str(args.segment)})
 
 
 if __name__ == "__main__":

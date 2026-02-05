@@ -18,6 +18,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
+from etf_strategy.core.utils.run_meta import write_step_meta
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
@@ -449,6 +450,8 @@ def main():
     output_path = output_dir / "holdout_validation_results.parquet"
     merged_df.to_parquet(output_path, index=False)
     print(f"\n✅ Results saved to: {output_path}")
+
+    write_step_meta(output_dir, step="holdout", inputs={"training_results": str(args.training_results)}, config=str(args.config or "default"), extras={"combo_count": len(merged_df)})
 
     # 11. Analysis Report
     print("\n" + "=" * 80)

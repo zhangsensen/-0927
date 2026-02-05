@@ -33,9 +33,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from etf_strategy.core.combo_wfo_optimizer import ComboWFOOptimizer
+from etf_strategy.core.combo_wfo_optimizer import ComboWFOOptimizer, warmup_numba_kernels
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.factor_cache import FactorCache
 from etf_strategy.core.frozen_params import load_frozen_config
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
@@ -133,48 +134,47 @@ def main():
     logger.info(f'  - ETF数量: {len(ohlcv["close"].columns)}')
     logger.info("")
 
-    # ========== 3. 计算因子 ==========
+    # ========== 3-4. 计算因子 + 横截面标准化 (带缓存) ==========
     logger.info("=" * 100)
-    logger.info("🔧 计算精确因子库")
-    logger.info("=" * 100)
-
-    factor_lib = PreciseFactorLibrary()
-    factors_df = factor_lib.compute_all_factors(prices=ohlcv)
-    factors_dict = {name: factors_df[name] for name in factor_lib.list_factors()}
-
-    logger.info(f"✅ 因子计算完成")
-    logger.info(f"  - 因子数量: {len(factors_dict)}")
-    logger.info(f'  - 因子列表: {", ".join(sorted(factors_dict.keys())[:10])}...')
-    logger.info("")
-
-    # ========== 4. 横截面标准化 ==========
-    logger.info("=" * 100)
-    logger.info("📐 横截面标准化处理")
+    logger.info("🔧 计算精确因子库 + 横截面标准化 (带缓存)")
     logger.info("=" * 100)
 
-    processor = CrossSectionProcessor(
-        lower_percentile=config["cross_section"]["winsorize_lower"] * 100,
-        upper_percentile=config["cross_section"]["winsorize_upper"] * 100,
-        verbose=False,
+    factor_cache = FactorCache(cache_dir=Path(config["data"].get("cache_dir") or ".cache"))
+    cached = factor_cache.get_or_compute(
+        ohlcv=ohlcv,
+        config=config,
+        data_dir=loader.data_dir,
     )
+    standardized_factors = cached["std_factors"]
+    all_factor_names = cached["factor_names"]
 
-    standardized_factors = processor.process_all_factors(factors_dict)
+    # ── 正交因子集过滤 ──
+    active_factors_cfg = config.get("active_factors")
+    if active_factors_cfg:
+        active_set = set(active_factors_cfg)
+        missing = active_set - set(all_factor_names)
+        if missing:
+            raise ValueError(f"active_factors 中指定了不存在的因子: {sorted(missing)}")
+        factor_names = sorted(active_set & set(all_factor_names))
+        idx_map = {name: i for i, name in enumerate(all_factor_names)}
+        selected_idx = [idx_map[f] for f in factor_names]
+        factors_data = cached["factors_3d"][:, :, selected_idx]
+        logger.info(
+            f"✅ 正交因子集: {len(factor_names)}/{len(all_factor_names)} 个因子已激活"
+        )
+        logger.info(f"  已排除: {sorted(set(all_factor_names) - active_set)}")
+    else:
+        factor_names = all_factor_names
+        factors_data = cached["factors_3d"]
 
-    logger.info(f"✅ 标准化完成")
-    logger.info(
-        f'  - Winsorize范围: [{config["cross_section"]["winsorize_lower"]}, {config["cross_section"]["winsorize_upper"]}]'
-    )
+    logger.info(f"✅ 因子准备完成: {len(factor_names)} 个因子")
+    logger.info(f'  - 因子列表: {", ".join(factor_names[:10])}...')
     logger.info("")
 
     # ========== 5. 准备数据 ==========
     logger.info("=" * 100)
     logger.info("🔄 准备WFO输入数据")
     logger.info("=" * 100)
-
-    # 组织因子数据
-    factor_names = sorted(standardized_factors.keys())
-    factor_arrays = [standardized_factors[name].values for name in factor_names]
-    factors_data = np.stack(factor_arrays, axis=-1)
 
     # 准备收益率
     returns_df = ohlcv["close"].pct_change()
@@ -202,6 +202,9 @@ def main():
     )
     logger.info(f"  - 因子名称: {factor_names}")
     logger.info("")
+
+    # ========== 5.5 Numba 预热 ==========
+    warmup_numba_kernels()
 
     # ========== 6. 执行WFO优化 ==========
     logger.info("=" * 100)

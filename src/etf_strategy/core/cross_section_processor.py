@@ -71,9 +71,6 @@ class CrossSectionProcessor:
         "PRICE_POSITION_120D",
         "PV_CORR_20D",
         "RSI_14",
-        "ADX_14D",
-        "CMF_20D",
-        "CORRELATION_TO_MARKET_20D",
     }
 
     # 有界因子的值域

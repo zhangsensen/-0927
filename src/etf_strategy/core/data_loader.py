@@ -96,7 +96,8 @@ class DataLoader:
                 'high': pd.DataFrame,
                 'low': pd.DataFrame,
                 'open': pd.DataFrame,
-                'volume': pd.DataFrame
+                'volume': pd.DataFrame,
+                'amount': pd.DataFrame (交易额, 可选 - 仅当原始数据包含amount列时)
             }
 
         注意：
@@ -139,7 +140,7 @@ class DataLoader:
         logger.info(f"找到 {len(parquet_files)} 个 ETF 数据文件")
 
         # 3. 加载每个 ETF
-        data_dict = {col: {} for col in ["close", "high", "low", "open", "volume"]}
+        data_dict = {col: {} for col in ["close", "high", "low", "open", "volume", "amount"]}
 
         for file_path in parquet_files:
             code = file_path.stem.split("_")[0].split(".")[0]
@@ -186,9 +187,13 @@ class DataLoader:
             else:
                 raise ValueError(f"{code} 缺少vol或volume列")
 
+            # amount列（交易额）：可选，用于 Amihud 等因子精度提升
+            if "amount" in df.columns:
+                data_dict["amount"][code] = df["amount"]
+
         # 4. 转换为 DataFrame（保留所有 NaN）
         result = {}
-        for col in ["close", "high", "low", "open", "volume"]:
+        for col in ["close", "high", "low", "open", "volume", "amount"]:
             if data_dict[col]:
                 result[col] = pd.DataFrame(data_dict[col])
 

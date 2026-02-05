@@ -18,6 +18,7 @@ from numba import njit
 from joblib import Parallel, delayed
 
 from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.factor_cache import FactorCache
 from etf_strategy.core.frozen_params import load_frozen_config
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
@@ -1049,23 +1050,20 @@ def main():
         end_date=config["data"]["end_date"],
     )
 
-    # 3. 计算因子
-    factor_lib = PreciseFactorLibrary()
-    raw_factors_df = factor_lib.compute_all_factors(ohlcv)
-
-    factor_names_list = raw_factors_df.columns.get_level_values(0).unique().tolist()
-    raw_factors = {fname: raw_factors_df[fname] for fname in factor_names_list}
-
-    processor = CrossSectionProcessor(verbose=False)
-    std_factors = processor.process_all_factors(raw_factors)
-
-    factor_names = sorted(std_factors.keys())
-    first_factor = std_factors[factor_names[0]]
-    dates = first_factor.index
-    etf_codes = first_factor.columns.tolist()
-    T, N = first_factor.shape
-
-    factors_3d = np.stack([std_factors[f].values for f in factor_names], axis=-1)
+    # 3. 计算因子 (带缓存)
+    factor_cache = FactorCache(cache_dir=Path(config["data"].get("cache_dir") or ".cache"))
+    cached = factor_cache.get_or_compute(
+        ohlcv=ohlcv,
+        config=config,
+        data_dir=loader.data_dir,
+    )
+    std_factors = cached["std_factors"]
+    factor_names = cached["factor_names"]
+    dates = cached["dates"]
+    etf_codes = cached["etf_codes"]
+    T = len(dates)
+    N = len(etf_codes)
+    factors_3d = cached["factors_3d"]
     # 价格数据处理：仅 ffill（bfill 会将未来价格回填到过去，造成 lookahead bias）
     # ✅ FIX: 部分 ETF 在 lookback 后才上市，ffill 无法填充上市前的 NaN
     # 用 1.0 兜底填充（上市前 ETF 的 factor score 也是 NaN，不会被选中交易，填充值不影响结果）
@@ -1358,9 +1356,11 @@ def main():
         }
 
     # ✅ 并行回测（Numba JIT 释放 GIL，线程池避免序列化开销）
+    import os as _os
+    n_vec_jobs = int(_os.environ.get("VEC_N_JOBS", min((_os.cpu_count() or 8) // 2, 16)))
     n_combos = len(combo_strings)
-    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合")
-    results = Parallel(n_jobs=-1, prefer="threads")(
+    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs})")
+    results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
         delayed(_backtest_one_combo)(cs, fi)
         for cs, fi in tqdm(
             zip(combo_strings, combo_indices),

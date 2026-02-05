@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from etf_strategy.core.utils.run_meta import write_step_meta
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
@@ -248,6 +249,8 @@ def main():
     output_path = output_dir / "full_space_results.parquet"
     df.to_parquet(output_path, index=False)
     print(f"\nResults saved to: {output_path}")
+
+    write_step_meta(output_dir, step="vec", inputs={"combos": str(args.combos or "auto")}, config=str(args.config or "default"), extras={"combo_count": len(df)})
 
     # Top 20 Analysis
     df_sorted = df.sort_values("vec_calmar_ratio", ascending=False)

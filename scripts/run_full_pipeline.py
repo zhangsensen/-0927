@@ -18,6 +18,7 @@
 
 import sys
 import os
+import json
 import argparse
 import subprocess
 import yaml
@@ -325,6 +326,70 @@ def main():
     logger.info("✅ PIPELINE COMPLETED SUCCESSFULLY")
     logger.info(f"📄 Final Report: {final_report}")
     logger.info("=" * 80)
+
+    # --- Registry: append run to REGISTRY.jsonl ---
+    try:
+        import pandas as pd
+
+        final_parquet = final_dir / "final_candidates.parquet"
+        n_candidates = 0
+        top_combo = ""
+        top_train_ret = 0.0
+        top_holdout_ret = 0.0
+        if final_parquet.exists():
+            df_final = pd.read_parquet(final_parquet)
+            n_candidates = len(df_final)
+            if n_candidates > 0:
+                top = df_final.sort_values("composite_score", ascending=False).iloc[0]
+                top_combo = str(top["combo"])
+                top_train_ret = round(float(top.get("vec_return", 0)), 4)
+                top_holdout_ret = round(float(top.get("holdout_return", 0)), 4)
+
+        git_hash = "unknown"
+        try:
+            git_hash = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            pass
+
+        regime_mode = args.regime_gate
+        if regime_mode == "auto":
+            cfg = _load_config(effective_config_path)
+            gate_on = (cfg.get("backtest") or {}).get("regime_gate", {}).get("enabled", False)
+            regime_mode = "on" if gate_on else "off"
+
+        pipeline_id = f"pipeline_{timestamp}"
+
+        entry = {
+            "pipeline_id": pipeline_id,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "config_file": str(effective_config_path),
+            "regime_gate": regime_mode,
+            "args": {"top_n": args.top_n, "n_jobs": args.n_jobs},
+            "steps": {
+                "wfo": {"dir": wfo_dir.name},
+                "vec": {"dir": vec_dir.name},
+                "bt": {"dir": bt_dir.name},
+                "rolling": {"dir": rolling_dir.name},
+                "holdout": {"dir": holdout_dir.name},
+                "final": {"dir": final_dir.name},
+            },
+            "result_summary": {
+                "final_candidates": n_candidates,
+                "top_combo": top_combo,
+                "top_train_return": top_train_ret,
+                "top_holdout_return": top_holdout_ret,
+            },
+            "git_commit": git_hash,
+        }
+
+        registry_path = ROOT / "results" / "REGISTRY.jsonl"
+        with open(registry_path, "a") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        logger.info(f"📋 Registry updated: {registry_path}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to update registry: {e}")
 
 
 if __name__ == "__main__":
