@@ -19,10 +19,12 @@ from tqdm import tqdm
 from datetime import datetime
 
 from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.frozen_params import load_frozen_config
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule
+from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
 from etf_strategy.auditor.core.engine import GenericStrategy, PandasData
 from aligned_metrics import compute_aligned_metrics
 
@@ -315,6 +317,12 @@ def main():
     parser.add_argument("--topk", type=int, default=None, help="仅回测 VEC 收益最高的 Top-K 个组合")
     parser.add_argument("--sort-by", type=str, default="total_return", help="排序字段 (默认: total_return)")
     parser.add_argument("--combos", type=str, default=None, help="指定组合文件路径 (parquet)")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="配置文件路径 (yaml)。默认使用 configs/combo_wfo_config.yaml",
+    )
     args = parser.parse_args()
 
     print("=" * 80)
@@ -375,9 +383,17 @@ def main():
                 print(f"✅ 已筛选 Top {len(df_combos)} 组合 (Min {args.sort_by}: {df_combos[args.sort_by].min():.4f})")
 
     # 2. 加载数据
-    config_path = ROOT / "configs/combo_wfo_config.yaml"
+    config_path = Path(args.config) if args.config else (ROOT / "configs/combo_wfo_config.yaml")
+    if not config_path.is_absolute():
+        config_path = (ROOT / config_path).resolve()
+    if not config_path.exists():
+        print(f"❌ 错误: 配置文件不存在 {config_path}")
+        sys.exit(1)
     with open(config_path) as f:
         config = yaml.safe_load(f)
+
+    frozen = load_frozen_config(config, config_path=str(config_path))
+    print(f"🔒 参数冻结校验通过 (version={frozen.version})")
 
     training_end_date = config.get("data", {}).get("training_end_date")
     training_end_ts = pd.to_datetime(training_end_date) if training_end_date else None
@@ -438,6 +454,13 @@ def main():
     # ✅ 使用 shift_timing_signal 做 t-1 shift，避免未来函数
     timing_arr_shifted = shift_timing_signal(timing_series_raw.reindex(dates).fillna(1.0).values)
     timing_series = pd.Series(timing_arr_shifted, index=dates)
+
+    # ✅ v3.2: Regime gate（可选），通过缩放 timing_series 实现统一降仓/停跑
+    gate_arr = compute_regime_gate_arr(ohlcv["close"], dates, backtest_config=backtest_config)
+    timing_series = timing_series * pd.Series(gate_arr, index=dates)
+    if bool(backtest_config.get("regime_gate", {}).get("enabled", False)):
+        s = gate_stats(gate_arr)
+        print(f"✅ Regime gate enabled: mean={s['mean']:.2f}, min={s['min']:.2f}, max={s['max']:.2f}")
 
     # ✅ v3.1: 波动率体制 (与 VEC 保持一致)
     if "510300" in ohlcv["close"].columns:

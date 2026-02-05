@@ -29,10 +29,16 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from core.combo_wfo_optimizer import ComboWFOOptimizer
-from core.cross_section_processor import CrossSectionProcessor
-from core.data_loader import DataLoader
-from core.precise_factor_library_v2 import PreciseFactorLibrary
+# Ensure src/ is on sys.path when running as a script
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+
+from etf_strategy.core.combo_wfo_optimizer import ComboWFOOptimizer
+from etf_strategy.core.cross_section_processor import CrossSectionProcessor
+from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.frozen_params import load_frozen_config
+from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
+from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
 
 # 设置日志
 logging.basicConfig(
@@ -59,6 +65,9 @@ def main():
 
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
+
+    frozen = load_frozen_config(config, config_path=str(config_path))
+    logger.info(f"🔒 参数冻结校验通过 (version={frozen.version})")
 
     logger.info("✅ 配置加载成功")
     logger.info(f'  - ETF数量: {len(config["data"]["symbols"])}')
@@ -166,6 +175,22 @@ def main():
     # 准备收益率
     returns_df = ohlcv["close"].pct_change(fill_method=None)
     returns = returns_df.values
+
+    # Regime gate（作为交易规则的一部分进入 WFO：用于 OOS 收益模拟）
+    backtest_cfg = config.get("backtest", {})
+    gate_arr = compute_regime_gate_arr(
+        ohlcv["close"],
+        returns_df.index,
+        backtest_config=backtest_cfg,
+    )
+    if bool((backtest_cfg.get("regime_gate") or {}).get("enabled", False)):
+        stats = gate_stats(gate_arr)
+        logger.info(
+            "🧯 Regime gate enabled (WFO): mean=%.3f min=%.3f max=%.3f",
+            stats["mean"],
+            stats["min"],
+            stats["max"],
+        )
     
     logger.info(f"✅ 数据准备完成")
     logger.info(
@@ -202,6 +227,7 @@ def main():
         top_n=config["combo_wfo"].get("top_n", 100),
         pos_size=config["backtest"].get("pos_size", 2),
         commission_rate=config["backtest"].get("commission_rate", 0.0002),
+        exposures=gate_arr,
     )
 
     logger.info("")

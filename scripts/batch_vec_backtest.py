@@ -17,10 +17,12 @@ from datetime import datetime
 from numba import njit
 
 from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.frozen_params import load_frozen_config
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule, DualTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal, generate_rebalance_schedule, ensure_price_views
+from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
 from aligned_metrics import compute_aligned_metrics
 
 # ✅ P0: 删除硬编码 - 所有参数必须从配置文件读取
@@ -880,7 +882,10 @@ def main():
     config_path = ROOT / "configs/combo_wfo_config.yaml"
     with open(config_path) as f:
         config = yaml.safe_load(f)
-    
+
+    frozen = load_frozen_config(config, config_path=str(config_path))
+    print(f"🔒 参数冻结校验通过 (version={frozen.version})")
+
     # ✅ P0: 从配置读取回测参数（强制依赖配置，无默认值）
     backtest_config = config.get("backtest", {})
     FREQ = backtest_config.get("freq")
@@ -1027,6 +1032,13 @@ def main():
     
     # ✅ 使用共享 helper shift_timing_signal: t 日调仓用 t-1 日的择时信号
     timing_arr = shift_timing_signal(timing_arr_raw)
+
+    # ✅ v3.2: Regime gate（可选），通过缩放 timing_arr 实现统一降仓/停跑
+    gate_arr = compute_regime_gate_arr(ohlcv["close"], dates, backtest_config=config.get("backtest", {}))
+    timing_arr = (timing_arr.astype(np.float64) * gate_arr.astype(np.float64)).astype(np.float64)
+    if bool(config.get("backtest", {}).get("regime_gate", {}).get("enabled", False)):
+        s = gate_stats(gate_arr)
+        print(f"✅ Regime gate enabled: mean={s['mean']:.2f}, min={s['min']:.2f}, max={s['max']:.2f}")
     
     # ═══════════════════════════════════════════════════════════════════════════
     # ✅ v3.1: 波动率体制 (Vol Regime) 计算

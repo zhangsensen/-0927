@@ -15,6 +15,12 @@ Core modules for ETF rotation system.
 """
 
 from .combo_wfo_optimizer import ComboWFOOptimizer
+from .frozen_params import FrozenProductionConfig, load_frozen_config
 from .ic_calculator_numba import ICCalculatorNumba
 
-__all__ = ["ICCalculatorNumba", "ComboWFOOptimizer"]
+__all__ = [
+    "ICCalculatorNumba",
+    "ComboWFOOptimizer",
+    "FrozenProductionConfig",
+    "load_frozen_config",
+]
