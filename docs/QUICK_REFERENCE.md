@@ -61,7 +61,7 @@
 | `configs/combo_wfo_config.yaml` | 🔧 主配置 (43 ETF 列表) |
 | `docs/ETF_POOL_ARCHITECTURE.md` | 📖 ETF 池深度分析 |
 | `docs/BEST_STRATEGY_43ETF_UNIFIED.md` | 📖 最佳策略说明 |
-| `AGENTS.md` | 🤖 AI Agent 指南 |
+| `CLAUDE.md` | 🤖 LLM 开发指南 |
 
 ---
 

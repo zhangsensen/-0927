@@ -9,7 +9,7 @@
 > **🚨 环境要求**：本项目强制使用 UV 包管理器（2025-12-15 更新）
 > - ✅ **必须**: `uv run python <script>`
 > - ❌ **禁止**: `pip install`, `python -m venv`, `source .venv/bin/activate`
-> - 📖 **详见**: [AGENTS.md](AGENTS.md) 顶部说明
+> - 📖 **详见**: [CLAUDE.md](CLAUDE.md)
 
 ---
 
@@ -185,7 +185,7 @@ python3 script.py
 ```
 .
 ├── README.md                      # 📌 本文件（v1.1 说明）
-├── AGENTS.md                      # AI Agent 指导规则（重要！）
+├── CLAUDE.md                      # LLM 开发指南
 ├── pyproject.toml                 # 项目配置 + 依赖定义
 ├── uv.lock                        # 依赖锁文件
 │

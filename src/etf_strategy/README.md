@@ -4,7 +4,7 @@
 
 ## ⚠️ 重要提示
 
-**本模块是主力策略系统，核心逻辑已封板。请先阅读根目录 `AGENTS.md`！**
+**本模块是主力策略系统，核心逻辑已封板。请先阅读根目录 `CLAUDE.md`！**
 
 ## 📁 目录结构
 
@@ -51,6 +51,6 @@ uv run python src/etf_strategy/run_combo_wfo.py
 
 ## 📖 详细文档
 
-- 根目录 `AGENTS.md` - AI Agent 指南（必读！）
+- 根目录 `CLAUDE.md` - LLM 开发指南（必读！）
 - 根目录 `README.md` - 项目说明
 - `docs/BEST_STRATEGY_43ETF_UNIFIED.md` - 最佳策略详情

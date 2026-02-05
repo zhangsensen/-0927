@@ -954,7 +954,7 @@ sealed_strategies/v3.X_YYYYMMDD/
 |------|------|
 | `configs/combo_wfo_config.yaml` | 主配置 (参数/ETF池/风控) |
 | `configs/etf_pools.yaml` | ETF池详细定义 |
-| `AGENTS.md` | Agent编码指南 |
+| `CLAUDE.md` | LLM 开发指南 |
 | `docs/ETF_POOL_ARCHITECTURE.md` | ETF池深度分析 |
 | `docs/QUICK_REFERENCE.md` | 快速参考卡 |
 | `sealed_strategies/v3.4_20251216/` | 当前生产版本封存 |
