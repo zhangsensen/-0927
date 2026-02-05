@@ -35,7 +35,7 @@ backtest:
       enabled: false
       window: 20
   regime_gate:
-    enabled: true
+    enabled: false
     mode: volatility
     volatility:
       proxy_symbol: '510300'

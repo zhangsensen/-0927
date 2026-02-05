@@ -4,103 +4,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Professional **ETF Rotation Strategy Research Platform** (A-share + QDII markets). Three-tier engine architecture (WFO → VEC → BT) for factor combination screening through backtesting audit. Current production: v3.4 with 2 live strategies.
+**ETF Rotation Strategy Research Platform** — A-share + QDII markets (A股 + QDII). Three-tier engine (WFO → VEC → BT) screens factor combinations, backtests them, and produces sealed production strategies. Current production: v3.4 with 2 live strategies.
 
 ## Environment & Commands
 
 **Package manager: UV only.** Never use `pip install`, `python -m venv`, or bare `python <script>`.
 
 ```bash
-# Setup
 uv sync --dev                    # Install all dependencies
-uv pip install -e .              # Editable install
 
-# All scripts MUST use uv run
-uv run python <script.py>
-
-# Code quality
+# Makefile shortcuts (all functional)
+make wfo                         # WFO screening (~2min)
+make vec                         # VEC backtesting (~5min)
+make bt                          # BT audit (~30-60min)
+make pipeline                    # Full WFO → VEC → BT pipeline
+make all                         # wfo + vec + bt
 make format                      # black + isort
-make check                       # pre-commit hooks (all checks)
+make lint                        # ruff + mypy
+make check                       # pre-commit --all-files
 make test                        # pytest -v
-uv run pytest tests/test_vec_bt_alignment.py -v   # Single test file
-uv run pytest -k "test_shift"                      # Single test by name
-```
+make test-cov                    # pytest with coverage
 
-**Note:** `make lint` and `make wfo` reference stale module paths (`factor_system/`, `etf_rotation_optimized/`). Use direct `uv run` commands instead until Makefile is updated.
+# Direct commands
+uv run python src/etf_strategy/run_combo_wfo.py           # WFO screening
+uv run python scripts/batch_vec_backtest.py                # VEC backtesting
+uv run python scripts/final_triple_validation.py           # Rolling OOS + holdout validation
+uv run python scripts/batch_bt_backtest.py                 # BT ground truth audit
+uv run python scripts/run_full_pipeline.py                 # Full pipeline
+uv run python scripts/generate_today_signal.py             # Daily trading signal
+uv run python scripts/update_daily_from_qmt_bridge.py --all  # Data update from QMT
+
+# Testing
+uv run pytest tests/ -v                                    # All tests (55 cases)
+uv run pytest tests/test_vec_bt_alignment.py -v            # Single file
+uv run pytest -k "test_shift" -v                           # Single test by name
+```
 
 ## Three-Tier Engine Architecture
 
 ```
 WFO (screening)  →  VEC (precision)  →  BT (ground truth)
 ~2 min               ~5 min              ~30-60 min
-12,597 combos        Numba JIT kernel    Backtrader event-driven
+IC gate + scoring    Numba JIT kernel    Backtrader event-driven
 ```
 
-**Core workflow:**
-```bash
-# Step 1: WFO screening (IC-based gate → composite scoring)
-uv run python src/etf_strategy/run_combo_wfo.py
-
-# Step 2: VEC precision backtesting
-uv run python scripts/batch_vec_backtest.py
-
-# Step 3: Validation (rolling OOS + holdout, 3-gate AND filter)
-uv run python scripts/final_triple_validation.py
-
-# Step 4: BT ground truth audit
-uv run python scripts/batch_bt_backtest.py
-
-# Full pipeline (all stages):
-uv run python scripts/run_full_pipeline.py
-
-# Daily signal generation:
-uv run python scripts/generate_today_signal.py
-
-# Data update from QMT Bridge:
-uv run python scripts/update_daily_from_qmt_bridge.py --all
-```
-
-## Project Structure
-
-```
-src/etf_strategy/                # Core strategy module
-├── run_combo_wfo.py             # WFO entry point
-├── core/                        # Core engines (DO NOT MODIFY)
-│   ├── combo_wfo_optimizer.py   # Rolling WFO (180d IS / 60d OOS / 60d step)
-│   ├── precise_factor_library_v2.py  # 18 factors (1,616 lines)
-│   ├── backtester_vectorized.py # VEC engine (Numba)
-│   ├── cross_section_processor.py    # Z-score normalization
-│   ├── data_loader.py           # OHLCV loading + pickle cache
-│   ├── ic_calculator_numba.py   # Spearman IC (Numba)
-│   ├── frozen_params.py         # Production config freezing
-│   └── utils/rebalance.py       # CRITICAL shared utilities
-├── auditor/core/engine.py       # Backtrader BT strategy
-└── regime_gate.py               # Volatility regime detection
-
-scripts/                         # Operational scripts
-├── batch_vec_backtest.py        # VEC batch
-├── batch_bt_backtest.py         # BT batch audit
-├── final_triple_validation.py   # Rolling OOS + holdout validation
-├── run_full_pipeline.py         # Full pipeline orchestration
-├── generate_today_signal.py     # Daily trading signal
-└── generate_production_pack.py  # Sealed release generation
-
-configs/combo_wfo_config.yaml    # Main config (43 ETFs, 18 factors, all params)
-sealed_strategies/v3.4_20251216/ # Current production sealed version
-```
+- **WFO**: Screens 12,597 factor combinations (sizes 2-7) using rolling IC as gate (≥0.05 or ≥55% positive rate), then ranks by composite score: Return(40%) + Sharpe(30%) + MaxDD(30%). IC alone has only 0.0319 correlation with actual returns — never rank by IC.
+- **VEC**: Numba-accelerated vectorized backtest for top candidates. Fast but uses float shares.
+- **BT**: Backtrader event-driven simulation with integer lots and capital constraints. Production ground truth.
+- **Validation**: Rolling OOS (≥60% positive windows) + Holdout (return > 0) via `final_triple_validation.py`.
 
 ## Locked Parameters (NEVER modify)
 
-| Parameter | Value | Why |
-|-----------|-------|-----|
-| `FREQ` | 3 | Rebalance every 3 trading days |
-| `POS_SIZE` | 2 | Hold 2 positions |
-| `COMMISSION` | 0.0002 | 2bp commission rate |
-| `LOOKBACK` | 252 | 1-year lookback window |
-| ETF pool | 43 (38 A-share + 5 QDII) | QDII contributes 90%+ returns |
+| Parameter | Value | Enforced by |
+|-----------|-------|-------------|
+| `FREQ` | 3 | `frozen_params.py` |
+| `POS_SIZE` | 2 | `frozen_params.py` |
+| `COMMISSION` | 0.0002 (2bp) | `frozen_params.py` |
+| `LOOKBACK` | 252 | `frozen_params.py` |
+| ETF pool | 43 (38 A-share + 5 QDII) | `frozen_params.py` |
 
-**5 QDII ETFs are the core alpha source — NEVER remove:**
+**5 QDII ETFs are the core alpha source (~90% of returns) — NEVER remove:**
 513100 (Nasdaq), 513500 (S&P), 159920 (HSI), 513050 (China Internet), 513130 (HK Tech)
+
+`frozen_params.py` validates config against hardcoded values at WFO/VEC/BT entry points. Override with `FROZEN_PARAMS_MODE=warn` env var (for A/B testing only).
 
 ## Required Shared Utilities
 
@@ -118,31 +84,59 @@ from etf_strategy.core.utils.rebalance import (
 
 | Pitfall | Wrong | Right |
 |---------|-------|-------|
-| **Lookahead bias** | Same-day signal for same-day trade | `shift_timing_signal()` to lag 1 day |
-| **Rebalance misalignment** | VEC/BT use different rebalance days | `generate_rebalance_schedule()` |
-| **Set iteration** | `for x in my_set` (non-deterministic) | `for x in sorted(my_set)` |
-| **Float comparison** | `a == b` | `abs(a - b) < 1e-6` or 0.01% tolerance |
-| **Numba argsort** | Default unstable sort for tied values | Use `stable_topk_indices()` |
-| **Bounded factor winsorization** | Winsorize RSI, ADX, PRICE_POSITION, PV_CORR | These are bounded [0,1] or [0,100] — skip winsorization |
+| Lookahead bias | Same-day signal for same-day trade | `shift_timing_signal()` to lag 1 day |
+| Rebalance misalignment | VEC/BT use different rebalance days | `generate_rebalance_schedule()` |
+| Bounded factor winsorization | Winsorize RSI, ADX, PRICE_POSITION, CMF, CORR_MKT, PV_CORR | Skip — these are naturally bounded |
+| Regime gate duplication | Apply via both timing_arr AND vol_regime | Apply via timing_arr only |
+| IC lookahead | `.shift(-1)` on returns in WFO | IC calc handles t-1 internally |
+| Set iteration | `for x in my_set` | `for x in sorted(my_set)` |
+| Float comparison | `a == b` | `abs(a - b) < 1e-6` |
+| Numba argsort | Default unstable sort for ties | Use `stable_topk_indices()` |
+| Late-IPO ETF NaN | Crash on NaN prices beyond lookback | `.ffill().fillna(1.0)` — NaN factor scores prevent selection |
+
+## Bounded Factors (NO winsorization)
+
+Defined in `cross_section_processor.py`. These are naturally bounded and must NOT be winsorized:
+
+```
+ADX_14D [0,100], CMF_20D [-1,1], CORRELATION_TO_MARKET_20D [-1,1],
+PRICE_POSITION_20D [0,1], PRICE_POSITION_120D [0,1], PV_CORR_20D [-1,1], RSI_14 [0,100]
+```
 
 ## VEC/BT Alignment
 
-- **Target**: < 0.01pp difference between VEC and BT returns
-- **Current average**: ~0.06pp (acceptable; caused by float accumulation, not logic errors)
-- **Known exception**: OBV_SLOPE_10D has 61pp drift (acknowledged, still in production)
-- **Red flag**: > 0.20pp difference → STOP and investigate
+- **Systemic gap**: Median ~4.8pp (execution model differences — float shares vs integer lots, not logic bugs)
+- **Red flag**: > 20pp → STOP and investigate
+- **OBV_SLOPE_10D**: Previously showed 61pp drift (fixed — was normalization difference, not computation error)
 
-## Development Rules
+## Regime Gate
 
-**Allowed**: Bug fixes (no logic change), data adaptation, documentation, performance optimization (same results), data updates
-
-**Prohibited**: Modifying core factor library, changing backtest engine logic, changing locked parameters, removing QDII ETFs, deleting ARCHIVE files, creating "simplified/backup" scripts
+Volatility-based exposure scaling using 510300 (A-share proxy). Config: `regime_gate.enabled: false`.
+- Thresholds 25/30/40 pct → exposures 1.0/0.7/0.4/0.1
+- A/B tested (100k combos): Gate ON improves Sharpe for 71.5% of all strategies, reduces drawdown for 86.3%
+- **Production decision: Gate OFF** — top candidates already contain risk-adjusted factors (CORR_MKT, MAX_DD, SHARPE), self-hedging makes external gate redundant. Gate is insurance for factor combos without built-in risk factors.
 
 ## Data Source
 
-Data comes from QMT Trading Terminal via `qmt-data-bridge` SDK. Use `QMTClient` from `qmt_bridge` — never construct manual HTTP requests.
+OHLCV data from QMT Trading Terminal via `qmt-data-bridge` SDK. Use `QMTClient` from `qmt_bridge` — never construct manual HTTP requests. Data cached in pickle with mtime-based invalidation (cache key includes file modification time).
 
-## Live Strategies (v3.4)
+## Module Independence
 
-- **Strategy #1**: ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D → 136.52%
-- **Strategy #2**: + PRICE_POSITION_120D → 129.85%, lower MaxDD (13.93%)
+- `src/etf_data/` — standalone data download tool, NOT part of strategy pipeline
+- `src/etf_strategy/` — core strategy module (depends on `raw/ETF/daily/` parquet files)
+- `scripts/` — operational scripts that orchestrate the pipeline
+
+## Development Rules
+
+**Allowed**: Bug fixes (no logic change), data adaptation, documentation, performance optimization (same results)
+
+**Prohibited**: Modifying core factor library, changing backtest engine logic, changing locked parameters, removing QDII ETFs, deleting ARCHIVE files, creating "simplified/backup" scripts
+
+## Config
+
+Single source of truth: `configs/combo_wfo_config.yaml` — 43 ETFs, 25 factors, all engine parameters.
+
+## Code Style
+
+- Python 3.11+, black (88 chars), isort (black profile), ruff, mypy strict
+- pytest for testing (3 test files, 55 cases covering frozen_params, rebalance utilities, OBV alignment)
