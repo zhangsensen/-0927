@@ -48,6 +48,8 @@ class GenericStrategy(bt.Strategy):
         # ✅ v4.0: 动态持仓
         ("dynamic_pos_config", None),  # dict from parse_dynamic_pos_config()
         ("gate_series", None),  # Series of gate exposure values (for dynamic pos sizing)
+        # ✅ Exp1: T+1 Open 执行模式
+        ("use_t1_open", False),
     )
 
     def __init__(self):
@@ -77,6 +79,9 @@ class GenericStrategy(bt.Strategy):
                 self.rebalance_set = set(
                     schedule.tolist() if hasattr(schedule, "tolist") else schedule
                 )
+
+        # ✅ Exp1: T+1 Open 挂单状态
+        self._pending_targets = None  # (top_k, timing_ratio) or None
 
         # ✅ P2: 动态降权 - 环形缓冲区存储日收益率
         self.returns_buffer = []
@@ -143,6 +148,25 @@ class GenericStrategy(bt.Strategy):
         """
         self.next()
 
+    def next_open(self):
+        """✅ Exp1: T+1 Open — 在 bar t+1 的 open 时刻执行昨日的调仓决策。
+
+        With set_coo(True), orders submitted here fill at current bar's open price.
+        This gives correct T+1 Open execution: signal at close(t) → fill at open(t+1).
+        """
+        if not self.params.use_t1_open:
+            return
+        if len(self) < self.params.lookback:
+            return
+        if self._pending_targets is None:
+            return
+
+        pend_top_k, pend_timing = self._pending_targets
+        self._pending_targets = None
+        dt = self.datas[0].datetime.date(0)
+        dt_ts = pd.Timestamp(dt)
+        self.rebalance(dt_ts, precomputed=(pend_top_k, pend_timing), use_open=True)
+
     def next(self):
         if len(self) < self.params.lookback:
             return
@@ -196,24 +220,27 @@ class GenericStrategy(bt.Strategy):
 
             dt = self.datas[0].datetime.date(0)
             dt_ts = pd.Timestamp(dt)
-            self.rebalance(dt_ts)
 
-    def rebalance(self, current_date):
-        """
-        与 FullDebugStrategy._rebalance 完全对齐的调仓逻辑
-        移除 Risk-Off 资产处理，保持与 VEC 一致
-        """
+            if self.params.use_t1_open:
+                # T+1 Open: 计算目标并存储，明天执行
+                targets = self._compute_rebalance_targets(dt_ts)
+                if targets is not None:
+                    self._pending_targets = targets
+            else:
+                self.rebalance(dt_ts)
+
+    def _compute_rebalance_targets(self, current_date):
+        """计算调仓目标 (top_k + timing_ratio)，不执行交易。"""
         try:
             prev_date = self.datas[0].datetime.date(-1)
             prev_ts = pd.Timestamp(prev_date)
 
             if prev_ts not in self.params.scores.index:
-                return
+                return None
 
             row = self.params.scores.loc[prev_ts]
             valid = row[row.notna() & (row != 0)]
 
-            # ✅ v4.0: 动态持仓数
             effective_pos_size = self.params.pos_size
             dps_cfg = self.params.dynamic_pos_config
             gate_s = self.params.gate_series
@@ -224,14 +251,13 @@ class GenericStrategy(bt.Strategy):
                     effective_pos_size = resolve_pos_size_for_day(dps_cfg, gate_val)
 
             if len(valid) < effective_pos_size:
-                return
+                return None
 
             top_k = (
                 valid.sort_values(ascending=False)
                 .head(effective_pos_size)
                 .index.tolist()
             )
-            target_set = set(top_k)
 
             timing_ratio = 1.0
             if (
@@ -239,32 +265,54 @@ class GenericStrategy(bt.Strategy):
                 and current_date in self.params.timing.index
             ):
                 timing_ratio = self.params.timing.loc[current_date]
-            # ✅ 应用波动率体制缩放，与 VEC 一致
             if (
                 self.params.vol_regime is not None
                 and current_date in self.params.vol_regime.index
             ):
                 timing_ratio = timing_ratio * self.params.vol_regime.loc[current_date]
-
-            # ✅ P2: 应用动态 leverage
             timing_ratio = timing_ratio * self.current_leverage
+
+            return (top_k, timing_ratio)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def rebalance(self, current_date, precomputed=None, use_open=False):
+        """
+        与 FullDebugStrategy._rebalance 完全对齐的调仓逻辑。
+
+        Args:
+            precomputed: (top_k, timing_ratio) 预计算目标，用于 T+1 Open 执行
+            use_open: True 时使用 data.open[0] 定价，False 使用 data.close[0]
+        """
+        try:
+            if precomputed is not None:
+                top_k, timing_ratio = precomputed
+            else:
+                result = self._compute_rebalance_targets(current_date)
+                if result is None:
+                    return
+                top_k, timing_ratio = result
+
+            target_set = set(top_k)
 
             # 获取当前持仓（使用阴影持仓，避免状态滞后）
             current_holdings = dict(self.shadow_holdings)
 
-            # 第一步：卖出非目标持仓（在 COC 模式下立即释放现金）
+            # 第一步：卖出非目标持仓
             kept_holdings_value = 0.0
             cash_after_sells = self.broker.getcash()
             for ticker, shares in list(current_holdings.items()):
                 data = self.etf_map[ticker]
-                price = data.close[0]
+                price = data.open[0] if use_open else data.close[0]
+                if np.isnan(price) or price <= 0:
+                    price = data.close[0]
                 if ticker not in target_set and shares > 0:
-                    # 卖出会立即释放现金（COC 模式）
                     self.close(data)
                     cash_after_sells += shares * price * (1 - COMMISSION_RATE)
                     self.shadow_holdings[ticker] = 0.0
                 else:
-                    # 保留的持仓价值
                     kept_holdings_value += shares * price
 
             # 计算目标敞口（与 VEC 完全一致）
@@ -278,10 +326,8 @@ class GenericStrategy(bt.Strategy):
             new_count = len(new_tickers)
 
             if new_count > 0:
-                # 计算每个新仓位的目标金额
                 target_pos_value = available_for_new / new_count / (1 + COMMISSION_RATE)
 
-                # 批量提交买入订单（避免逐个提交导致的现金不足）
                 buy_orders = []
                 total_cost = 0.0
 
@@ -289,26 +335,24 @@ class GenericStrategy(bt.Strategy):
                     data = self.etf_map.get(ticker)
                     if data is None:
                         continue
-                    price = data.close[0]
+                    price = data.open[0] if use_open else data.close[0]
+                    if np.isnan(price) or price <= 0:
+                        price = data.close[0]
                     if np.isnan(price) or price <= 0:
                         continue
 
-                    # 计算目标股数和成本
                     shares = target_pos_value / price
                     cost = shares * price * (1 + COMMISSION_RATE)
                     buy_orders.append((ticker, data, shares, cost))
                     total_cost += cost
 
-                # 检查总成本是否超过可用资金（使用极小安全边际，避免浮点误差）
                 if total_cost <= available_for_new * self.safety_margin:
-                    # 资金充足，提交所有订单
                     for ticker, data, shares, cost in buy_orders:
                         self.buy(data, size=shares)
                         self.shadow_holdings[ticker] = (
                             self.shadow_holdings.get(ticker, 0.0) + shares
                         )
                 else:
-                    # 资金不足，按比例缩减
                     scale_factor = (available_for_new * self.safety_margin) / total_cost
                     for ticker, data, shares, cost in buy_orders:
                         adjusted_shares = shares * scale_factor

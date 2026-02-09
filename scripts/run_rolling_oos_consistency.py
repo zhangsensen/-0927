@@ -50,6 +50,7 @@ from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal
 from etf_strategy.regime_gate import compute_regime_gate_arr
+from etf_strategy.core.execution_model import load_execution_model
 
 from batch_vec_backtest import run_vec_backtest
 
@@ -224,6 +225,7 @@ def process_combo(
     freq: int,
     pos_size: int,
     write_segments: bool,
+    use_t1_open: bool = False,
 ):
     factors_in_combo = [f.strip() for f in combo_str.split(" + ")]
     try:
@@ -258,6 +260,7 @@ def process_combo(
             lookback=int(backtest_config["lookback"]),
             trailing_stop_pct=0.0,
             stop_on_rebalance_only=True,
+            use_t1_open=use_t1_open,
         )
 
         seg_rows = []
@@ -433,6 +436,10 @@ def main() -> None:
 
     backtest_config = config.get("backtest", {})
 
+    # Execution model
+    exec_model = load_execution_model(config)
+    USE_T1_OPEN = exec_model.is_t1_open
+
     # Fixed trading rule
     FREQ = 3
     POS_SIZE = 2
@@ -550,6 +557,7 @@ def main() -> None:
             FREQ,
             POS_SIZE,
             bool(args.write_segments),
+            use_t1_open=USE_T1_OPEN,
         )
         for combo_str in combos
     )

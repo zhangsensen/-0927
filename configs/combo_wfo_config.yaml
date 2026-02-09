@@ -1,4 +1,5 @@
 backtest:
+  execution_model: "T1_OPEN"  # "COC" (cheat-on-close) or "T1_OPEN" (signal T-1 → fill at open T+1)
   commission_rate: 0.0002
   initial_capital: 1000000
   lookback_window: 252
