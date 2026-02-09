@@ -225,6 +225,7 @@ def main():
             "complexity_penalty_lambda"
         ],
         rebalance_frequencies=config["combo_wfo"]["rebalance_frequencies"],
+        use_t1_open=config.get("backtest", {}).get("execution_model", "COC") == "T1_OPEN",
     )
 
     top_combos_list, all_combos_df = optimizer.run_combo_search(

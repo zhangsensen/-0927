@@ -192,6 +192,8 @@ def vec_backtest_kernel(
     cooldown_days,  # 单标的止损后冷却天数
     # ✅ P7: 杠杆上限（零杠杆原则）
     leverage_cap,  # 最大仓位上限 (1.0 = 无杠杆)
+    # ✅ Exp1: T+1 Open 执行模式
+    use_t1_open,  # True = 用明天的 open 成交, False = 当天 close (COC)
 ):
     T, N, _ = factors_3d.shape
 
@@ -210,6 +212,13 @@ def vec_backtest_kernel(
 
     # ✅ P6: 冷却期追踪 (每个标的的剩余冷却天数)
     cooldown_remaining = np.zeros(N, dtype=np.int64)
+
+    # ✅ Exp1: T+1 Open pending 状态
+    pend_active = False
+    pend_target = np.zeros(N, dtype=np.bool_)
+    pend_buy = np.empty(pos_size, dtype=np.int64)
+    pend_buy_cnt = 0
+    pend_timing = 1.0
 
     wins = 0
     losses = 0
@@ -387,6 +396,80 @@ def vec_backtest_kernel(
         for n in range(N):
             if cooldown_remaining[n] > 0:
                 cooldown_remaining[n] -= 1
+
+        # ✅ Exp1: 执行 T+1 Open 挂单 (在当天开盘执行昨日的调仓决策)
+        if use_t1_open and pend_active:
+            # --- 卖出不在目标集的持仓 (at open[t]) ---
+            for n in range(N):
+                if holdings[n] > 0.0 and not pend_target[n]:
+                    price = open_prices[t, n]
+                    if np.isnan(price) or price <= 0.0:
+                        price = close_prices[t - 1, n]
+                    proceeds = holdings[n] * price * (1.0 - commission_rate)
+                    cash += proceeds
+                    pnl = (price - entry_prices[n]) / entry_prices[n]
+                    if pnl > 0.0:
+                        wins += 1
+                        total_win_pnl += pnl
+                    else:
+                        losses += 1
+                        total_loss_pnl += abs(pnl)
+                    holdings[n] = -1.0
+                    entry_prices[n] = 0.0
+                    high_water_marks[n] = 0.0
+                    current_stop_pcts[n] = trailing_stop_pct
+                    current_atr_mults[n] = atr_multiplier
+
+            # --- 计算开盘时组合价值 (用 open[t] 估值) ---
+            pend_val = cash
+            pend_kept = 0.0
+            for n in range(N):
+                if holdings[n] > 0.0:
+                    p = open_prices[t, n]
+                    if np.isnan(p):
+                        p = close_prices[t - 1, n]
+                    v = holdings[n] * p
+                    pend_val += v
+                    pend_kept += v
+
+            # --- 买入新标的 (at open[t]) ---
+            pend_new_cnt = 0
+            for k in range(pend_buy_cnt):
+                idx = pend_buy[k]
+                if holdings[idx] < 0.0 and cooldown_remaining[idx] == 0:
+                    new_targets[pend_new_cnt] = idx
+                    pend_new_cnt += 1
+
+            if pend_new_cnt > 0:
+                target_exposure = pend_val * pend_timing
+                available_for_new = target_exposure - pend_kept
+                if available_for_new < 0.0:
+                    available_for_new = 0.0
+                tpv = available_for_new / pend_new_cnt / (1.0 + commission_rate)
+                if tpv > 0.0:
+                    for k in range(pend_new_cnt):
+                        idx = new_targets[k]
+                        price = open_prices[t, idx]
+                        if np.isnan(price) or price <= 0.0:
+                            continue
+                        shares = tpv / price
+                        cost = shares * price * (1.0 + commission_rate)
+                        target_value_total += tpv
+                        target_shares_total += shares
+                        if cash >= cost - 1e-5 and cost > 0.0:
+                            actual_cost = cost if cost <= cash else cash
+                            actual_shares = actual_cost / (
+                                price * (1.0 + commission_rate)
+                            )
+                            filled_shares_total += actual_shares
+                            filled_value_total += actual_shares * price
+                            cash -= actual_cost
+                            holdings[idx] = shares
+                            entry_prices[idx] = price
+                            high_water_marks[idx] = price
+                            current_stop_pcts[idx] = trailing_stop_pct
+                            current_atr_mults[idx] = atr_multiplier
+            pend_active = False
 
         # ✅ P3/P4: 动态止损 + 阶梯止盈
         # 🔧 修复1: HWM 滞后更新 - 止损检查使用昨日 HWM，避免前视偏差
@@ -570,80 +653,87 @@ def vec_backtest_kernel(
             if circuit_breaker_active:
                 timing_ratio = 0.0  # 清空目标仓位
 
-            for n in range(N):
-                if holdings[n] > 0.0 and not target_set[n]:
-                    # ✅ 使用收盘价（与 BT Cheat-On-Close 模式对齐）
-                    price = close_prices[t, n]
-                    proceeds = holdings[n] * price * (1.0 - commission_rate)
-                    cash += proceeds
+            # ✅ Exp1: T+1 Open → 存储 pending, 下一天用 open 成交
+            if use_t1_open:
+                for n in range(N):
+                    pend_target[n] = target_set[n]
+                for k in range(buy_count):
+                    pend_buy[k] = buy_order[k]
+                pend_buy_cnt = buy_count
+                pend_timing = timing_ratio
+                pend_active = True
+            else:
+                # --- COC 模式: 当天 close 即时成交 (原逻辑) ---
+                for n in range(N):
+                    if holdings[n] > 0.0 and not target_set[n]:
+                        price = close_prices[t, n]
+                        proceeds = holdings[n] * price * (1.0 - commission_rate)
+                        cash += proceeds
 
-                    pnl = (price - entry_prices[n]) / entry_prices[n]
-                    if pnl > 0.0:
-                        wins += 1
-                        total_win_pnl += pnl
-                    else:
-                        losses += 1
-                        total_loss_pnl += abs(pnl)
+                        pnl = (price - entry_prices[n]) / entry_prices[n]
+                        if pnl > 0.0:
+                            wins += 1
+                            total_win_pnl += pnl
+                        else:
+                            losses += 1
+                            total_loss_pnl += abs(pnl)
 
-                    holdings[n] = -1.0
-                    entry_prices[n] = 0.0
-                    high_water_marks[n] = 0.0
-                    current_stop_pcts[n] = trailing_stop_pct  # 重置止损率
-                    current_atr_mults[n] = atr_multiplier  # 重置 ATR 倍数
+                        holdings[n] = -1.0
+                        entry_prices[n] = 0.0
+                        high_water_marks[n] = 0.0
+                        current_stop_pcts[n] = trailing_stop_pct
+                        current_atr_mults[n] = atr_multiplier
 
-            current_value = cash
-            kept_value = 0.0
-            for n in range(N):
-                if holdings[n] > 0.0:
-                    # ✅ 使用收盘价
-                    val = holdings[n] * close_prices[t, n]
-                    current_value += val
-                    kept_value += val
+                current_value = cash
+                kept_value = 0.0
+                for n in range(N):
+                    if holdings[n] > 0.0:
+                        val = holdings[n] * close_prices[t, n]
+                        current_value += val
+                        kept_value += val
 
-            new_count = 0
-            for k in range(buy_count):
-                idx = buy_order[k]
-                # ✅ P6: 检查冷却期 - 如果在冷却期内则跳过
-                if holdings[idx] < 0.0 and cooldown_remaining[idx] == 0:
-                    new_targets[new_count] = idx
-                    new_count += 1
+                new_count = 0
+                for k in range(buy_count):
+                    idx = buy_order[k]
+                    if holdings[idx] < 0.0 and cooldown_remaining[idx] == 0:
+                        new_targets[new_count] = idx
+                        new_count += 1
 
-            if new_count > 0:
-                target_exposure = current_value * timing_ratio
-                available_for_new = target_exposure - kept_value
-                if available_for_new < 0.0:
-                    available_for_new = 0.0
+                if new_count > 0:
+                    target_exposure = current_value * timing_ratio
+                    available_for_new = target_exposure - kept_value
+                    if available_for_new < 0.0:
+                        available_for_new = 0.0
 
-                target_pos_value = (
-                    available_for_new / new_count / (1.0 + commission_rate)
-                )
+                    target_pos_value = (
+                        available_for_new / new_count / (1.0 + commission_rate)
+                    )
 
-                if target_pos_value > 0.0:
-                    for k in range(new_count):
-                        idx = new_targets[k]
-                        # ✅ 使用收盘价（与 BT Cheat-On-Close 模式对齐）
-                        price = close_prices[t, idx]
-                        if np.isnan(price) or price <= 0.0:
-                            continue
+                    if target_pos_value > 0.0:
+                        for k in range(new_count):
+                            idx = new_targets[k]
+                            price = close_prices[t, idx]
+                            if np.isnan(price) or price <= 0.0:
+                                continue
 
-                        shares = target_pos_value / price
-                        cost = shares * price * (1.0 + commission_rate)
-                        target_value_total += target_pos_value
-                        target_shares_total += shares
+                            shares = target_pos_value / price
+                            cost = shares * price * (1.0 + commission_rate)
+                            target_value_total += target_pos_value
+                            target_shares_total += shares
 
-                        if cash >= cost - 1e-5 and cost > 0.0:
-                            actual_cost = cost if cost <= cash else cash
-                            actual_shares = actual_cost / (
-                                price * (1.0 + commission_rate)
-                            )
-                            filled_shares_total += actual_shares
-                            filled_value_total += actual_shares * price
-                            cash -= actual_cost
-                            holdings[idx] = shares
-                            entry_prices[idx] = price
-                            high_water_marks[idx] = price
-                            current_stop_pcts[idx] = trailing_stop_pct  # 初始化止损率
-                            current_atr_mults[idx] = atr_multiplier  # 初始化 ATR 倍数
+                            if cash >= cost - 1e-5 and cost > 0.0:
+                                actual_cost = cost if cost <= cash else cash
+                                actual_shares = actual_cost / (
+                                    price * (1.0 + commission_rate)
+                                )
+                                filled_shares_total += actual_shares
+                                filled_value_total += actual_shares * price
+                                cash -= actual_cost
+                                holdings[idx] = shares
+                                entry_prices[idx] = price
+                                high_water_marks[idx] = price
+                                current_stop_pcts[idx] = trailing_stop_pct
+                                current_atr_mults[idx] = atr_multiplier
     final_value = cash
     for n in range(N):
         if holdings[n] > 0.0:
@@ -791,17 +881,13 @@ def run_vec_backtest(
     cooldown_days=0,
     # ✅ P7: 杠杆上限
     leverage_cap=1.0,
+    # ✅ Exp1: T+1 Open 执行模式
+    use_t1_open=False,
 ):
     """运行单个策略的 VEC 回测，并返回舍入诊断信息和风险指标。
 
     ✅ P0 修正: 所有策略参数从外部传入，不使用默认值
-    ✅ v1.2: 支持 ATR 动态止损 (use_atr_stop=True) 和固定百分比止损 (use_atr_stop=False)
-    ✅ v1.3: 支持仅在调仓日检查止损 (stop_on_rebalance_only=True)，与 8 天调仓节奏一致
-    ✅ v3.0: 双重择时 - 个股趋势过滤 (individual_trend_arr)
-    ✅ P4: 阶梯止盈 - profit_ladders 格式: [{threshold, new_stop, new_multiplier}, ...]
-    ✅ P5: 熔断机制 - 单日/总回撤超限暂停交易
-    ✅ P6: 冷却期 - 止损后 N 天内不买入该标的
-    ✅ P7: 零杠杆原则 - leverage_cap 限制最大仓位
+    ✅ Exp1: use_t1_open=True 时用 open[t+1] 成交 (T+1 Open 执行模式)
     """
     factor_indices_arr = np.array(factor_indices, dtype=np.int64)
     T, N = factors_3d.shape[:2]
@@ -941,6 +1027,8 @@ def run_vec_backtest(
         cooldown_days,
         # ✅ P7: 杠杆上限
         leverage_cap,
+        # ✅ Exp1: T+1 Open
+        use_t1_open,
     )
 
     rounding_diag = {
@@ -1008,6 +1096,12 @@ def main():
     print(f"   LOOKBACK: {LOOKBACK}")
     print(f"   INITIAL_CAPITAL: {INITIAL_CAPITAL:,.0f}")
     print(f"   COMMISSION_RATE: {COMMISSION_RATE*10000:.1f} bp")
+
+    # ✅ Exp1: 执行模型
+    from etf_strategy.core.execution_model import load_execution_model
+    exec_model = load_execution_model(config)
+    USE_T1_OPEN = exec_model.is_t1_open
+    print(f"   EXECUTION_MODEL: {exec_model.mode}")
 
     # 1. 加载 WFO 结果
     # ✅ 优先查找 run_* 目录 (True WFO)，排除 symlink
@@ -1327,6 +1421,8 @@ def main():
             cooldown_days=cooldown_days,
             # ✅ P7: 杠杆上限
             leverage_cap=leverage_cap,
+            # ✅ Exp1: T+1 Open
+            use_t1_open=USE_T1_OPEN,
         )
         return {
             "combo": combo_str,

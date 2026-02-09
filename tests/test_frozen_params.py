@@ -294,7 +294,7 @@ class TestVersionRegistry:
         assert v34.backtest == v41.backtest
         assert v34.etf_pool == v41.etf_pool
         assert v34.wfo == v41.wfo
-        # cross_section differs: v4.1 has 5 bounded_factors vs v3.4's 4
-        assert v34.cross_section != v41.cross_section
-        assert len(v41.cross_section.bounded_factors) == 5
+        # v4.1 rolled back to v3.4's bounded_factors (both have 4)
+        assert v34.cross_section == v41.cross_section
+        assert len(v41.cross_section.bounded_factors) == 4
         assert len(v34.cross_section.bounded_factors) == 4

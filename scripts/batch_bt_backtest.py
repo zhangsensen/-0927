@@ -56,12 +56,17 @@ def run_bt_backtest(
     vol_window=20,
     dynamic_leverage_enabled=True,
     collect_daily_returns: bool = False,
+    use_t1_open: bool = False,
 ):
     """单组合 BT 回测引擎，返回收益和风险指标"""
-    cerebro = bt.Cerebro()
+    cerebro = bt.Cerebro(cheat_on_open=use_t1_open)
     cerebro.broker.setcash(initial_capital)
     cerebro.broker.setcommission(commission=commission_rate, leverage=1.0)
-    cerebro.broker.set_coc(True)
+    if use_t1_open:
+        cerebro.broker.set_coc(False)
+        cerebro.broker.set_coo(True)  # Cheat-On-Open: 订单在提交当 bar 的 open 成交
+    else:
+        cerebro.broker.set_coc(True)
     cerebro.broker.set_checksubmit(False)
 
     for ticker, df in data_feeds.items():
@@ -81,6 +86,8 @@ def run_bt_backtest(
         target_vol=target_vol,
         vol_window=vol_window,
         dynamic_leverage_enabled=dynamic_leverage_enabled,
+        # ✅ Exp1: T+1 Open
+        use_t1_open=use_t1_open,
     )
 
     # ✅ P0: 添加 Analyzers 计算风险指标
@@ -228,9 +235,11 @@ def init_worker(
     commission_rate,
     lookback,
     training_end_ts,
+    use_t1_open,
 ):
     """子进程初始化：保存共享数据"""
     global _shared_data
+    _shared_data["use_t1_open"] = use_t1_open
     _shared_data["data_feeds"] = data_feeds
     _shared_data["std_factors"] = std_factors
     _shared_data["timing_series"] = timing_series
@@ -287,6 +296,7 @@ def process_combo(row_data):
     pos_size = _shared_data["pos_size"]
     initial_capital = _shared_data["initial_capital"]
     commission_rate = _shared_data["commission_rate"]
+    use_t1_open = _shared_data.get("use_t1_open", False)
 
     factors = [f.strip() for f in combo_str.split(" + ")]
     dates = timing_series.index
@@ -313,6 +323,7 @@ def process_combo(row_data):
         vol_window,
         dynamic_leverage_enabled,
         collect_daily_returns=True,
+        use_t1_open=use_t1_open,
     )
 
     bt_train_return = np.nan
@@ -471,6 +482,12 @@ def main():
     frozen = load_frozen_config(config, config_path=str(config_path))
     print(f"🔒 参数冻结校验通过 (version={frozen.version})")
 
+    # ✅ Exp1: 执行模型
+    from etf_strategy.core.execution_model import load_execution_model
+    exec_model = load_execution_model(config)
+    USE_T1_OPEN = exec_model.is_t1_open
+    print(f"   EXECUTION_MODEL: {exec_model.mode}")
+
     training_end_date = config.get("data", {}).get("training_end_date")
     training_end_ts = pd.to_datetime(training_end_date) if training_end_date else None
 
@@ -612,6 +629,7 @@ def main():
             commission_rate,
             lookback,
             training_end_ts,
+            USE_T1_OPEN,
         ),
     ) as pool:
         # 使用 imap_unordered 获取实时进度

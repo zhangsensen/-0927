@@ -111,10 +111,10 @@ PRICE_POSITION_20D [0,1], PRICE_POSITION_120D [0,1], PV_CORR_20D [-1,1], RSI_14 
 
 ## Regime Gate
 
-Volatility-based exposure scaling using 510300 (A-share proxy). Config: `regime_gate.enabled: false`.
+Volatility-based exposure scaling using 510300 (A-share proxy). Config: `regime_gate.enabled: true`.
 - Thresholds 25/30/40 pct → exposures 1.0/0.7/0.4/0.1
 - A/B tested (100k combos): Gate ON improves Sharpe for 71.5% of all strategies, reduces drawdown for 86.3%
-- **Production decision: Gate OFF** — top candidates already contain risk-adjusted factors (CORR_MKT, MAX_DD, SHARPE), self-hedging makes external gate redundant. Gate is insurance for factor combos without built-in risk factors.
+- **Production decision: Gate ON** — frozen_params v3.4/v4.0/v4.1 all define `enabled=True`; all 55 validated candidates and BT audits produced under Gate ON.
 
 ## Data Source
 

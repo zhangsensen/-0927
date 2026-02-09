@@ -21,6 +21,7 @@ from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal
 from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
+from etf_strategy.core.execution_model import load_execution_model
 
 # Import the backtest engine
 from batch_vec_backtest import run_vec_backtest
@@ -89,6 +90,10 @@ def main():
 
     backtest_config = config.get("backtest", {})
 
+    # Execution model
+    exec_model = load_execution_model(config)
+    USE_T1_OPEN = exec_model.is_t1_open
+
     # Override with optimized parameters
     FREQ = 3
     POS_SIZE = 2
@@ -96,6 +101,7 @@ def main():
     EXTREME_POSITION = 0.1
 
     print(f"Configuration:")
+    print(f"  Execution Model: {exec_model.mode}")
     print(f"  FREQ: {FREQ}")
     print(f"  POS_SIZE: {POS_SIZE}")
     print(f"  Timing Threshold: {EXTREME_THRESHOLD}")
@@ -219,6 +225,7 @@ def main():
                 lookback=backtest_config["lookback"],
                 trailing_stop_pct=0.0,
                 stop_on_rebalance_only=True,
+                use_t1_open=USE_T1_OPEN,
             )
 
             results.append(

@@ -160,6 +160,7 @@ def _compute_rebalanced_return(
     rebalance_freq: int,
     top_k: int,
     commission_rate: float = 0.0002,
+    use_t1_open: bool = False,
 ) -> float:
     """
     计算滚动 OOS 收益率 (模拟真实交易)
@@ -228,8 +229,10 @@ def _compute_rebalanced_return(
 
         # 计算持仓收益（组合层面逐日累乘，更贴近 VEC/BT：
         # daily_port_ret = exposure[t] * mean(ret_topk[t])，现金部分收益视为 0）
+        # ✅ Exp1: T1_OPEN 跳过首日 (成交在 start_idx 的 open, 首个完整日收益从 start_idx+1 开始)
         cum_port = 1.0
-        for t in range(start_idx, end_idx):
+        ret_start = start_idx + 1 if use_t1_open else start_idx
+        for t in range(ret_start, end_idx):
             exp_t = exposures[t]
             if np.isnan(exp_t):
                 exp_t = 1.0
@@ -269,7 +272,9 @@ class ComboWFOOptimizer:
         fdr_alpha: float = 0.05,
         complexity_penalty_lambda: float = 0.01,
         rebalance_frequencies: List[int] = None,
+        use_t1_open: bool = False,
     ):
+        self.use_t1_open = use_t1_open
         self.config = ComboWFOConfig(
             combo_sizes=combo_sizes,
             is_period=is_period,
@@ -355,7 +360,8 @@ class ComboWFOOptimizer:
 
         # 计算 OOS 收益 (使用最佳 freq)
         oos_return = _compute_rebalanced_return(
-            signal_oos, returns_oos, exposures_oos, best_freq, pos_size, commission_rate
+            signal_oos, returns_oos, exposures_oos, best_freq, pos_size, commission_rate,
+            self.use_t1_open,
         )
 
         return best_score, best_ir, best_pos_rate, best_freq, oos_return
