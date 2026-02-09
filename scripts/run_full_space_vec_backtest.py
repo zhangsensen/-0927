@@ -198,7 +198,10 @@ def main():
         combos_path = Path(args.combos)
         if not combos_path.exists():
             raise FileNotFoundError(f"指定的 combos 文件不存在: {combos_path}")
-        combos_df = pd.read_parquet(combos_path)
+        if combos_path.suffix == ".csv":
+            combos_df = pd.read_csv(combos_path)
+        else:
+            combos_df = pd.read_parquet(combos_path)
         print(f"✅ 使用指定组合文件: {combos_path} ({len(combos_df)} 个组合)")
     else:
         combos_path = _load_latest_wfo_combos()
@@ -252,6 +255,8 @@ def main():
                         "aligned_sharpe", risk.get("sharpe_ratio", 0.0)
                     ),
                     "vec_trades": trades,
+                    "vec_turnover_ann": risk.get("turnover_ann", 0.0),
+                    "vec_cost_drag": risk.get("cost_drag", 0.0),
                 }
             )
         except Exception as e:

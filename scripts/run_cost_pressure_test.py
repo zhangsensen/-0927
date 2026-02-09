@@ -76,9 +76,24 @@ def run_tier(tier: str, base_config_path: Path, args) -> dict:
 
     # 2. VEC
     wfo_dir = _get_latest("run_*")
-    combos_file = wfo_dir / "top100_by_ic.parquet"
-    if not combos_file.exists():
-        combos_file = wfo_dir / "all_combos.parquet"
+    # Search for combos file in multiple formats
+    combos_file = None
+    for name in [
+        "top100_by_ic.parquet",
+        "all_combos.parquet",
+        "wfo_combos_converted.parquet",
+        "full_combo_results.csv",
+    ]:
+        candidate = wfo_dir / name
+        if candidate.exists():
+            combos_file = candidate
+            break
+    if combos_file is None:
+        raise FileNotFoundError(
+            f"No combos file found in {wfo_dir}. "
+            f"Looked for: top100_by_ic.parquet, all_combos.parquet, "
+            f"wfo_combos_converted.parquet, full_combo_results.csv"
+        )
     _run(
         [
             "uv", "run", "python", "scripts/run_full_space_vec_backtest.py",

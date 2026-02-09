@@ -187,12 +187,17 @@ def main():
 
     # 3. Apply Holdout Gate
     # holdout_return > 0
-    mask_holdout = passed_rolling["holdout_return"] > GATE_HOLDOUT_MIN_RET
-
-    final_candidates = passed_rolling[mask_holdout].copy()
-    print(
-        f"Passed Holdout Gate (Return > {GATE_HOLDOUT_MIN_RET}): {len(final_candidates)} / {len(passed_rolling)} ({len(final_candidates)/len(passed_rolling):.2%})"
-    )
+    if len(passed_rolling) == 0:
+        final_candidates = passed_rolling.copy()
+        print(
+            f"Passed Holdout Gate (Return > {GATE_HOLDOUT_MIN_RET}): 0 / 0 (no candidates from rolling gate)"
+        )
+    else:
+        mask_holdout = passed_rolling["holdout_return"] > GATE_HOLDOUT_MIN_RET
+        final_candidates = passed_rolling[mask_holdout].copy()
+        print(
+            f"Passed Holdout Gate (Return > {GATE_HOLDOUT_MIN_RET}): {len(final_candidates)} / {len(passed_rolling)} ({len(final_candidates)/len(passed_rolling):.2%})"
+        )
 
     # 4. Ranking (Composite Score)
     # We want strategies that are good EVERYWHERE.
