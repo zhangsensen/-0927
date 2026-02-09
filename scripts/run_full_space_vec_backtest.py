@@ -22,6 +22,8 @@ from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal
 from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
 from etf_strategy.core.execution_model import load_execution_model
+from etf_strategy.core.cost_model import load_cost_model, build_cost_array
+from etf_strategy.core.frozen_params import FrozenETFPool
 
 # Import the backtest engine
 from batch_vec_backtest import run_vec_backtest
@@ -156,6 +158,14 @@ def main():
         [std_factors[f].values for f in factor_names_list], axis=-1
     )
 
+    # ✅ Exp2: 构建 per-ETF 成本数组
+    cost_model = load_cost_model(config)
+    qdii_set = set(FrozenETFPool().qdii_codes)
+    cost_arr = build_cost_array(cost_model, etf_codes, qdii_set)
+    tier = cost_model.active_tier
+    print(f"  Cost Model: mode={cost_model.mode}, tier={cost_model.tier}, "
+          f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
+
     close_prices = ohlcv["close"][etf_codes].ffill().bfill().values
     open_prices = ohlcv["open"][etf_codes].ffill().bfill().values
     high_prices = ohlcv["high"][etf_codes].ffill().bfill().values
@@ -188,7 +198,10 @@ def main():
         combos_path = Path(args.combos)
         if not combos_path.exists():
             raise FileNotFoundError(f"指定的 combos 文件不存在: {combos_path}")
-        combos_df = pd.read_parquet(combos_path)
+        if combos_path.suffix == ".csv":
+            combos_df = pd.read_csv(combos_path)
+        else:
+            combos_df = pd.read_parquet(combos_path)
         print(f"✅ 使用指定组合文件: {combos_path} ({len(combos_df)} 个组合)")
     else:
         combos_path = _load_latest_wfo_combos()
@@ -223,6 +236,7 @@ def main():
                 initial_capital=float(backtest_config["initial_capital"]),
                 commission_rate=float(backtest_config["commission_rate"]),
                 lookback=backtest_config["lookback"],
+                cost_arr=cost_arr,
                 trailing_stop_pct=0.0,
                 stop_on_rebalance_only=True,
                 use_t1_open=USE_T1_OPEN,
@@ -241,6 +255,8 @@ def main():
                         "aligned_sharpe", risk.get("sharpe_ratio", 0.0)
                     ),
                     "vec_trades": trades,
+                    "vec_turnover_ann": risk.get("turnover_ann", 0.0),
+                    "vec_cost_drag": risk.get("cost_drag", 0.0),
                 }
             )
         except Exception as e:

@@ -1,6 +1,19 @@
 backtest:
   execution_model: "T1_OPEN"  # "COC" (cheat-on-close) or "T1_OPEN" (signal T-1 → fill at open T+1)
   commission_rate: 0.0002
+  cost_model:
+    mode: "SPLIT_MARKET"
+    tier: "med"
+    tiers:
+      low:
+        a_share: 0.0010
+        qdii: 0.0030
+      med:
+        a_share: 0.0020
+        qdii: 0.0050
+      high:
+        a_share: 0.0030
+        qdii: 0.0080
   initial_capital: 1000000
   lookback_window: 252
   freq: 3

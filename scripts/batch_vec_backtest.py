@@ -166,7 +166,7 @@ def vec_backtest_kernel(
     # ✅ v4.0: 动态持仓数组 (len=rebalance_schedule), -1表示使用固定pos_size
     dynamic_pos_size_arr,
     initial_capital,
-    commission_rate,
+    cost_arr,  # ✅ Exp2: per-ETF cost array (N,), replaces scalar commission_rate
     # ✅ P2: 动态降权参数 (已禁用 - 零杠杆原则)
     target_vol,
     vol_window,
@@ -219,6 +219,10 @@ def vec_backtest_kernel(
     pend_buy = np.empty(pos_size, dtype=np.int64)
     pend_buy_cnt = 0
     pend_timing = 1.0
+
+    # ✅ Exp2: turnover & commission tracking
+    total_commission_paid = 0.0
+    total_turnover_value = 0.0
 
     wins = 0
     losses = 0
@@ -405,7 +409,10 @@ def vec_backtest_kernel(
                     price = open_prices[t, n]
                     if np.isnan(price) or price <= 0.0:
                         price = close_prices[t - 1, n]
-                    proceeds = holdings[n] * price * (1.0 - commission_rate)
+                    sell_cost = holdings[n] * price * cost_arr[n]
+                    total_commission_paid += sell_cost
+                    total_turnover_value += holdings[n] * price
+                    proceeds = holdings[n] * price - sell_cost
                     cash += proceeds
                     pnl = (price - entry_prices[n]) / entry_prices[n]
                     if pnl > 0.0:
@@ -445,22 +452,26 @@ def vec_backtest_kernel(
                 available_for_new = target_exposure - pend_kept
                 if available_for_new < 0.0:
                     available_for_new = 0.0
-                tpv = available_for_new / pend_new_cnt / (1.0 + commission_rate)
+                tpv = available_for_new / pend_new_cnt
                 if tpv > 0.0:
                     for k in range(pend_new_cnt):
                         idx = new_targets[k]
                         price = open_prices[t, idx]
                         if np.isnan(price) or price <= 0.0:
                             continue
-                        shares = tpv / price
-                        cost = shares * price * (1.0 + commission_rate)
+                        effective_tpv = tpv / (1.0 + cost_arr[idx])
+                        shares = effective_tpv / price
+                        cost = shares * price * (1.0 + cost_arr[idx])
                         target_value_total += tpv
                         target_shares_total += shares
                         if cash >= cost - 1e-5 and cost > 0.0:
                             actual_cost = cost if cost <= cash else cash
                             actual_shares = actual_cost / (
-                                price * (1.0 + commission_rate)
+                                price * (1.0 + cost_arr[idx])
                             )
+                            buy_comm = actual_shares * price * cost_arr[idx]
+                            total_commission_paid += buy_comm
+                            total_turnover_value += actual_shares * price
                             filled_shares_total += actual_shares
                             filled_value_total += actual_shares * price
                             cash -= actual_cost
@@ -552,7 +563,10 @@ def vec_backtest_kernel(
                         if not np.isnan(curr_low):
                             exec_price = max(exec_price, curr_low)
 
-                        proceeds = holdings[n] * exec_price * (1.0 - commission_rate)
+                        sl_cost = holdings[n] * exec_price * cost_arr[n]
+                        total_commission_paid += sl_cost
+                        total_turnover_value += holdings[n] * exec_price
+                        proceeds = holdings[n] * exec_price - sl_cost
                         cash += proceeds
 
                         pnl = (exec_price - entry_prices[n]) / entry_prices[n]
@@ -667,7 +681,10 @@ def vec_backtest_kernel(
                 for n in range(N):
                     if holdings[n] > 0.0 and not target_set[n]:
                         price = close_prices[t, n]
-                        proceeds = holdings[n] * price * (1.0 - commission_rate)
+                        coc_sell_cost = holdings[n] * price * cost_arr[n]
+                        total_commission_paid += coc_sell_cost
+                        total_turnover_value += holdings[n] * price
+                        proceeds = holdings[n] * price - coc_sell_cost
                         cash += proceeds
 
                         pnl = (price - entry_prices[n]) / entry_prices[n]
@@ -705,9 +722,7 @@ def vec_backtest_kernel(
                     if available_for_new < 0.0:
                         available_for_new = 0.0
 
-                    target_pos_value = (
-                        available_for_new / new_count / (1.0 + commission_rate)
-                    )
+                    target_pos_value = available_for_new / new_count
 
                     if target_pos_value > 0.0:
                         for k in range(new_count):
@@ -716,16 +731,20 @@ def vec_backtest_kernel(
                             if np.isnan(price) or price <= 0.0:
                                 continue
 
-                            shares = target_pos_value / price
-                            cost = shares * price * (1.0 + commission_rate)
+                            effective_tpv_coc = target_pos_value / (1.0 + cost_arr[idx])
+                            shares = effective_tpv_coc / price
+                            cost = shares * price * (1.0 + cost_arr[idx])
                             target_value_total += target_pos_value
                             target_shares_total += shares
 
                             if cash >= cost - 1e-5 and cost > 0.0:
                                 actual_cost = cost if cost <= cash else cash
                                 actual_shares = actual_cost / (
-                                    price * (1.0 + commission_rate)
+                                    price * (1.0 + cost_arr[idx])
                                 )
+                                coc_buy_comm = actual_shares * price * cost_arr[idx]
+                                total_commission_paid += coc_buy_comm
+                                total_turnover_value += actual_shares * price
                                 filled_shares_total += actual_shares
                                 filled_value_total += actual_shares * price
                                 cash -= actual_cost
@@ -839,6 +858,9 @@ def vec_backtest_kernel(
         calmar_ratio,
         # ✅ P2: 动态降权诊断
         avg_leverage,
+        # ✅ Exp2: 成本追踪
+        total_commission_paid,
+        total_turnover_value,
     )
 
 
@@ -854,8 +876,9 @@ def run_vec_backtest(
     freq,
     pos_size,
     initial_capital,
-    commission_rate,
+    commission_rate,  # ✅ Exp2: legacy scalar, used when cost_arr not provided
     lookback,
+    cost_arr=None,  # ✅ Exp2: per-ETF cost array (N,), overrides commission_rate
     target_vol=0.20,
     vol_window=20,
     dynamic_leverage_enabled=False,
@@ -891,6 +914,13 @@ def run_vec_backtest(
     """
     factor_indices_arr = np.array(factor_indices, dtype=np.int64)
     T, N = factors_3d.shape[:2]
+
+    # ✅ Exp2: 构建 per-ETF 成本数组
+    if cost_arr is not None:
+        cost_arr_internal = np.asarray(cost_arr, dtype=np.float64)
+    else:
+        # Legacy fallback: uniform commission_rate for all ETFs
+        cost_arr_internal = np.full(N, commission_rate, dtype=np.float64)
 
     # ✅ v1.2: 处理 ATR 矩阵
     if atr_arr is None:
@@ -988,6 +1018,9 @@ def run_vec_backtest(
         calmar_ratio,
         # ✅ P2: 动态降权诊断
         avg_leverage,
+        # ✅ Exp2: 成本追踪
+        total_commission_paid,
+        total_turnover_value,
     ) = vec_backtest_kernel(
         factors_3d,
         close_arr,
@@ -1001,7 +1034,7 @@ def run_vec_backtest(
         pos_size,  # 使用传入的 pos_size
         dynamic_pos_size_arr_internal,  # ✅ v4.0: 动态持仓
         initial_capital,  # 使用传入的 initial_capital
-        commission_rate,  # 使用传入的 commission_rate
+        cost_arr_internal,  # ✅ Exp2: per-ETF cost array
         # ✅ P2: 动态降权参数 (已禁用 - 零杠杆原则)
         target_vol,
         vol_window,
@@ -1040,6 +1073,14 @@ def run_vec_backtest(
 
     aligned_metrics = compute_aligned_metrics(equity_curve, start_idx=start_day)
 
+    # ✅ Exp2: 计算换手率和成本拖拽
+    trading_days_total = T - start_day
+    years_total = trading_days_total / 252.0 if trading_days_total > 0 else 1.0
+    turnover_ann = total_turnover_value / (initial_capital * years_total) if years_total > 0 else 0.0
+    final_value_est = initial_capital * (1.0 + total_return)
+    gross_pnl = final_value_est - initial_capital
+    cost_drag = total_commission_paid / max(gross_pnl, 1.0) if gross_pnl > 0 else 0.0
+
     # ✅ P0: 风险指标字典
     risk_metrics = {
         "max_drawdown": max_drawdown,
@@ -1052,6 +1093,10 @@ def run_vec_backtest(
         # ✅ 对齐后的统一指标
         "aligned_return": aligned_metrics["aligned_return"],
         "aligned_sharpe": aligned_metrics["aligned_sharpe"],
+        # ✅ Exp2: 成本诊断
+        "turnover_ann": turnover_ann,
+        "cost_drag": cost_drag,
+        "total_commission_paid": total_commission_paid,
     }
 
     return (
@@ -1102,6 +1147,13 @@ def main():
     exec_model = load_execution_model(config)
     USE_T1_OPEN = exec_model.is_t1_open
     print(f"   EXECUTION_MODEL: {exec_model.mode}")
+
+    # ✅ Exp2: 成本模型
+    from etf_strategy.core.cost_model import load_cost_model, build_cost_array
+    from etf_strategy.core.frozen_params import FrozenETFPool
+    cost_model = load_cost_model(config)
+    qdii_set = set(FrozenETFPool().qdii_codes)
+    print(f"   COST_MODEL: mode={cost_model.mode}, tier={cost_model.tier}")
 
     # 1. 加载 WFO 结果
     # ✅ 优先查找 run_* 目录 (True WFO)，排除 symlink
@@ -1157,6 +1209,11 @@ def main():
     etf_codes = cached["etf_codes"]
     T = len(dates)
     N = len(etf_codes)
+
+    # ✅ Exp2: 构建 per-ETF 成本数组
+    COST_ARR = build_cost_array(cost_model, list(etf_codes), qdii_set)
+    tier = cost_model.active_tier
+    print(f"   COST_ARR: A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
     factors_3d = cached["factors_3d"]
     # 价格数据处理：仅 ffill（bfill 会将未来价格回填到过去，造成 lookahead bias）
     # ✅ FIX: 部分 ETF 在 lookback 后才上市，ffill 无法填充上市前的 NaN
@@ -1395,6 +1452,7 @@ def main():
             initial_capital=INITIAL_CAPITAL,
             commission_rate=COMMISSION_RATE,
             lookback=LOOKBACK,
+            cost_arr=COST_ARR,  # ✅ Exp2: per-ETF 成本数组
             # ✅ P2: 动态降权参数 (已禁用 - 零杠杆原则)
             target_vol=target_vol,
             vol_window=vol_window,
@@ -1440,6 +1498,9 @@ def main():
             "vec_aligned_sharpe": risk["aligned_sharpe"],
             # ✅ P2: 动态降权诊断
             "vec_avg_leverage": risk["avg_leverage"],
+            # ✅ Exp2: 成本诊断
+            "vec_turnover_ann": risk["turnover_ann"],
+            "vec_cost_drag": risk["cost_drag"],
             # 诊断信息
             "vec_target_value": rounding["target_value_total"],
             "vec_filled_value": rounding["filled_value_total"],

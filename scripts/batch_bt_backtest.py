@@ -21,7 +21,8 @@ from datetime import datetime
 from etf_strategy.core.utils.run_meta import write_step_meta
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.factor_cache import FactorCache
-from etf_strategy.core.frozen_params import load_frozen_config
+from etf_strategy.core.cost_model import load_cost_model, CostModel
+from etf_strategy.core.frozen_params import load_frozen_config, FrozenETFPool
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule
@@ -57,11 +58,19 @@ def run_bt_backtest(
     dynamic_leverage_enabled=True,
     collect_daily_returns: bool = False,
     use_t1_open: bool = False,
+    cost_model: CostModel | None = None,
+    qdii_codes: set | None = None,
 ):
     """单组合 BT 回测引擎，返回收益和风险指标"""
     cerebro = bt.Cerebro(cheat_on_open=use_t1_open)
     cerebro.broker.setcash(initial_capital)
-    cerebro.broker.setcommission(commission=commission_rate, leverage=1.0)
+    # ✅ Exp2: 按标的设置佣金 (SPLIT_MARKET 模式)
+    if cost_model is not None and cost_model.is_split_market and qdii_codes is not None:
+        for ticker in data_feeds:
+            rate = cost_model.get_cost(ticker, qdii_codes)
+            cerebro.broker.setcommission(commission=rate, name=ticker, leverage=1.0)
+    else:
+        cerebro.broker.setcommission(commission=commission_rate, leverage=1.0)
     if use_t1_open:
         cerebro.broker.set_coc(False)
         cerebro.broker.set_coo(True)  # Cheat-On-Open: 订单在提交当 bar 的 open 成交
@@ -236,6 +245,8 @@ def init_worker(
     lookback,
     training_end_ts,
     use_t1_open,
+    cost_model=None,
+    qdii_codes=None,
 ):
     """子进程初始化：保存共享数据"""
     global _shared_data
@@ -257,6 +268,10 @@ def init_worker(
     _shared_data["initial_capital"] = initial_capital
     _shared_data["commission_rate"] = commission_rate
     _shared_data["training_end_date"] = training_end_ts
+
+    # ✅ Exp2: 成本模型
+    _shared_data["cost_model"] = cost_model
+    _shared_data["qdii_codes"] = qdii_codes
 
     # ✅ 预计算调仓日程 (所有组合共享)
     T = len(timing_series)
@@ -297,6 +312,8 @@ def process_combo(row_data):
     initial_capital = _shared_data["initial_capital"]
     commission_rate = _shared_data["commission_rate"]
     use_t1_open = _shared_data.get("use_t1_open", False)
+    cost_model = _shared_data.get("cost_model")
+    qdii_codes = _shared_data.get("qdii_codes")
 
     factors = [f.strip() for f in combo_str.split(" + ")]
     dates = timing_series.index
@@ -324,6 +341,8 @@ def process_combo(row_data):
         dynamic_leverage_enabled,
         collect_daily_returns=True,
         use_t1_open=use_t1_open,
+        cost_model=cost_model,
+        qdii_codes=qdii_codes,
     )
 
     bt_train_return = np.nan
@@ -523,8 +542,16 @@ def main():
     commission_rate = float(backtest_config.get("commission_rate", 0.0002))
     lookback = backtest_config.get("lookback", 252)
 
+    # ✅ Exp2: 加载成本模型
+    cost_model = load_cost_model(config)
+    qdii_codes = set(FrozenETFPool().qdii_codes)
+    tier = cost_model.active_tier
     print(
         f"✅ 回测参数: FREQ={freq}, POS={pos_size}, Capital={initial_capital}, Comm={commission_rate}"
+    )
+    print(
+        f"✅ 成本模型: mode={cost_model.mode}, tier={cost_model.tier}, "
+        f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp"
     )
 
     # ✅ P1: 从配置文件读取择时参数
@@ -630,6 +657,8 @@ def main():
             lookback,
             training_end_ts,
             USE_T1_OPEN,
+            cost_model,
+            qdii_codes,
         ),
     ) as pool:
         # 使用 imap_unordered 获取实时进度
