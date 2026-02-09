@@ -49,7 +49,8 @@ def warmup_numba_kernels() -> None:
 
     _compute_combo_signal(dummy_factors, dummy_weights)
     _compute_rebalanced_ic(dummy_signal, dummy_returns, 3)
-    _compute_rebalanced_return(dummy_signal, dummy_returns, dummy_exposures, 3, 2, 0.0002)
+    dummy_cost_arr = np.full(N, 0.0002, dtype=np.float64)
+    _compute_rebalanced_return(dummy_signal, dummy_returns, dummy_exposures, 3, 2, dummy_cost_arr)
     compute_spearman_ic_numba(dummy_signal, dummy_returns)
     compute_multiple_ics_numba(dummy_factors.transpose(2, 0, 1), dummy_returns)
 
@@ -159,7 +160,7 @@ def _compute_rebalanced_return(
     exposures: np.ndarray,
     rebalance_freq: int,
     top_k: int,
-    commission_rate: float = 0.0002,
+    cost_arr: np.ndarray,
     use_t1_open: bool = False,
 ) -> float:
     """
@@ -171,7 +172,7 @@ def _compute_rebalanced_return(
         exposures: (T,) 逐日风险暴露系数 (0~1)，用于模拟部分仓位/停跑
         rebalance_freq: 调仓周期 (天)
         top_k: 持仓数量
-        commission_rate: 手续费率
+        cost_arr: (N,) 每个 ETF 的单边成本 (decimal)
 
     返回:
         累计收益率 (如 0.50 = 50%)
@@ -219,13 +220,16 @@ def _compute_rebalanced_return(
             elif prev_positions[n] == 0 and new_positions[n] == 1:
                 turnover += 1  # 买入
 
-        # 手续费 (单边 commission_rate)
+        # ✅ Exp2: 按标的成本计费 (单边 cost_arr[n])
         # exposure 缩放：部分仓位下，交易名义金额也缩小；
-        # turnover 计数包含买入+卖出，因此按 top_k 归一化近似每笔权重。
+        # 每个换仓标的按自身成本计费，除以 top_k 归一化权重。
         exp_trade = exposures[start_idx]
         if np.isnan(exp_trade):
             exp_trade = 1.0
-        commission_cost = turnover * commission_rate * exp_trade / top_k
+        commission_cost = 0.0
+        for n in range(N):
+            if prev_positions[n] != new_positions[n]:
+                commission_cost += cost_arr[n] * exp_trade / top_k
 
         # 计算持仓收益（组合层面逐日累乘，更贴近 VEC/BT：
         # daily_port_ret = exposure[t] * mean(ret_topk[t])，现金部分收益视为 0）
@@ -313,7 +317,7 @@ class ComboWFOOptimizer:
         returns_oos,
         exposures_oos,
         pos_size: int = 2,
-        commission_rate: float = 0.0002,
+        cost_arr: np.ndarray | None = None,
         factor_ics: np.ndarray | None = None,
     ):
         """
@@ -358,9 +362,14 @@ class ComboWFOOptimizer:
                 best_ir = ir
                 best_pos_rate = pos_rate
 
-        # 计算 OOS 收益 (使用最佳 freq)
+        # ✅ Exp2: 计算 OOS 收益 (使用最佳 freq, per-ETF cost)
+        N_oos = returns_oos.shape[1]
+        if cost_arr is None:
+            cost_arr_local = np.full(N_oos, 0.0002, dtype=np.float64)
+        else:
+            cost_arr_local = cost_arr
         oos_return = _compute_rebalanced_return(
-            signal_oos, returns_oos, exposures_oos, best_freq, pos_size, commission_rate,
+            signal_oos, returns_oos, exposures_oos, best_freq, pos_size, cost_arr_local,
             self.use_t1_open,
         )
 
@@ -374,7 +383,7 @@ class ComboWFOOptimizer:
         exposures,
         windows,
         pos_size: int = 2,
-        commission_rate: float = 0.0002,
+        cost_arr: np.ndarray | None = None,
         precomputed_ics: np.ndarray | None = None,
     ):
         oos_ic_list = []
@@ -402,7 +411,7 @@ class ComboWFOOptimizer:
                 returns_oos,
                 exposures_oos,
                 pos_size,
-                commission_rate,
+                cost_arr,
                 factor_ics=window_ics,
             )
 
@@ -429,14 +438,14 @@ class ComboWFOOptimizer:
         exposures,
         windows,
         pos_size: int = 2,
-        commission_rate: float = 0.0002,
+        cost_arr: np.ndarray | None = None,
         precomputed_ics: np.ndarray | None = None,
     ):
         """批量处理多个 combo，减少 joblib IPC 开销"""
         return [
             self._test_combo_impl(
                 combo, factors_data, returns, exposures,
-                windows, pos_size, commission_rate, precomputed_ics,
+                windows, pos_size, cost_arr, precomputed_ics,
             )
             for combo in combo_batch
         ]
@@ -478,6 +487,7 @@ class ComboWFOOptimizer:
         top_n=100,
         pos_size: int = 2,
         commission_rate: float = 0.0002,
+        cost_arr: np.ndarray | None = None,
         exposures: np.ndarray | None = None,
     ):
         """
@@ -489,7 +499,8 @@ class ComboWFOOptimizer:
             factor_names: 因子名称列表
             top_n: 返回 Top N 组合
             pos_size: 持仓数量 (用于计算 OOS 收益)
-            commission_rate: 手续费率 (用于计算 OOS 收益)
+            commission_rate: 手续费率 (legacy fallback, 当 cost_arr=None 时使用)
+            cost_arr: (N,) per-ETF 单边成本数组, 覆盖 commission_rate
             exposures: (T,) 逐日暴露（regime gate），None 表示全 1.0
         """
         T, N, F = factors_data.shape
@@ -501,6 +512,12 @@ class ComboWFOOptimizer:
                 raise ValueError(
                     f"exposures length mismatch: expected {T}, got {exposures.shape[0]}"
                 )
+        # ✅ Exp2: 构建 per-ETF 成本数组 (fallback to uniform commission_rate)
+        if cost_arr is None:
+            cost_arr = np.full(N, commission_rate, dtype=np.float64)
+        else:
+            cost_arr = np.asarray(cost_arr, dtype=np.float64)
+
         logger.info(f"Data: {T} days x {N} ETFs x {F} factors")
         logger.info(f"ℹ️ 启用标准模式: 基于 IC 进行优化 (pos_size={pos_size})")
 
@@ -544,7 +561,7 @@ class ComboWFOOptimizer:
                 exposures,
                 windows,
                 pos_size,
-                commission_rate,
+                cost_arr,
                 precomputed_ics,
             )
             for batch in tqdm(combo_batches, desc="WFO组合评估", unit="batch", ncols=80)

@@ -334,6 +334,7 @@ _OPERATIONAL_KEYS = frozenset(
         "max_workers",
         "save_all_results",
         "output_root",
+        "cost_model",
     }
 )
 

@@ -37,7 +37,8 @@ from etf_strategy.core.combo_wfo_optimizer import ComboWFOOptimizer, warmup_numb
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.factor_cache import FactorCache
-from etf_strategy.core.frozen_params import load_frozen_config
+from etf_strategy.core.cost_model import load_cost_model, build_cost_array
+from etf_strategy.core.frozen_params import load_frozen_config, FrozenETFPool
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
 
@@ -228,6 +229,15 @@ def main():
         use_t1_open=config.get("backtest", {}).get("execution_model", "COC") == "T1_OPEN",
     )
 
+    # ✅ Exp2: 加载成本模型 → 构建 per-ETF 成本数组
+    cost_model = load_cost_model(config)
+    etf_codes = list(ohlcv["close"].columns)
+    qdii_set = set(FrozenETFPool().qdii_codes)
+    cost_arr = build_cost_array(cost_model, etf_codes, qdii_set)
+    tier = cost_model.active_tier
+    logger.info(f"✅ 成本模型: mode={cost_model.mode}, tier={cost_model.tier}, "
+                f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
+
     top_combos_list, all_combos_df = optimizer.run_combo_search(
         factors_data=factors_data,
         returns=returns,
@@ -235,6 +245,7 @@ def main():
         top_n=config["combo_wfo"].get("top_n", 100),
         pos_size=config["backtest"].get("pos_size", 2),
         commission_rate=config["backtest"].get("commission_rate", 0.0002),
+        cost_arr=cost_arr,
         exposures=gate_arr,
     )
 
