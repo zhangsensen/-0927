@@ -5,7 +5,7 @@
 # ✅ 必须: uv run python <script>, uv sync, uv add/remove
 # 📖 详见: AGENTS.md 顶部说明
 
-.PHONY: help install format lint test clean wfo vec bt pipeline all
+.PHONY: help install format lint test clean clean-numba wfo vec bt pipeline all
 
 # ============ 帮助 ============
 help:  ## 显示帮助信息
@@ -62,6 +62,12 @@ clean:  ## 清理缓存和临时文件
 	find . -type f -name "*.pyc" -delete
 	rm -rf .pytest_cache .coverage htmlcov .mypy_cache
 	@echo "✅ 缓存清理完成"
+
+clean-numba:  ## 清理 Numba JIT 缓存（修改 @njit 签名后必须执行）
+	find . -type f \( -name "*.nbi" -o -name "*.nbc" \) -delete 2>/dev/null || true
+	find ./scripts -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find ./src -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@echo "✅ Numba cache 清理完成（请重新运行 pipeline）"
 
 # ============ 依赖管理 ============
 update-deps:  ## 更新所有依赖
