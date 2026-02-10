@@ -60,6 +60,8 @@ def run_bt_backtest(
     use_t1_open: bool = False,
     cost_model: CostModel | None = None,
     qdii_codes: set | None = None,
+    delta_rank: float = 0.0,
+    min_hold_days: int = 0,
 ):
     """单组合 BT 回测引擎，返回收益和风险指标"""
     cerebro = bt.Cerebro(cheat_on_open=use_t1_open)
@@ -97,6 +99,9 @@ def run_bt_backtest(
         dynamic_leverage_enabled=dynamic_leverage_enabled,
         # ✅ Exp1: T+1 Open
         use_t1_open=use_t1_open,
+        # ✅ Exp4: 换仓迟滞
+        delta_rank=delta_rank,
+        min_hold_days=min_hold_days,
     )
 
     # ✅ P0: 添加 Analyzers 计算风险指标
@@ -247,6 +252,8 @@ def init_worker(
     use_t1_open,
     cost_model=None,
     qdii_codes=None,
+    delta_rank=0.0,
+    min_hold_days=0,
 ):
     """子进程初始化：保存共享数据"""
     global _shared_data
@@ -272,6 +279,10 @@ def init_worker(
     # ✅ Exp2: 成本模型
     _shared_data["cost_model"] = cost_model
     _shared_data["qdii_codes"] = qdii_codes
+
+    # ✅ Exp4: 换仓迟滞
+    _shared_data["delta_rank"] = delta_rank
+    _shared_data["min_hold_days"] = min_hold_days
 
     # ✅ 预计算调仓日程 (所有组合共享)
     T = len(timing_series)
@@ -314,6 +325,8 @@ def process_combo(row_data):
     use_t1_open = _shared_data.get("use_t1_open", False)
     cost_model = _shared_data.get("cost_model")
     qdii_codes = _shared_data.get("qdii_codes")
+    delta_rank = _shared_data.get("delta_rank", 0.0)
+    min_hold_days = _shared_data.get("min_hold_days", 0)
 
     factors = [f.strip() for f in combo_str.split(" + ")]
     dates = timing_series.index
@@ -343,6 +356,8 @@ def process_combo(row_data):
         use_t1_open=use_t1_open,
         cost_model=cost_model,
         qdii_codes=qdii_codes,
+        delta_rank=delta_rank,
+        min_hold_days=min_hold_days,
     )
 
     bt_train_return = np.nan
@@ -416,6 +431,15 @@ def main():
         type=str,
         default=None,
         help="配置文件路径 (yaml)。默认使用 configs/combo_wfo_config.yaml",
+    )
+    # ✅ Exp4: 换仓迟滞 CLI 参数
+    parser.add_argument(
+        "--delta-rank", type=float, default=0.0,
+        help="Exp4: rank01 gap threshold for swap (0 = disabled)",
+    )
+    parser.add_argument(
+        "--min-hold-days", type=int, default=0,
+        help="Exp4: minimum hold days before sell (0 = disabled)",
     )
     args = parser.parse_args()
 
@@ -553,6 +577,8 @@ def main():
         f"✅ 成本模型: mode={cost_model.mode}, tier={cost_model.tier}, "
         f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp"
     )
+    if args.delta_rank > 0 or args.min_hold_days > 0:
+        print(f"✅ Exp4: delta_rank={args.delta_rank}, min_hold_days={args.min_hold_days}")
 
     # ✅ P1: 从配置文件读取择时参数
     timing_config = config.get("backtest", {}).get("timing", {})
@@ -659,6 +685,8 @@ def main():
             USE_T1_OPEN,
             cost_model,
             qdii_codes,
+            args.delta_rank,
+            args.min_hold_days,
         ),
     ) as pool:
         # 使用 imap_unordered 获取实时进度
