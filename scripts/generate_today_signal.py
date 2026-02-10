@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable  # noqa: F401
@@ -27,7 +28,7 @@ import yaml
 
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.data_loader import DataLoader
-from etf_strategy.core.frozen_params import get_qdii_tickers, get_universe_mode
+from etf_strategy.core.frozen_params import CURRENT_VERSION, get_qdii_tickers, get_universe_mode
 from etf_strategy.core.hysteresis import apply_hysteresis
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
@@ -36,6 +37,8 @@ from etf_strategy.regime_gate import compute_regime_gate_arr
 
 ROOT = Path(__file__).resolve().parent.parent
 
+
+logger = logging.getLogger(__name__)
 
 STATE_DIR = ROOT / "data" / "live"
 
@@ -145,6 +148,45 @@ def _load_signal_state(path: Path) -> dict | None:
 def _save_signal_state(path: Path, state: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _validate_signal_state(
+    state: dict,
+    freq: int,
+    universe_mode: str,
+    tradable_symbols: set[str],
+) -> list[str]:
+    """Validate state file against current environment. Returns list of mismatch reasons.
+
+    If non-empty, caller should cold-start (discard state).
+    """
+    problems: list[str] = []
+
+    # 1) version compatibility
+    sv = state.get("version", "")
+    if sv and not sv.startswith("v5.0"):
+        problems.append(f"version mismatch: state={sv}, current={CURRENT_VERSION}")
+
+    # 2) freq
+    sf = state.get("freq")
+    if sf is not None and int(sf) != freq:
+        problems.append(f"freq mismatch: state={sf}, config={freq}")
+
+    # 3) universe_mode
+    sm = state.get("universe_mode", "")
+    if sm and sm != universe_mode:
+        problems.append(f"universe_mode mismatch: state={sm}, config={universe_mode}")
+
+    # 4) signal_portfolio tickers in tradable symbols
+    for combo, st in state.get("strategies", {}).items():
+        for ticker in st.get("signal_portfolio", []):
+            if ticker not in tradable_symbols:
+                problems.append(
+                    f"combo {combo}: ticker {ticker} not in tradable symbols"
+                )
+                break  # one per combo is enough
+
+    return problems
 
 
 def _stable_topk_indices(scores: np.ndarray, k: int) -> list[int]:
@@ -281,6 +323,21 @@ def main() -> int:
     state_path = STATE_DIR / "signal_state.json"
     prev_state = _load_signal_state(state_path) if hysteresis_enabled else None
     prev_strategies: dict = {}
+    elapsed_days = 0  # trading days since last state; surfaced in report
+
+    if prev_state:
+        # Validate state against current environment
+        tradable_set = set(tickers)
+        problems = _validate_signal_state(
+            prev_state, proto.freq, universe_mode, tradable_set
+        )
+        if problems:
+            for p in problems:
+                logger.warning(f"状态文件校验失败，冷启动: {p}")
+            print(f"⚠️  状态文件校验失败 ({len(problems)} 项)，冷启动（不使用旧 state）")
+            for p in problems:
+                print(f"   - {p}")
+            prev_state = None  # cold start
 
     if prev_state and prev_state.get("last_asof_date"):
         last_ts = pd.Timestamp(prev_state["last_asof_date"])
@@ -288,7 +345,7 @@ def main() -> int:
         mask = (close_df.index > last_ts) & (close_df.index <= asof_ts)
         elapsed_days = int(mask.sum())
         # Increment hold_days for all held positions
-        for combo_key, st in prev_state.get("strategies", {}).items():
+        for _combo_key, st in prev_state.get("strategies", {}).items():
             for ticker in st.get("signal_portfolio", []):
                 st["signal_hold_days"][ticker] = (
                     st["signal_hold_days"].get(ticker, 0) + elapsed_days
@@ -434,6 +491,9 @@ def main() -> int:
                 }
 
         state_out = {
+            "version": CURRENT_VERSION,
+            "freq": proto.freq,
+            "universe_mode": universe_mode,
             "last_asof_date": str(asof_ts.date()),
             "last_trade_date": args.trade_date,
             "strategies": new_strategies,
@@ -536,7 +596,9 @@ def main() -> int:
         md_lines.append(
             f"- 迟滞参数：delta_rank={proto.delta_rank:.2f}, min_hold_days={proto.min_hold_days}"
         )
-        md_lines.append(f"- 状态文件：{state_path.relative_to(ROOT)} (上次: {prev_date})")
+        md_lines.append(
+            f"- 状态文件：{state_path.relative_to(ROOT)} (上次: {prev_date}, elapsed_td={elapsed_days})"
+        )
     md_lines.append(
         f"- 策略数：{n_strat}，每策略持仓：{proto.pos_size}，资金：{args.capital:,.0f}\n"
     )
