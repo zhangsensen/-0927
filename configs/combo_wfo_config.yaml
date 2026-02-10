@@ -25,10 +25,10 @@ backtest:
         qdii: 0.0080
   initial_capital: 1000000
   lookback_window: 252
-  freq: 3
+  freq: 5
   pos_size: 2
   lookback: 252
-  rebalance_frequency: 3d
+  rebalance_frequency: 5d
   max_workers: 8
   test_all_frequencies: false
   test_all_position_sizes: false
@@ -57,6 +57,9 @@ backtest:
     individual_timing:
       enabled: false
       window: 20
+  hysteresis:
+    delta_rank: 0.10
+    min_hold_days: 9
   regime_gate:
     enabled: true
     mode: volatility
@@ -147,7 +150,7 @@ combo_wfo:
   n_jobs: -1
   oos_period: 60
   rebalance_frequencies:
-  - 3
+  - 5
   save_all_results: true
   scoring:
     complexity_penalty_lambda: 0.15

@@ -53,7 +53,7 @@ class FrozenParamViolation(Exception):
 
 @dataclass(frozen=True)
 class FrozenBacktestParams:
-    freq: int = 3
+    freq: int = 5
     pos_size: int = 2
     commission_rate: float = 0.0002
     initial_capital: int = 1_000_000
@@ -95,6 +95,12 @@ class FrozenRiskControlParams:
 
 
 @dataclass(frozen=True)
+class FrozenHysteresisParams:
+    delta_rank: float = 0.10
+    min_hold_days: int = 9
+
+
+@dataclass(frozen=True)
 class FrozenWFOParams:
     combo_sizes: Tuple[int, ...] = (2, 3, 4, 5, 6, 7)
     enable_fdr: bool = True
@@ -104,7 +110,7 @@ class FrozenWFOParams:
     oos_period: int = 60
     step_size: int = 60
     top_n: int = 100_000
-    rebalance_frequencies: Tuple[int, ...] = (3,)
+    rebalance_frequencies: Tuple[int, ...] = (5,)
 
 
 @dataclass(frozen=True)
@@ -208,6 +214,7 @@ class FrozenProductionConfig:
     timing: FrozenTimingParams
     regime_gate: FrozenRegimeGateParams
     risk_control: FrozenRiskControlParams
+    hysteresis: FrozenHysteresisParams
     wfo: FrozenWFOParams
     scoring: FrozenScoringParams
     cross_section: FrozenCrossSectionParams
@@ -219,14 +226,19 @@ class FrozenProductionConfig:
 # v3.4 production config (硬编码)
 # ---------------------------------------------------------------------------
 
+_V3_4_BACKTEST = FrozenBacktestParams(freq=3)
+_V3_4_WFO = FrozenWFOParams(rebalance_frequencies=(3,))
+_HYSTERESIS_DISABLED = FrozenHysteresisParams(delta_rank=0.0, min_hold_days=0)
+
 _V3_4_CONFIG = FrozenProductionConfig(
     version="v3.4",
     config_sha256=None,  # 运行时计算
-    backtest=FrozenBacktestParams(),
+    backtest=_V3_4_BACKTEST,
     timing=FrozenTimingParams(),
     regime_gate=FrozenRegimeGateParams(),
     risk_control=FrozenRiskControlParams(),
-    wfo=FrozenWFOParams(),
+    hysteresis=_HYSTERESIS_DISABLED,
+    wfo=_V3_4_WFO,
     scoring=FrozenScoringParams(),
     cross_section=FrozenCrossSectionParams(),
     etf_pool=FrozenETFPool(),
@@ -273,11 +285,12 @@ _V4_1_CROSS_SECTION = FrozenCrossSectionParams(
 _V4_0_CONFIG = FrozenProductionConfig(
     version="v4.0",
     config_sha256=None,
-    backtest=FrozenBacktestParams(),
+    backtest=_V3_4_BACKTEST,
     timing=FrozenTimingParams(),
     regime_gate=FrozenRegimeGateParams(),
     risk_control=FrozenRiskControlParams(),
-    wfo=FrozenWFOParams(),
+    hysteresis=_HYSTERESIS_DISABLED,
+    wfo=_V3_4_WFO,
     scoring=FrozenScoringParams(),
     cross_section=_V4_0_CROSS_SECTION,
     etf_pool=FrozenETFPool(),
@@ -302,24 +315,56 @@ _V4_0_CONFIG = FrozenProductionConfig(
 _V4_1_CONFIG = FrozenProductionConfig(
     version="v4.1",
     config_sha256=None,
-    backtest=FrozenBacktestParams(),
+    backtest=_V3_4_BACKTEST,
     timing=FrozenTimingParams(),
     regime_gate=FrozenRegimeGateParams(enabled=True),  # v3.4 兼容: Gate ON
     risk_control=FrozenRiskControlParams(),
-    wfo=FrozenWFOParams(),
+    hysteresis=_HYSTERESIS_DISABLED,
+    wfo=_V3_4_WFO,
     scoring=FrozenScoringParams(),
     cross_section=_V4_1_CROSS_SECTION,
     etf_pool=FrozenETFPool(),
     strategies=(),  # 正交化后新候选待定
 )
 
+_V5_0_CONFIG = FrozenProductionConfig(
+    version="v5.0",
+    config_sha256=None,
+    backtest=FrozenBacktestParams(),  # freq=5 (new default)
+    timing=FrozenTimingParams(),
+    regime_gate=FrozenRegimeGateParams(enabled=True),
+    risk_control=FrozenRiskControlParams(),
+    hysteresis=FrozenHysteresisParams(),  # dr=0.10, mh=9 (new default)
+    wfo=FrozenWFOParams(),  # rebalance_frequencies=(5,) (new default)
+    scoring=FrozenScoringParams(),
+    cross_section=_V4_1_CROSS_SECTION,
+    etf_pool=FrozenETFPool(),
+    strategies=(
+        FrozenStrategy(
+            name="strategy_1",
+            factors=("ADX_14D", "OBV_SLOPE_10D", "SHARPE_RATIO_20D", "SLOPE_20D"),
+        ),
+        FrozenStrategy(
+            name="strategy_2",
+            factors=(
+                "ADX_14D",
+                "OBV_SLOPE_10D",
+                "PRICE_POSITION_120D",
+                "SHARPE_RATIO_20D",
+                "SLOPE_20D",
+            ),
+        ),
+    ),
+)
+
 _VERSION_REGISTRY: Dict[str, FrozenProductionConfig] = {
     "v3.4": _V3_4_CONFIG,
     "v4.0": _V4_0_CONFIG,
     "v4.1": _V4_1_CONFIG,
+    "v5.0": _V5_0_CONFIG,
 }
 
-CURRENT_VERSION = "v4.1"
+CURRENT_VERSION = "v5.0"
 
 # 操作性参数 (不校验)
 _OPERATIONAL_KEYS = frozenset(
@@ -513,6 +558,30 @@ def _validate_regime_gate(frozen: FrozenRegimeGateParams, cfg: dict) -> List[str
                     vol_cfg[key],
                     f"backtest.regime_gate.volatility.{key}",
                 )
+            )
+
+    return violations
+
+
+def _validate_hysteresis(frozen: FrozenHysteresisParams, cfg: dict) -> List[str]:
+    violations: List[str] = []
+    hyst_cfg = cfg.get("hysteresis", {})
+    if not hyst_cfg:
+        # No hysteresis section in config — only violate if frozen expects non-zero
+        if frozen.delta_rank > 0 or frozen.min_hold_days > 0:
+            violations.append(
+                f"backtest.hysteresis: 缺少配置节 (frozen expects dr={frozen.delta_rank}, mh={frozen.min_hold_days})"
+            )
+        return violations
+
+    mapping = {
+        "delta_rank": frozen.delta_rank,
+        "min_hold_days": frozen.min_hold_days,
+    }
+    for key, frozen_val in mapping.items():
+        if key in hyst_cfg:
+            violations.extend(
+                _compare_values(frozen_val, hyst_cfg[key], f"backtest.hysteresis.{key}")
             )
 
     return violations
@@ -758,6 +827,7 @@ def load_frozen_config(
     violations.extend(_validate_backtest(frozen.backtest, backtest_cfg))
     violations.extend(_validate_timing(frozen.timing, backtest_cfg))
     violations.extend(_validate_regime_gate(frozen.regime_gate, backtest_cfg))
+    violations.extend(_validate_hysteresis(frozen.hysteresis, backtest_cfg))
     violations.extend(_validate_risk_control(frozen.risk_control, backtest_cfg))
     violations.extend(_validate_wfo(frozen.wfo, raw_config))
     violations.extend(_validate_scoring(frozen.scoring, raw_config))
@@ -779,6 +849,7 @@ def load_frozen_config(
         timing=frozen.timing,
         regime_gate=frozen.regime_gate,
         risk_control=frozen.risk_control,
+        hysteresis=frozen.hysteresis,
         wfo=frozen.wfo,
         scoring=frozen.scoring,
         cross_section=frozen.cross_section,

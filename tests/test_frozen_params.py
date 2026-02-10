@@ -14,6 +14,7 @@ from etf_strategy.core.frozen_params import (
     CURRENT_VERSION,
     FrozenBacktestParams,
     FrozenETFPool,
+    FrozenHysteresisParams,
     FrozenParamViolation,
     FrozenProductionConfig,
     FrozenRegimeGateParams,
@@ -41,15 +42,20 @@ def real_config():
 
 class TestFrozenValues:
     def test_current_version(self):
-        assert CURRENT_VERSION == "v4.1"
+        assert CURRENT_VERSION == "v5.0"
 
     def test_backtest_defaults(self):
         p = FrozenBacktestParams()
-        assert p.freq == 3
+        assert p.freq == 5
         assert p.pos_size == 2
         assert p.commission_rate == 0.0002
         assert p.initial_capital == 1_000_000
         assert p.lookback_window == 252
+
+    def test_hysteresis_defaults(self):
+        p = FrozenHysteresisParams()
+        assert p.delta_rank == 0.10
+        assert p.min_hold_days == 9
 
     def test_regime_gate_defaults(self):
         p = FrozenRegimeGateParams()
@@ -68,7 +74,7 @@ class TestFrozenValues:
         assert p.oos_period == 60
         assert p.step_size == 60
         assert p.top_n == 100_000
-        assert p.rebalance_frequencies == (3,)
+        assert p.rebalance_frequencies == (5,)
 
     def test_etf_pool_counts(self):
         p = FrozenETFPool()
@@ -118,14 +124,16 @@ class TestRealConfigValidation:
             config_path=str(CONFIG_PATH),
             strictness=StrictnessMode.STRICT,
         )
-        assert frozen.version == "v4.1"
+        assert frozen.version == "v5.0"
         assert frozen.config_sha256 is not None
 
     def test_returns_frozen_config(self, real_config):
         frozen = load_frozen_config(real_config, config_path=str(CONFIG_PATH))
         assert isinstance(frozen, FrozenProductionConfig)
-        assert frozen.backtest.freq == 3
+        assert frozen.backtest.freq == 5
         assert frozen.etf_pool.total_count == 43
+        assert frozen.hysteresis.delta_rank == 0.10
+        assert frozen.hysteresis.min_hold_days == 9
 
     def test_v34_still_accessible(self, real_config):
         """v3.4 config should remain accessible for rollback.
@@ -222,7 +230,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise
         frozen = load_frozen_config(bad, strictness=StrictnessMode.WARN)
-        assert frozen.version == "v4.1"
+        assert frozen.version == "v5.0"
 
     def test_env_var_warn(self, real_config, monkeypatch):
         monkeypatch.setenv("FROZEN_PARAMS_MODE", "warn")
@@ -230,7 +238,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise due to env var
         frozen = load_frozen_config(bad)
-        assert frozen.version == "v4.1"
+        assert frozen.version == "v5.0"
 
 
 # ---------------------------------------------------------------------------
@@ -244,20 +252,20 @@ class TestOperationalParamsIgnored:
         modified["data"]["data_dir"] = "/some/other/path"
         # Should pass without error
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v4.1"
+        assert frozen.version == "v5.0"
 
     def test_n_jobs_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["combo_wfo"]["n_jobs"] = 1
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v4.1"
+        assert frozen.version == "v5.0"
 
     def test_start_end_date_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["data"]["start_date"] = "2021-01-01"
         modified["data"]["end_date"] = "2026-01-01"
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v4.1"
+        assert frozen.version == "v5.0"
 
 
 # ---------------------------------------------------------------------------
@@ -279,22 +287,45 @@ class TestVersionRegistry:
 
     def test_v41_registered(self, real_config):
         frozen = load_frozen_config(
-            real_config, version="v4.1", strictness=StrictnessMode.STRICT
+            real_config, version="v4.1", strictness=StrictnessMode.WARN
         )
         assert frozen.version == "v4.1"
 
+    def test_v50_registered(self, real_config):
+        frozen = load_frozen_config(
+            real_config, version="v5.0", strictness=StrictnessMode.STRICT
+        )
+        assert frozen.version == "v5.0"
+        assert frozen.hysteresis.delta_rank == 0.10
+        assert frozen.hysteresis.min_hold_days == 9
+
     def test_v34_and_v41_share_base_params(self, real_config):
-        """v4.1 shares core backtest/pool/wfo params with v3.4."""
+        """v3.4 and v4.1 share core backtest/pool/wfo params (both freq=3)."""
         v34 = load_frozen_config(
             real_config, version="v3.4", strictness=StrictnessMode.WARN
         )
         v41 = load_frozen_config(
-            real_config, version="v4.1", strictness=StrictnessMode.STRICT
+            real_config, version="v4.1", strictness=StrictnessMode.WARN
         )
         assert v34.backtest == v41.backtest
+        assert v34.backtest.freq == 3
         assert v34.etf_pool == v41.etf_pool
         assert v34.wfo == v41.wfo
+        assert v34.wfo.rebalance_frequencies == (3,)
         # v4.1 rolled back to v3.4's bounded_factors (both have 4)
         assert v34.cross_section == v41.cross_section
         assert len(v41.cross_section.bounded_factors) == 4
         assert len(v34.cross_section.bounded_factors) == 4
+
+    def test_v50_differs_from_v41(self, real_config):
+        """v5.0 has freq=5 and hysteresis enabled, unlike v4.1."""
+        v41 = load_frozen_config(
+            real_config, version="v4.1", strictness=StrictnessMode.WARN
+        )
+        v50 = load_frozen_config(
+            real_config, version="v5.0", strictness=StrictnessMode.STRICT
+        )
+        assert v41.backtest.freq == 3
+        assert v50.backtest.freq == 5
+        assert v41.hysteresis.delta_rank == 0.0
+        assert v50.hysteresis.delta_rank == 0.10

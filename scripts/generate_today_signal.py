@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable  # noqa: F401
@@ -27,12 +28,16 @@ import yaml
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.frozen_params import get_qdii_tickers, get_universe_mode
+from etf_strategy.core.hysteresis import apply_hysteresis
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.utils.rebalance import generate_rebalance_schedule
 from etf_strategy.regime_gate import compute_regime_gate_arr
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+STATE_DIR = ROOT / "data" / "live"
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,8 @@ class Protocol:
     timing_enabled: bool
     extreme_threshold: float
     extreme_position: float
+    delta_rank: float
+    min_hold_days: int
 
 
 def _parse_args() -> argparse.Namespace:
@@ -93,6 +100,10 @@ def _load_protocol(config_path: Path) -> Protocol:
     extreme_threshold = float(timing.get("extreme_threshold", -0.4))
     extreme_position = float(timing.get("extreme_position", 0.3))
 
+    hyst = bt.get("hysteresis") or {}
+    delta_rank = float(hyst.get("delta_rank", 0.0))
+    min_hold_days = int(hyst.get("min_hold_days", 0))
+
     symbols = list(map(str, data.get("symbols", [])))
     if not symbols:
         raise ValueError("configs/combo_wfo_config.yaml 缺少 data.symbols")
@@ -107,7 +118,33 @@ def _load_protocol(config_path: Path) -> Protocol:
         timing_enabled=timing_enabled,
         extreme_threshold=extreme_threshold,
         extreme_position=extreme_position,
+        delta_rank=delta_rank,
+        min_hold_days=min_hold_days,
     )
+
+
+def _load_signal_state(path: Path) -> dict | None:
+    """Load signal state from JSON file.
+
+    Expected format:
+    {
+      "last_asof_date": "2025-12-12",
+      "strategies": {
+        "combo_key": {
+          "signal_portfolio": ["510300", "512880"],
+          "signal_hold_days": {"510300": 3, "512880": 1}
+        }
+      }
+    }
+    """
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _save_signal_state(path: Path, state: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _stable_topk_indices(scores: np.ndarray, k: int) -> list[int]:
@@ -239,11 +276,31 @@ def main() -> int:
     schedule = generate_rebalance_schedule(T + 1, proto.lookback_window, proto.freq)
     is_rebalance_day = bool(np.any(schedule == trade_idx))
 
-    # 6) 逐策略选股（使用 asof 日的标准化因子；与 kernel 中 t-1 取值一致）
+    # 6) 加载迟滞状态 (hysteresis state persistence)
+    hysteresis_enabled = proto.delta_rank > 0 or proto.min_hold_days > 0
+    state_path = STATE_DIR / "signal_state.json"
+    prev_state = _load_signal_state(state_path) if hysteresis_enabled else None
+    prev_strategies: dict = {}
+
+    if prev_state and prev_state.get("last_asof_date"):
+        last_ts = pd.Timestamp(prev_state["last_asof_date"])
+        # Count trading days elapsed between last_asof and current asof
+        mask = (close_df.index > last_ts) & (close_df.index <= asof_ts)
+        elapsed_days = int(mask.sum())
+        # Increment hold_days for all held positions
+        for combo_key, st in prev_state.get("strategies", {}).items():
+            for ticker in st.get("signal_portfolio", []):
+                st["signal_hold_days"][ticker] = (
+                    st["signal_hold_days"].get(ticker, 0) + elapsed_days
+                )
+        prev_strategies = prev_state.get("strategies", {})
+
+    # 6a) 逐策略选股（使用 asof 日的标准化因子；与 kernel 中 t-1 取值一致）
     price_asof = close_df.loc[asof_ts]
 
     per_strategy_rows: list[dict] = []
     agg_counts = {t: 0 for t in tickers}
+    new_strategies: dict = {}
 
     for _, row in df_candidates.iterrows():
         combo = str(row["combo"]).strip()
@@ -265,39 +322,80 @@ def main() -> int:
                 scores[i] = s
                 valid += 1
 
-        # ✅ FIX: 过滤涨停/停牌的ETF（避免选中买不进的标的）
-        # 涨停判断：当日涨幅 > 9.5%（ETF涨停约10%，留0.5%容差）
-        # 停牌判断：成交量 = 0
+        # 过滤涨停/停牌的ETF（避免选中买不进的标的）
         tradable_mask = np.ones(len(tickers), dtype=bool)
 
-        if len(close_df) >= 2:  # 需要至少2天数据才能计算涨幅
-            prev_close = close_df.iloc[-2]  # t-2日收盘
-            curr_close = close_df.iloc[-1]  # t-1日收盘（asof日）
-            volume_curr = ohlcv["volume"].iloc[-1]  # t-1日成交量
+        if len(close_df) >= 2:
+            prev_close = close_df.iloc[-2]
+            curr_close = close_df.iloc[-1]
+            volume_curr = ohlcv["volume"].iloc[-1]
 
             for i, ticker in enumerate(tickers):
-                # 检查涨停
                 if pd.notna(prev_close[ticker]) and pd.notna(curr_close[ticker]):
                     pct_change = (curr_close[ticker] / prev_close[ticker]) - 1.0
-                    if pct_change > 0.095:  # 涨幅 > 9.5%
+                    if pct_change > 0.095:
                         tradable_mask[i] = False
-
-                # 检查停牌
                 if pd.notna(volume_curr[ticker]) and volume_curr[ticker] <= 0:
                     tradable_mask[i] = False
 
-            # 将不可交易的ETF分数设为-inf
             scores[~tradable_mask] = -np.inf
 
-        # 🚫 QDII 硬禁止: A_SHARE_ONLY 模式下 QDII 不可被选为持仓
+        # QDII 硬禁止: A_SHARE_ONLY 模式下 QDII 不可被选为持仓
         if universe_mode == "A_SHARE_ONLY":
             for i, ticker in enumerate(tickers):
                 if ticker in qdii_set:
                     scores[i] = -np.inf
 
         picks: list[int] = []
+        hyst_kept: list[str] = []  # tickers kept by hysteresis (for reporting)
+
         if valid >= proto.pos_size:
-            picks = _stable_topk_indices(scores, proto.pos_size)
+            top_indices = _stable_topk_indices(scores, proto.pos_size)
+
+            if hysteresis_enabled and is_rebalance_day and len(top_indices) == proto.pos_size:
+                # Load per-combo state
+                combo_state = prev_strategies.get(combo, {})
+                signal_portfolio = set(combo_state.get("signal_portfolio", []))
+                signal_hold_days = combo_state.get("signal_hold_days", {})
+
+                # Build hmask/hdays arrays aligned to tickers
+                hmask = np.array(
+                    [t in signal_portfolio for t in tickers], dtype=np.bool_
+                )
+                hdays = np.array(
+                    [signal_hold_days.get(t, 0) for t in tickers], dtype=np.int64
+                )
+
+                top_arr = np.array(top_indices, dtype=np.int64)
+                target_mask = apply_hysteresis(
+                    scores, hmask, hdays, top_arr,
+                    proto.pos_size, proto.delta_rank, proto.min_hold_days,
+                )
+                picks = [i for i in range(len(tickers)) if target_mask[i]]
+
+                # Track which picks were "kept by hysteresis" vs "newly selected"
+                top_set = set(tickers[i] for i in top_indices)
+                for idx in picks:
+                    t = tickers[idx]
+                    if t in signal_portfolio and t not in top_set:
+                        hyst_kept.append(t)
+
+                # Update state for this combo
+                new_portfolio = [tickers[i] for i in picks]
+                new_hold_days = {}
+                new_set = set(new_portfolio)
+                for t in new_set:
+                    if t in signal_portfolio:
+                        new_hold_days[t] = signal_hold_days.get(t, 0)  # already incremented
+                    else:
+                        new_hold_days[t] = 0  # T+1 Open: init to 0, next run increments
+                new_strategies[combo] = {
+                    "signal_portfolio": new_portfolio,
+                    "signal_hold_days": new_hold_days,
+                }
+            else:
+                # Stateless top-k (hysteresis disabled, non-rebalance day, or first run)
+                picks = top_indices
 
         picked_tickers = [tickers[i] for i in picks]
         picked_scores = [float(scores[i]) for i in picks]
@@ -316,10 +414,31 @@ def main() -> int:
                 "pick2": picked_tickers[1] if len(picked_tickers) > 1 else "",
                 "score1": picked_scores[0] if len(picked_scores) > 0 else np.nan,
                 "score2": picked_scores[1] if len(picked_scores) > 1 else np.nan,
+                "hyst_kept": ",".join(hyst_kept) if hyst_kept else "",
             }
         )
 
     df_per = pd.DataFrame(per_strategy_rows)
+
+    # 6a-post) Save signal state on rebalance days (hysteresis persistence)
+    if hysteresis_enabled and is_rebalance_day:
+        # For combos not processed by hysteresis (first run / cold start), backfill from picks
+        for _, row in df_per.iterrows():
+            combo = str(row["combo"]).strip()
+            if combo not in new_strategies:
+                picks_list = [row["pick1"], row["pick2"]]
+                picks_list = [p for p in picks_list if p]
+                new_strategies[combo] = {
+                    "signal_portfolio": picks_list,
+                    "signal_hold_days": {p: 0 for p in picks_list},
+                }
+
+        state_out = {
+            "last_asof_date": str(asof_ts.date()),
+            "last_trade_date": args.trade_date,
+            "strategies": new_strategies,
+        }
+        _save_signal_state(state_path, state_out)
 
     # 6b) QDII 排名监控（不交易，仅记录当日 QDII 在全池的排名情况）
     qdii_monitor_rows: list[dict] = []
@@ -412,6 +531,12 @@ def main() -> int:
         f"- 是否调仓日（按 freq={proto.freq}, lookback={proto.lookback_window} 的 index 近似）：{is_rebalance_day}"
     )
     md_lines.append(f"- 择时仓位系数（含 regime gate）：{timing_ratio:.3f} (regime={regime_ratio:.3f})")
+    if hysteresis_enabled:
+        prev_date = prev_state.get("last_asof_date", "N/A") if prev_state else "N/A"
+        md_lines.append(
+            f"- 迟滞参数：delta_rank={proto.delta_rank:.2f}, min_hold_days={proto.min_hold_days}"
+        )
+        md_lines.append(f"- 状态文件：{state_path.relative_to(ROOT)} (上次: {prev_date})")
     md_lines.append(
         f"- 策略数：{n_strat}，每策略持仓：{proto.pos_size}，资金：{args.capital:,.0f}\n"
     )
@@ -427,9 +552,13 @@ def main() -> int:
             )
 
     md_lines.append("\n## 分策略选股（每策略 Top2）")
-    md_lines.append(
-        df_per[["combo", "pick1", "pick2", "score1", "score2"]].to_markdown(index=False)
-    )
+    display_cols = ["combo", "pick1", "pick2", "score1", "score2"]
+    if hysteresis_enabled and "hyst_kept" in df_per.columns:
+        display_cols.append("hyst_kept")
+    md_lines.append(df_per[display_cols].to_markdown(index=False))
+
+    if hysteresis_enabled and not is_rebalance_day and prev_state:
+        md_lines.append("\n> 非调仓日：持仓不变，上次调仓状态保持。")
 
     # QDII 监控（只看不买）
     if qdii_monitor_rows:
