@@ -19,6 +19,7 @@ from .wfo_realbt_calibrator import WFORealBacktestCalibrator
 from pathlib import Path
 
 from .ic_calculator_numba import compute_spearman_ic_numba, compute_multiple_ics_numba
+from .hysteresis import apply_hysteresis
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -162,6 +163,8 @@ def _compute_rebalanced_return(
     top_k: int,
     cost_arr: np.ndarray,
     use_t1_open: bool = False,
+    delta_rank: float = 0.0,      # ✅ Exp4: hysteresis threshold
+    min_hold_days: int = 0,       # ✅ Exp4: minimum holding period
 ) -> float:
     """
     计算滚动 OOS 收益率 (模拟真实交易)
@@ -173,6 +176,8 @@ def _compute_rebalanced_return(
         rebalance_freq: 调仓周期 (天)
         top_k: 持仓数量
         cost_arr: (N,) 每个 ETF 的单边成本 (decimal)
+        delta_rank: rank01 gap threshold for swap (0 = disabled)
+        min_hold_days: minimum holding days before sell (0 = disabled)
 
     返回:
         累计收益率 (如 0.50 = 50%)
@@ -184,6 +189,9 @@ def _compute_rebalanced_return(
     equity = 1.0
     prev_positions = np.zeros(N, dtype=np.int64)  # 0/1 表示是否持仓
 
+    # ✅ Exp4: 持有天数追踪 (WFO 以 rebalance_freq 为周期递增)
+    hold_days_wfo = np.zeros(N, dtype=np.int64)
+
     # 从 rebalance_freq 开始，确保有上一日信号 (T-1)
     for start_idx in range(rebalance_freq, T, rebalance_freq):
         end_idx = min(start_idx + rebalance_freq, T)
@@ -191,6 +199,11 @@ def _compute_rebalanced_return(
             continue
         # 使用 T-1 日信号决定 T 日开盘后的持仓
         sig = signal[start_idx - 1]
+
+        # ✅ Exp4: 递增持有天数 (按 rebalance_freq 周期递增)
+        for n in range(N):
+            if prev_positions[n] == 1:
+                hold_days_wfo[n] += rebalance_freq
 
         # 跳过无效信号
         valid_mask = ~np.isnan(sig)
@@ -209,8 +222,30 @@ def _compute_rebalanced_return(
 
         # 计算新持仓
         new_positions = np.zeros(N, dtype=np.int64)
-        for idx in top_indices:
-            new_positions[idx] = 1
+
+        # ✅ Exp4: Apply hysteresis if enabled
+        if delta_rank > 0.0 or min_hold_days > 0:
+            h_mask = np.zeros(N, dtype=np.bool_)
+            for n in range(N):
+                h_mask[n] = prev_positions[n] == 1
+            target_mask = apply_hysteresis(
+                sig, h_mask, hold_days_wfo,
+                top_indices, top_k,
+                delta_rank, min_hold_days,
+            )
+            for n in range(N):
+                if target_mask[n]:
+                    new_positions[n] = 1
+        else:
+            for idx in top_indices:
+                new_positions[idx] = 1
+
+        # ✅ Exp4: 更新持有天数 (买入置1, 卖出置0)
+        for n in range(N):
+            if prev_positions[n] == 0 and new_positions[n] == 1:
+                hold_days_wfo[n] = 1  # 新买入
+            elif prev_positions[n] == 1 and new_positions[n] == 0:
+                hold_days_wfo[n] = 0  # 卖出
 
         # 计算换手 (卖出 + 买入)
         turnover = 0

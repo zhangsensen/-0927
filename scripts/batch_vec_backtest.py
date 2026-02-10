@@ -29,6 +29,7 @@ from etf_strategy.core.utils.rebalance import (
     ensure_price_views,
 )
 from etf_strategy.regime_gate import compute_regime_gate_arr, gate_stats
+from etf_strategy.core.hysteresis import apply_hysteresis
 from etf_strategy.core.utils.position_sizing import (
     parse_dynamic_pos_config,
     resolve_pos_size_for_day,
@@ -194,6 +195,9 @@ def vec_backtest_kernel(
     leverage_cap,  # 最大仓位上限 (1.0 = 无杠杆)
     # ✅ Exp1: T+1 Open 执行模式
     use_t1_open,  # True = 用明天的 open 成交, False = 当天 close (COC)
+    # ✅ Exp4: Hysteresis + minimum holding period
+    delta_rank,  # float: rank01 gap threshold for swap (0 = disabled)
+    min_hold_days,  # int: minimum holding days before allowing sell (0 = disabled)
 ):
     T, N, _ = factors_3d.shape
 
@@ -212,6 +216,9 @@ def vec_backtest_kernel(
 
     # ✅ P6: 冷却期追踪 (每个标的的剩余冷却天数)
     cooldown_remaining = np.zeros(N, dtype=np.int64)
+
+    # ✅ Exp4: 持有天数追踪
+    hold_days_arr = np.zeros(N, dtype=np.int64)
 
     # ✅ Exp1: T+1 Open pending 状态
     pend_active = False
@@ -401,6 +408,11 @@ def vec_backtest_kernel(
             if cooldown_remaining[n] > 0:
                 cooldown_remaining[n] -= 1
 
+        # ✅ Exp4: 持有天数递增 (每个交易日递增, 在买卖逻辑前)
+        for n in range(N):
+            if holdings[n] > 0.0:
+                hold_days_arr[n] += 1
+
         # ✅ Exp1: 执行 T+1 Open 挂单 (在当天开盘执行昨日的调仓决策)
         if use_t1_open and pend_active:
             # --- 卖出不在目标集的持仓 (at open[t]) ---
@@ -426,6 +438,7 @@ def vec_backtest_kernel(
                     high_water_marks[n] = 0.0
                     current_stop_pcts[n] = trailing_stop_pct
                     current_atr_mults[n] = atr_multiplier
+                    hold_days_arr[n] = 0  # ✅ Exp4
 
             # --- 计算开盘时组合价值 (用 open[t] 估值) ---
             pend_val = cash
@@ -480,6 +493,7 @@ def vec_backtest_kernel(
                             high_water_marks[idx] = price
                             current_stop_pcts[idx] = trailing_stop_pct
                             current_atr_mults[idx] = atr_multiplier
+                            hold_days_arr[idx] = 1  # ✅ Exp4
             pend_active = False
 
         # ✅ P3/P4: 动态止损 + 阶梯止盈
@@ -584,6 +598,7 @@ def vec_backtest_kernel(
                         current_atr_mults[n] = atr_multiplier  # 重置 ATR 倍数
                         # ✅ P6: 设置冷却期
                         cooldown_remaining[n] = cooldown_days
+                        hold_days_arr[n] = 0  # ✅ Exp4
                     else:
                         # 未触发止损，更新 HWM 供明日使用
                         curr_high = high_prices[t, n]
@@ -657,6 +672,25 @@ def vec_backtest_kernel(
                     buy_order[buy_count] = idx
                     buy_count += 1
 
+            # ✅ Exp4: Apply hysteresis filter (max 1 swap per rebalance)
+            if (delta_rank > 0.0 or min_hold_days > 0) and buy_count > 0:
+                h_mask = np.zeros(N, dtype=np.bool_)
+                for n in range(N):
+                    h_mask[n] = holdings[n] > 0.0
+                target_mask = apply_hysteresis(
+                    combined_score, h_mask, hold_days_arr,
+                    top_indices, effective_pos_size,
+                    delta_rank, min_hold_days,
+                )
+                # Overwrite target_set and buy_order from hysteresis result
+                for n in range(N):
+                    target_set[n] = target_mask[n]
+                buy_count = 0
+                for n in range(N):
+                    if target_set[n]:
+                        buy_order[buy_count] = n
+                        buy_count += 1
+
             # ✅ 改用 t-1 日择时信号 (timing_arr 已在 main 中 shift(1)，故此处用 t 即为 t-1 日信号)
             # ✅ P2: 应用动态 leverage，受 leverage_cap 限制
             # ✅ P7: 零杠杆原则 - 确保不超过 leverage_cap
@@ -700,6 +734,7 @@ def vec_backtest_kernel(
                         high_water_marks[n] = 0.0
                         current_stop_pcts[n] = trailing_stop_pct
                         current_atr_mults[n] = atr_multiplier
+                        hold_days_arr[n] = 0  # ✅ Exp4
 
                 current_value = cash
                 kept_value = 0.0
@@ -753,6 +788,7 @@ def vec_backtest_kernel(
                                 high_water_marks[idx] = price
                                 current_stop_pcts[idx] = trailing_stop_pct
                                 current_atr_mults[idx] = atr_multiplier
+                                hold_days_arr[idx] = 1  # ✅ Exp4
     final_value = cash
     for n in range(N):
         if holdings[n] > 0.0:
@@ -906,6 +942,9 @@ def run_vec_backtest(
     leverage_cap=1.0,
     # ✅ Exp1: T+1 Open 执行模式
     use_t1_open=False,
+    # ✅ Exp4: Hysteresis + minimum holding period
+    delta_rank=0.0,  # rank01 gap threshold (0 = disabled)
+    min_hold_days=0,  # minimum holding days (0 = disabled)
 ):
     """运行单个策略的 VEC 回测，并返回舍入诊断信息和风险指标。
 
@@ -1062,6 +1101,9 @@ def run_vec_backtest(
         leverage_cap,
         # ✅ Exp1: T+1 Open
         use_t1_open,
+        # ✅ Exp4: Hysteresis
+        delta_rank,
+        min_hold_days,
     )
 
     rounding_diag = {
