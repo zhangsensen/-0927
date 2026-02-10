@@ -1,3 +1,12 @@
+universe:
+  mode: "A_SHARE_ONLY"   # "A_SHARE_ONLY" = 实盘禁止QDII; "GLOBAL" = 全池含QDII
+  qdii_tickers:
+    - "513500"
+    - "513100"
+    - "513050"
+    - "159920"
+    - "513130"
+
 backtest:
   execution_model: "T1_OPEN"  # "COC" (cheat-on-close) or "T1_OPEN" (signal T-1 → fill at open T+1)
   commission_rate: 0.0002

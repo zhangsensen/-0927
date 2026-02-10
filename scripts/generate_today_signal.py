@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable  # noqa: F401
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ import yaml
 
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.frozen_params import get_qdii_tickers, get_universe_mode
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.utils.rebalance import generate_rebalance_schedule
@@ -176,6 +177,10 @@ def main() -> int:
         raw_config = yaml.safe_load(f)
     backtest_config = raw_config.get("backtest", {})
 
+    # Universe mode: A_SHARE_ONLY 硬禁止 QDII 交易
+    universe_mode = get_universe_mode(raw_config)
+    qdii_set = get_qdii_tickers(raw_config)
+
     candidates_path = Path(args.candidates)
     if not candidates_path.exists():
         raise FileNotFoundError(str(candidates_path))
@@ -284,6 +289,12 @@ def main() -> int:
             # 将不可交易的ETF分数设为-inf
             scores[~tradable_mask] = -np.inf
 
+        # 🚫 QDII 硬禁止: A_SHARE_ONLY 模式下 QDII 不可被选为持仓
+        if universe_mode == "A_SHARE_ONLY":
+            for i, ticker in enumerate(tickers):
+                if ticker in qdii_set:
+                    scores[i] = -np.inf
+
         picks: list[int] = []
         if valid >= proto.pos_size:
             picks = _stable_topk_indices(scores, proto.pos_size)
@@ -309,6 +320,48 @@ def main() -> int:
         )
 
     df_per = pd.DataFrame(per_strategy_rows)
+
+    # 6b) QDII 排名监控（不交易，仅记录当日 QDII 在全池的排名情况）
+    qdii_monitor_rows: list[dict] = []
+    if qdii_set:
+        # 用第一个策略的因子做一次全池排名（含 QDII）
+        first_combo = str(df_candidates.iloc[0]["combo"]).strip() if len(df_candidates) > 0 else ""
+        first_factors = _iter_combo_factors(first_combo)
+        monitor_scores = np.full(len(tickers), -np.inf, dtype=float)
+        for i, ticker in enumerate(tickers):
+            s = 0.0
+            has_value = False
+            for f_name in first_factors:
+                if f_name not in std_factors:
+                    continue
+                v = std_factors[f_name].at[asof_ts, ticker]
+                if pd.notna(v):
+                    s += float(v)
+                    has_value = True
+            if has_value and s != 0.0:
+                monitor_scores[i] = s
+
+        # 全池排名 (1=最高分)
+        valid_mask = np.isfinite(monitor_scores)
+        ranks = np.full(len(tickers), len(tickers), dtype=int)
+        if valid_mask.any():
+            order = np.argsort(-monitor_scores[valid_mask])
+            valid_indices = np.where(valid_mask)[0]
+            for rank, idx in enumerate(order):
+                ranks[valid_indices[idx]] = rank + 1
+
+        for i, ticker in enumerate(tickers):
+            if ticker in qdii_set:
+                qdii_monitor_rows.append(
+                    {
+                        "ticker": ticker,
+                        "score": float(monitor_scores[i]) if np.isfinite(monitor_scores[i]) else None,
+                        "rank": int(ranks[i]),
+                        "in_top2": ranks[i] <= 2,
+                        "in_top10": ranks[i] <= 10,
+                    }
+                )
+        qdii_monitor_rows.sort(key=lambda r: r["rank"])
 
     # 7) 汇总权重：等权 Top6 策略 + 每策略等权 2 只 => 每次命中权重 1/(6*2)
     n_strat = len(df_per)
@@ -349,6 +402,7 @@ def main() -> int:
     title = f"TODAY_SIGNAL_{args.trade_date.replace('-', '')}"
     md_lines: list[str] = []
     md_lines.append(f"# {title}\n")
+    md_lines.append(f"**Universe mode**: `{universe_mode}`")
     md_lines.append("**说明**：以下为策略引擎规则的机械信号输出（非投资建议）。")
     md_lines.append(
         f"- 信号计算日（asof）：{asof_ts.date()}（用于 {args.trade_date} 执行的 t-1 信号）"
@@ -376,6 +430,17 @@ def main() -> int:
     md_lines.append(
         df_per[["combo", "pick1", "pick2", "score1", "score2"]].to_markdown(index=False)
     )
+
+    # QDII 监控（只看不买）
+    if qdii_monitor_rows:
+        md_lines.append(f"\n## QDII 监控（{universe_mode} — 不交易，仅排名追踪）")
+        df_qdii_mon = pd.DataFrame(qdii_monitor_rows)
+        md_lines.append(df_qdii_mon.to_markdown(index=False))
+        best_qdii = qdii_monitor_rows[0]
+        md_lines.append(
+            f"\n最佳 QDII: {best_qdii['ticker']} (rank {best_qdii['rank']}/{len(tickers)}, "
+            f"in_top10={'Y' if best_qdii['in_top10'] else 'N'})"
+        )
 
     (outdir / "TODAY_SIGNAL.md").write_text(
         "\n".join(md_lines) + "\n", encoding="utf-8"

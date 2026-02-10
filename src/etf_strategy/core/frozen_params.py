@@ -335,8 +335,45 @@ _OPERATIONAL_KEYS = frozenset(
         "save_all_results",
         "output_root",
         "cost_model",
+        "universe",
     }
 )
+
+
+# ---------------------------------------------------------------------------
+# Universe mode helpers (A_SHARE_ONLY / GLOBAL)
+# ---------------------------------------------------------------------------
+
+
+def get_universe_mode(config: Dict[str, Any]) -> str:
+    """读取 universe.mode，默认 GLOBAL（向后兼容）"""
+    return config.get("universe", {}).get("mode", "GLOBAL")
+
+
+def get_qdii_tickers(config: Dict[str, Any]) -> set:
+    """从配置读取 QDII ticker 集合，fallback 到 FrozenETFPool 硬编码"""
+    raw = config.get("universe", {}).get("qdii_tickers", None)
+    if raw:
+        return set(str(s) for s in raw)
+    return set(FrozenETFPool().qdii_codes)
+
+
+def get_tradable_symbols(config: Dict[str, Any]) -> List[str]:
+    """根据 universe.mode 返回可交易 ETF 列表。
+
+    A_SHARE_ONLY → 剔除 QDII；GLOBAL → 全池。
+    保持原始顺序。
+    """
+    all_symbols = [str(s) for s in config.get("data", {}).get("symbols", [])]
+    if get_universe_mode(config) == "A_SHARE_ONLY":
+        qdii = get_qdii_tickers(config)
+        return [s for s in all_symbols if s not in qdii]
+    return all_symbols
+
+
+def is_qdii(ticker: str, config: Dict[str, Any]) -> bool:
+    """判断 ticker 是否属于 QDII"""
+    return ticker in get_qdii_tickers(config)
 
 
 # ---------------------------------------------------------------------------
