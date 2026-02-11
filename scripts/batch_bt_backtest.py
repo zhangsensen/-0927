@@ -84,6 +84,12 @@ def run_bt_backtest(
         data = PandasData(dataname=df, name=ticker)
         cerebro.adddata(data)
 
+    # ✅ Exp2: sizing_commission_rate 必须与 broker 实际扣费匹配，否则 shadow 估算偏低导致 margin failure
+    if cost_model is not None and cost_model.is_split_market:
+        sizing_comm = max(cost_model.active_tier.a_share, cost_model.active_tier.qdii)
+    else:
+        sizing_comm = commission_rate
+
     cerebro.addstrategy(
         GenericStrategy,
         scores=combined_score_df,
@@ -99,6 +105,8 @@ def run_bt_backtest(
         dynamic_leverage_enabled=dynamic_leverage_enabled,
         # ✅ Exp1: T+1 Open
         use_t1_open=use_t1_open,
+        # ✅ Exp2: conservative sizing — use max(A-share, QDII) rate
+        sizing_commission_rate=sizing_comm,
         # ✅ Exp4: 换仓迟滞
         delta_rank=delta_rank,
         min_hold_days=min_hold_days,
@@ -619,20 +627,11 @@ def main():
             f"✅ Regime gate enabled: mean={s['mean']:.2f}, min={s['min']:.2f}, max={s['max']:.2f}"
         )
 
-    # ✅ v3.1: 波动率体制 (与 VEC 保持一致)
-    if "510300" in ohlcv["close"].columns:
-        hs300 = ohlcv["close"]["510300"]
-    else:
-        hs300 = ohlcv["close"].iloc[:, 0]
-    rets = hs300.pct_change()
-    hv = rets.rolling(window=20, min_periods=20).std() * np.sqrt(252) * 100
-    hv_5d = hv.shift(5)
-    regime_vol = (hv + hv_5d) / 2
-    exposure_s = pd.Series(1.0, index=regime_vol.index)
-    exposure_s[regime_vol >= 25] = 0.7
-    exposure_s[regime_vol >= 30] = 0.4
-    exposure_s[regime_vol >= 40] = 0.1
-    vol_regime_series = exposure_s.reindex(dates).fillna(1.0)
+    # ✅ FIXED: vol_regime_series = 1.0 — regime gate already baked into timing_series via gate_arr.
+    # Previously this duplicated the same 25/30/40% thresholds, causing exposure^2 scaling
+    # which locked up capital and caused massive margin failures.
+    # See CLAUDE.md pitfall: "NEVER duplicate regime gate (timing_arr only)"
+    vol_regime_series = pd.Series(1.0, index=dates)
 
     # 准备 data feeds
     data_feeds = {}

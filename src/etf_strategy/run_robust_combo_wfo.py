@@ -207,6 +207,9 @@ def main():
     # 10. 运行WFO
     print(f"\n🚀 开始WFO优化（全空间搜索）...")
 
+    # 跨桶约束配置
+    bucket_cfg = wfo_cfg.get("bucket_constraints", {})
+
     optimizer = ComboWFOOptimizer(
         combo_sizes=combo_sizes,
         is_period=wfo_cfg["is_period"],
@@ -219,6 +222,9 @@ def main():
         complexity_penalty_lambda=wfo_cfg["scoring"].get(
             "complexity_penalty_lambda", 0.01
         ),
+        use_bucket_constraints=bucket_cfg.get("enabled", False),
+        bucket_min_buckets=bucket_cfg.get("min_buckets", 3),
+        bucket_max_per_bucket=bucket_cfg.get("max_per_bucket", 2),
     )
 
     top_combos, results_df = optimizer.run_combo_search(

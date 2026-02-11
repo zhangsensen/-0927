@@ -169,7 +169,7 @@ combo_wfo:
   # 跨桶约束: 基于因子截面相关性分桶, 强制组合跨维度选择
   # 默认关闭; 启用后组合空间约减半, 搜索密度翻倍
   bucket_constraints:
-    enabled: false        # 生产默认关闭, 研究分支可开启 A/B 对照
+    enabled: true         # 2026-02-11: 启用, Phase1+2验证通过 (HO+4.84pp, 5/5 PASS)
     min_buckets: 3        # 组合至少覆盖3个信息维度桶
     max_per_bucket: 2     # 每桶最多选2个因子
 cross_section:
