@@ -74,7 +74,7 @@ def main():
     )
     args = parser.parse_args()
     print("=" * 80)
-    print("🚀 VEC BACKTEST (WFO -> VEC pipeline enforced, FREQ=3, POS=2)")
+    print("🚀 VEC BACKTEST (WFO -> VEC pipeline enforced)")
     print("=" * 80)
 
     # 1. Load Configuration
@@ -96,9 +96,9 @@ def main():
     exec_model = load_execution_model(config)
     USE_T1_OPEN = exec_model.is_t1_open
 
-    # Override with optimized parameters
-    FREQ = 3
-    POS_SIZE = 2
+    # Read parameters from config (no longer hardcoded)
+    FREQ = backtest_config.get("freq", 3)
+    POS_SIZE = backtest_config.get("pos_size", 2)
     EXTREME_THRESHOLD = -0.1
     EXTREME_POSITION = 0.1
 

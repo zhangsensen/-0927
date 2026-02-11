@@ -444,9 +444,9 @@ def main() -> None:
     exec_model = load_execution_model(config)
     USE_T1_OPEN = exec_model.is_t1_open
 
-    # Fixed trading rule
-    FREQ = 3
-    POS_SIZE = 2
+    # Read parameters from config (no longer hardcoded)
+    FREQ = backtest_config.get("freq", 3)
+    POS_SIZE = backtest_config.get("pos_size", 2)
     EXTREME_THRESHOLD = -0.1
     EXTREME_POSITION = 0.1
 

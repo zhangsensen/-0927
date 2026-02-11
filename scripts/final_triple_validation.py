@@ -50,7 +50,7 @@ GATE_HOLDOUT_MIN_RET = 0.0  # Must be profitable in holdout
 # + orthogonal_v1 cleanup: remove redundant/insignificant factors
 EXCLUDE_FACTORS = {
     # 原有排除
-    "OBV_SLOPE_10D",
+    # "OBV_SLOPE_10D",  # restored to active_factors for full-space evaluation
     "CMF_20D",
     "VOL_RATIO_60D",
     # 正交化 v1 新增排除
