@@ -213,6 +213,9 @@ def main():
     logger.info("=" * 100)
     logger.info("")
 
+    # 跨桶约束配置 (默认关闭, 需在 combo_wfo.bucket_constraints 中启用)
+    bucket_cfg = config["combo_wfo"].get("bucket_constraints", {})
+
     optimizer = ComboWFOOptimizer(
         combo_sizes=config["combo_wfo"]["combo_sizes"],
         is_period=config["combo_wfo"]["is_period"],
@@ -227,6 +230,9 @@ def main():
         ],
         rebalance_frequencies=config["combo_wfo"]["rebalance_frequencies"],
         use_t1_open=config.get("backtest", {}).get("execution_model", "COC") == "T1_OPEN",
+        use_bucket_constraints=bucket_cfg.get("enabled", False),
+        bucket_min_buckets=bucket_cfg.get("min_buckets", 3),
+        bucket_max_per_bucket=bucket_cfg.get("max_per_bucket", 2),
     )
 
     # ✅ Exp2: 加载成本模型 → 构建 per-ETF 成本数组

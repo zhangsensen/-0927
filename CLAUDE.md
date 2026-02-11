@@ -151,9 +151,19 @@ OHLCV data from QMT Trading Terminal via `qmt-data-bridge` SDK. Use `QMTClient` 
 
 **Prohibited**: Modifying core factor library, changing backtest engine logic, changing locked parameters, removing QDII ETFs, deleting ARCHIVE files, creating "simplified/backup" scripts
 
+## Signal Evaluation Principle (v5.0+)
+
+**Any new signal/factor must be evaluated under the production execution framework (FREQ=5 + Exp4 hysteresis + regime gate), otherwise it is not a valid production candidate.** The legacy pipeline mode (F3_OFF) is permitted only as a research reference and must never directly drive go-live decisions.
+
+Rationale (verified 2026-02-11):
+- Cross-sectional return PCA: PC1 median explained ratio = 59.8% — the A-share ETF universe is dominated by a single factor (sector/theme momentum)
+- S1's 4 factors have moderate IC correlation (avg 0.31) and moderate cross-sectional overlap (avg 0.24) — they are not fully redundant but share the same dominant signal
+- Factor space effective dimensionality (Kaiser): 5 out of 17 — most factors are redundant
+- v3.4→v5.0 evidence: same signal (S1), execution-only improvement yielded +35.8pp holdout return; switching signals under same execution destroyed value
+
 ## Config
 
-Single source of truth: `configs/combo_wfo_config.yaml` — 43 ETFs, 16 active factors, all engine parameters including hysteresis section.
+Single source of truth: `configs/combo_wfo_config.yaml` — 43 ETFs, 17 active factors (OBV_SLOPE_10D restored), all engine parameters including hysteresis section.
 
 ## Code Style
 
