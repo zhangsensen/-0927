@@ -84,6 +84,12 @@ def _parse_args() -> argparse.Namespace:
         default="",
         help="输出目录（默认 results/today_signal_<trade-date>/）",
     )
+    p.add_argument(
+        "--shadow-config",
+        type=str,
+        default="configs/shadow_strategies.yaml",
+        help="Shadow strategy definitions (default: configs/shadow_strategies.yaml)",
+    )
     return p.parse_args()
 
 
@@ -559,6 +565,169 @@ def main() -> int:
         }
         _save_signal_state(state_path, state_out)
 
+    # ──────────────────────────────────────────────────────────────────
+    # Shadow strategies: parallel signal generation (no production impact)
+    # ──────────────────────────────────────────────────────────────────
+    shadow_results: list[dict] = []
+    shadow_config_path = ROOT / args.shadow_config
+
+    if shadow_config_path.exists():
+        with open(shadow_config_path, "r", encoding="utf-8") as f:
+            shadow_cfg = yaml.safe_load(f) or {}
+
+        for shadow_strat in shadow_cfg.get("shadow_strategies", []):
+            s_name = shadow_strat["name"]
+            s_combo = shadow_strat["combo"]
+            s_factors = _iter_combo_factors(s_combo)
+
+            # Verify factors exist
+            missing = [f for f in s_factors if f not in std_factors]
+            if missing:
+                print(f"  Shadow {s_name}: missing factors {missing}, skipping")
+                continue
+
+            # Separate state file per shadow strategy
+            s_state_path = STATE_DIR / f"signal_state_shadow_{s_name}.json"
+            s_prev_state = _load_signal_state(s_state_path) if hysteresis_enabled else None
+            s_combo_state: dict = {}
+            s_elapsed = 0
+
+            if s_prev_state:
+                tradable_set = set(tickers)
+                problems = _validate_signal_state(
+                    s_prev_state, proto.freq, universe_mode, tradable_set
+                )
+                if problems:
+                    for p in problems:
+                        logger.warning(f"Shadow {s_name} state validation failed: {p}")
+                    s_prev_state = None
+
+            if s_prev_state and s_prev_state.get("last_asof_date"):
+                last_ts = pd.Timestamp(s_prev_state["last_asof_date"])
+                mask = (close_df.index > last_ts) & (close_df.index <= asof_ts)
+                s_elapsed = int(mask.sum())
+                for st in s_prev_state.get("strategies", {}).values():
+                    for ticker in st.get("signal_portfolio", []):
+                        st["signal_hold_days"][ticker] = (
+                            st["signal_hold_days"].get(ticker, 0) + s_elapsed
+                        )
+                s_combo_state = s_prev_state.get("strategies", {}).get(s_combo, {})
+
+            # Score (same logic as production)
+            s_scores = np.full(len(tickers), -np.inf, dtype=float)
+            s_valid = 0
+            for i, ticker in enumerate(tickers):
+                s = 0.0
+                has_value = False
+                for f_name in s_factors:
+                    v = std_factors[f_name].at[asof_ts, ticker]
+                    if pd.notna(v):
+                        s += float(v)
+                        has_value = True
+                if has_value and s != 0.0:
+                    s_scores[i] = s
+                    s_valid += 1
+
+            # Tradable mask (same as production)
+            s_tradable = np.ones(len(tickers), dtype=bool)
+            if len(close_df) >= 2:
+                prev_close = close_df.iloc[-2]
+                curr_close = close_df.iloc[-1]
+                volume_curr = ohlcv["volume"].iloc[-1]
+                for i, ticker in enumerate(tickers):
+                    if pd.notna(prev_close[ticker]) and pd.notna(curr_close[ticker]):
+                        if (curr_close[ticker] / prev_close[ticker]) - 1.0 > 0.095:
+                            s_tradable[i] = False
+                    if pd.notna(volume_curr[ticker]) and volume_curr[ticker] <= 0:
+                        s_tradable[i] = False
+                s_scores[~s_tradable] = -np.inf
+
+            # QDII block
+            if universe_mode == "A_SHARE_ONLY":
+                for i, ticker in enumerate(tickers):
+                    if ticker in qdii_set:
+                        s_scores[i] = -np.inf
+
+            # Selection with hysteresis
+            s_picks: list[int] = []
+            s_hyst_kept: list[str] = []
+
+            if s_valid >= proto.pos_size:
+                if pool_ids is not None and pool_extended_k > 0:
+                    s_top = _pool_diversify_topk(s_scores, pool_ids, proto.pos_size, pool_extended_k)
+                else:
+                    s_top = _stable_topk_indices(s_scores, proto.pos_size)
+
+                if hysteresis_enabled and is_rebalance_day and len(s_top) == proto.pos_size:
+                    sig_pf = set(s_combo_state.get("signal_portfolio", []))
+                    sig_hd = s_combo_state.get("signal_hold_days", {})
+
+                    hmask = np.array([t in sig_pf for t in tickers], dtype=np.bool_)
+                    hdays = np.array([sig_hd.get(t, 0) for t in tickers], dtype=np.int64)
+
+                    target_mask = apply_hysteresis(
+                        s_scores, hmask, hdays, np.array(s_top, dtype=np.int64),
+                        proto.pos_size, proto.delta_rank, proto.min_hold_days,
+                    )
+                    s_picks = [i for i in range(len(tickers)) if target_mask[i]]
+
+                    top_set = set(tickers[i] for i in s_top)
+                    for idx in s_picks:
+                        t = tickers[idx]
+                        if t in sig_pf and t not in top_set:
+                            s_hyst_kept.append(t)
+                else:
+                    s_picks = s_top
+
+            s_picked_tickers = [tickers[i] for i in s_picks]
+            s_picked_scores = [float(s_scores[i]) for i in s_picks]
+
+            # Build new state
+            s_new_hold_days: dict[str, int] = {}
+            prev_pf = set(s_combo_state.get("signal_portfolio", []))
+            prev_hd = s_combo_state.get("signal_hold_days", {})
+            for t in s_picked_tickers:
+                s_new_hold_days[t] = prev_hd.get(t, 0) if t in prev_pf else 0
+
+            # Save state on rebalance days
+            if hysteresis_enabled and is_rebalance_day:
+                s_state_out = {
+                    "version": CURRENT_VERSION,
+                    "freq": proto.freq,
+                    "universe_mode": universe_mode,
+                    "last_asof_date": str(asof_ts.date()),
+                    "last_trade_date": args.trade_date,
+                    "strategies": {
+                        s_combo: {
+                            "signal_portfolio": s_picked_tickers,
+                            "signal_hold_days": s_new_hold_days,
+                        }
+                    },
+                }
+                _save_signal_state(s_state_path, s_state_out)
+
+            # Append to snapshot log (append-only JSONL for historical tracking)
+            snapshot_path = STATE_DIR / "shadow_snapshots.jsonl"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot = {
+                "asof_date": str(asof_ts.date()),
+                "trade_date": args.trade_date,
+                "strategy": s_name,
+                "combo": s_combo,
+                "is_rebalance": is_rebalance_day,
+                "picks": s_picked_tickers,
+                "scores": s_picked_scores,
+                "timing_ratio": timing_ratio,
+                "regime_ratio": regime_ratio,
+                "hyst_kept": s_hyst_kept,
+                "hold_days": s_new_hold_days,
+            }
+            with open(snapshot_path, "a", encoding="utf-8") as sf:
+                sf.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
+
+            shadow_results.append(snapshot)
+            print(f"  Shadow {s_name}: {s_picked_tickers} (scores: {[f'{x:.3f}' for x in s_picked_scores]})")
+
     # 6b) QDII 排名监控（不交易，仅记录当日 QDII 在全池的排名情况）
     qdii_monitor_rows: list[dict] = []
     if qdii_set:
@@ -692,6 +861,28 @@ def main() -> int:
             f"in_top10={'Y' if best_qdii['in_top10'] else 'N'})"
         )
 
+    # Shadow strategies markdown section
+    if shadow_results:
+        md_lines.append(f"\n## Shadow 策略信号（不交易，仅记录）")
+        for sr in shadow_results:
+            md_lines.append(f"\n### {sr['strategy']} ({sr['combo']})")
+            if sr["picks"]:
+                for i, (p, s) in enumerate(zip(sr["picks"], sr["scores"])):
+                    md_lines.append(f"- Pick {i + 1}: **{p}** (score: {s:.4f})")
+            else:
+                md_lines.append("- (无有效信号)")
+            md_lines.append(f"- 调仓日: {'是' if sr['is_rebalance'] else '否'}")
+            md_lines.append(
+                f"- 迟滞保留: {', '.join(sr['hyst_kept']) if sr['hyst_kept'] else '无'}"
+            )
+            if sr["hold_days"]:
+                hd_str = ", ".join(f"{k}: {v}d" for k, v in sr["hold_days"].items())
+                md_lines.append(f"- Hold days: {hd_str}")
+
+        # Save shadow signals CSV
+        shadow_csv_path = outdir / "shadow_signals.csv"
+        pd.DataFrame(shadow_results).to_csv(shadow_csv_path, index=False, encoding="utf-8")
+
     (outdir / "TODAY_SIGNAL.md").write_text(
         "\n".join(md_lines) + "\n", encoding="utf-8"
     )
@@ -700,6 +891,9 @@ def main() -> int:
     print(f"- {outdir / 'TODAY_SIGNAL.md'}")
     print(f"- {outdir / 'signals_per_strategy.csv'}")
     print(f"- {outdir / 'aggregate_weights.csv'}")
+    if shadow_results:
+        print(f"- {outdir / 'shadow_signals.csv'}")
+        print(f"- {STATE_DIR / 'shadow_snapshots.jsonl'} (appended)")
     return 0
 
 

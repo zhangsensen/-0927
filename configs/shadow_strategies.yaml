@@ -1,0 +1,13 @@
+# Shadow strategy definitions for forward signal monitoring.
+# These strategies run in parallel with production (S1) but do NOT trade.
+# Each strategy gets its own hysteresis state file at data/live/signal_state_shadow_{name}.json.
+# Snapshots appended to data/live/shadow_snapshots.jsonl for historical tracking.
+#
+# Used by: scripts/generate_today_signal.py --shadow-config configs/shadow_strategies.yaml
+
+shadow_strategies:
+  - name: "C2"
+    combo: "AMIHUD_ILLIQUIDITY+CALMAR_RATIO_60D+CORRELATION_TO_MARKET_20D"
+    # Sealed at: sealed_strategies/c2_shadow_20260211/
+    # Factors: B(SUSTAINED_POSITION) + D(MICROSTRUCTURE) + E(TREND_STRENGTH_RISK)
+    # BT HO: +45.9%, VEC HO: +63.0%, Jaccard=0.000 vs S1

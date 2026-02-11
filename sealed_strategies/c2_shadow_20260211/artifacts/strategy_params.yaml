@@ -1,0 +1,42 @@
+# C2 Strategy Frozen Parameters
+# Sealed: 2026-02-11
+# Status: Shadow Candidate (NOT production)
+# Codebase: identical to v5.0_20260211
+
+strategy:
+  name: "C2"
+  factors:
+    - AMIHUD_ILLIQUIDITY
+    - CALMAR_RATIO_60D
+    - CORRELATION_TO_MARKET_20D
+  factor_buckets: "B(SUSTAINED_POSITION) + D(MICROSTRUCTURE) + E(TREND_STRENGTH_RISK)"
+  n_factors: 3
+
+execution:
+  freq: 5
+  pos_size: 2
+  lookback: 252
+  commission: 0.0002
+  hysteresis:
+    enabled: true
+    delta_rank: 0.10
+    min_hold_days: 9
+    max_swaps_per_rebalance: 1
+  regime_gate:
+    enabled: true
+    mode: volatility
+    proxy: "510300"
+    thresholds: [25, 30, 40]
+  execution_model: T1_OPEN
+  cost_model: SPLIT_MARKET
+  universe_mode: A_SHARE_ONLY
+
+data:
+  training: "2020-01 ~ 2025-04"
+  holdout: "2025-05 ~ 2026-02-10"
+  etf_pool: 43  # 38 A-share + 5 QDII (monitored)
+
+reference:
+  production_strategy: "S1 (v5.0)"
+  codebase_version: "v5.0_20260211"
+  config_file: "configs/combo_wfo_config.yaml"
