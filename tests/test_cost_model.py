@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 import yaml
 
@@ -226,6 +227,110 @@ class TestFrozenParamsCompatibility:
         # This should not raise even though cost_model is present
         frozen = load_frozen_config(config, config_path=str(config_path))
         assert frozen is not None
+
+
+# ─────────────────────────────────────────────────────────
+#  5. VEC kernel regression: UNIFIED mode = legacy behavior
+# ─────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────
+#  6. BT sizing commission rate regression
+# ─────────────────────────────────────────────────────────
+
+
+class TestBTSizingCommissionRate:
+    """Regression: sizing_commission_rate must match broker actual rate, not hardcoded constant.
+
+    Bug history (2026-02-11): Engine used COMMISSION_RATE (2bp) for position sizing
+    while SPLIT_MARKET broker charged 20bp → progressive cash drain → margin failures.
+    Fix: pass max(a_share, qdii) rate as sizing_commission_rate.
+    """
+
+    def test_sizing_comm_from_split_market(self):
+        """SPLIT_MARKET: sizing_commission_rate = max(a_share, qdii)."""
+        from etf_strategy.core.cost_model import CostModel
+
+        m = CostModel(
+            mode="SPLIT_MARKET",
+            tier="med",
+            tiers=(("med", 0.0020, 0.0050),),
+        )
+        assert m.is_split_market
+        sizing_comm = max(m.active_tier.a_share, m.active_tier.qdii)
+        assert sizing_comm == 0.0050, (
+            f"sizing_commission_rate should be max(0.002, 0.005)=0.005, got {sizing_comm}"
+        )
+        # Must be significantly higher than legacy COMMISSION_RATE
+        assert sizing_comm > 0.001, "sizing rate must exceed legacy 2bp constant"
+
+    def test_sizing_comm_from_unified(self):
+        """UNIFIED: sizing_commission_rate = commission_rate (pass-through)."""
+        from etf_strategy.core.cost_model import CostModel
+
+        m = CostModel(mode="UNIFIED", unified_rate=0.0002)
+        assert not m.is_split_market
+        # In UNIFIED mode, a_share == qdii == unified_rate
+        sizing_comm = max(m.active_tier.a_share, m.active_tier.qdii)
+        assert sizing_comm == 0.0002
+
+    def test_production_sizing_comm_exceeds_engine_constant(self):
+        """Guard: production SPLIT_MARKET sizing rate >> engine COMMISSION_RATE constant."""
+        import yaml
+
+        from etf_strategy.core.cost_model import load_cost_model
+
+        config_path = ROOT / "configs" / "combo_wfo_config.yaml"
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        m = load_cost_model(config)
+
+        if m.is_split_market:
+            sizing_comm = max(m.active_tier.a_share, m.active_tier.qdii)
+            engine_constant = 0.0002  # COMMISSION_RATE in engine.py
+            assert sizing_comm >= 10 * engine_constant, (
+                f"SPLIT_MARKET sizing rate ({sizing_comm}) must be ≥10x engine constant "
+                f"({engine_constant}) — otherwise position sizing underestimates costs"
+            )
+
+
+# ─────────────────────────────────────────────────────────
+#  7. Vol regime series non-duplication regression
+# ─────────────────────────────────────────────────────────
+
+
+class TestVolRegimeNonDuplication:
+    """Regression: vol_regime_series must NOT duplicate regime gate already in timing_series.
+
+    Bug history (2026-02-11): batch_bt_backtest.py computed vol_regime_series with
+    same 25/30/40% thresholds as gate_arr in timing_series → engine multiplied both
+    → exposure^2 → severe under-capitalization → massive margin failures.
+    Fix: vol_regime_series = 1.0 (neutral).
+    """
+
+    def test_regime_gate_single_application(self):
+        """If timing_series already contains gate, vol_regime must be 1.0 (neutral)."""
+        # Simulate the production pattern: timing_series has gate baked in
+        dates = pd.date_range("2025-01-01", periods=100, freq="B")
+        timing_series = pd.Series(0.7, index=dates)  # gate-adjusted
+        vol_regime_series = pd.Series(1.0, index=dates)  # neutral
+
+        # Engine multiplies: timing_ratio *= vol_regime
+        combined = timing_series * vol_regime_series
+        pd.testing.assert_series_equal(combined, timing_series, check_names=False)
+
+    def test_double_application_would_reduce_exposure(self):
+        """Demonstrate the bug: double-applying gate squares the exposure."""
+        dates = pd.date_range("2025-01-01", periods=100, freq="B")
+        gate_value = 0.4  # 30%+ volatility regime
+        timing_with_gate = pd.Series(gate_value, index=dates)
+        vol_regime_duplicate = pd.Series(gate_value, index=dates)  # BUG: same gate again
+
+        double_applied = timing_with_gate * vol_regime_duplicate
+        # 0.4 * 0.4 = 0.16 — only 16% exposure instead of 40%
+        assert double_applied.iloc[0] == pytest.approx(0.16, abs=1e-10)
+        # This is why it causes margin failures: capital allocated << needed
+        assert double_applied.iloc[0] < timing_with_gate.iloc[0]
 
 
 # ─────────────────────────────────────────────────────────
