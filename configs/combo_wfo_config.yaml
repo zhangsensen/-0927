@@ -162,6 +162,12 @@ combo_wfo:
   step_size: 60
   top_n: 100000
   verbose: true
+  # 跨桶约束: 基于因子截面相关性分桶, 强制组合跨维度选择
+  # 默认关闭; 启用后组合空间约减半, 搜索密度翻倍
+  bucket_constraints:
+    enabled: false        # 生产默认关闭, 研究分支可开启 A/B 对照
+    min_buckets: 3        # 组合至少覆盖3个信息维度桶
+    max_per_bucket: 2     # 每桶最多选2个因子
 cross_section:
   bounded_factors:
   - PRICE_POSITION_20D

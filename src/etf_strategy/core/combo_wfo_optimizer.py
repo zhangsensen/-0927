@@ -70,6 +70,9 @@ class ComboWFOConfig:
     enable_fdr: bool = True
     fdr_alpha: float = 0.05
     complexity_penalty_lambda: float = 0.01
+    use_bucket_constraints: bool = False  # 跨桶约束开关
+    bucket_min_buckets: int = 3           # 最少覆盖桶数
+    bucket_max_per_bucket: int = 2        # 每桶最多选几个因子
 
     def __post_init__(self):
         """初始化后自动调整 n_jobs"""
@@ -312,6 +315,9 @@ class ComboWFOOptimizer:
         complexity_penalty_lambda: float = 0.01,
         rebalance_frequencies: List[int] = None,
         use_t1_open: bool = False,
+        use_bucket_constraints: bool = False,
+        bucket_min_buckets: int = 3,
+        bucket_max_per_bucket: int = 2,
     ):
         self.use_t1_open = use_t1_open
         self.config = ComboWFOConfig(
@@ -324,10 +330,52 @@ class ComboWFOOptimizer:
             enable_fdr=enable_fdr,
             fdr_alpha=fdr_alpha,
             complexity_penalty_lambda=complexity_penalty_lambda,
+            use_bucket_constraints=use_bucket_constraints,
+            bucket_min_buckets=bucket_min_buckets,
+            bucket_max_per_bucket=bucket_max_per_bucket,
         )
         self.rebalance_frequencies = (
             rebalance_frequencies if rebalance_frequencies else [5, 10, 15, 20, 25, 30]
         )
+
+    def _generate_combos(
+        self, factor_names: List[str], n_factors: int
+    ) -> List[Tuple[int, ...]]:
+        """生成因子组合 (索引 tuple).
+
+        当 use_bucket_constraints=True 时, 使用跨桶约束剪枝;
+        否则使用原始无约束枚举.
+        """
+        all_combos: List[Tuple[int, ...]] = []
+
+        if self.config.use_bucket_constraints:
+            from etf_strategy.core.factor_buckets import generate_cross_bucket_combos
+
+            name_to_idx = {name: i for i, name in enumerate(factor_names)}
+            for size in self.config.combo_sizes:
+                # size=2 不可能覆盖3桶, 用 min_buckets=min(size, target)
+                effective_min = min(size, self.config.bucket_min_buckets)
+                name_combos = generate_cross_bucket_combos(
+                    factor_names,
+                    combo_size=size,
+                    min_buckets=effective_min,
+                    max_per_bucket=self.config.bucket_max_per_bucket,
+                )
+                idx_combos = [
+                    tuple(name_to_idx[n] for n in nc) for nc in name_combos
+                ]
+                all_combos.extend(idx_combos)
+                logger.info(
+                    f"  {size}-factor combos: {len(idx_combos)} (cross-bucket, "
+                    f"min_buckets={effective_min})"
+                )
+        else:
+            for size in self.config.combo_sizes:
+                combos = list(combinations(range(n_factors), size))
+                all_combos.extend(combos)
+                logger.info(f"  {size}-factor combos: {len(combos)}")
+
+        return all_combos
 
     def _generate_windows(self, total_days: int):
         windows = []
@@ -558,11 +606,7 @@ class ComboWFOOptimizer:
 
         windows = self._generate_windows(T)
         logger.info(f"Generated {len(windows)} WFO windows")
-        all_combos = []
-        for size in self.config.combo_sizes:
-            combos = list(combinations(range(F), size))
-            all_combos.extend(combos)
-            logger.info(f"  {size}-factor combos: {len(combos)}")
+        all_combos = self._generate_combos(factor_names, F)
         logger.info(f"Total: {len(all_combos)} combos")
 
         # 预计算所有因子的单因子IC（避免combo间重复计算）
