@@ -212,6 +212,48 @@ def _stable_topk_indices(scores: np.ndarray, k: int) -> list[int]:
     return out
 
 
+def _pool_diversify_topk(
+    scores: np.ndarray, pool_ids: np.ndarray, pos_size: int, extended_k: int
+) -> list[int]:
+    """Python equivalent of pool_diversify_topk (mirrors @njit version in VEC)."""
+    candidates = _stable_topk_indices(scores, extended_k)
+    if not candidates:
+        return candidates
+
+    result: list[int] = [candidates[0]]
+    used_pools: list[int] = [int(pool_ids[candidates[0]])]
+
+    for _ in range(1, pos_size):
+        found = False
+        # Prefer cross-pool candidate
+        for idx in candidates[1:]:
+            if not np.isfinite(scores[idx]):
+                break
+            if idx in result:
+                continue
+            cand_pool = int(pool_ids[idx])
+            if cand_pool != -1 and cand_pool in used_pools:
+                continue
+            result.append(idx)
+            used_pools.append(cand_pool)
+            found = True
+            break
+        # Fallback: best remaining regardless of pool
+        if not found:
+            for idx in candidates[1:]:
+                if not np.isfinite(scores[idx]):
+                    break
+                if idx not in result:
+                    result.append(idx)
+                    used_pools.append(int(pool_ids[idx]))
+                    found = True
+                    break
+        if not found:
+            break
+
+    return result
+
+
 def _iter_combo_factors(combo: str) -> list[str]:
     return [s.strip() for s in combo.split("+") if s.strip()]
 
@@ -352,6 +394,19 @@ def main() -> int:
                 )
         prev_strategies = prev_state.get("strategies", {})
 
+    # 6a-pre) Pool diversity constraint (mirrors VEC kernel logic)
+    pool_constraint_cfg = backtest_config.get("portfolio_constraints", {}).get("pool_diversity", {})
+    pool_diversity_enabled = pool_constraint_cfg.get("enabled", False)
+    pool_extended_k = pool_constraint_cfg.get("extended_k", 10) if pool_diversity_enabled else 0
+    if pool_diversity_enabled:
+        from etf_strategy.core.etf_pool_mapper import load_pool_mapping, build_pool_array
+        _pool_map = load_pool_mapping(ROOT / "configs" / "etf_pools.yaml")
+        pool_ids = build_pool_array(list(tickers), _pool_map)
+        logger.info(f"池约束: enabled, extended_k={pool_extended_k}")
+    else:
+        pool_ids = None
+        pool_extended_k = 0
+
     # 6a) 逐策略选股（使用 asof 日的标准化因子；与 kernel 中 t-1 取值一致）
     price_asof = close_df.loc[asof_ts]
 
@@ -407,7 +462,11 @@ def main() -> int:
         hyst_kept: list[str] = []  # tickers kept by hysteresis (for reporting)
 
         if valid >= proto.pos_size:
-            top_indices = _stable_topk_indices(scores, proto.pos_size)
+            # ✅ Pool diversity: prefer cross-pool candidates
+            if pool_ids is not None and pool_extended_k > 0:
+                top_indices = _pool_diversify_topk(scores, pool_ids, proto.pos_size, pool_extended_k)
+            else:
+                top_indices = _stable_topk_indices(scores, proto.pos_size)
 
             if hysteresis_enabled and is_rebalance_day and len(top_indices) == proto.pos_size:
                 # Load per-combo state

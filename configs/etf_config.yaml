@@ -160,7 +160,7 @@ etf_list:
 
       - code: "515210.SH"
         name: "钢铁ETF"
-        category: "科技"
+        category: "资源周期"
         priority: 3
         description: "跟踪中证钢铁指数"
 

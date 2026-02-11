@@ -152,6 +152,95 @@ def stable_topk_indices(scores, k):
     return result
 
 
+@njit(cache=True)
+def pool_diversify_topk(combined_score, pool_ids, pos_size, extended_k):
+    """Pool-diversified top-k selection: greedy pick ensuring cross-pool diversity.
+
+    Algorithm:
+    1. Get extended candidate list via stable_topk_indices(combined_score, extended_k)
+    2. Pick1 = best overall candidate
+    3. Pick2..N = first candidate from a different pool than all already-picked
+    4. Fallback: if no cross-pool candidate in top extended_k, allow same pool
+
+    Args:
+        combined_score: (N,) float64 scores (-inf for invalid)
+        pool_ids: (N,) int64 pool IDs (0-6, -1 for unmapped)
+        pos_size: number of positions to select
+        extended_k: search depth (e.g. 10)
+
+    Returns:
+        int64 array of selected indices (length <= pos_size)
+    """
+    candidates = stable_topk_indices(combined_score, extended_k)
+    n_cand = len(candidates)
+    if n_cand == 0:
+        return candidates
+
+    result = np.empty(pos_size, dtype=np.int64)
+    used_pools = np.empty(pos_size, dtype=np.int64)
+    n_picked = 0
+
+    # Pick1: always the best candidate
+    result[0] = candidates[0]
+    used_pools[0] = pool_ids[candidates[0]]
+    n_picked = 1
+
+    if pos_size == 1:
+        return result[:1]
+
+    # Pick2..N: prefer cross-pool candidates
+    for pick_round in range(1, pos_size):
+        found = False
+        for j in range(1, n_cand):
+            idx = candidates[j]
+            if combined_score[idx] == -np.inf:
+                break
+            # Check if already picked
+            already = False
+            for p in range(n_picked):
+                if result[p] == idx:
+                    already = True
+                    break
+            if already:
+                continue
+            # Check if from a different pool than all picked so far
+            cand_pool = pool_ids[idx]
+            same_pool = False
+            for p in range(n_picked):
+                if cand_pool == used_pools[p] and cand_pool != -1:
+                    same_pool = True
+                    break
+            if not same_pool:
+                result[pick_round] = idx
+                used_pools[pick_round] = cand_pool
+                n_picked += 1
+                found = True
+                break
+
+        # Fallback: pick best remaining regardless of pool
+        if not found:
+            for j in range(1, n_cand):
+                idx = candidates[j]
+                if combined_score[idx] == -np.inf:
+                    break
+                already = False
+                for p in range(n_picked):
+                    if result[p] == idx:
+                        already = True
+                        break
+                if not already:
+                    result[pick_round] = idx
+                    used_pools[pick_round] = pool_ids[idx]
+                    n_picked += 1
+                    found = True
+                    break
+
+        if not found:
+            break
+
+    return result[:n_picked]
+
+
 @njit(cache=True)  # ✅ 稳定排序已修复，可安全启用缓存
 def vec_backtest_kernel(
     factors_3d,
@@ -198,6 +287,10 @@ def vec_backtest_kernel(
     # ✅ Exp4: Hysteresis + minimum holding period
     delta_rank,  # float: rank01 gap threshold for swap (0 = disabled)
     min_hold_days,  # int: minimum holding days before allowing sell (0 = disabled)
+    # ✅ Pool diversity constraint
+    pool_ids,  # (N,) int64: pool ID per ETF (-1 = unmapped, 0=disabled sentinel)
+    pool_constraint_extended_k,  # int: search depth (0 = disabled)
+    pool_constraint_post_hyst,  # bool: True = apply AFTER hysteresis (Route B)
 ):
     T, N, _ = factors_3d.shape
 
@@ -662,8 +755,17 @@ def vec_backtest_kernel(
 
             buy_count = 0
             if valid >= effective_pos_size:
-                # ✅ 使用稳定排序，确保 numba/Python 结果一致
-                top_indices = stable_topk_indices(combined_score, effective_pos_size)
+                # ✅ Pool diversity: Route A = before hysteresis, Route B = after
+                use_pre_hyst_pool = (
+                    pool_constraint_extended_k > 0 and not pool_constraint_post_hyst
+                )
+                if use_pre_hyst_pool:
+                    top_indices = pool_diversify_topk(
+                        combined_score, pool_ids,
+                        effective_pos_size, pool_constraint_extended_k,
+                    )
+                else:
+                    top_indices = stable_topk_indices(combined_score, effective_pos_size)
                 for k in range(len(top_indices)):
                     idx = top_indices[k]
                     if combined_score[idx] == -np.inf:
@@ -673,10 +775,12 @@ def vec_backtest_kernel(
                     buy_count += 1
 
             # ✅ Exp4: Apply hysteresis filter (max 1 swap per rebalance)
+            # Compute h_mask unconditionally (needed for Route B post-hyst check)
+            h_mask = np.zeros(N, dtype=np.bool_)
+            for n in range(N):
+                h_mask[n] = holdings[n] > 0.0
+
             if (delta_rank > 0.0 or min_hold_days > 0) and buy_count > 0:
-                h_mask = np.zeros(N, dtype=np.bool_)
-                for n in range(N):
-                    h_mask[n] = holdings[n] > 0.0
                 target_mask = apply_hysteresis(
                     combined_score, h_mask, hold_days_arr,
                     top_indices, effective_pos_size,
@@ -690,6 +794,71 @@ def vec_backtest_kernel(
                     if target_set[n]:
                         buy_order[buy_count] = n
                         buy_count += 1
+
+            # ✅ Route B: post-hysteresis pool diversification
+            # Only swap NEW entries (not held-over by hysteresis) for cross-pool
+            if (
+                pool_constraint_extended_k > 0
+                and pool_constraint_post_hyst
+                and buy_count >= 2
+            ):
+                # Collect current targets and their pools
+                tgt_indices = np.empty(buy_count, dtype=np.int64)
+                tgt_pools = np.empty(buy_count, dtype=np.int64)
+                for i in range(buy_count):
+                    n = buy_order[i]
+                    tgt_indices[i] = n
+                    tgt_pools[i] = pool_ids[n]
+
+                # Check if all same pool (excluding -1 unmapped)
+                all_same = True
+                ref_pool = tgt_pools[0]
+                if ref_pool == -1:
+                    all_same = False
+                else:
+                    for i in range(1, buy_count):
+                        if tgt_pools[i] != ref_pool or tgt_pools[i] == -1:
+                            all_same = False
+                            break
+
+                if all_same:
+                    # Find the NEW entry (not previously held) with lowest score
+                    swap_idx = -1
+                    swap_score = np.inf
+                    for i in range(buy_count):
+                        n = tgt_indices[i]
+                        if not h_mask[n] and combined_score[n] < swap_score:
+                            swap_score = combined_score[n]
+                            swap_idx = n
+
+                    if swap_idx >= 0:
+                        # Find best cross-pool candidate from extended list
+                        ext_cands = stable_topk_indices(
+                            combined_score, pool_constraint_extended_k
+                        )
+                        for j in range(len(ext_cands)):
+                            c = ext_cands[j]
+                            if combined_score[c] == -np.inf:
+                                break
+                            # Must be different pool, not already selected
+                            if pool_ids[c] == ref_pool or pool_ids[c] == -1:
+                                continue
+                            already_in = False
+                            for i in range(buy_count):
+                                if tgt_indices[i] == c:
+                                    already_in = True
+                                    break
+                            if already_in:
+                                continue
+                            # Execute swap
+                            target_set[swap_idx] = False
+                            target_set[c] = True
+                            buy_count = 0
+                            for n in range(N):
+                                if target_set[n]:
+                                    buy_order[buy_count] = n
+                                    buy_count += 1
+                            break
 
             # ✅ 改用 t-1 日择时信号 (timing_arr 已在 main 中 shift(1)，故此处用 t 即为 t-1 日信号)
             # ✅ P2: 应用动态 leverage，受 leverage_cap 限制
@@ -945,6 +1114,10 @@ def run_vec_backtest(
     # ✅ Exp4: Hysteresis + minimum holding period
     delta_rank=0.0,  # rank01 gap threshold (0 = disabled)
     min_hold_days=0,  # minimum holding days (0 = disabled)
+    # ✅ Pool diversity constraint
+    pool_ids=None,  # (N,) int64 pool IDs, None = disabled
+    pool_constraint_extended_k=0,  # search depth, 0 = disabled
+    pool_constraint_post_hyst=False,  # True = Route B (after hysteresis)
 ):
     """运行单个策略的 VEC 回测，并返回舍入诊断信息和风险指标。
 
@@ -1039,6 +1212,14 @@ def run_vec_backtest(
             dynamic_pos_size_arr, dtype=np.int64
         )
 
+    # ✅ Pool diversity constraint
+    if pool_ids is not None and pool_constraint_extended_k > 0:
+        pool_ids_internal = np.asarray(pool_ids, dtype=np.int64)
+        pool_ext_k = pool_constraint_extended_k
+    else:
+        pool_ids_internal = np.zeros(N, dtype=np.int64)
+        pool_ext_k = 0  # disabled
+
     (
         equity_curve,
         total_return,
@@ -1104,6 +1285,10 @@ def run_vec_backtest(
         # ✅ Exp4: Hysteresis
         delta_rank,
         min_hold_days,
+        # ✅ Pool diversity constraint
+        pool_ids_internal,
+        pool_ext_k,
+        pool_constraint_post_hyst,
     )
 
     rounding_diag = {
@@ -1443,6 +1628,23 @@ def main():
     print(f"✅ 冷却期: {cooldown_days} 天")
     print(f"✅ 杠杆上限: {leverage_cap} (零杠杆原则)")
 
+    # ✅ Pool diversity constraint
+    pool_constraint_config = backtest_config.get("portfolio_constraints", {}).get("pool_diversity", {})
+    pool_diversity_enabled = pool_constraint_config.get("enabled", False)
+    POOL_EXTENDED_K = pool_constraint_config.get("extended_k", 10) if pool_diversity_enabled else 0
+    POOL_POST_HYST = pool_constraint_config.get("post_hyst", False)
+    if pool_diversity_enabled:
+        from etf_strategy.core.etf_pool_mapper import load_pool_mapping, build_pool_array
+        pool_mapping = load_pool_mapping(config_path.parent / "etf_pools.yaml")
+        POOL_IDS = build_pool_array(etf_codes, pool_mapping)
+        n_mapped = int(np.sum(POOL_IDS >= 0))
+        n_pools = len(set(int(p) for p in POOL_IDS if p >= 0))
+        print(f"✅ 池约束: enabled, extended_k={POOL_EXTENDED_K}, mapped={n_mapped}/{len(etf_codes)}, pools={n_pools}")
+    else:
+        POOL_IDS = None
+        POOL_POST_HYST = False
+        print(f"✅ 池约束: disabled")
+
     # ✅ v4.0: 动态持仓数组
     dps_config = parse_dynamic_pos_config(backtest_config)
     if dps_config["enabled"]:
@@ -1523,6 +1725,10 @@ def main():
             leverage_cap=leverage_cap,
             # ✅ Exp1: T+1 Open
             use_t1_open=USE_T1_OPEN,
+            # ✅ Pool diversity constraint
+            pool_ids=POOL_IDS,
+            pool_constraint_extended_k=POOL_EXTENDED_K,
+            pool_constraint_post_hyst=POOL_POST_HYST,
         )
         return {
             "combo": combo_str,

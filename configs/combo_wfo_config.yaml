@@ -60,6 +60,10 @@ backtest:
   hysteresis:
     delta_rank: 0.10
     min_hold_days: 9
+  portfolio_constraints:
+    pool_diversity:
+      enabled: false        # research default OFF
+      extended_k: 10        # search depth for cross-pool candidates
   regime_gate:
     enabled: true
     mode: volatility
