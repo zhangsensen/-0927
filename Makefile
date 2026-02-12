@@ -5,7 +5,7 @@
 # ✅ 必须: uv run python <script>, uv sync, uv add/remove
 # 📖 详见: AGENTS.md 顶部说明
 
-.PHONY: help install format lint test clean clean-numba wfo vec bt pipeline all research research-reuse
+.PHONY: help install format format-check lint test clean clean-numba wfo vec bt pipeline all research research-reuse signal update-data validate
 
 # ============ 帮助 ============
 help:  ## 显示帮助信息
@@ -41,6 +41,10 @@ all: wfo vec bt  ## 运行核心三层：WFO → VEC → BT
 format:  ## 格式化代码（black + isort）
 	uv run black .
 	uv run isort .
+
+format-check:  ## 检查格式（CI 用，不修改文件）
+	uv run black --check --diff .
+	uv run isort --check --diff .
 
 lint:  ## 运行代码检查（ruff + mypy）
 	uv run ruff check src/etf_strategy/
@@ -83,6 +87,16 @@ export-requirements:  ## 导出 requirements.txt（兼容模式）
 setup-dev: install  ## 初始化开发环境
 	uv run pre-commit install
 	@echo "✅ 开发环境初始化完成"
+
+# ============ 日常操作 ============
+signal:  ## 生成今日交易信号
+	uv run python scripts/generate_today_signal.py
+
+update-data:  ## 更新所有市场数据（增量）
+	uv run python scripts/update_all_data.py
+
+validate:  ## 运行最终三重验证
+	uv run python scripts/final_triple_validation.py
 
 # ============ 研究流水线 ============
 research:  ## 完整研究流水线：mining → WFO → VEC → BT → validation
