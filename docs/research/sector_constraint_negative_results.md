@@ -11,7 +11,7 @@ S1 的同板块双持（尤其是 COMMODITY 金+银 518850/518880）是尾部回
 
 ## Diagnostic Results
 
-Script: `scripts/diagnose_sector_concentration.py`
+Script: `archive/scripts/negative_results/diagnose_sector_concentration.py`
 
 | Metric | Value | Threshold |
 |--------|-------|-----------|
@@ -26,7 +26,7 @@ Main driver: COMMODITY pool (gold 518850 + silver 518880) appeared in 7/13 same-
 
 ## A/B Test Results
 
-Script: `scripts/ab_commodity_max1.py`
+Script: `archive/scripts/negative_results/ab_commodity_max1.py`
 
 Three VEC variants under S1_F5_ON (med cost, T1_OPEN):
 
@@ -65,6 +65,6 @@ Full 7-pool diversity marginally improves MDD (+1.3pp) but at unacceptable retur
 
 ## Scripts
 
-- `scripts/diagnose_sector_concentration.py` — 3-metric diagnostic
-- `scripts/ab_commodity_max1.py` — A/B test (baseline vs COMMODITY max 1 vs 7-pool)
+- `archive/scripts/negative_results/diagnose_sector_concentration.py` — 3-metric diagnostic
+- `archive/scripts/negative_results/ab_commodity_max1.py` — A/B test (baseline vs COMMODITY max 1 vs 7-pool)
 - Results: `results/ab_commodity_max1/equity_curves.csv`

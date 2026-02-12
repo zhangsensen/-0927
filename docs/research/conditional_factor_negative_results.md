@@ -2,7 +2,7 @@
 
 > **Date**: 2026-02-11
 > **Status**: NEGATIVE — All hypotheses refuted, S1 baseline frozen
-> **Scripts**: `ablation_qdii_factors.py`, `ablation_qdii_deep_diag.py`, `ablation_adx_conditional_ic.py`, `ablation_diff_trade_attribution.py`
+> **Scripts**: Archived to `archive/scripts/negative_results/` — `ablation_qdii_factors.py`, `ablation_qdii_deep_diag.py`, `ablation_adx_conditional_ic.py`, `ablation_diff_trade_attribution.py`
 
 ## 1. Problem Statement
 
@@ -123,7 +123,7 @@ Both designed as **QDII-specific sleeve strategies**, not forced into 43-ETF uni
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `scripts/ablation_qdii_factors.py` | 4-variant factor ablation (GLOBAL, F5+Exp4) | `results/ablation_qdii_*/` |
-| `scripts/ablation_qdii_deep_diag.py` | Pre/post hysteresis, trade quality, regime robustness | `results/ablation_diag_*/` |
-| `scripts/ablation_adx_conditional_ic.py` | Rank IC decomposed by vol regime | `results/ablation_conditional_ic_*/` |
-| `scripts/ablation_diff_trade_attribution.py` | Differential trade ledger + state variable correlation | `results/ablation_diff_attr_*/` |
+| `archive/scripts/negative_results/ablation_qdii_factors.py` | 4-variant factor ablation (GLOBAL, F5+Exp4) | `results/ablation_qdii_*/` |
+| `archive/scripts/negative_results/ablation_qdii_deep_diag.py` | Pre/post hysteresis, trade quality, regime robustness | `results/ablation_diag_*/` |
+| `archive/scripts/negative_results/ablation_adx_conditional_ic.py` | Rank IC decomposed by vol regime | `results/ablation_conditional_ic_*/` |
+| `archive/scripts/negative_results/ablation_diff_trade_attribution.py` | Differential trade ledger + state variable correlation | `results/ablation_diff_attr_*/` |

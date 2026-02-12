@@ -159,7 +159,7 @@ cat data/live/signal_state.json | python -m json.tool | head -5
 ```
 # 回归验证
 uv run python scripts/run_v5_validation.py          # VEC 12 runs (~3min)
-uv run python scripts/run_bt_exp4_audit.py           # BT 4 runs (~30min)
+uv run python archive/scripts/completed_validation/run_bt_exp4_audit.py           # BT 4 runs (~30min)
 
 # 冻结参数测试
 uv run pytest tests/test_frozen_params.py -v
