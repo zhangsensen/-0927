@@ -65,13 +65,13 @@ Enforced by `src/etf_strategy/core/frozen_params.py` — validated at WFO/VEC/BT
 | `LOOKBACK` | 252 | 1 year |
 | `delta_rank` | 0.10 | Hysteresis: min rank01 gap for swap |
 | `min_hold_days` | 9 | Hysteresis: min holding period |
-| ETF pool | 43 (38 A-share + 5 QDII) | |
+| ETF pool | 49 (41 A-share + 8 QDII) | |
 | Universe mode | `A_SHARE_ONLY` | QDII hard-blocked from live trading |
 
 **Version registry**: v3.4/v4.0/v4.1 preserved with freq=3 and hysteresis disabled for rollback. `CURRENT_VERSION = "v5.0"`.
 
-**5 QDII ETFs** (monitored but not traded in A_SHARE_ONLY mode):
-513100 (Nasdaq), 513500 (S&P), 159920 (HSI), 513050 (China Internet), 513130 (HK Tech)
+**8 QDII ETFs** (monitored but not traded in A_SHARE_ONLY mode):
+159920 (恒生ETF), 513050 (中概互联网ETF), 513100 (纳指ETF), 513130 (恒生科技ETF), 513180 (恒生科技指数ETF), 513400 (道琼斯ETF), 513500 (标普500ETF), 513520 (日经ETF)
 
 ## Hysteresis State Machine (v5.0)
 
@@ -167,7 +167,7 @@ Rationale (verified 2026-02-11):
 
 ## Config
 
-Single source of truth: `configs/combo_wfo_config.yaml` — 43 ETFs, 18 active factors (17 base + PREMIUM_DEVIATION_20D), all engine parameters including hysteresis section.
+Single source of truth: `configs/combo_wfo_config.yaml` — 49 ETFs (41 A-share + 8 QDII), 18 active factors (17 base + PREMIUM_DEVIATION_20D), all engine parameters including hysteresis section.
 
 ## Code Style
 

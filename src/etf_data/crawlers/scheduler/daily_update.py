@@ -10,6 +10,8 @@ import pandas as pd
 
 from etf_data.crawlers.sources.eastmoney_crawler import EastmoneyETFCrawler
 from etf_data.crawlers.sources.eastmoney_detail_crawler import EastmoneyDetailCrawler
+from etf_data.crawlers.sources.shares_crawler import TushareSharesCrawler
+from etf_data.crawlers.sources.tushare_flow_crawler import TushareFlowCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +26,13 @@ class DailyDataUpdater:
         # 初始化爬虫
         self.eastmoney_crawler = EastmoneyETFCrawler()
         self.detail_crawler = EastmoneyDetailCrawler()
+        self.shares_crawler = TushareSharesCrawler()
+        self.flow_crawler = TushareFlowCrawler()
 
     def update_etf_list(self) -> bool:
         """更新ETF列表"""
         return self._update_etf_list()
+
 
     def _update_etf_list(self) -> bool:
         logger.info("开始更新ETF列表...")
@@ -204,6 +209,55 @@ class DailyDataUpdater:
             logger.error(f"融资融券数据采集失败: {e}")
             return False
 
+    def update_shares_history(self, etf_codes: list = None) -> bool:
+        """
+        更新ETF历史份额数据 (Tushare)
+        """
+        logger.info("开始更新ETF历史份额 (Tushare)...")
+        if not self.shares_crawler.pro:
+            logger.warning("Tushare未配置，跳过份额更新")
+            return False
+
+        if etf_codes is None:
+            # 读取列表
+            list_file = self.output_dir / "etf_list.parquet"
+            if not list_file.exists():
+                return False
+            etf_list = pd.read_parquet(list_file)
+            etf_codes = etf_list["code"].tolist()
+
+        total = len(etf_codes)
+        for i, code in enumerate(etf_codes, 1):
+            if i % 10 == 0:
+                logger.info(f"份额更新进度: {i}/{total}")
+            self.shares_crawler.update_shares(str(code))
+        
+        return True
+
+    def update_flow_backfill(self, etf_codes: list = None) -> bool:
+        """
+        补全ETF历史资金流向 (Tushare)
+        """
+        logger.info("开始补全ETF历史资金流向 (Tushare)...")
+        if not self.flow_crawler.pro:
+            logger.warning("Tushare未配置，跳过资金流补全")
+            return False
+
+        if etf_codes is None:
+            list_file = self.output_dir / "etf_list.parquet"
+            if not list_file.exists():
+                return False
+            etf_list = pd.read_parquet(list_file)
+            etf_codes = etf_list["code"].tolist()
+
+        total = len(etf_codes)
+        for i, code in enumerate(etf_codes, 1):
+            if i % 10 == 0:
+                logger.info(f"资金流补全进度: {i}/{total}")
+            self.flow_crawler.update_flow_history(str(code))
+        
+        return True
+
     def run_daily_update(self):
         """执行每日完整更新"""
         logger.info("=" * 60)
@@ -213,13 +267,19 @@ class DailyDataUpdater:
         # 1. 更新ETF列表
         self.update_etf_list()
 
-        # 2. 更新实时行情
+        # 2. 更新历史份额 (P0)
+        self.update_shares_history()
+        
+        # 3. 补全历史资金流 (P0)
+        self.update_flow_backfill()
+
+        # 4. 更新实时行情
         self.update_realtime_quotes()
 
-        # 3. [高价值] ETF日频快照 (IOPV/折溢价/资金流/份额)
+        # 5. [高价值] ETF日频快照 (IOPV/折溢价/资金流/份额)
         self.update_etf_snapshot()
 
-        # 4. [高价值] 融资融券数据 (日频杠杆情绪)
+        # 6. [高价值] 融资融券数据 (日频杠杆情绪)
         self.update_margin_data()
 
         logger.info("=" * 60)

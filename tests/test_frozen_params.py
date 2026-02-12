@@ -78,8 +78,8 @@ class TestFrozenValues:
 
     def test_etf_pool_counts(self):
         p = FrozenETFPool()
-        assert p.total_count == 43
-        assert p.qdii_count == 5
+        assert p.total_count == 49
+        assert p.qdii_count == 8
 
     def test_scoring_weights(self):
         p = FrozenScoringParams()
@@ -131,7 +131,7 @@ class TestRealConfigValidation:
         frozen = load_frozen_config(real_config, config_path=str(CONFIG_PATH))
         assert isinstance(frozen, FrozenProductionConfig)
         assert frozen.backtest.freq == 5
-        assert frozen.etf_pool.total_count == 43
+        assert frozen.etf_pool.total_count == 49
         assert frozen.hysteresis.delta_rank == 0.10
         assert frozen.hysteresis.min_hold_days == 9
 
