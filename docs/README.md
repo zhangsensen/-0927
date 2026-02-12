@@ -21,7 +21,7 @@
 | 文档 | 说明 |
 |------|------|
 | [WFO_VEC_STATUS.md](WFO_VEC_STATUS.md) | 三层引擎对齐状态 + P0 修复记录 |
-| [ETF_POOL_ARCHITECTURE.md](ETF_POOL_ARCHITECTURE.md) | 43 ETF 池设计（38 A股 + 5 QDII） |
+| [ETF_POOL_ARCHITECTURE.md](ETF_POOL_ARCHITECTURE.md) | 49 ETF 池设计（41 A股 + 8 QDII） |
 | [DATA_FORMAT_SPECIFICATION.md](DATA_FORMAT_SPECIFICATION.md) | Parquet 数据格式规范 |
 | [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md) | 已知引擎差异清单 |
 

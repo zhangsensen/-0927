@@ -31,7 +31,7 @@ IC gate+评分     Numba JIT内核     Backtrader事件驱动
 | delta_rank | 0.10 | Hysteresis: rank01差≥0.10才换仓 |
 | min_hold_days | 9 | Hysteresis: 最少持有9天 |
 | 因子池 | 17 (base) + 1 (PREMIUM_DEVIATION_20D) | 活跃因子 |
-| 标的池 | 43只 | 38只A股ETF + 5只QDII(仅监控) |
+| 标的池 | 49只 | 41只A股ETF + 8只QDII(仅监控) |
 | Regime Gate | ON | 510300波动率门控 (25/30/40%) |
 | 成本模型 | SPLIT_MARKET | A股20bp, QDII 50bp |
 

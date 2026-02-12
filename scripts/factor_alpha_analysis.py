@@ -2,7 +2,7 @@
 """
 因子 Alpha 深度检验 | Factor Alpha Deep Analysis
 =================================================
-对 25 个因子在 43 只 ETF 上的预测能力进行全方位检验。
+对 25 个因子在 49 只 ETF 上的预测能力进行全方位检验。
 
 检验维度:
   1. 单因子滚动 IC (Spearman) — 均值 IC、IC_IR、命中率、t 检验
@@ -40,7 +40,7 @@ FREQ = 3  # 调仓频率
 POS_SIZE = 2  # 持仓数量
 COMMISSION = 0.0002  # 单边佣金 2bp
 
-QDII_CODES = {"513100", "513500", "159920", "513050", "513130"}
+QDII_CODES = {"513100", "513500", "159920", "513050", "513130", "513180", "513400", "513520"}
 
 IC_HORIZONS = [1, 3, 5, 10, 20]  # IC 衰减检验的前瞻天数
 
@@ -404,11 +404,11 @@ def top2_selection_return(std_factors, close, factor_names, metadata):
             f"{row['最大回撤']:>8.1%}"
         )
 
-    # 基准: 等权全部 43 只 ETF
+    # 基准: 等权全部 ETF
     eq_ret = daily_ret.mean(axis=1)
     eq_cum = (1 + eq_ret).cumprod()
     eq_total = eq_cum.iloc[-1] - 1
-    print(f"\n  基准 (等权43ETF): 总收益 {eq_total:+.1%}")
+    print(f"\n  基准 (等权全池ETF): 总收益 {eq_total:+.1%}")
 
     return df
 
@@ -510,7 +510,7 @@ def ashare_vs_qdii_ic(std_factors, close, factor_names, metadata, a_share_cols, 
             mean_ic_a = np.nan
             hit_a = np.nan
 
-        # QDII IC (仅 5 只, IC 极不稳定, 仅供参考)
+        # QDII IC (仅 8 只, IC 极不稳定, 仅供参考)
         q_cols = [c for c in qdii_cols if c in fdf.columns]
         if len(q_cols) >= 3:
             ic_q = spearman_ic_series(fdf[q_cols], fwd_ret_all[q_cols])
@@ -546,7 +546,7 @@ def ashare_vs_qdii_ic(std_factors, close, factor_names, metadata, a_share_cols, 
         q_hit = f"{row['QDII命中率']:>8.1%}" if np.isfinite(row['QDII命中率']) else "    N/A "
         print(f"  {row['因子']:<33s} {row['全池IC']:>+8.4f} {a_ic} {a_hit} {q_ic} {q_hit}")
 
-    print(f"\n  注: QDII 仅 5 只, 截面 IC 极不稳定, 仅供参考方向")
+    print(f"\n  注: QDII 仅 8 只, 截面 IC 极不稳定, 仅供参考方向")
 
     return df
 
@@ -961,7 +961,7 @@ def orthogonal_set_validation(ic_df, corr_df, factor_names, metadata):
 def main():
     print("\n" + "█" * 80)
     print("  ETF 因子 Alpha 深度检验")
-    print("  25 因子 × 43 ETF × 5 年 (2020-2025)")
+    print("  25 因子 × 49 ETF × 5 年 (2020-2025)")
     print("█" * 80)
 
     # Step 1: Load

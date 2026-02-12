@@ -254,7 +254,7 @@ class VECFactorValidator:
                     else 0
                 )
 
-                # 相对基准（等权43 ETF）
+                # 相对基准（等权全池ETF）
                 benchmark_return = self._calculate_benchmark_return(rebalance_dates)
                 report.vs_benchmark = report.total_return - benchmark_return
 

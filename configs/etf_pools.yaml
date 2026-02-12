@@ -1,6 +1,6 @@
 # ETF分池配置 (Refactored for All-Weather Strategy)
 # 用途：全天候策略的子池定义
-# 更新时间: 2025-11-28
+# 更新时间: 2026-02-12
 # 🔧 注意：ETF代码格式必须与 combo_wfo_config.yaml 中的 symbols 一致（不带后缀）
 
 # 全局路径配置
@@ -71,7 +71,7 @@ pools:
   # 3. 权益-周期 (Alpha Source - Cyclical)
   EQUITY_CYCLICAL:
     name: "A股周期"
-    description: "金融/资源/军工等周期性板块"
+    description: "金融/资源/军工/房地产/煤炭等周期性板块"
     calendar: "SSE"
     timezone: "Asia/Shanghai"
     symbols:
@@ -81,6 +81,8 @@ pools:
       - "159992"
       - "515210"
       - "512660"
+      - "512200"   # 房地产ETF (v5.0 新增)
+      - "515220"   # 煤炭ETF (v5.0 新增)
 
   # 4. 权益-防御 (Alpha Source - Defensive)
   EQUITY_DEFENSIVE:
@@ -107,43 +109,44 @@ pools:
   # 6. 商品 (Inflation Hedge)
   COMMODITY:
     name: "商品"
-    description: "黄金/白银/大宗"
+    description: "黄金/白银/豆粕等大宗"
     calendar: "SSE"
     timezone: "Asia/Shanghai"
     symbols:
       - "518880"
       - "518850"
+      - "159985"   # 豆粕ETF (v5.0 新增)
 
   # 7. QDII (Geographic Diversification)
   # ═══════════════════════════════════════════════════════════════════════════
-  # ⚠️ 核心 Alpha 来源 - 贡献 +90.23% 收益 (占总收益 38%)
-  # 
-  # v3.1 审计结果 (2025-12-01):
+  # ⚠️ 8 只 QDII 参与横截面校准，v5.0 A_SHARE_ONLY 模式下不交易
+  #
+  # v3.1 审计结果 (2025-12-01, 原始 5 只):
   #   513500 标普500:     +25.37%, 胜率 68.9%, 选中 45 次 ← 最强
   #   513130 恒生科技(港元): +23.69%, 胜率 53.3%, 选中 15 次
   #   513100 纳指100:     +22.03%, 胜率 61.3%, 选中 31 次
   #   159920 恒生指数:    +17.13%, 胜率 70.0%, 选中 10 次
   #   513050 中概互联:    +2.01%,  胜率 44.4%, 选中 18 次
   #
-  # ⚠️ 移除这 5 只 QDII 会导致收益从 237% 降至 177% (损失 60pp)
+  # v5.0 新增 3 只: 513180 恒生科技指数, 513400 道琼斯, 513520 日经225
   # ⚠️ 禁止修改此列表！详见 docs/ETF_POOL_ARCHITECTURE.md
   # ═══════════════════════════════════════════════════════════════════════════
   QDII:
     name: "海外QDII"
-    description: "美股/港股 - 核心 Alpha 来源，贡献 90%+ 收益"
+    description: "美股/港股/日股 — 8只QDII，v5.0 A_SHARE_ONLY模式下仅参与横截面校准不交易"
     calendar: "NYSE"
     timezone: "America/New_York"
     symbols:
-      # --- 生产配置 (v3.1 锁定) ---
+      # --- 原始 5 只 (v3.1) ---
       - "513100"   # 🌍 纳指100 ETF (美股) - +22.03%
       - "513500"   # 🌍 标普500 ETF (美股) - +25.37% ⭐最强
       - "513050"   # 🌍 中概互联 ETF (港股)
       - "159920"   # 🌍 恒生指数 ETF (港股) - 70% 胜率
       - "513130"   # 🌍 恒生科技(港元) ETF - +23.69%
-      # --- 实验配置 (已禁用 - 导致横截面污染) ---
-      # - "513180"   # ❌ 恒生科技ETF (与沪深300相关性0.71)
-      # - "513400"   # ❌ 道琼斯ETF (数据仅406天)
-      # - "513520"   # ❌ 日经225ETF (整体污染效应)
+      # --- v5.0 新增 3 只 ---
+      - "513180"   # 🌍 恒生科技指数ETF (v5.0 新增)
+      - "513400"   # 🌍 道琼斯ETF (v5.0 新增)
+      - "513520"   # 🌍 日经225ETF (v5.0 新增)
 
   # 8. 实盘精选池 (Legacy Support)
   A_SHARE_LIVE:
@@ -195,6 +198,8 @@ etf_categories:
   "159992": "Cyclical"
   "515210": "Cyclical"
   "512660": "Cyclical"
+  "512200": "Cyclical"
+  "515220": "Cyclical"
   "512690": "Defensive"
   "159928": "Defensive"
   "512980": "Defensive"
@@ -203,6 +208,7 @@ etf_categories:
   "511380": "Bond"
   "518880": "Commodity"
   "518850": "Commodity"
+  "159985": "Commodity"
   "513100": "QDII"
   "513500": "QDII"
   "513050": "QDII"

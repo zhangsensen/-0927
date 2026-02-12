@@ -206,7 +206,7 @@ class TestETFPoolTamper:
     def test_qdii_removed(self, real_config):
         bad = copy.deepcopy(real_config)
         # Remove all QDII codes
-        qdii = {"159920", "513050", "513100", "513130", "513500"}
+        qdii = {"159920", "513050", "513100", "513130", "513180", "513400", "513500", "513520"}
         bad["data"]["symbols"] = [s for s in bad["data"]["symbols"] if s not in qdii]
         with pytest.raises(FrozenParamViolation) as exc_info:
             load_frozen_config(bad, strictness=StrictnessMode.STRICT)

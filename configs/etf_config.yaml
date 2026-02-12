@@ -34,7 +34,7 @@ save_format: "parquet"  # parquet, csv
 verbose: true
 
 # ========================================
-# ETF配置清单 - 完整43只ETF
+# ETF配置清单 - 完整49只ETF (41 A股 + 8 QDII)
 # ========================================
 # 说明：包含39只已下载 + 4只待补充的ETF，按优先级和类别分组管理
 
@@ -208,7 +208,7 @@ etf_list:
         priority: 3
         description: "跟踪国证生物医药指数，医药细分领域"
 
-      # 金融地产 (3只)
+      # 金融地产 (4只)
       - code: "512800.SH"
         name: "银行ETF"
         category: "金融"
@@ -227,7 +227,13 @@ etf_list:
         priority: 2
         description: "跟踪上证红利指数"
 
-      # 资源周期类 (2只)
+      - code: "512200.SH"
+        name: "房地产ETF"
+        category: "地产"
+        priority: 3
+        description: "跟踪中证全指房地产指数 (v5.0 新增)"
+
+      # 资源周期类 (3只)
       - code: "159992.SZ"
         name: "能源ETF"
         category: "能源"
@@ -239,6 +245,12 @@ etf_list:
         category: "资源周期"
         priority: 2
         description: "跟踪中证有色金属指数，资源周期核心"
+
+      - code: "515220.SH"
+        name: "煤炭ETF"
+        category: "资源周期"
+        priority: 3
+        description: "跟踪中证煤炭指数 (v5.0 新增)"
 
       # 贵金属类 (2只)
       - code: "518880.SH"
@@ -252,6 +264,13 @@ etf_list:
         category: "贵金属"
         priority: 3
         description: "跟踪上海金交所白银现货价格，贵金属对冲工具"
+
+      # 大宗商品类 (1只)
+      - code: "159985.SZ"
+        name: "豆粕ETF"
+        category: "大宗商品"
+        priority: 3
+        description: "跟踪大商所豆粕期货指数 (v5.0 新增)"
 
   # ======================================
   # 创新成长ETF - 成长风格主题 (4只)
@@ -304,42 +323,60 @@ etf_list:
         description: "跟踪上证10年期国债指数"
 
   # ======================================
-  # 海外市场ETF - 跨境QDII投资产品 (5只)
-  # ⚠️ 核心 Alpha 来源，贡献 90%+ 收益！禁止修改！
+  # 海外市场ETF - 跨境QDII投资产品 (8只)
+  # ⚠️ 8只QDII参与横截面校准，v5.0 A_SHARE_ONLY模式下不交易
   # ======================================
   overseas_etfs:
     name: "海外市场QDII ETF"
-    description: "投资海外市场的ETF产品 - 核心Alpha来源"
+    description: "投资海外市场的ETF产品 — 8只QDII，v5.0 A_SHARE_ONLY模式下仅参与校准不交易"
     etfs:
       - code: "513500.SH"
         name: "标普500 ETF"
         category: "美股"
         priority: 1
-        description: "⭐ 最强Alpha来源！跟踪标普500指数，收益贡献 +25.37%"
+        description: "跟踪标普500指数"
 
       - code: "513100.SH"
         name: "纳指100 ETF"
         category: "美股"
         priority: 1
-        description: "跟踪纳斯达克100指数，收益贡献 +22.03%"
+        description: "跟踪纳斯达克100指数"
 
       - code: "159920.SZ"
         name: "恒生ETF"
         category: "港股"
         priority: 2
-        description: "跟踪恒生指数，70%胜率，收益贡献 +17.13%"
+        description: "跟踪恒生指数"
 
       - code: "513130.SH"
         name: "恒生科技ETF（港元）"
         category: "港股"
         priority: 2
-        description: "跟踪恒生科技指数（港元计价），收益贡献 +23.69%"
+        description: "跟踪恒生科技指数（港元计价）"
 
       - code: "513050.SH"
         name: "中概互联ETF"
         category: "港股"
         priority: 2
         description: "跟踪中证海外中国互联网50指数"
+
+      - code: "513180.SH"
+        name: "恒生科技指数ETF"
+        category: "港股"
+        priority: 3
+        description: "跟踪恒生科技指数 (v5.0 新增)"
+
+      - code: "513400.SH"
+        name: "道琼斯ETF"
+        category: "美股"
+        priority: 3
+        description: "跟踪道琼斯工业平均指数 (v5.0 新增)"
+
+      - code: "513520.SH"
+        name: "日经225ETF"
+        category: "日股"
+        priority: 3
+        description: "跟踪日经225指数 (v5.0 新增)"
 
   # ======================================
   # 军工ETF (1只)
@@ -355,18 +392,16 @@ etf_list:
         description: "跟踪中证军工指数"
 
 # ========================================
-# 配置使用说明 (更新于 2025-12-02)
+# 配置使用说明 (更新于 2026-02-12)
 # ========================================
-# 1. 总ETF数量: 43只
+# 1. 总ETF数量: 49只 (41 A股 + 8 QDII)
 # 2. 优先级分布:
 #    - 优先级1 (最高): 5只 (核心必配 + QDII美股)
 #    - 优先级2 (高): 18只 (重要配置)
-#    - 优先级3 (一般): 20只 (可选配置)
+#    - 优先级3 (一般): 26只 (可选配置)
 # 3. 类别分布: 覆盖A股宽基、行业、债券、商品、QDII
-# 4. ⚠️ 重要: 5只QDII ETF贡献90%+收益，禁止移除！
-#    - 513500 标普500 (+25.37%)
-#    - 513100 纳指100 (+22.03%)
-#    - 513130 恒生科技港元 (+23.69%)
-#    - 159920 恒生ETF (+17.13%)
-#    - 513050 中概互联
+# 4. ⚠️ 重要: 8只QDII ETF参与横截面校准，v5.0 A_SHARE_ONLY模式下不交易
+#    - 513500 标普500, 513100 纳指100, 513050 中概互联
+#    - 159920 恒生ETF, 513130 恒生科技(港元)
+#    - 513180 恒生科技指数, 513400 道琼斯, 513520 日经225
 # ========================================

@@ -37,7 +37,7 @@ class RegimeDetector:
     市场Regime检测器
 
     算法：
-    1. 计算市场指数（43 ETF等权均值）
+    1. 计算市场指数（ETF等权均值）
     2. 计算滑动窗口指标（MA, Vol, Sharpe）
     3. 基于规则分类regime
 

@@ -350,7 +350,7 @@ def main():
     timing_full = _compute_timing(data_full["ohlcv"], data_full["dates"], backtest_config)
 
     # 4. Run VEC: GLOBAL
-    print("\n🌍 Running GLOBAL (43 ETFs, QDII enabled)...")
+    print("\n🌍 Running GLOBAL (49 ETFs, QDII enabled)...")
     df_global = _run_vec_for_combos(
         combo_list, data_full, timing_full, cost_arr, backtest_config, USE_T1_OPEN,
         qdii_mask=None, label="GLOBAL",

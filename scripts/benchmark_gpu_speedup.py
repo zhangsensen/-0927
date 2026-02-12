@@ -7,7 +7,7 @@ GPU 性能基准测试 | GPU Performance Benchmark
 - IC 计算
 - 批量因子处理
 
-预期结果 (10,000 因子 × 1442 天 × 43 ETF):
+预期结果 (10,000 因子 × 1442 天 × 49 ETF):
 - CPU: ~1.4 小时
 - GPU: ~2-3 分钟 (30x 加速)
 
@@ -101,7 +101,7 @@ def main():
     parser = argparse.ArgumentParser(description="GPU 性能基准测试")
     parser.add_argument("--n-factors", type=int, default=1000, help="因子数量 (默认 1000)")
     parser.add_argument("--n-days", type=int, default=1442, help="天数 (默认 1442)")
-    parser.add_argument("--n-etfs", type=int, default=43, help="ETF 数量 (默认 43)")
+    parser.add_argument("--n-etfs", type=int, default=49, help="ETF 数量 (默认 49)")
     parser.add_argument("--use-real-data", action="store_true", help="使用真实数据 (默认合成)")
     parser.add_argument("--cpu-only", action="store_true", help="仅测试 CPU")
     parser.add_argument("--gpu-only", action="store_true", help="仅测试 GPU")

@@ -37,6 +37,9 @@ pipeline:  ## 运行完整流水线（WFO → VEC → BT → 验证）
 
 all: wfo vec bt  ## 运行核心三层：WFO → VEC → BT
 
+pipeline-fast:  ## 优化流水线（16 BT workers, 16 VEC threads, Numba thread cap）
+	BT_NUM_WORKERS=16 VEC_N_JOBS=16 NUMBA_NUM_THREADS=4 uv run python scripts/run_full_pipeline.py
+
 # ============ 代码质量 ============
 format:  ## 格式化代码（black + isort）
 	uv run black .

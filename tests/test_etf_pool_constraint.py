@@ -25,10 +25,10 @@ class TestPoolMapping:
         assert isinstance(mapping, dict)
         assert len(mapping) > 0
 
-    def test_all_43_etfs_mapped(self):
-        """All 43 ETFs in the production universe should be mapped."""
+    def test_all_49_etfs_mapped(self):
+        """All 49 ETFs in the production universe should be mapped."""
         mapping = load_pool_mapping(POOLS_PATH)
-        assert len(mapping) == 43, f"Expected 43 mapped ETFs, got {len(mapping)}"
+        assert len(mapping) == 49, f"Expected 49 mapped ETFs, got {len(mapping)}"
 
     def test_7_pools_present(self):
         """All 7 canonical pools should have at least one ETF."""
@@ -77,8 +77,8 @@ class TestPoolMapping:
         arr = build_pool_array(etf_codes, mapping)
         assert len(arr) == len(etf_codes)
         n_mapped = int(np.sum(arr >= 0))
-        # All A-share ETFs should be mapped (some QDII too)
-        assert n_mapped >= 38, f"Only {n_mapped} ETFs mapped"
+        # All 49 ETFs (41 A-share + 8 QDII) should be mapped
+        assert n_mapped >= 49, f"Only {n_mapped} ETFs mapped"
 
 
 class TestPoolDiversifyTopk:

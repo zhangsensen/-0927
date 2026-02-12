@@ -46,7 +46,7 @@
 | `LOOKBACK` | 252 | 回看窗口 1 年 |
 | `delta_rank` | 0.10 | 迟滞：rank01 差值门槛 |
 | `min_hold_days` | 9 | 迟滞：最小持仓天数 |
-| ETF 池 | 43 只 | 38 A 股 + 5 QDII |
+| ETF 池 | 49 只 | 41 A 股 + 8 QDII |
 | Universe 模式 | `A_SHARE_ONLY` | QDII 硬阻断实盘交易 |
 | Regime Gate | ON | 波动率模式，510300 代理 |
 

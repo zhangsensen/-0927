@@ -3,39 +3,56 @@
 from __future__ import annotations
 
 import logging
+import os
+import time as _time
 import warnings
+from collections import Counter
 from dataclasses import dataclass
 from itertools import combinations
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-from tqdm import tqdm
 from numba import njit
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
-from .wfo_realbt_calibrator import WFORealBacktestCalibrator
-from pathlib import Path
+from tqdm import tqdm
 
-from .ic_calculator_numba import compute_spearman_ic_numba, compute_multiple_ics_numba
 from .hysteresis import apply_hysteresis
+from .ic_calculator_numba import compute_multiple_ics_numba, compute_spearman_ic_numba
+from .wfo_realbt_calibrator import WFORealBacktestCalibrator
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
-import os
-import time as _time
 
 
 def _get_optimal_n_jobs() -> int:
-    """获取最优并行核心数 (单CCD内8核共享L3，避免跨CCD延迟)"""
+    """获取最优并行核心数 (单CCD内8核共享L3，避免跨CCD延迟)
+
+    Also caps NUMBA_NUM_THREADS to avoid oversubscription when
+    Numba parallel=True kernels (ic_calculator_numba) run inside
+    joblib workers.
+    """
     env_jobs = os.getenv("JOBLIB_N_JOBS")
     if env_jobs:
-        return int(env_jobs)
-    # 9950X 双CCD: 单CCD 8核共享32MB L3, 跨CCD有额外延迟
-    cpu_count = os.cpu_count() or 8
-    physical_cores = cpu_count // 2
-    return min(physical_cores, 8)
+        n_jobs = int(env_jobs)
+    else:
+        # 9950X 双CCD: 单CCD 8核共享32MB L3, 跨CCD有额外延迟
+        cpu_count = os.cpu_count() or 8
+        physical_cores = cpu_count // 2
+        n_jobs = min(physical_cores, 8)
+
+    # Prevent Numba thread oversubscription: n_jobs workers each spawn
+    # NUMBA_NUM_THREADS threads for parallel=True kernels.
+    # Cap so total threads <= logical CPU count.
+    if not os.getenv("NUMBA_NUM_THREADS"):
+        cpu_count = os.cpu_count() or 8
+        numba_threads = max(1, cpu_count // n_jobs)
+        os.environ["NUMBA_NUM_THREADS"] = str(numba_threads)
+
+    return n_jobs
 
 
 def warmup_numba_kernels() -> None:
@@ -51,7 +68,13 @@ def warmup_numba_kernels() -> None:
     _compute_combo_signal(dummy_factors, dummy_weights)
     _compute_rebalanced_ic(dummy_signal, dummy_returns, 3)
     dummy_cost_arr = np.full(N, 0.0002, dtype=np.float64)
-    _compute_rebalanced_return(dummy_signal, dummy_returns, dummy_exposures, 3, 2, dummy_cost_arr)
+    _compute_rebalanced_return(
+        dummy_signal, dummy_returns, dummy_exposures, 3, 2, dummy_cost_arr
+    )
+    _compute_rebalanced_return_stats(
+        dummy_signal, dummy_returns, dummy_exposures, 3, 2, dummy_cost_arr,
+        False, 0.0, 0, 0,
+    )
     compute_spearman_ic_numba(dummy_signal, dummy_returns)
     compute_multiple_ics_numba(dummy_factors.transpose(2, 0, 1), dummy_returns)
 
@@ -70,12 +93,12 @@ class ComboWFOConfig:
     enable_fdr: bool = True
     fdr_alpha: float = 0.05
     complexity_penalty_lambda: float = 0.01
-    delta_rank: float = 0.0               # Exp4: hysteresis rank01 gap threshold (0 = disabled)
-    min_hold_days: int = 0                # Exp4: minimum holding period (0 = disabled)
+    delta_rank: float = 0.0  # Exp4: hysteresis rank01 gap threshold (0 = disabled)
+    min_hold_days: int = 0  # Exp4: minimum holding period (0 = disabled)
     use_bucket_constraints: bool = False  # 跨桶约束开关
-    bucket_min_buckets: int = 3           # 最少覆盖桶数
-    bucket_max_per_bucket: int = 2        # 每桶最多选几个因子
-    max_parent_occurrence: int = 0        # 父因子最大重复 (0=不限制)
+    bucket_min_buckets: int = 3  # 最少覆盖桶数
+    bucket_max_per_bucket: int = 2  # 每桶最多选几个因子
+    max_parent_occurrence: int = 0  # 父因子最大重复 (0=不限制)
 
     def __post_init__(self):
         """初始化后自动调整 n_jobs"""
@@ -169,8 +192,8 @@ def _compute_rebalanced_return(
     top_k: int,
     cost_arr: np.ndarray,
     use_t1_open: bool = False,
-    delta_rank: float = 0.0,      # ✅ Exp4: hysteresis threshold
-    min_hold_days: int = 0,       # ✅ Exp4: minimum holding period
+    delta_rank: float = 0.0,
+    min_hold_days: int = 0,
 ) -> float:
     """
     计算滚动 OOS 收益率 (模拟真实交易)
@@ -188,56 +211,92 @@ def _compute_rebalanced_return(
     返回:
         累计收益率 (如 0.50 = 50%)
     """
+    ret, _, _ = _compute_rebalanced_return_stats(
+        signal, returns, exposures, rebalance_freq, top_k,
+        cost_arr, use_t1_open, delta_rank, min_hold_days, 0,
+    )
+    return ret
+
+
+@njit(cache=True)
+def _compute_rebalanced_return_stats(
+    signal: np.ndarray,
+    returns: np.ndarray,
+    exposures: np.ndarray,
+    rebalance_freq: int,
+    top_k: int,
+    cost_arr: np.ndarray,
+    use_t1_open: bool = False,
+    delta_rank: float = 0.0,
+    min_hold_days: int = 0,
+    warmup_length: int = 0,
+):
+    """
+    计算滚动收益率 + Sharpe + MaxDD (模拟真实交易, 含 IS 暖启动)
+
+    参数:
+        signal: (T, N) 因子信号 (IS+OOS 拼接, 或仅 OOS)
+        returns: (T, N) 收益率
+        exposures: (T,) 逐日风险暴露系数
+        rebalance_freq: 调仓周期 (天)
+        top_k: 持仓数量
+        cost_arr: (N,) 每个 ETF 的单边成本
+        use_t1_open: T1_OPEN 执行模式
+        delta_rank: hysteresis rank01 gap threshold
+        min_hold_days: minimum holding period
+        warmup_length: IS 暖启动长度; 前 warmup_length 天仅更新持仓状态,
+                       不计入收益/Sharpe/MDD. 0 = 无暖启动.
+
+    返回:
+        (total_return, sharpe_ratio, max_drawdown)
+        - total_return: 累计收益率 (仅 OOS 部分)
+        - sharpe_ratio: 年化 Sharpe (基于逐期收益, 仅 OOS 部分)
+        - max_drawdown: 最大回撤 (正值, 如 0.10 = 10%)
+    """
     T, N = signal.shape
     if exposures.shape[0] != T:
-        # Numba 中不方便抛复杂异常，这里直接返回 0 避免崩溃
-        return 0.0
-    equity = 1.0
-    prev_positions = np.zeros(N, dtype=np.int64)  # 0/1 表示是否持仓
+        return 0.0, 0.0, 0.0
 
-    # ✅ Exp4: 持有天数追踪 (WFO 以 rebalance_freq 为周期递增)
+    equity = 1.0
+    prev_positions = np.zeros(N, dtype=np.int64)
     hold_days_wfo = np.zeros(N, dtype=np.int64)
 
-    # 从 rebalance_freq 开始，确保有上一日信号 (T-1)
+    # Collect per-period returns for Sharpe/MDD (OOS only)
+    max_periods = T // max(rebalance_freq, 1) + 1
+    period_returns = np.empty(max_periods, dtype=np.float64)
+    n_oos_periods = 0
+    peak_equity = 1.0
+    max_dd = 0.0
+
     for start_idx in range(rebalance_freq, T, rebalance_freq):
         end_idx = min(start_idx + rebalance_freq, T)
-        if end_idx - start_idx < 2:  # 至少2天才有意义
+        if end_idx - start_idx < 2:
             continue
-        # 使用 T-1 日信号决定 T 日开盘后的持仓
         sig = signal[start_idx - 1]
 
-        # ✅ Exp4: 递增持有天数 (按 rebalance_freq 周期递增)
+        # Exp4: increment hold days
         for n in range(N):
             if prev_positions[n] == 1:
                 hold_days_wfo[n] += rebalance_freq
 
-        # 跳过无效信号
         valid_mask = ~np.isnan(sig)
         valid_count = np.sum(valid_mask)
         if valid_count < top_k:
             continue
 
-        # 选取 top-k 资产 (信号最高的)
-        # 稳定排序: 先按信号排序, 选取前 k 个
         valid_indices = np.where(valid_mask)[0]
         valid_signals = sig[valid_indices]
-
-        # 降序排列索引
         sorted_idx = np.argsort(-valid_signals)
         top_indices = valid_indices[sorted_idx[:top_k]]
 
-        # 计算新持仓
         new_positions = np.zeros(N, dtype=np.int64)
-
-        # ✅ Exp4: Apply hysteresis if enabled
         if delta_rank > 0.0 or min_hold_days > 0:
             h_mask = np.zeros(N, dtype=np.bool_)
             for n in range(N):
                 h_mask[n] = prev_positions[n] == 1
             target_mask = apply_hysteresis(
-                sig, h_mask, hold_days_wfo,
-                top_indices, top_k,
-                delta_rank, min_hold_days,
+                sig, h_mask, hold_days_wfo, top_indices,
+                top_k, delta_rank, min_hold_days,
             )
             for n in range(N):
                 if target_mask[n]:
@@ -246,62 +305,85 @@ def _compute_rebalanced_return(
             for idx in top_indices:
                 new_positions[idx] = 1
 
-        # ✅ Exp4: 更新持有天数 (买入置1, 卖出置0)
+        # Update hold days
         for n in range(N):
             if prev_positions[n] == 0 and new_positions[n] == 1:
-                hold_days_wfo[n] = 1  # 新买入
+                hold_days_wfo[n] = 1
             elif prev_positions[n] == 1 and new_positions[n] == 0:
-                hold_days_wfo[n] = 0  # 卖出
+                hold_days_wfo[n] = 0
 
-        # 计算换手 (卖出 + 买入)
-        turnover = 0
-        for n in range(N):
-            if prev_positions[n] == 1 and new_positions[n] == 0:
-                turnover += 1  # 卖出
-            elif prev_positions[n] == 0 and new_positions[n] == 1:
-                turnover += 1  # 买入
+        # --- OOS scoring: only accumulate equity after warmup ---
+        is_oos = start_idx >= warmup_length
 
-        # ✅ Exp2: 按标的成本计费 (单边 cost_arr[n])
-        # exposure 缩放：部分仓位下，交易名义金额也缩小；
-        # 每个换仓标的按自身成本计费，除以 top_k 归一化权重。
-        exp_trade = exposures[start_idx]
-        if np.isnan(exp_trade):
-            exp_trade = 1.0
-        commission_cost = 0.0
-        for n in range(N):
-            if prev_positions[n] != new_positions[n]:
-                commission_cost += cost_arr[n] * exp_trade / top_k
-
-        # 计算持仓收益（组合层面逐日累乘，更贴近 VEC/BT：
-        # daily_port_ret = exposure[t] * mean(ret_topk[t])，现金部分收益视为 0）
-        # ✅ Exp1: T1_OPEN 跳过首日 (成交在 start_idx 的 open, 首个完整日收益从 start_idx+1 开始)
-        cum_port = 1.0
-        ret_start = start_idx + 1 if use_t1_open else start_idx
-        for t in range(ret_start, end_idx):
-            exp_t = exposures[t]
-            if np.isnan(exp_t):
-                exp_t = 1.0
-
-            day_ret_sum = 0.0
-            day_cnt = 0
+        if is_oos:
+            # Commission cost
+            exp_trade = exposures[start_idx]
+            if np.isnan(exp_trade):
+                exp_trade = 1.0
+            commission_cost = 0.0
             for n in range(N):
-                if new_positions[n] == 1:
-                    ret = returns[t, n]
-                    if not np.isnan(ret):
-                        day_ret_sum += ret
-                        day_cnt += 1
-            if day_cnt > 0:
-                avg_ret = day_ret_sum / day_cnt
-                cum_port *= 1.0 + exp_t * avg_ret
+                if prev_positions[n] != new_positions[n]:
+                    commission_cost += cost_arr[n] * exp_trade / top_k
 
-        period_return = cum_port - 1.0
+            # Period return (daily compounding)
+            cum_port = 1.0
+            ret_start = start_idx + 1 if use_t1_open else start_idx
+            for t in range(ret_start, end_idx):
+                exp_t = exposures[t]
+                if np.isnan(exp_t):
+                    exp_t = 1.0
+                day_ret_sum = 0.0
+                day_cnt = 0
+                for n in range(N):
+                    if new_positions[n] == 1:
+                        ret = returns[t, n]
+                        if not np.isnan(ret):
+                            day_ret_sum += ret
+                            day_cnt += 1
+                if day_cnt > 0:
+                    avg_ret = day_ret_sum / day_cnt
+                    cum_port *= 1.0 + exp_t * avg_ret
 
-        # 扣除手续费
-        equity *= 1.0 + period_return - commission_cost
+            period_ret = cum_port - 1.0 - commission_cost
+            equity *= 1.0 + period_ret
+
+            # Track for Sharpe
+            period_returns[n_oos_periods] = period_ret
+            n_oos_periods += 1
+
+            # Track MDD
+            if equity > peak_equity:
+                peak_equity = equity
+            dd = (peak_equity - equity) / peak_equity
+            if dd > max_dd:
+                max_dd = dd
 
         prev_positions = new_positions
 
-    return equity - 1.0  # 返回总收益率
+    total_return = equity - 1.0
+
+    # Compute Sharpe from period returns
+    if n_oos_periods >= 2:
+        pr = period_returns[:n_oos_periods]
+        mean_r = 0.0
+        for i in range(n_oos_periods):
+            mean_r += pr[i]
+        mean_r /= n_oos_periods
+        var_r = 0.0
+        for i in range(n_oos_periods):
+            var_r += (pr[i] - mean_r) ** 2
+        var_r /= n_oos_periods
+        std_r = var_r**0.5
+        if std_r > 1e-12:
+            # Annualize: assume ~252/rebalance_freq periods per year
+            periods_per_year = 252.0 / rebalance_freq
+            sharpe = (mean_r / std_r) * (periods_per_year**0.5)
+        else:
+            sharpe = 0.0
+    else:
+        sharpe = 0.0
+
+    return total_return, sharpe, max_dd
 
 
 class ComboWFOOptimizer:
@@ -408,6 +490,7 @@ class ComboWFOOptimizer:
         returns_is,
         factors_oos,
         returns_oos,
+        exposures_is,
         exposures_oos,
         pos_size: int = 2,
         cost_arr: np.ndarray | None = None,
@@ -421,7 +504,9 @@ class ComboWFOOptimizer:
             best_ir: 最佳 IR
             best_pos_rate: 最佳正率
             best_freq: 最佳调仓频率
-            oos_return: OOS 收益率 (使用最佳 freq，含 exposure 缩放)
+            oos_return: OOS 收益率 (含 hysteresis + IS 暖启动)
+            oos_sharpe: OOS Sharpe ratio (年化)
+            oos_maxdd: OOS 最大回撤 (正值)
         """
         n_factors = len(combo_indices)
         if factor_ics is not None:
@@ -430,7 +515,9 @@ class ComboWFOOptimizer:
         else:
             is_ics = np.zeros(n_factors)
             for i, f_idx in enumerate(combo_indices):
-                is_ics[i] = compute_spearman_ic_numba(factors_is[:, :, f_idx], returns_is)
+                is_ics[i] = compute_spearman_ic_numba(
+                    factors_is[:, :, f_idx], returns_is
+                )
         abs_ics = np.abs(is_ics)
         if abs_ics.sum() > 0:
             weights = abs_ics / abs_ics.sum()
@@ -455,20 +542,48 @@ class ComboWFOOptimizer:
                 best_ir = ir
                 best_pos_rate = pos_rate
 
-        # ✅ Exp2: 计算 OOS 收益 (使用最佳 freq, per-ETF cost)
+        # Compute OOS return + Sharpe + MaxDD with IS warm-up for hysteresis
         N_oos = returns_oos.shape[1]
         if cost_arr is None:
             cost_arr_local = np.full(N_oos, 0.0002, dtype=np.float64)
         else:
             cost_arr_local = cost_arr
-        oos_return = _compute_rebalanced_return(
-            signal_oos, returns_oos, exposures_oos, best_freq, pos_size, cost_arr_local,
+
+        use_warmup = (
+            self.config.delta_rank > 0.0 or self.config.min_hold_days > 0
+        )
+
+        if use_warmup:
+            # Concatenate IS+OOS for hysteresis warm-up
+            factors_is_combo = factors_is[:, :, combo_indices]
+            signal_is = _compute_combo_signal(factors_is_combo, weights)
+            signal_full = np.concatenate((signal_is, signal_oos), axis=0)
+            returns_full = np.concatenate((returns_is, returns_oos), axis=0)
+            exposures_full = np.concatenate((exposures_is, exposures_oos), axis=0)
+            warmup_length = len(returns_is)
+        else:
+            signal_full = signal_oos
+            returns_full = returns_oos
+            exposures_full = exposures_oos
+            warmup_length = 0
+
+        oos_return, oos_sharpe, oos_maxdd = _compute_rebalanced_return_stats(
+            signal_full,
+            returns_full,
+            exposures_full,
+            best_freq,
+            pos_size,
+            cost_arr_local,
             self.use_t1_open,
             self.config.delta_rank,
             self.config.min_hold_days,
+            warmup_length,
         )
 
-        return best_score, best_ir, best_pos_rate, best_freq, oos_return
+        return (
+            best_score, best_ir, best_pos_rate, best_freq,
+            oos_return, oos_sharpe, oos_maxdd,
+        )
 
     def _test_combo_impl(
         self,
@@ -485,7 +600,9 @@ class ComboWFOOptimizer:
         oos_ir_list = []
         positive_rate_list = []
         best_freq_list = []
-        oos_return_list = []  # 新增: 滚动 OOS 收益
+        oos_return_list = []
+        oos_sharpe_list = []
+        oos_maxdd_list = []
 
         for w_idx, (is_range, oos_range) in enumerate(windows):
             is_start, is_end = is_range
@@ -494,27 +611,33 @@ class ComboWFOOptimizer:
             returns_is = returns[is_start:is_end]
             factors_oos = factors_data[oos_start:oos_end]
             returns_oos = returns[oos_start:oos_end]
+            exposures_is = exposures[is_start:is_end]
             exposures_oos = exposures[oos_start:oos_end]
 
-            window_ics = precomputed_ics[w_idx] if precomputed_ics is not None else None
+            window_ics = (
+                precomputed_ics[w_idx] if precomputed_ics is not None else None
+            )
 
-            res1, res2, res3, res4, res5 = self._test_combo_single_window(
+            res = self._test_combo_single_window(
                 list(combo_indices),
                 factors_is,
                 returns_is,
                 factors_oos,
                 returns_oos,
+                exposures_is,
                 exposures_oos,
                 pos_size,
                 cost_arr,
                 factor_ics=window_ics,
             )
 
-            oos_ic_list.append(res1)
-            oos_ir_list.append(res2)
-            positive_rate_list.append(res3)
-            best_freq_list.append(res4)
-            oos_return_list.append(res5)
+            oos_ic_list.append(res[0])
+            oos_ir_list.append(res[1])
+            positive_rate_list.append(res[2])
+            best_freq_list.append(res[3])
+            oos_return_list.append(res[4])
+            oos_sharpe_list.append(res[5])
+            oos_maxdd_list.append(res[6])
 
         return {
             "combo_indices": combo_indices,
@@ -522,7 +645,9 @@ class ComboWFOOptimizer:
             "oos_ir_list": oos_ir_list,
             "positive_rate_list": positive_rate_list,
             "best_freq_list": best_freq_list,
-            "oos_return_list": oos_return_list,  # 新增
+            "oos_return_list": oos_return_list,
+            "oos_sharpe_list": oos_sharpe_list,
+            "oos_maxdd_list": oos_maxdd_list,
         }
 
     def _test_combo_batch(
@@ -563,7 +688,7 @@ class ComboWFOOptimizer:
             ics = np.array(row["oos_ic_list"])
             if len(ics) < 2:
                 return 1.0
-            t_stat, p_val = stats.ttest_1samp(ics, 0.0, alternative="greater")
+            _, p_val = stats.ttest_1samp(ics, 0.0, alternative="greater")
             return p_val
 
         results_df["p_value"] = results_df.apply(calc_pvalue, axis=1)
@@ -607,7 +732,7 @@ class ComboWFOOptimizer:
                 raise ValueError(
                     f"exposures length mismatch: expected {T}, got {exposures.shape[0]}"
                 )
-        # ✅ Exp2: 构建 per-ETF 成本数组 (fallback to uniform commission_rate)
+        # Exp2: 构建 per-ETF 成本数组 (fallback to uniform commission_rate)
         if cost_arr is None:
             cost_arr = np.full(N, commission_rate, dtype=np.float64)
         else:
@@ -616,10 +741,10 @@ class ComboWFOOptimizer:
         logger.info(f"Data: {T} days x {N} ETFs x {F} factors")
         if self.config.delta_rank > 0 or self.config.min_hold_days > 0:
             logger.info(
-                f"✅ Hysteresis enabled in WFO OOS: delta_rank={self.config.delta_rank}, "
-                f"min_hold_days={self.config.min_hold_days}"
+                f"Hysteresis enabled in WFO OOS: delta_rank={self.config.delta_rank}, "
+                f"min_hold_days={self.config.min_hold_days} (with IS warm-up)"
             )
-        logger.info(f"ℹ️ 启用标准模式: 基于 IC 进行优化 (pos_size={pos_size})")
+        logger.info(f"Standard mode: IC-based optimization (pos_size={pos_size})")
 
         windows = self._generate_windows(T)
         logger.info(f"Generated {len(windows)} WFO windows")
@@ -629,14 +754,18 @@ class ComboWFOOptimizer:
         # 预计算所有因子的单因子IC（避免combo间重复计算）
         n_windows = len(windows)
         precomputed_ics = np.zeros((n_windows, F))
-        for w_idx, (is_range, _oos_range) in enumerate(windows):
+        for w_idx, (is_range, _) in enumerate(windows):
             is_start, is_end = is_range
             factors_is = factors_data[is_start:is_end]
             returns_is = returns[is_start:is_end]
             # 批量计算: (F, T, N) → (F,) IC值
             all_factor_signals = np.transpose(factors_is, (2, 0, 1))
-            precomputed_ics[w_idx] = compute_multiple_ics_numba(all_factor_signals, returns_is)
-        logger.info(f"Pre-computed {n_windows} x {F} = {n_windows * F} factor ICs")
+            precomputed_ics[w_idx] = compute_multiple_ics_numba(
+                all_factor_signals, returns_is
+            )
+        logger.info(
+            f"Pre-computed {n_windows} x {F} = {n_windows * F} factor ICs"
+        )
 
         # joblib 批处理: 减少 IPC 次数 (12,597 → ~126 批)
         BATCH_SIZE = 100
@@ -660,9 +789,12 @@ class ComboWFOOptimizer:
                 cost_arr,
                 precomputed_ics,
             )
-            for batch in tqdm(combo_batches, desc="WFO组合评估", unit="batch", ncols=80)
+            for batch in tqdm(
+                combo_batches, desc="WFO combo eval", unit="batch", ncols=80
+            )
         )
         results = [r for batch_results in results_nested for r in batch_results]
+
         records = []
         for res in results:
             combo_indices = res["combo_indices"]
@@ -671,22 +803,27 @@ class ComboWFOOptimizer:
             oos_ir_list = res["oos_ir_list"]
             positive_rate_list = res["positive_rate_list"]
             best_freq_list = res["best_freq_list"]
-            oos_return_list = res["oos_return_list"]  # 新增
+            oos_return_list = res["oos_return_list"]
+            oos_sharpe_list = res["oos_sharpe_list"]
+            oos_maxdd_list = res["oos_maxdd_list"]
 
             mean_oos_ic = np.mean(oos_ic_list)
             oos_ic_std = np.std(oos_ic_list)
             mean_oos_ir = np.mean(oos_ir_list)
             mean_positive_rate = np.mean(positive_rate_list)
 
-            # 新增: 计算平均 OOS 收益和累计 OOS 收益
-            mean_oos_return = np.mean(oos_return_list)  # 平均每窗口收益
-            # 累计收益 = 所有窗口收益累乘
+            mean_oos_return = np.mean(oos_return_list)
             cum_oos_return = 1.0
             for r in oos_return_list:
                 cum_oos_return *= 1.0 + r
             cum_oos_return -= 1.0
 
-            from collections import Counter
+            mean_oos_sharpe = (
+                np.mean(oos_sharpe_list) if oos_sharpe_list else 0.0
+            )
+            mean_oos_maxdd = (
+                np.mean(oos_maxdd_list) if oos_maxdd_list else 0.0
+            )
 
             freq_counter = Counter(best_freq_list)
             best_rebalance_freq = freq_counter.most_common(1)[0][0]
@@ -704,13 +841,17 @@ class ComboWFOOptimizer:
                     "positive_rate": mean_positive_rate,
                     "best_rebalance_freq": best_rebalance_freq,
                     "stability_score": stability_score,
-                    "mean_oos_return": mean_oos_return,  # 新增: 平均窗口 OOS 收益
-                    "cum_oos_return": cum_oos_return,  # 新增: 累计 OOS 收益
+                    "mean_oos_return": mean_oos_return,
+                    "cum_oos_return": cum_oos_return,
+                    "mean_oos_sharpe": mean_oos_sharpe,
+                    "mean_oos_maxdd": mean_oos_maxdd,
                     "oos_ic_list": oos_ic_list,
                     "oos_ir_list": oos_ir_list,
                     "positive_rate_list": positive_rate_list,
                     "best_freq_list": best_freq_list,
-                    "oos_return_list": oos_return_list,  # 新增
+                    "oos_return_list": oos_return_list,
+                    "oos_sharpe_list": oos_sharpe_list,
+                    "oos_maxdd_list": oos_maxdd_list,
                 }
             )
         results_df = pd.DataFrame(records)
@@ -721,35 +862,85 @@ class ComboWFOOptimizer:
             results_df["p_value"] = np.nan
             results_df["q_value"] = np.nan
             results_df["is_significant"] = True
-        # 使用校准器排序（若可用），否则退回IC排序
+
+        # Compute execution_score: normalized composite of return + sharpe + maxdd
+        # This score reflects production execution (with hysteresis + IS warm-up)
+        use_execution_scoring = (
+            self.config.delta_rank > 0 or self.config.min_hold_days > 0
+        )
+        if use_execution_scoring:
+            results_df = self._add_execution_score(results_df)
+
+        # Sorting: execution_score (when available) > calibrated > IC
         calibrated_model_path = Path("results/calibrator_gbdt_full.joblib")
         use_calibrated = calibrated_model_path.exists()
-        if use_calibrated:
+
+        if use_execution_scoring and "execution_score" in results_df.columns:
+            results_df = results_df.sort_values(
+                by=["execution_score", "mean_oos_ic"],
+                ascending=[False, False],
+            ).reset_index(drop=True)
+            sort_method = "execution_score (hysteresis-aware)"
+        elif use_calibrated:
             try:
-                calibrator = WFORealBacktestCalibrator.load(calibrated_model_path)
-                # 生成校准预测分（与训练时一致的特征列）
+                calibrator = WFORealBacktestCalibrator.load(
+                    calibrated_model_path
+                )
                 results_df = results_df.copy()
-                results_df["calibrated_sharpe_pred"] = calibrator.predict(results_df)
-                # 以校准分为主排序，稳定性次序，保留原始IC便于诊断
+                results_df["calibrated_sharpe_pred"] = calibrator.predict(
+                    results_df
+                )
                 results_df = results_df.sort_values(
                     by=["calibrated_sharpe_pred", "stability_score"],
                     ascending=[False, False],
                 ).reset_index(drop=True)
-                logger.info(
-                    "✅ 使用已训练校准器(results/calibrator_gbdt_full.joblib)进行排序"
-                )
+                sort_method = "calibrated"
             except Exception as e:
-                logger.warning(f"校准器预测失败，回退到IC排序。原因: {e}")
+                logger.warning(f"Calibrator failed, fallback to IC: {e}")
                 results_df = results_df.sort_values(
-                    by=["mean_oos_ic", "stability_score"], ascending=[False, False]
+                    by=["mean_oos_ic", "stability_score"],
+                    ascending=[False, False],
                 ).reset_index(drop=True)
+                sort_method = "IC"
         else:
-            # 改为按IC排序（IC越高越好），稳定性得分作为次要指标
             results_df = results_df.sort_values(
-                by=["mean_oos_ic", "stability_score"], ascending=[False, False]
+                by=["mean_oos_ic", "stability_score"],
+                ascending=[False, False],
             ).reset_index(drop=True)
+            sort_method = "IC"
+
         top_combos = results_df.head(top_n).to_dict("records")
         logger.info(
-            f"Found {len(top_combos)} top combos (sorted by {'calibrated' if use_calibrated else 'IC'})"
+            f"Found {len(top_combos)} top combos (sorted by {sort_method})"
         )
         return top_combos, results_df
+
+    @staticmethod
+    def _add_execution_score(df: pd.DataFrame) -> pd.DataFrame:
+        """Compute execution_score from hysteresis-aware OOS metrics.
+
+        Composite: 0.4 * norm(mean_oos_return) + 0.3 * norm(mean_oos_sharpe)
+                   + 0.3 * norm(-mean_oos_maxdd)
+
+        All components rank-normalized to [0, 1] to avoid scale dependency.
+        """
+        df = df.copy()
+        n = len(df)
+        if n < 2:
+            df["execution_score"] = 0.0
+            return df
+
+        # Rank-normalize each component to [0, 1]
+        def rank_normalize(series):
+            ranks = series.rank(method="average", ascending=True)
+            return (ranks - 1) / max(n - 1, 1)
+
+        norm_ret = rank_normalize(df["mean_oos_return"])
+        norm_sharpe = rank_normalize(df["mean_oos_sharpe"])
+        # For maxdd, lower is better -> negate before ranking
+        norm_mdd = rank_normalize(-df["mean_oos_maxdd"])
+
+        df["execution_score"] = (
+            0.4 * norm_ret + 0.3 * norm_sharpe + 0.3 * norm_mdd
+        )
+        return df

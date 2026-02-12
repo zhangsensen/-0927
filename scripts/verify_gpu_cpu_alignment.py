@@ -47,7 +47,7 @@ def main():
     parser = argparse.ArgumentParser(description="GPU/CPU 结果一致性验证")
     parser.add_argument("--n-factors", type=int, default=100, help="因子数量")
     parser.add_argument("--n-days", type=int, default=252, help="天数")
-    parser.add_argument("--n-etfs", type=int, default=43, help="ETF 数量")
+    parser.add_argument("--n-etfs", type=int, default=49, help="ETF 数量")
     parser.add_argument("--tolerance", type=float, default=1e-6, help="容差")
     args = parser.parse_args()
 

@@ -13,7 +13,7 @@ GPU-Accelerated IC Calculator | GPU 加速 IC 计算器
 - GPU: RTX 5070 Ti 16GB (CUDA 13.0)
 - 依赖: cupy-cuda12x >= 12.3.0
 
-性能对比 (10,000 因子 × 1442 天 × 43 ETF):
+性能对比 (10,000 因子 × 1442 天 × 49 ETF):
 - CPU (Numba): ~1.4 小时
 - GPU (CuPy): ~2-3 分钟 (30x 加速)
 
