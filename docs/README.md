@@ -21,7 +21,6 @@
 | 文档 | 说明 |
 |------|------|
 | [WFO_VEC_STATUS.md](WFO_VEC_STATUS.md) | 三层引擎对齐状态 + P0 修复记录 |
-| [VEC_BT_ALIGNMENT_GUIDE.md](VEC_BT_ALIGNMENT_GUIDE.md) | VEC/BT 对齐原理与红线 |
 | [ETF_POOL_ARCHITECTURE.md](ETF_POOL_ARCHITECTURE.md) | 43 ETF 池设计（38 A股 + 5 QDII） |
 | [DATA_FORMAT_SPECIFICATION.md](DATA_FORMAT_SPECIFICATION.md) | Parquet 数据格式规范 |
 | [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md) | 已知引擎差异清单 |
@@ -33,9 +32,7 @@
 | 文档 | 说明 |
 |------|------|
 | [v5_prod1_go_live_summary.md](v5_prod1_go_live_summary.md) | v5.0 上线总结 |
-| [BEST_STRATEGY_43ETF_UNIFIED.md](BEST_STRATEGY_43ETF_UNIFIED.md) | 历史最佳策略（v3.0 参考） |
 | [STRATEGY_DEVELOPMENT_WORKFLOW.md](STRATEGY_DEVELOPMENT_WORKFLOW.md) | 策略开发流程 |
-| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | 快速参考卡 |
 
 ---
 
@@ -50,16 +47,15 @@
 
 ---
 
-## 历史版本与审计
+## 历史与审计
 
 | 文档 | 说明 |
 |------|------|
-| [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md) | 项目技术深潜 |
+| [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md) | 项目技术深潜 (v3.4 基线) |
 | [OVERFITTING_DIAGNOSIS_REPORT.md](OVERFITTING_DIAGNOSIS_REPORT.md) | 过拟合诊断报告 |
 | [FACTOR_EXPANSION_V42.md](FACTOR_EXPANSION_V42.md) | v4.2 因子扩展 |
-| [RELEASE_NOTES_V3_2.md](RELEASE_NOTES_V3_2.md) | v3.2 发布说明 |
-| [PRODUCTION_STRATEGIES_V3_2.md](PRODUCTION_STRATEGIES_V3_2.md) | v3.2 生产策略 |
 | [../reports/deep_review_final_report.md](../reports/deep_review_final_report.md) | 深度审阅报告 (6P0 + 8P1 + 9P2) |
+| [archive/](archive/) | v3.0~v3.2 历史文档（已归档，仅供考古） |
 
 ---
 

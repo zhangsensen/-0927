@@ -50,12 +50,12 @@
 | Universe 模式 | `A_SHARE_ONLY` | QDII 硬阻断实盘交易 |
 | Regime Gate | ON | 波动率模式，510300 代理 |
 
-### 封板策略
+### 封板策略 (v5.0 VEC 验证, F5+Exp4, med cost)
 
-| 策略 | 因子组合 | 全期收益 | Sharpe | MDD |
-|------|---------|---------|--------|-----|
-| **S1 (4F)** | ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D | 136.52% | 1.03 | 15.47% |
-| **S2 (5F)** | S1 + PRICE_POSITION_120D | 129.85% | 1.04 | 13.93% |
+| 策略 | 因子组合 | HO 收益 | HO MDD | HO Sharpe |
+|------|---------|---------|--------|-----------|
+| **S1 (4F)** 生产 | ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D | +42.7% | 11.8% | 2.15 |
+| **C2 (3F)** 影子 | AMIHUD_ILLIQUIDITY + CALMAR_RATIO_60D + CORRELATION_TO_MARKET_20D | +63.9% | 10.4% | 2.63 |
 
 ---
 
