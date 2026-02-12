@@ -102,10 +102,16 @@ def main():
     EXTREME_THRESHOLD = -0.1
     EXTREME_POSITION = 0.1
 
+    # Hysteresis parameters from config
+    hyst_config = backtest_config.get("hysteresis", {})
+    DELTA_RANK = float(hyst_config.get("delta_rank", 0.0))
+    MIN_HOLD_DAYS = int(hyst_config.get("min_hold_days", 0))
+
     print(f"Configuration:")
     print(f"  Execution Model: {exec_model.mode}")
     print(f"  FREQ: {FREQ}")
     print(f"  POS_SIZE: {POS_SIZE}")
+    print(f"  Hysteresis: delta_rank={DELTA_RANK}, min_hold_days={MIN_HOLD_DAYS}")
     print(f"  Timing Threshold: {EXTREME_THRESHOLD}")
     print(f"  Timing Position: {EXTREME_POSITION}")
 
@@ -136,27 +142,20 @@ def main():
         end_date=data_end_date,  # 使用训练集截止日期
     )
 
-    # 3. Compute Factors
-    print("Computing Factors...")
-    factor_lib = PreciseFactorLibrary()
-    raw_factors_df = factor_lib.compute_all_factors(ohlcv)
-    factor_names_list = sorted(
-        raw_factors_df.columns.get_level_values(0).unique().tolist()
+    # 3. Load Factors (OHLCV + non-OHLCV via FactorCache)
+    print("Loading Factors (cached + external)...")
+    from etf_strategy.core.factor_cache import FactorCache
+
+    factor_cache = FactorCache(
+        cache_dir=Path(config["data"].get("cache_dir", ".cache"))
     )
-    raw_factors = {fname: raw_factors_df[fname] for fname in factor_names_list}
-
-    processor = CrossSectionProcessor(verbose=False)
-    std_factors = processor.process_all_factors(raw_factors)
-
-    # 4. Prepare Backtest Data
-    first_factor = std_factors[factor_names_list[0]]
-    dates = first_factor.index
-    etf_codes = first_factor.columns.tolist()
-
-    # Stack all factors into a 3D array (Time, Assets, Factors)
-    all_factors_stack = np.stack(
-        [std_factors[f].values for f in factor_names_list], axis=-1
-    )
+    data_dir = Path(config["data"].get("data_dir", "raw/ETF/daily"))
+    cached_factors = factor_cache.get_or_compute(ohlcv, config, data_dir)
+    factor_names_list = cached_factors["factor_names"]
+    dates = cached_factors["dates"]
+    etf_codes = cached_factors["etf_codes"]
+    all_factors_stack = cached_factors["factors_3d"]
+    print(f"  Factors: {len(factor_names_list)}, Shape: {all_factors_stack.shape}")
 
     # ✅ Exp2: 构建 per-ETF 成本数组
     cost_model = load_cost_model(config)
@@ -236,8 +235,10 @@ def main():
                 pos_size=POS_SIZE,
                 initial_capital=float(backtest_config["initial_capital"]),
                 commission_rate=float(backtest_config["commission_rate"]),
-                lookback=backtest_config["lookback"],
+                lookback=backtest_config.get("lookback") or backtest_config.get("lookback_window", 252),
                 cost_arr=cost_arr,
+                delta_rank=DELTA_RANK,
+                min_hold_days=MIN_HOLD_DAYS,
                 trailing_stop_pct=0.0,
                 stop_on_rebalance_only=True,
                 use_t1_open=USE_T1_OPEN,

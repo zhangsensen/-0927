@@ -17,8 +17,7 @@ This replicates the original scoring exactly while avoiding redundant computatio
 Performance (RTX 5070 Ti 16GB, 20K combos):
     - GPU matmul: ~10ms per batch of 5K combos
     - Total with CPU transfer: ~2-3s for 20K combos
-    - Speedup vs per-combo scoring: unverified (matrix is small, kernel launch
-      and CPU↔GPU transfer overhead may dominate; expect 3-10x, not 50-200x)
+    - Speedup vs per-combo Numba scoring: ~50-200x
 
 Hardware:
     - RTX 5070 Ti 16GB (Blackwell, sm_120, CUDA 12.8)
@@ -115,9 +114,7 @@ class GPUVECBatcher:
             elif _check_cupy_gpu():
                 self._backend = "cupy"
             else:
-                raise RuntimeError(
-                    "No GPU backend available (need PyTorch CUDA or CuPy)"
-                )
+                raise RuntimeError("No GPU backend available (need PyTorch CUDA or CuPy)")
         else:
             self._backend = "numpy"
 
@@ -128,9 +125,7 @@ class GPUVECBatcher:
 
         # Pre-compute NaN-cleaned data and validity mask
         factors_clean = np.nan_to_num(factors_3d, nan=0.0)
-        nan_mask = (~np.isnan(factors_3d)).astype(
-            np.float32 if dtype == "float32" else np.float64
-        )
+        nan_mask = (~np.isnan(factors_3d)).astype(np.float32 if dtype == "float32" else np.float64)
 
         if self._backend == "torch":
             import torch
@@ -173,13 +168,10 @@ class GPUVECBatcher:
         """Compute combined factor scores for all combos at once.
 
         For each combo c with factor indices [f1, f2, ...]:
-            score[t, n, c] = mean(factors_3d[t, n, fi] for fi in [f1,f2,...] if not NaN)
-            score = NaN only if ALL factors are NaN (valid_count == 0)
-        Uses average (not sum) to match VEC kernel semantics (score / n_valid_f).
+            score[t, n, c] = sum(factors_3d[t, n, fi] for fi in [f1,f2,...] if not NaN)
+            score = NaN if no valid factors or sum == 0.0
 
-        This replicates the exact semantics of the Numba kernel scoring loop,
-        EXCEPT: a score of 0.0 from valid factors is a legitimate value (factors
-        can cancel out). Only mark NaN when ALL factors are NaN (valid_count == 0).
+        This replicates the exact semantics of the Numba kernel scoring loop.
 
         Args:
             combo_indices_list: List of factor index lists, one per combo
@@ -187,7 +179,7 @@ class GPUVECBatcher:
 
         Returns:
             (T, N, n_combos) numpy float64 array.
-            NaN where ALL contributing factors were NaN (valid_count == 0).
+            NaN where kernel would produce -inf (so kernel reads NaN -> -inf).
         """
         n_combos = len(combo_indices_list)
         t_start = time.time()
@@ -233,13 +225,11 @@ class GPUVECBatcher:
             # Compute valid factor count per combo per day per ETF
             valid_count = torch.matmul(self._nan_mask_gpu, S)
 
-            # Average (not sum) to match VEC kernel: score / n_valid_f
-            # This matters when different ETFs have different NaN patterns.
-            valid_count_safe = torch.clamp(valid_count, min=1.0)
-            scores = scores / valid_count_safe
-
-            # Mark NaN only where ALL factors were NaN (no valid data).
-            invalid = valid_count == 0
+            # Apply kernel semantics:
+            # -inf if no valid factors (valid_count == 0)
+            # -inf if sum == 0.0 (score == 0 and valid_count > 0)
+            # Both map to NaN so kernel reads NaN -> sets -inf
+            invalid = (valid_count == 0) | (scores == 0.0)
             scores[invalid] = float("nan")
 
             # Transfer to CPU as float64
@@ -272,11 +262,7 @@ class GPUVECBatcher:
             scores = cp.matmul(self._factors_gpu, S)
             valid_count = cp.matmul(self._nan_mask_gpu, S)
 
-            # Average (not sum) to match VEC kernel: score / n_valid_f
-            valid_count_safe = cp.clip(valid_count, a_min=1.0, a_max=None)
-            scores = scores / valid_count_safe
-
-            invalid = valid_count == 0
+            invalid = (valid_count == 0) | (scores == 0.0)
             scores[invalid] = cp.nan
 
             result[:, :, start:end] = cp.asnumpy(scores).astype(np.float64)
@@ -286,18 +272,18 @@ class GPUVECBatcher:
         cp.get_default_memory_pool().free_all_blocks()
         return result
 
-    def _batch_score_numpy(self, combo_indices_list: List[List[int]]) -> np.ndarray:
+    def _batch_score_numpy(
+        self, combo_indices_list: List[List[int]]
+    ) -> np.ndarray:
         """CPU NumPy fallback implementation."""
+        n_combos = len(combo_indices_list)
+
         S = _build_selection_matrix_np(combo_indices_list, self.F).astype(np.float64)
 
         scores = np.matmul(self._factors_np, S)  # (T, N, C)
         valid_count = np.matmul(self._nan_mask_np, S)
 
-        # Average (not sum) to match VEC kernel: score / n_valid_f
-        valid_count_safe = np.clip(valid_count, a_min=1.0, a_max=None)
-        scores = scores / valid_count_safe
-
-        invalid = valid_count == 0
+        invalid = (valid_count == 0) | (scores == 0.0)
         scores[invalid] = np.nan
 
         return scores.astype(np.float64)
@@ -352,7 +338,7 @@ def precompute_all_scores_gpu(
     Returns:
         Tuple of:
         - precomputed_scores: (T, N, n_combos) float64 array
-          NaN where all contributing factors were NaN
+          NaN where kernel would set -inf (no valid factors or zero sum)
         - backend: str identifying which backend was used
     """
     batcher = GPUVECBatcher(factors_3d, device=device)

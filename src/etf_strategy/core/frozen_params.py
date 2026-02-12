@@ -22,7 +22,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .factor_registry import get_bounded_factors_tuple
+
 logger = logging.getLogger(__name__)
+
+# Computed once at import time — single source of truth for bounded factors
+_BOUNDED_FACTORS_TUPLE = get_bounded_factors_tuple()
 
 
 # ---------------------------------------------------------------------------
@@ -126,15 +131,8 @@ class FrozenScoringParams:
 
 @dataclass(frozen=True)
 class FrozenCrossSectionParams:
-    bounded_factors: Tuple[str, ...] = (
-        "ADX_14D",
-        "CMF_20D",
-        "CORRELATION_TO_MARKET_20D",
-        "PRICE_POSITION_20D",
-        "PRICE_POSITION_120D",
-        "PV_CORR_20D",
-        "RSI_14",
-    )
+    # bounded_factors 从 factor_registry 单一事实源派生
+    bounded_factors: Tuple[str, ...] = _BOUNDED_FACTORS_TUPLE
     winsorize_lower: float = 0.025
     winsorize_upper: float = 0.975
 
@@ -272,20 +270,9 @@ _V3_4_CONFIG = FrozenProductionConfig(
     ),
 )
 
-_V4_0_CROSS_SECTION = FrozenCrossSectionParams(
-    bounded_factors=(
-        "ADX_14D",
-        "CMF_20D",
-        "CORRELATION_TO_MARKET_20D",
-        "PRICE_POSITION_20D",
-        "PRICE_POSITION_120D",
-        "PV_CORR_20D",
-        "RSI_14",
-    ),
-)
-
-# v4.1+: all 7 bounded factors (aligned with FACTOR_BOUNDS and cross_section_processor.py)
-_V4_1_CROSS_SECTION = FrozenCrossSectionParams()
+# v4.0+: all 7 bounded factors — derived from factor_registry single source of truth
+_V4_0_CROSS_SECTION = FrozenCrossSectionParams()
+_V4_1_CROSS_SECTION = _V4_0_CROSS_SECTION
 
 _V4_0_CONFIG = FrozenProductionConfig(
     version="v4.0",
@@ -394,7 +381,7 @@ _VERSION_REGISTRY: Dict[str, FrozenProductionConfig] = {
     "v6.0": _V6_0_CONFIG,
 }
 
-CURRENT_VERSION = "v6.0"
+CURRENT_VERSION = "v5.0"
 
 # 操作性参数 (不校验)
 _OPERATIONAL_KEYS = frozenset(

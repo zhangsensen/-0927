@@ -732,15 +732,15 @@ def vec_backtest_kernel(
             valid = 0
             for n in range(N):
                 score = 0.0
-                n_valid_f = 0
+                has_value = False
                 for idx in factor_indices:
                     val = factors_3d[t - 1, n, idx]
                     if not np.isnan(val):
                         score += val
-                        n_valid_f += 1
+                        has_value = True
 
-                if n_valid_f > 0:
-                    combined_score[n] = score / n_valid_f
+                if has_value and score != 0.0:
+                    combined_score[n] = score
                     valid += 1
                 else:
                     combined_score[n] = -np.inf
@@ -1458,49 +1458,7 @@ def main():
     factors_3d = cached["factors_3d"]
     factor_names = list(factor_names)  # Convert to mutable list
 
-    # ── 加载外部因子 (parquet, 与 run_combo_wfo.py 一致) ──
-    _ext_factors_dir = config.get("combo_wfo", {}).get("extra_factors", {}).get("factors_dir", "")
-    if _ext_factors_dir:
-        from etf_strategy.core.cross_section_processor import CrossSectionProcessor
-        _ext_dir = Path(_ext_factors_dir)
-        if not _ext_dir.is_absolute():
-            _ext_dir = ROOT / _ext_dir
-        if _ext_dir.exists():
-            # Find factors referenced in combos but not in factor_names
-            _combo_factors = set()
-            for c in df_combos["combo"].tolist():
-                _combo_factors.update(f.strip() for f in c.split(" + "))
-            _missing = sorted(_combo_factors - set(factor_names))
-            if _missing:
-                print(f"🔧 加载 {len(_missing)} 个外部因子 (parquet): {_missing}")
-                cs_processor = CrossSectionProcessor(
-                    lower_percentile=config["cross_section"]["winsorize_lower"],
-                    upper_percentile=config["cross_section"]["winsorize_upper"],
-                    verbose=False,
-                )
-                for fname in _missing:
-                    fpath = _ext_dir / f"{fname}.parquet"
-                    if fpath.exists():
-                        fdf = pd.read_parquet(fpath)
-                        fdf.index = pd.to_datetime(fdf.index)
-                        fdf = fdf.reindex(dates)
-                        fdf = fdf[etf_codes] if all(c in fdf.columns for c in etf_codes) else fdf.reindex(columns=etf_codes)
-                        farr = fdf.values
-                        valid_ratio = np.isfinite(farr).sum() / farr.size if farr.size > 0 else 0
-                        if valid_ratio > 0.01:
-                            processed = cs_processor.process_all_factors({fname: fdf})
-                            fstd = processed[fname].values
-                            fstd = np.where(np.isfinite(fstd), fstd, 0.0)
-                            factors_3d = np.concatenate([factors_3d, fstd[:, :, np.newaxis]], axis=2)
-                            factor_names.append(fname)
-                            print(f"  ✓ {fname}: {valid_ratio*100:.1f}% valid")
-                        else:
-                            print(f"  ⚠️ {fname}: insufficient data ({valid_ratio*100:.1f}%)")
-                    else:
-                        print(f"  ⚠️ {fname}: file not found {fpath}")
-                T = factors_3d.shape[0]
-                N = factors_3d.shape[1]
-                print(f"  factors_3d shape: {factors_3d.shape} ({len(factor_names)} factors)")
+    # (non-OHLCV factors already loaded by FactorCache — no manual parquet loading needed)
 
     # ── 加载额外因子矩阵 (来自 factor mining prefilter) ──
     extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})
@@ -1822,43 +1780,16 @@ def main():
         for combo in combo_strings
     ]
 
-    # GPU pre-scoring: compute all combo scores at once on GPU
-    import os as _os
-    _use_gpu = _os.environ.get("VEC_GPU", "0") == "1"
-    _precomputed_scores = None  # (T, N, n_combos) or None
-    if _use_gpu:
-        try:
-            from etf_strategy.gpu.vec_gpu_batch import precompute_all_scores_gpu
-            import time as _time
-            _t0 = _time.time()
-            _precomputed_scores, _gpu_backend = precompute_all_scores_gpu(
-                factors_3d, combo_indices, batch_size=5000, device="auto"
-            )
-            _gpu_elapsed = _time.time() - _t0
-            print(f"GPU pre-scoring: {len(combo_indices)} combos in {_gpu_elapsed:.2f}s "
-                  f"(backend={_gpu_backend}, "
-                  f"output={_precomputed_scores.nbytes / 1024**2:.0f}MB)")
-        except Exception as e:
-            print(f"GPU pre-scoring failed: {e}. Falling back to CPU.")
-            _precomputed_scores = None
-
     # 定义单个combo回测函数（闭包捕获共享数据）
-    def _backtest_one_combo(combo_str, factor_indices, combo_idx=None):
-        # If GPU pre-computed scores available, use single-column view
-        if _precomputed_scores is not None and combo_idx is not None:
-            _factors = _precomputed_scores[:, :, combo_idx:combo_idx + 1]
-            _fi = [0]
-        else:
-            _factors = factors_3d
-            _fi = factor_indices
+    def _backtest_one_combo(combo_str, factor_indices):
         eq_curve, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
-            _factors,
+            factors_3d,
             close_prices,
             open_prices,
             high_prices,
             low_prices,
             timing_arr,
-            _fi,
+            factor_indices,
             # ✅ P0: 传入配置参数
             freq=FREQ,
             pos_size=POS_SIZE,
@@ -1936,17 +1867,17 @@ def main():
         return result
 
     # ✅ 并行回测（Numba JIT 释放 GIL，线程池避免序列化开销）
+    import os as _os
     n_vec_jobs = int(_os.environ.get("VEC_N_JOBS", min((_os.cpu_count() or 8) // 2, 16)))
     n_combos = len(combo_strings)
     # 小批量自动保存权益曲线 (用于 holdout 分析)
     _save_equity = n_combos <= 200
-    _gpu_label = " [GPU pre-scored]" if _precomputed_scores is not None else ""
-    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs}){_gpu_label}"
+    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs})"
           + (", 保存权益曲线" if _save_equity else ""))
     results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
-        delayed(_backtest_one_combo)(cs, fi, combo_idx=ci)
-        for ci, (cs, fi) in tqdm(
-            enumerate(zip(combo_strings, combo_indices)),
+        delayed(_backtest_one_combo)(cs, fi)
+        for cs, fi in tqdm(
+            zip(combo_strings, combo_indices),
             total=n_combos,
             desc="VEC 回测",
         )

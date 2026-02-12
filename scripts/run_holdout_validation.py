@@ -145,7 +145,7 @@ def process_combo(
             pos_size=POS_SIZE,
             initial_capital=float(backtest_config["initial_capital"]),
             commission_rate=float(backtest_config["commission_rate"]),
-            lookback=int(backtest_config["lookback"]),
+            lookback=int(backtest_config.get("lookback") or backtest_config.get("lookback_window", 252)),
             cost_arr=cost_arr,
             trailing_stop_pct=0.0,
             stop_on_rebalance_only=True,
@@ -371,9 +371,9 @@ def main():
     )
 
     # 确保 lookback 后还有足够数据
-    effective_start_idx = backtest_config["lookback"]
+    effective_start_idx = int(backtest_config.get("lookback") or backtest_config.get("lookback_window", 252))
     print(
-        f"有效交易起始索引: {effective_start_idx} (lookback={backtest_config['lookback']})"
+        f"有效交易起始索引: {effective_start_idx} (lookback={effective_start_idx})"
     )
 
     if holdout_start_idx < effective_start_idx:

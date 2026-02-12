@@ -625,7 +625,7 @@ def main():
     pos_size = backtest_config.get("pos_size", 3)
     initial_capital = float(backtest_config.get("initial_capital", 1_000_000.0))
     commission_rate = float(backtest_config.get("commission_rate", 0.0002))
-    lookback = backtest_config.get("lookback", 252)
+    lookback = backtest_config.get("lookback") or backtest_config.get("lookback_window", 252)
 
     # ✅ Exp2: 加载成本模型
     cost_model = load_cost_model(config)

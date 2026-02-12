@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import pickle
 import time
 from pathlib import Path
@@ -36,6 +37,8 @@ class FactorCache:
         source_files = [
             Path(__file__).parent / "precise_factor_library_v2.py",
             Path(__file__).parent / "cross_section_processor.py",
+            Path(__file__).parent / "factor_registry.py",
+            Path(__file__).parent / "non_ohlcv_factors.py",
         ]
         mtimes = []
         for f in source_files:
@@ -57,6 +60,33 @@ class FactorCache:
             logger.warning(f"无法获取数据目录 {data_dir} 的修改时间")
             return 0
 
+    def _resolve_ext_factors_dir(self, config: dict) -> Optional[Path]:
+        """解析外部因子目录: 环境变量 > config > None"""
+        ext_dir_str = os.environ.get("EXTRA_FACTORS_DIR", "").strip()
+        if not ext_dir_str:
+            ext_dir_str = (
+                config.get("combo_wfo", {})
+                .get("extra_factors", {})
+                .get("factors_dir", "")
+            )
+        if not ext_dir_str:
+            return None
+        ext_dir = Path(ext_dir_str)
+        if not ext_dir.is_absolute():
+            project_root = Path(__file__).resolve().parents[3]
+            ext_dir = project_root / ext_dir_str
+        return ext_dir if ext_dir.exists() else None
+
+    def _get_ext_factors_mtime(self, config: dict) -> int:
+        """获取外部因子 parquet 目录的最新 mtime"""
+        ext_dir = self._resolve_ext_factors_dir(config)
+        if ext_dir is None:
+            return 0
+        pq_files = list(ext_dir.glob("*.parquet"))
+        if pq_files:
+            return int(max(f.stat().st_mtime for f in pq_files))
+        return 0
+
     def _generate_cache_key(
         self,
         data_dir: Path,
@@ -65,13 +95,16 @@ class FactorCache:
         end_date: str,
         ema_span: int = 0,
         bounded_factors: Optional[List[str]] = None,
+        ext_mtime: int = 0,
+        use_loader: bool = False,
     ) -> str:
-        """生成缓存键 (包含数据mtime + 源码mtime + ema_span + bounded_factors)"""
+        """生成缓存键 (包含数据mtime + 源码mtime + ema_span + bounded_factors + ext_mtime + loader)"""
         codes_str = "-".join(sorted(etf_codes))
         data_mtime = int(self._get_data_mtime(data_dir))
         source_mtime = int(self._get_source_mtime())
         bf_str = "-".join(sorted(bounded_factors)) if bounded_factors else "default"
-        key_str = f"factors_{codes_str}_{start_date}_{end_date}_{data_mtime}_{source_mtime}_ema{ema_span}_bf{bf_str}"
+        loader_str = "inline" if use_loader else "parquet"
+        key_str = f"factors_{codes_str}_{start_date}_{end_date}_{data_mtime}_{source_mtime}_ema{ema_span}_bf{bf_str}_ext{ext_mtime}_{loader_str}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
     def get_or_compute(
@@ -79,9 +112,18 @@ class FactorCache:
         ohlcv: Dict[str, pd.DataFrame],
         config: dict,
         data_dir: Path,
+        loader: Optional[object] = None,
     ) -> Dict:
         """
         获取或计算因子数据 (带缓存)
+
+        Parameters:
+            ohlcv: OHLCV data dict with 'close', 'volume', etc.
+            config: Full config dict from combo_wfo_config.yaml.
+            data_dir: Path to OHLCV parquet directory.
+            loader: Optional DataLoader instance. When provided, non-OHLCV
+                factors (fund_share, margin) are computed inline instead of
+                loaded from pre-computed parquet files.
 
         Returns:
             {
@@ -104,12 +146,18 @@ class FactorCache:
         ema_enabled = ts_cfg.get("enabled", False)
         ema_span = int(ts_cfg.get("ema_span", 5)) if ema_enabled else 0
 
-        # bounded_factors config → cache key (P1-11: invalidate on config change)
-        bounded_factors = config.get("cross_section", {}).get("bounded_factors", None)
+        # bounded_factors → cache key (from factor_registry single source of truth)
+        from .factor_registry import get_bounded_factors
+
+        bounded_factors = sorted(get_bounded_factors())
+
+        # ext_factors mtime → cache key (invalidate when parquet files change)
+        ext_mtime = self._get_ext_factors_mtime(config)
 
         cache_key = self._generate_cache_key(
             data_dir, etf_codes, actual_start, actual_end,
             ema_span=ema_span, bounded_factors=bounded_factors,
+            ext_mtime=ext_mtime, use_loader=(loader is not None),
         )
         cache_file = self.cache_dir / f"factor_cache_{cache_key}.pkl"
 
@@ -156,6 +204,74 @@ class FactorCache:
 
             std_factors = apply_temporal_ema(std_factors, ema_span)
             logger.info(f"Exp5: temporal EMA applied (span={ema_span})")
+
+        # ── 加载非-OHLCV 因子 ──
+        # 优先路径: loader 内联计算 (Phase 2)
+        # 回退路径: 预计算 parquet 文件 (legacy, backward compatible)
+        active_factors = set(config.get("active_factors", []))
+
+        if loader is not None:
+            from .factor_registry import FACTOR_SPECS
+            from .non_ohlcv_factors import compute_non_ohlcv_factors
+
+            non_ohlcv_needed = [
+                name
+                for name, spec in FACTOR_SPECS.items()
+                if spec.source != "ohlcv" and name in active_factors
+            ]
+            if non_ohlcv_needed:
+                logger.info(
+                    f"Computing {len(non_ohlcv_needed)} non-OHLCV factors inline: "
+                    f"{non_ohlcv_needed}"
+                )
+                raw_ext = compute_non_ohlcv_factors(
+                    loader, ohlcv, factor_names=non_ohlcv_needed
+                )
+                _any_factor = next(iter(std_factors.values()))
+                _dates = _any_factor.index
+                _etf_cols = _any_factor.columns.tolist()
+                for fname, fdf in raw_ext.items():
+                    fdf = fdf.reindex(_dates).reindex(columns=_etf_cols)
+                    ext_processed = processor.process_all_factors({fname: fdf})
+                    std_factors[fname] = ext_processed[fname]
+                logger.info(
+                    f"✅ {len(raw_ext)} non-OHLCV factors computed inline"
+                )
+        else:
+            # Legacy: load from pre-computed parquet files
+            ext_dir = self._resolve_ext_factors_dir(config)
+            if ext_dir is not None:
+                _any_factor = next(iter(std_factors.values()))
+                _dates = _any_factor.index
+                _etf_cols = _any_factor.columns.tolist()
+                _loaded = 0
+                for fpath in sorted(ext_dir.glob("*.parquet")):
+                    fname = fpath.stem
+                    if fname in std_factors:
+                        continue  # already computed from OHLCV
+                    fdf = pd.read_parquet(fpath)
+                    fdf.index = pd.to_datetime(fdf.index)
+                    fdf = fdf.reindex(_dates).reindex(columns=_etf_cols)
+                    farr = fdf.values
+                    valid_ratio = (
+                        np.isfinite(farr).sum() / farr.size if farr.size > 0 else 0
+                    )
+                    if valid_ratio > 0.01:
+                        ext_processed = processor.process_all_factors({fname: fdf})
+                        std_factors[fname] = ext_processed[fname]
+                        _loaded += 1
+                        logger.info(
+                            f"  ✓ {fname}: {valid_ratio * 100:.1f}% valid (external)"
+                        )
+                    else:
+                        logger.warning(
+                            f"  ⚠️ {fname}: insufficient data "
+                            f"({valid_ratio * 100:.1f}%)"
+                        )
+                if _loaded > 0:
+                    logger.info(
+                        f"✅ {_loaded} non-OHLCV factors loaded from {ext_dir}"
+                    )
 
         # 组织输出
         factor_names = sorted(std_factors.keys())

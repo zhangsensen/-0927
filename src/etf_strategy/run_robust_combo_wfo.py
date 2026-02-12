@@ -98,28 +98,18 @@ def main():
     print(f"  日期数: {len(ohlcv_data['close'])}")
     print(f"  ETF数: {len(config['data']['symbols'])}")
 
-    # 3. 计算因子（使用全部18个因子）
-    print(f"\n🔧 计算因子（全空间）...")
-    factor_lib = PreciseFactorLibrary()
-    factors_raw = factor_lib.compute_all_factors(ohlcv_data)
+    # 3. 加载因子 (OHLCV + non-OHLCV via FactorCache)
+    print(f"\n🔧 加载因子（含缓存 + 外部因子）...")
+    from etf_strategy.core.factor_cache import FactorCache
 
-    # 4. 提取因子名并转换为Dict格式
-    all_factors = factors_raw.columns.get_level_values(0).unique().tolist()
-    print(f"✅ 因子计算完成: {len(all_factors)} 个")
-
-    # 转换为Dict格式以适配CrossSectionProcessor
-    print(f"\n🔄 准备因子数据...")
-    factors_dict = {}
-    for factor_name in all_factors:
-        factors_dict[factor_name] = factors_raw[factor_name]
-
-    # 5. 横截面处理
-    print(f"\n📐 横截面标准化...")
-    processor = CrossSectionProcessor(
-        lower_percentile=config["cross_section"]["winsorize_lower"],
-        upper_percentile=config["cross_section"]["winsorize_upper"],
+    factor_cache = FactorCache(
+        cache_dir=Path(config["data"].get("cache_dir", ".cache"))
     )
-    processed_factors = processor.process_all_factors(factors_dict)
+    data_dir = Path(config["data"]["data_dir"])
+    cached = factor_cache.get_or_compute(ohlcv_data, config, data_dir)
+    processed_factors = cached["std_factors"]
+    all_factors = list(cached["factor_names"])
+    print(f"✅ 因子加载完成: {len(all_factors)} 个")
 
     # 6. 择时信号
     print(f"\n⏰ 生成择时信号...")
@@ -171,7 +161,12 @@ def main():
         all_factor_set = set(processed_factors.keys())
         missing = active_set - all_factor_set
         if missing:
-            raise ValueError(f"active_factors 中指定了不存在的因子: {sorted(missing)}")
+            logger.warning(
+                f"⚠️ {len(missing)} 个外部因子未加载 (parquet 不存在): {sorted(missing)}"
+            )
+            logger.warning(
+                "   → 仅使用已加载的因子继续运行，包含这些因子的组合将被跳过"
+            )
         excluded = sorted(all_factor_set - active_set)
         processed_factors = {
             k: v for k, v in processed_factors.items() if k in active_set

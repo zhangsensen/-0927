@@ -260,7 +260,7 @@ def process_combo(
             pos_size=pos_size,
             initial_capital=float(backtest_config["initial_capital"]),
             commission_rate=float(backtest_config["commission_rate"]),
-            lookback=int(backtest_config["lookback"]),
+            lookback=int(backtest_config.get("lookback") or backtest_config.get("lookback_window", 252)),
             cost_arr=cost_arr,
             trailing_stop_pct=0.0,
             stop_on_rebalance_only=True,
@@ -536,7 +536,7 @@ def main() -> None:
     else:
         print("🛡️ Regime Gate DISABLED")
 
-    effective_start_idx = int(backtest_config["lookback"])
+    effective_start_idx = int(backtest_config.get("lookback") or backtest_config.get("lookback_window", 252))
     segments = _build_segments(
         all_dates, effective_start_idx, args.segment, training_end
     )

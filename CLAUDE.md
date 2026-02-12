@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ETF Rotation Strategy Research Platform** — A-share + QDII markets. Three-tier engine (WFO → VEC → BT) screens factor combinations, backtests them, and produces sealed production strategies. Current production: **v6.0** with C2 strategy (AMIHUD+CALMAR+CORR_MKT), FREQ=5, Exp4 hysteresis enabled, and stateful signal generation.
+**ETF Rotation Strategy Research Platform** — A-share + QDII markets. Three-tier engine (WFO → VEC → BT) screens factor combinations, backtests them, and produces sealed production strategies. Current production: **v5.0** with FREQ=5, Exp4 hysteresis enabled, and stateful signal generation.
 
 ## Environment & Commands
 
@@ -53,13 +53,12 @@ IC gate + scoring    Numba JIT kernel    Backtrader event-driven
 - **BT** (`scripts/batch_bt_backtest.py`): Backtrader event-driven simulation with integer lots and capital constraints. Production ground truth.
 - **Validation**: Rolling OOS (≥60% positive windows) + Holdout (return > 0) via `final_triple_validation.py`.
 
-## Production Parameters (v6.0)
+## Production Parameters (v5.0)
 
 Enforced by `src/etf_strategy/core/frozen_params.py` — validated at WFO/VEC/BT entry points. Override with `FROZEN_PARAMS_MODE=warn` for A/B testing only.
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Strategy | C2 | AMIHUD_ILLIQUIDITY + CALMAR_RATIO_60D + CORRELATION_TO_MARKET_20D |
 | `FREQ` | 5 | Rebalance every 5 trading days |
 | `POS_SIZE` | 2 | Hold 2 ETFs |
 | `COMMISSION` | 0.0002 (2bp) | |
@@ -69,12 +68,12 @@ Enforced by `src/etf_strategy/core/frozen_params.py` — validated at WFO/VEC/BT
 | ETF pool | 49 (41 A-share + 8 QDII) | |
 | Universe mode | `A_SHARE_ONLY` | QDII hard-blocked from live trading |
 
-**Version registry**: v3.4/v4.0/v4.1 preserved with freq=3 and hysteresis disabled for rollback. v5.0 (S1) **DEPRECATED** — results were bounded_factors bug artifacts. `CURRENT_VERSION = "v6.0"`.
+**Version registry**: v3.4/v4.0/v4.1 preserved with freq=3 and hysteresis disabled for rollback. `CURRENT_VERSION = "v5.0"`.
 
 **8 QDII ETFs** (monitored but not traded in A_SHARE_ONLY mode):
 159920 (恒生ETF), 513050 (中概互联网ETF), 513100 (纳指ETF), 513130 (恒生科技ETF), 513180 (恒生科技指数ETF), 513400 (道琼斯ETF), 513500 (标普500ETF), 513520 (日经ETF)
 
-## Hysteresis State Machine (v6.0)
+## Hysteresis State Machine (v5.0)
 
 `src/etf_strategy/core/hysteresis.py` — `@njit` kernel shared by WFO/VEC/BT.
 
@@ -103,7 +102,7 @@ from etf_strategy.core.utils.rebalance import (
 |---------|-------|-------|
 | Lookahead bias | Same-day signal for same-day trade | `shift_timing_signal()` to lag 1 day |
 | Rebalance misalignment | VEC/BT use different rebalance days | `generate_rebalance_schedule()` |
-| Bounded factor winsorization | Winsorize RSI, ADX, PRICE_POSITION, CMF, CORR_MKT, PV_CORR | Skip — these are naturally bounded |
+| Bounded factor sync | Hardcode bounded list in multiple files | Define once in `factor_registry.py` FACTOR_SPECS |
 | Regime gate duplication | Apply via both timing_arr AND vol_regime | Apply via timing_arr only |
 | IC lookahead | `.shift(-1)` on returns in WFO | IC calc handles t-1 internally |
 | Set iteration | `for x in my_set` | `for x in sorted(my_set)` |
@@ -117,12 +116,15 @@ from etf_strategy.core.utils.rebalance import (
 
 ## Bounded Factors (NO winsorization)
 
-Defined in `cross_section_processor.py`. These are naturally bounded and must NOT be winsorized:
+**Single source of truth**: `src/etf_strategy/core/factor_registry.py` → `FACTOR_SPECS` with `is_bounded=True`. Both `CrossSectionProcessor.BOUNDED_FACTORS` and `FrozenCrossSectionParams.bounded_factors` derive from this registry. The `cross_section.bounded_factors` key was removed from `combo_wfo_config.yaml` — it's now code-driven.
 
+Currently bounded (rank-standardized to [-0.5, 0.5], NOT Winsorized):
 ```
 ADX_14D [0,100], CMF_20D [-1,1], CORRELATION_TO_MARKET_20D [-1,1],
 PRICE_POSITION_20D [0,1], PRICE_POSITION_120D [0,1], PV_CORR_20D [-1,1], RSI_14 [0,100]
 ```
+
+To add a new bounded factor: add `FactorSpec(..., is_bounded=True, bounds=(...))` to `FACTOR_SPECS`.
 
 ## VEC/BT Alignment
 
@@ -135,7 +137,7 @@ PRICE_POSITION_20D [0,1], PRICE_POSITION_120D [0,1], PV_CORR_20D [-1,1], RSI_14 
 Volatility-based exposure scaling using 510300 (A-share proxy). Config: `regime_gate.enabled: true`.
 - Thresholds 25/30/40 pct → exposures 1.0/0.7/0.4/0.1
 - A/B tested (100k combos): Gate ON improves Sharpe for 71.5%, reduces drawdown for 86.3%
-- **Production: Gate ON** across all frozen versions (v3.4 through v6.0)
+- **Production: Gate ON** across all frozen versions (v3.4 through v5.0)
 
 ## Data Source
 
@@ -153,7 +155,7 @@ OHLCV data from QMT Trading Terminal via `qmt-data-bridge` SDK. Use `QMTClient` 
 
 **Prohibited**: Modifying core factor library, changing backtest engine logic, changing locked parameters, removing QDII ETFs, deleting ARCHIVE files, creating "simplified/backup" scripts
 
-## Signal Evaluation Principle (v6.0+)
+## Signal Evaluation Principle (v5.0+)
 
 **Any new signal/factor must be evaluated under the production execution framework (FREQ=5 + Exp4 hysteresis + regime gate), otherwise it is not a valid production candidate.** The legacy pipeline mode (F3_OFF) is permitted only as a research reference and must never directly drive go-live decisions.
 
@@ -168,7 +170,9 @@ Rationale (verified 2026-02-11):
 
 ## Config
 
-Single source of truth: `configs/combo_wfo_config.yaml` — 49 ETFs (41 A-share + 8 QDII), 24 active factors (18 OHLCV + 6 non-OHLCV from fund_share/margin), 7 bounded factors, all engine parameters including hysteresis section.
+- **Engine params**: `configs/combo_wfo_config.yaml` — 49 ETFs, 23 active factors (17 OHLCV + 6 non-OHLCV), hysteresis, regime gate, cost model.
+- **Factor metadata**: `src/etf_strategy/core/factor_registry.py` — bounded/unbounded classification, data source, bounds. Single source of truth for all factor metadata.
+- **Non-OHLCV factors**: Can be computed inline (pass `loader` to `FactorCache.get_or_compute()`) or from pre-computed parquet (legacy fallback).
 
 ## Code Style
 

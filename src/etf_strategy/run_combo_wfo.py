@@ -158,92 +158,19 @@ def main():
     dates = cached["dates"]
     etf_codes = cached["etf_codes"]
 
-    # ── 加载外部因子 (从parquet文件) ──
-    active_factors_cfg = config.get("active_factors")
-    if active_factors_cfg:
-        external_factors = set(active_factors_cfg) - set(all_factor_names)
-        if external_factors:
-            logger.info(f"🔧 检测到外部因子: {sorted(external_factors)}")
-            # Resolve external factors directory: env var > config > skip
-            _ext_dir = os.environ.get("EXTRA_FACTORS_DIR", "").strip()
-            if not _ext_dir:
-                _ext_dir = (
-                    config.get("combo_wfo", {})
-                    .get("extra_factors", {})
-                    .get("factors_dir", "")
-                )
-            if not _ext_dir:
-                logger.warning(
-                    "⚠️ 外部因子目录未配置 (EXTRA_FACTORS_DIR env 或 "
-                    "combo_wfo.extra_factors.factors_dir), 跳过外部因子加载"
-                )
-                external_factors = set()  # skip loading
-            factors_dir = Path(_ext_dir) if _ext_dir else None
-
-            for factor_name in sorted(external_factors):
-                factor_path = factors_dir / f"{factor_name}.parquet"
-                if factor_path.exists():
-                    # 加载外部因子
-                    factor_df = pd.read_parquet(factor_path)
-                    factor_df.index = pd.to_datetime(factor_df.index)
-
-                    # 对齐日期和symbol
-                    factor_aligned = factor_df.reindex(dates)
-                    factor_aligned = factor_aligned[etf_codes]  # 按顺序排列
-
-                    # 转换为numpy数组
-                    factor_arr = factor_aligned.values  # Shape: (T, N)
-
-                    # 检查是否有足够的数据
-                    valid_ratio = np.isfinite(factor_arr).sum() / factor_arr.size
-                    if valid_ratio > 0.01:  # 至少1%有效数据
-                        logger.info(
-                            f"  ✓ {factor_name}: {valid_ratio * 100:.1f}% 有效数据"
-                        )
-
-                        # 标准化处理: 使用 CrossSectionProcessor (与 base 因子一致)
-                        factor_df_aligned = pd.DataFrame(
-                            factor_arr, index=dates, columns=etf_codes
-                        )
-                        cs_processor = CrossSectionProcessor(
-                            lower_percentile=config["cross_section"]["winsorize_lower"] * 100,
-                            upper_percentile=config["cross_section"]["winsorize_upper"] * 100,
-                            verbose=False,
-                        )
-                        processed = cs_processor.process_all_factors(
-                            {factor_name: factor_df_aligned}
-                        )
-                        factor_std = processed[factor_name].values
-                        factor_std = np.where(
-                            np.isfinite(factor_std), factor_std, 0.0
-                        )
-
-                        # 添加到factors_3d
-                        factor_std_expanded = factor_std[
-                            :, :, np.newaxis
-                        ]  # Shape: (T, N, 1)
-                        factors_3d = np.concatenate(
-                            [factors_3d, factor_std_expanded], axis=2
-                        )
-                        all_factor_names.append(factor_name)
-
-                        # 添加到standardized_factors
-                        for j, symbol in enumerate(etf_codes):
-                            factor_series = pd.Series(factor_std[:, j], index=dates)
-                            standardized_factors[(factor_name, symbol)] = factor_series
-                    else:
-                        logger.warning(
-                            f"  ⚠️ {factor_name}: 有效数据不足 ({valid_ratio * 100:.1f}%), 跳过"
-                        )
-                else:
-                    logger.warning(f"  ⚠️ {factor_name}: 因子文件不存在 {factor_path}")
-
     # ── 正交因子集过滤 ──
+    # (non-OHLCV factors already loaded by FactorCache)
+    active_factors_cfg = config.get("active_factors")
     if active_factors_cfg:
         active_set = set(active_factors_cfg)
         missing = active_set - set(all_factor_names)
         if missing:
-            raise ValueError(f"active_factors 中指定了不存在的因子: {sorted(missing)}")
+            logger.warning(
+                f"⚠️ {len(missing)} 个外部因子未加载 (parquet 不存在): {sorted(missing)}"
+            )
+            logger.warning(
+                "   → 仅使用已加载的因子继续运行，包含这些因子的组合将被跳过"
+            )
         factor_names = sorted(active_set & set(all_factor_names))
         idx_map = {name: i for i, name in enumerate(all_factor_names)}
         selected_idx = [idx_map[f] for f in factor_names]

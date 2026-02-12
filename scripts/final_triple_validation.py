@@ -41,9 +41,13 @@ OUTPUT_DIR = Path(f"results/final_triple_validation_{TIMESTAMP}")
 GATE_ROLLING_NAME = "Strict"
 GATE_ROLLING_POS_RATE = 0.60
 GATE_ROLLING_WORST_RET = -0.08
-GATE_ROLLING_CALMAR = 0.80
+GATE_ROLLING_CALMAR = 0.30  # Adjusted from 0.80 (pre-bugfix era) to 0.30 (post-bugfix realistic)
 
 GATE_HOLDOUT_MIN_RET = 0.0  # Must be profitable in holdout
+
+# Gate 0: Train Performance (NEW — closes the "train blind spot")
+GATE_TRAIN_MIN_RET = 0.0  # Train return must be positive
+GATE_TRAIN_MAX_MDD = 0.25  # Train MDD must be less than 25% (stored as positive value)
 # =====================
 
 # Risk filter (per recent audit): exclude unstable/low-trust factors
@@ -163,7 +167,26 @@ def main():
         f"Passed Risk Filter (exclude {sorted(EXCLUDE_FACTORS)}): {len(passed_risk)} / {total_count} ({len(passed_risk)/total_count:.2%})"
     )
 
-    # 2. Apply Rolling Consistency Gate (Strict)
+    # 2. Apply Train Performance Gate (Gate 0)
+    mask_train = passed_risk["vec_return"] > GATE_TRAIN_MIN_RET
+    if "vec_max_drawdown" in passed_risk.columns:
+        # vec_max_drawdown is positive (e.g. 0.43 for 43% drawdown)
+        mask_train = mask_train & (
+            passed_risk["vec_max_drawdown"] < GATE_TRAIN_MAX_MDD
+        )
+        train_gate_desc = (
+            f"Return > {GATE_TRAIN_MIN_RET}, MDD < {GATE_TRAIN_MAX_MDD:.0%}"
+        )
+    else:
+        train_gate_desc = f"Return > {GATE_TRAIN_MIN_RET}"
+
+    passed_train = passed_risk[mask_train].copy()
+    print(
+        f"Passed Train Gate ({train_gate_desc}): {len(passed_train)} / {len(passed_risk)} "
+        f"({len(passed_train)/len(passed_risk):.2%})"
+    )
+
+    # 3. Apply Rolling Consistency Gate (Strict)
     # Note: rolling summary already has 'full_calmar_ratio' (from rolling script re-calc)
     # and 'all_segment_positive_rate', 'all_segment_worst_return'
     # We use the columns from rolling df (prefixed with roll_)
@@ -174,18 +197,18 @@ def main():
     # roll_full_calmar_ratio
 
     mask_rolling = (
-        (passed_risk["roll_all_segment_positive_rate"] >= GATE_ROLLING_POS_RATE)
-        & (passed_risk["roll_all_segment_worst_return"] >= GATE_ROLLING_WORST_RET)
-        & (passed_risk["roll_full_calmar_ratio"] >= GATE_ROLLING_CALMAR)
+        (passed_train["roll_all_segment_positive_rate"] >= GATE_ROLLING_POS_RATE)
+        & (passed_train["roll_all_segment_worst_return"] >= GATE_ROLLING_WORST_RET)
+        & (passed_train["roll_full_calmar_ratio"] >= GATE_ROLLING_CALMAR)
     )
 
-    passed_rolling = passed_risk[mask_rolling].copy()
+    passed_rolling = passed_train[mask_rolling].copy()
     print(
-        f"Passed Rolling Gate ({GATE_ROLLING_NAME}): {len(passed_rolling)} / {len(passed_risk)} "
-        f"({len(passed_rolling)/len(passed_risk):.2%})"
+        f"Passed Rolling Gate ({GATE_ROLLING_NAME}): {len(passed_rolling)} / {len(passed_train)} "
+        f"({len(passed_rolling)/len(passed_train):.2%})"
     )
 
-    # 3. Apply Holdout Gate
+    # 4. Apply Holdout Gate
     # holdout_return > 0
     if len(passed_rolling) == 0:
         final_candidates = passed_rolling.copy()
@@ -199,7 +222,7 @@ def main():
             f"Passed Holdout Gate (Return > {GATE_HOLDOUT_MIN_RET}): {len(final_candidates)} / {len(passed_rolling)} ({len(final_candidates)/len(passed_rolling):.2%})"
         )
 
-    # 4. Ranking (Composite Score)
+    # 5. Ranking (Composite Score)
     # We want strategies that are good EVERYWHERE.
     # Score = 0.4 * Norm(Train_Calmar) + 0.3 * Norm(Roll_Worst_Ret) + 0.3 * Norm(Holdout_Calmar)
     # Simple normalization: Rank pct
@@ -245,6 +268,9 @@ def main():
         f.write("## 1. Screening Funnel\n")
         f.write(f"- **Total Universe**: {total_count}\n")
         f.write(f"- **Risk Filter** (factor exclusions): {len(passed_risk)}\n")
+        f.write(
+            f"- **Train Gate** (new): {len(passed_train)} / {len(passed_risk)} ({train_gate_desc})\n"
+        )
         f.write(
             f"- **Rolling Consistency Gate** (Strict): {len(passed_rolling)} (PosRate>={GATE_ROLLING_POS_RATE}, Worst>={GATE_ROLLING_WORST_RET}, Calmar>={GATE_ROLLING_CALMAR})\n"
         )

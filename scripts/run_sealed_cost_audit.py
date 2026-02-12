@@ -188,7 +188,7 @@ def main():
                     pos_size=2,
                     initial_capital=float(backtest_config["initial_capital"]),
                     commission_rate=float(backtest_config["commission_rate"]),
-                    lookback=int(backtest_config["lookback"]),
+                    lookback=int(backtest_config.get("lookback") or backtest_config.get("lookback_window", 252)),
                     cost_arr=cost_arr,
                     trailing_stop_pct=0.0,
                     stop_on_rebalance_only=True,

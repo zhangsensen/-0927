@@ -42,7 +42,7 @@ def real_config():
 
 class TestFrozenValues:
     def test_current_version(self):
-        assert CURRENT_VERSION == "v6.0"
+        assert CURRENT_VERSION == "v5.0"
 
     def test_backtest_defaults(self):
         p = FrozenBacktestParams()
@@ -124,7 +124,7 @@ class TestRealConfigValidation:
             config_path=str(CONFIG_PATH),
             strictness=StrictnessMode.STRICT,
         )
-        assert frozen.version == "v6.0"
+        assert frozen.version == "v5.0"
         assert frozen.config_sha256 is not None
 
     def test_returns_frozen_config(self, real_config):
@@ -230,7 +230,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise
         frozen = load_frozen_config(bad, strictness=StrictnessMode.WARN)
-        assert frozen.version == "v6.0"
+        assert frozen.version == "v5.0"
 
     def test_env_var_warn(self, real_config, monkeypatch):
         monkeypatch.setenv("FROZEN_PARAMS_MODE", "warn")
@@ -238,7 +238,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise due to env var
         frozen = load_frozen_config(bad)
-        assert frozen.version == "v6.0"
+        assert frozen.version == "v5.0"
 
 
 # ---------------------------------------------------------------------------
@@ -252,20 +252,20 @@ class TestOperationalParamsIgnored:
         modified["data"]["data_dir"] = "/some/other/path"
         # Should pass without error
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v6.0"
+        assert frozen.version == "v5.0"
 
     def test_n_jobs_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["combo_wfo"]["n_jobs"] = 1
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v6.0"
+        assert frozen.version == "v5.0"
 
     def test_start_end_date_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["data"]["start_date"] = "2021-01-01"
         modified["data"]["end_date"] = "2026-01-01"
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v6.0"
+        assert frozen.version == "v5.0"
 
 
 # ---------------------------------------------------------------------------

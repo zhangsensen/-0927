@@ -28,6 +28,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from .factor_registry import get_bounded_factors, get_factor_bounds
+
 
 @dataclass
 class FactorMetadata:
@@ -65,27 +67,9 @@ class CrossSectionProcessor:
         processing_report (Dict): 处理报告
     """
 
-    # 有界因子名单（必须与 FACTOR_BOUNDS / frozen_params / config 保持同步）
-    BOUNDED_FACTORS = {
-        "ADX_14D",
-        "CMF_20D",
-        "CORRELATION_TO_MARKET_20D",
-        "PRICE_POSITION_20D",
-        "PRICE_POSITION_120D",
-        "PV_CORR_20D",
-        "RSI_14",
-    }
-
-    # 有界因子的值域
-    FACTOR_BOUNDS = {
-        "PRICE_POSITION_20D": (0.0, 1.0),
-        "PRICE_POSITION_120D": (0.0, 1.0),
-        "PV_CORR_20D": (-1.0, 1.0),
-        "RSI_14": (0.0, 100.0),
-        "ADX_14D": (0.0, 100.0),
-        "CMF_20D": (-1.0, 1.0),
-        "CORRELATION_TO_MARKET_20D": (-1.0, 1.0),
-    }
+    # 有界因子名单 — 从 factor_registry 单一事实源派生
+    BOUNDED_FACTORS = get_bounded_factors()
+    FACTOR_BOUNDS = get_factor_bounds()
 
     def __init__(
         self,

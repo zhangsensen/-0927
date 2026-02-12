@@ -32,13 +32,14 @@ vec:  ## 运行 VEC 批量回测
 bt:  ## 运行 BT 批量审计
 	uv run python scripts/batch_bt_backtest.py
 
-pipeline:  ## 运行完整流水线（WFO → VEC → BT → 验证）
+pipeline:  ## 运行完整流水线（precompute → WFO → VEC → BT → 验证）
+	uv run python scripts/precompute_non_ohlcv_factors.py
 	uv run python scripts/run_full_pipeline.py
 
 all: wfo vec bt  ## 运行核心三层：WFO → VEC → BT
 
-pipeline-fast:  ## 优化流水线（16 BT workers, 16 VEC threads, Numba thread auto-cap）
-	BT_NUM_WORKERS=16 VEC_N_JOBS=16 uv run python scripts/run_full_pipeline.py
+pipeline-fast:  ## 优化流水线（16 BT workers, 16 VEC threads, Numba thread cap）
+	BT_NUM_WORKERS=16 VEC_N_JOBS=16 NUMBA_NUM_THREADS=4 uv run python scripts/run_full_pipeline.py
 
 # ============ 代码质量 ============
 format:  ## 格式化代码（black + isort）

@@ -189,6 +189,28 @@ def main():
         except FileNotFoundError:
             logger.warning("⚠️ No factor_mining_* directory found, proceeding without extra factors")
 
+    # 0.5 Precompute non-OHLCV factors (if factors_dir configured)
+    cfg_for_check = _load_config(effective_config_path)
+    extra_factors_dir = (
+        cfg_for_check.get("combo_wfo", {})
+        .get("extra_factors", {})
+        .get("factors_dir", "")
+    )
+    if extra_factors_dir:
+        logger.info("=" * 80)
+        logger.info("0️⃣ .5  STEP 0.5: Precompute non-OHLCV factors")
+        logger.info("=" * 80)
+        run_command(
+            ["uv", "run", "python", "scripts/precompute_non_ohlcv_factors.py"],
+            env=env_cfg,
+        )
+        factors_dir = ROOT / extra_factors_dir
+        if not factors_dir.exists() or not list(factors_dir.glob("*.parquet")):
+            logger.warning("⚠️ No non-OHLCV factors generated, proceeding with OHLCV only")
+        else:
+            n_files = len(list(factors_dir.glob("*.parquet")))
+            logger.info(f"✅ {n_files} non-OHLCV factor files ready in {factors_dir}")
+
     # 1. WFO (Full Space)
     if not args.skip_wfo:
         logger.info("=" * 80)

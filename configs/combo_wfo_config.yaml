@@ -181,14 +181,7 @@ combo_wfo:
     min_buckets: 3        # 组合至少覆盖3个信息维度桶
     max_per_bucket: 2     # 每桶最多选2个因子
 cross_section:
-  bounded_factors:
-  - ADX_14D
-  - CMF_20D
-  - CORRELATION_TO_MARKET_20D
-  - PRICE_POSITION_20D
-  - PRICE_POSITION_120D
-  - PV_CORR_20D
-  - RSI_14
+  # bounded_factors: removed — now derived from factor_registry.py (single source of truth)
   winsorize_lower: 0.025
   winsorize_upper: 0.975
   pool_mode: unified
