@@ -312,10 +312,10 @@ class TestVersionRegistry:
         assert v34.etf_pool == v41.etf_pool
         assert v34.wfo == v41.wfo
         assert v34.wfo.rebalance_frequencies == (3,)
-        # v4.1 rolled back to v3.4's bounded_factors (both have 4)
+        # v3.4 and v4.1 now both use the full 7 bounded factors
         assert v34.cross_section == v41.cross_section
-        assert len(v41.cross_section.bounded_factors) == 4
-        assert len(v34.cross_section.bounded_factors) == 4
+        assert len(v41.cross_section.bounded_factors) == 7
+        assert len(v34.cross_section.bounded_factors) == 7
 
     def test_v50_differs_from_v41(self, real_config):
         """v5.0 has freq=5 and hysteresis enabled, unlike v4.1."""

@@ -63,12 +63,15 @@ class FactorCache:
         etf_codes: List[str],
         start_date: str,
         end_date: str,
+        ema_span: int = 0,
+        bounded_factors: Optional[List[str]] = None,
     ) -> str:
-        """生成缓存键 (包含数据mtime + 源码mtime)"""
+        """生成缓存键 (包含数据mtime + 源码mtime + ema_span + bounded_factors)"""
         codes_str = "-".join(sorted(etf_codes))
         data_mtime = int(self._get_data_mtime(data_dir))
         source_mtime = int(self._get_source_mtime())
-        key_str = f"factors_{codes_str}_{start_date}_{end_date}_{data_mtime}_{source_mtime}"
+        bf_str = "-".join(sorted(bounded_factors)) if bounded_factors else "default"
+        key_str = f"factors_{codes_str}_{start_date}_{end_date}_{data_mtime}_{source_mtime}_ema{ema_span}_bf{bf_str}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
     def get_or_compute(
@@ -96,7 +99,18 @@ class FactorCache:
         actual_end = str(close_df.index[-1].date())
         n_days = len(close_df)
 
-        cache_key = self._generate_cache_key(data_dir, etf_codes, actual_start, actual_end)
+        # Exp5: temporal smoothing config → cache key
+        ts_cfg = config.get("backtest", {}).get("temporal_smoothing", {})
+        ema_enabled = ts_cfg.get("enabled", False)
+        ema_span = int(ts_cfg.get("ema_span", 5)) if ema_enabled else 0
+
+        # bounded_factors config → cache key (P1-11: invalidate on config change)
+        bounded_factors = config.get("cross_section", {}).get("bounded_factors", None)
+
+        cache_key = self._generate_cache_key(
+            data_dir, etf_codes, actual_start, actual_end,
+            ema_span=ema_span, bounded_factors=bounded_factors,
+        )
         cache_file = self.cache_dir / f"factor_cache_{cache_key}.pkl"
 
         # 尝试读取缓存
@@ -135,6 +149,13 @@ class FactorCache:
             verbose=False,
         )
         std_factors = processor.process_all_factors(raw_factors)
+
+        # Exp5: temporal EMA smoothing (after cross-section standardization)
+        if ema_span > 0:
+            from .cross_section_processor import apply_temporal_ema
+
+            std_factors = apply_temporal_ema(std_factors, ema_span)
+            logger.info(f"Exp5: temporal EMA applied (span={ema_span})")
 
         # 组织输出
         factor_names = sorted(std_factors.keys())

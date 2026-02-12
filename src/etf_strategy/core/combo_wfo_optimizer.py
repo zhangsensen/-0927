@@ -70,6 +70,8 @@ class ComboWFOConfig:
     enable_fdr: bool = True
     fdr_alpha: float = 0.05
     complexity_penalty_lambda: float = 0.01
+    delta_rank: float = 0.0               # Exp4: hysteresis rank01 gap threshold (0 = disabled)
+    min_hold_days: int = 0                # Exp4: minimum holding period (0 = disabled)
     use_bucket_constraints: bool = False  # 跨桶约束开关
     bucket_min_buckets: int = 3           # 最少覆盖桶数
     bucket_max_per_bucket: int = 2        # 每桶最多选几个因子
@@ -316,6 +318,8 @@ class ComboWFOOptimizer:
         complexity_penalty_lambda: float = 0.01,
         rebalance_frequencies: List[int] = None,
         use_t1_open: bool = False,
+        delta_rank: float = 0.0,
+        min_hold_days: int = 0,
         use_bucket_constraints: bool = False,
         bucket_min_buckets: int = 3,
         bucket_max_per_bucket: int = 2,
@@ -332,6 +336,8 @@ class ComboWFOOptimizer:
             enable_fdr=enable_fdr,
             fdr_alpha=fdr_alpha,
             complexity_penalty_lambda=complexity_penalty_lambda,
+            delta_rank=delta_rank,
+            min_hold_days=min_hold_days,
             use_bucket_constraints=use_bucket_constraints,
             bucket_min_buckets=bucket_min_buckets,
             bucket_max_per_bucket=bucket_max_per_bucket,
@@ -458,6 +464,8 @@ class ComboWFOOptimizer:
         oos_return = _compute_rebalanced_return(
             signal_oos, returns_oos, exposures_oos, best_freq, pos_size, cost_arr_local,
             self.use_t1_open,
+            self.config.delta_rank,
+            self.config.min_hold_days,
         )
 
         return best_score, best_ir, best_pos_rate, best_freq, oos_return
@@ -606,6 +614,11 @@ class ComboWFOOptimizer:
             cost_arr = np.asarray(cost_arr, dtype=np.float64)
 
         logger.info(f"Data: {T} days x {N} ETFs x {F} factors")
+        if self.config.delta_rank > 0 or self.config.min_hold_days > 0:
+            logger.info(
+                f"✅ Hysteresis enabled in WFO OOS: delta_rank={self.config.delta_rank}, "
+                f"min_hold_days={self.config.min_hold_days}"
+            )
         logger.info(f"ℹ️ 启用标准模式: 基于 IC 进行优化 (pos_size={pos_size})")
 
         windows = self._generate_windows(T)

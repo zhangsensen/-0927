@@ -65,8 +65,11 @@ class CrossSectionProcessor:
         processing_report (Dict): 处理报告
     """
 
-    # 有界因子名单（必须与 precise_factor_library_v2.py 的 bounded=True 保持同步）
+    # 有界因子名单（必须与 FACTOR_BOUNDS / frozen_params / config 保持同步）
     BOUNDED_FACTORS = {
+        "ADX_14D",
+        "CMF_20D",
+        "CORRELATION_TO_MARKET_20D",
         "PRICE_POSITION_20D",
         "PRICE_POSITION_120D",
         "PV_CORR_20D",
@@ -562,6 +565,34 @@ class CrossSectionProcessor:
             print(f"\n✅ 无警告")
 
         print("\n" + "=" * 70 + "\n")
+
+
+def apply_temporal_ema(
+    std_factors: Dict[str, pd.DataFrame],
+    ema_span: int,
+) -> Dict[str, pd.DataFrame]:
+    """Apply temporal EMA smoothing to cross-section standardized factor scores.
+
+    Smooths each factor's standardized scores over time (axis=0) using an
+    exponential moving average. This reduces day-to-day noise while
+    preserving cross-sectional ordering.
+
+    Parameters
+    ----------
+    std_factors : dict[str, pd.DataFrame]
+        Standardized factor dict (date × symbol).
+    ema_span : int
+        EMA span in trading days (e.g. 5 matches FREQ=5).
+
+    Returns
+    -------
+    dict[str, pd.DataFrame]
+        Smoothed factor dict, same shape. NaN-safe (min_periods=1).
+    """
+    return {
+        name: df.ewm(span=ema_span, min_periods=1).mean()
+        for name, df in std_factors.items()
+    }
 
 
 def create_sample_factors() -> Dict[str, pd.DataFrame]:

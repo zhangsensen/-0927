@@ -506,10 +506,11 @@ def main() -> None:
     qdii_set = set(FrozenETFPool().qdii_codes)
     cost_arr = build_cost_array(cost_model, etf_codes, qdii_set)
 
-    close_prices = ohlcv["close"][etf_codes].ffill().bfill().values
-    open_prices = ohlcv["open"][etf_codes].ffill().bfill().values
-    high_prices = ohlcv["high"][etf_codes].ffill().bfill().values
-    low_prices = ohlcv["low"][etf_codes].ffill().bfill().values
+    # fillna(1.0) instead of bfill() to avoid lookahead bias
+    close_prices = ohlcv["close"][etf_codes].ffill().fillna(1.0).values
+    open_prices = ohlcv["open"][etf_codes].ffill().fillna(1.0).values
+    high_prices = ohlcv["high"][etf_codes].ffill().fillna(1.0).values
+    low_prices = ohlcv["low"][etf_codes].ffill().fillna(1.0).values
 
     # Timing signal
     timing_module = LightTimingModule(

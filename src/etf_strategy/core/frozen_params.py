@@ -127,6 +127,9 @@ class FrozenScoringParams:
 @dataclass(frozen=True)
 class FrozenCrossSectionParams:
     bounded_factors: Tuple[str, ...] = (
+        "ADX_14D",
+        "CMF_20D",
+        "CORRELATION_TO_MARKET_20D",
         "PRICE_POSITION_20D",
         "PRICE_POSITION_120D",
         "PV_CORR_20D",
@@ -272,15 +275,8 @@ _V4_0_CROSS_SECTION = FrozenCrossSectionParams(
     ),
 )
 
-# v4.1: 回退到 v3.4 的 bounded_factors (4个), 与 cross_section_processor.py 保持一致
-_V4_1_CROSS_SECTION = FrozenCrossSectionParams(
-    bounded_factors=(
-        "PRICE_POSITION_20D",
-        "PRICE_POSITION_120D",
-        "PV_CORR_20D",
-        "RSI_14",
-    ),
-)
+# v4.1+: all 7 bounded factors (aligned with FACTOR_BOUNDS and cross_section_processor.py)
+_V4_1_CROSS_SECTION = FrozenCrossSectionParams()
 
 _V4_0_CONFIG = FrozenProductionConfig(
     version="v4.0",

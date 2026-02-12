@@ -187,6 +187,94 @@ def main():
     factor_names = list(processed_factors.keys())
     print(f"  Shape: {factors_array.shape}")
 
+    # 8b. 加载额外因子矩阵 (来自 factor mining prefilter)
+    extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})
+    env_npz = os.environ.get("EXTRA_FACTORS_NPZ")
+    if env_npz:
+        extra_cfg = {"enabled": True, "path": env_npz}
+        print(f"  环境变量覆盖 extra_factors: {env_npz}")
+    if extra_cfg.get("enabled", False):
+        extra_path = Path(extra_cfg["path"])
+        if not extra_path.is_absolute():
+            extra_path = ROOT / extra_path
+        if not extra_path.exists():
+            raise FileNotFoundError(f"Extra factors not found: {extra_path}")
+
+        extra = np.load(extra_path)
+        extra_names = list(extra["factor_names"])
+        extra_dates = list(extra["dates"])
+        extra_symbols = list(extra["symbols"])
+
+        # Date alignment
+        base_dates = [str(d.date()) if hasattr(d, "date") else str(d) for d in ohlcv_data["close"].index]
+        if extra_dates == base_dates:
+            date_slice = slice(None)
+        elif set(base_dates).issubset(set(extra_dates)):
+            start_idx = extra_dates.index(base_dates[0])
+            end_idx = extra_dates.index(base_dates[-1])
+            date_slice = slice(start_idx, end_idx + 1)
+            sliced_dates = extra_dates[date_slice]
+            if sliced_dates != base_dates:
+                raise ValueError(
+                    f"Date alignment failed: sliced extra has {len(sliced_dates)} dates "
+                    f"but base has {len(base_dates)}"
+                )
+            print(f"  Extra factors date subset: {len(extra_dates)} → {len(base_dates)} dates")
+        else:
+            raise ValueError(
+                f"Date mismatch: base has {len(base_dates)} dates "
+                f"({base_dates[0]}~{base_dates[-1]}), "
+                f"extra has {len(extra_dates)} ({extra_dates[0]}~{extra_dates[-1]})"
+            )
+
+        # Symbol alignment
+        base_symbols = config["data"]["symbols"]
+        if extra_symbols == base_symbols:
+            symbol_indices = None
+        elif set(base_symbols).issubset(set(extra_symbols)):
+            symbol_indices = [extra_symbols.index(s) for s in base_symbols]
+            print(f"  Extra factors symbol subset: {len(extra_symbols)} → {len(base_symbols)} ETFs")
+        else:
+            missing = set(base_symbols) - set(extra_symbols)
+            raise ValueError(
+                f"Symbol mismatch: base needs {sorted(missing)} "
+                f"but extra only has {len(extra_symbols)} symbols"
+            )
+
+        # Exclude factors already in base pool
+        new_mask = [n not in set(factor_names) for n in extra_names]
+        new_indices = [i for i, keep in enumerate(new_mask) if keep]
+        new_names = [extra_names[i] for i in new_indices]
+
+        if new_names:
+            raw_extra = extra["data"][date_slice, :, :][:, :, new_indices]
+            if symbol_indices is not None:
+                extra_data = raw_extra[:, symbol_indices, :]
+            else:
+                extra_data = raw_extra
+            factors_array = np.concatenate([factors_array, extra_data], axis=-1)
+            factor_names = factor_names + new_names
+
+            # Register extra factors into bucket system
+            import json as _json
+            meta_path = extra_path.parent / "survivors_meta.json"
+            if meta_path.exists():
+                with open(meta_path) as f:
+                    extra_meta = _json.load(f)
+                bucket_map = extra_meta.get("factor_bucket_map", {})
+                mapped = {n: b for n, b in bucket_map.items() if n in new_names and b != "UNMAPPED"}
+                if mapped:
+                    from etf_strategy.core.factor_buckets import register_extra_factors
+                    register_extra_factors(mapped)
+                    print(f"  Registered {len(mapped)} extra factors into buckets")
+
+            print(f"✅ Extra factors loaded: +{len(new_names)} → total {len(factor_names)} factors")
+            print(f"  New: {', '.join(new_names[:10])}{'...' if len(new_names) > 10 else ''}")
+        else:
+            print("  Extra factors: all already in base pool, skipped")
+
+    print(f"✅ 因子准备完成: {len(factor_names)} 个因子, shape: {factors_array.shape}")
+
     # 9. 计算收益率
     returns_df = ohlcv_data["close"].pct_change()
     returns = returns_df.values

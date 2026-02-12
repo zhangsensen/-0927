@@ -164,7 +164,21 @@ def main():
         external_factors = set(active_factors_cfg) - set(all_factor_names)
         if external_factors:
             logger.info(f"🔧 检测到外部因子: {sorted(external_factors)}")
-            factors_dir = Path("results/run_20260212_005855/factors")
+            # Resolve external factors directory: env var > config > skip
+            _ext_dir = os.environ.get("EXTRA_FACTORS_DIR", "").strip()
+            if not _ext_dir:
+                _ext_dir = (
+                    config.get("combo_wfo", {})
+                    .get("extra_factors", {})
+                    .get("factors_dir", "")
+                )
+            if not _ext_dir:
+                logger.warning(
+                    "⚠️ 外部因子目录未配置 (EXTRA_FACTORS_DIR env 或 "
+                    "combo_wfo.extra_factors.factors_dir), 跳过外部因子加载"
+                )
+                external_factors = set()  # skip loading
+            factors_dir = Path(_ext_dir) if _ext_dir else None
 
             for factor_name in sorted(external_factors):
                 factor_path = factors_dir / f"{factor_name}.parquet"
@@ -187,15 +201,22 @@ def main():
                             f"  ✓ {factor_name}: {valid_ratio * 100:.1f}% 有效数据"
                         )
 
-                        # 标准化处理（截面z-score）
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore")
-                            mean = np.nanmean(factor_arr, axis=1, keepdims=True)
-                            std = np.nanstd(factor_arr, axis=1, keepdims=True)
-                            factor_std = (factor_arr - mean) / (std + 1e-8)
-                            factor_std = np.where(
-                                np.isfinite(factor_std), factor_std, 0.0
-                            )
+                        # 标准化处理: 使用 CrossSectionProcessor (与 base 因子一致)
+                        factor_df_aligned = pd.DataFrame(
+                            factor_arr, index=dates, columns=etf_codes
+                        )
+                        cs_processor = CrossSectionProcessor(
+                            lower_percentile=config["cross_section"]["winsorize_lower"],
+                            upper_percentile=config["cross_section"]["winsorize_upper"],
+                            verbose=False,
+                        )
+                        processed = cs_processor.process_all_factors(
+                            {factor_name: factor_df_aligned}
+                        )
+                        factor_std = processed[factor_name].values
+                        factor_std = np.where(
+                            np.isfinite(factor_std), factor_std, 0.0
+                        )
 
                         # 添加到factors_3d
                         factor_std_expanded = factor_std[
@@ -237,6 +258,11 @@ def main():
 
     # ── 加载额外因子矩阵 (来自 factor mining prefilter) ──
     extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})
+    # 环境变量覆盖 config 中的 extra_factors 设置
+    env_npz = os.environ.get("EXTRA_FACTORS_NPZ")
+    if env_npz:
+        extra_cfg = {"enabled": True, "path": env_npz}
+        logger.info(f"环境变量覆盖 extra_factors: {env_npz}")
     if extra_cfg.get("enabled", False):
         extra_path = Path(extra_cfg["path"])
         if not extra_path.is_absolute():
@@ -384,6 +410,9 @@ def main():
     # 跨桶约束配置 (默认关闭, 需在 combo_wfo.bucket_constraints 中启用)
     bucket_cfg = config["combo_wfo"].get("bucket_constraints", {})
 
+    # Hysteresis 配置 (从 backtest.hysteresis 读取)
+    hyst_cfg = config.get("backtest", {}).get("hysteresis", {})
+
     optimizer = ComboWFOOptimizer(
         combo_sizes=config["combo_wfo"]["combo_sizes"],
         is_period=config["combo_wfo"]["is_period"],
@@ -399,6 +428,8 @@ def main():
         rebalance_frequencies=config["combo_wfo"]["rebalance_frequencies"],
         use_t1_open=config.get("backtest", {}).get("execution_model", "COC")
         == "T1_OPEN",
+        delta_rank=float(hyst_cfg.get("delta_rank", 0.0)),
+        min_hold_days=int(hyst_cfg.get("min_hold_days", 0)),
         use_bucket_constraints=bucket_cfg.get("enabled", False),
         bucket_min_buckets=bucket_cfg.get("min_buckets", 3),
         bucket_max_per_bucket=bucket_cfg.get("max_per_bucket", 2),

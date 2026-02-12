@@ -5,8 +5,8 @@ import numpy as np
 from etf_strategy.core.utils.position_sizing import resolve_pos_size_for_day
 from etf_strategy.core.hysteresis import apply_hysteresis
 
-# Constants - 必须与向量化回测完全一致
-FREQ = 3
+# Constants - 必须与向量化回测及生产配置 (v5.0) 完全一致
+FREQ = 5
 POS_SIZE = 2
 INITIAL_CAPITAL = 1_000_000.0
 COMMISSION_RATE = 0.0002

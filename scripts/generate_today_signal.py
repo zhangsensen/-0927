@@ -337,6 +337,15 @@ def main() -> int:
 
     # 2) 计算标准化因子（与 VEC 一致）
     std_factors = _compute_std_factors(ohlcv)
+
+    # Exp5: temporal EMA smoothing
+    ts_cfg = backtest_config.get("temporal_smoothing", {})
+    if ts_cfg.get("enabled", False):
+        from etf_strategy.core.cross_section_processor import apply_temporal_ema
+
+        ema_span = int(ts_cfg.get("ema_span", 5))
+        std_factors = apply_temporal_ema(std_factors, ema_span)
+
     tickers: list[str] = close_df.columns.tolist()
 
     # 3) 择时（trade_date 使用 asof 的信号，因为 t-1 -> t 执行）

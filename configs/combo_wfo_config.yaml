@@ -27,7 +27,6 @@ backtest:
   lookback_window: 252
   freq: 5
   pos_size: 2
-  lookback: 252
   rebalance_frequency: 5d
   max_workers: 8
   test_all_frequencies: false
@@ -60,6 +59,9 @@ backtest:
   hysteresis:
     delta_rank: 0.10
     min_hold_days: 9
+  temporal_smoothing:
+    enabled: false    # Exp5: EMA on standardized factor scores (OFF for backward compat)
+    ema_span: 5       # match FREQ=5
   portfolio_constraints:
     pool_diversity:
       enabled: false        # research default OFF
@@ -131,8 +133,8 @@ backtest:
       new_stop: 0.05
       new_multiplier: 3.0
     circuit_breaker:
-      max_drawdown_day: 0.0
-      max_drawdown_total: 0.0
+      max_drawdown_day: 0.0    # intentionally disabled: regime gate provides exposure control
+      max_drawdown_total: 0.0  # intentionally disabled: regime gate provides exposure control
       recovery_days: 5
     dynamic_leverage:
       enabled: false
@@ -174,6 +176,9 @@ combo_wfo:
     max_per_bucket: 2     # 每桶最多选2个因子
 cross_section:
   bounded_factors:
+  - ADX_14D
+  - CMF_20D
+  - CORRELATION_TO_MARKET_20D
   - PRICE_POSITION_20D
   - PRICE_POSITION_120D
   - PV_CORR_20D

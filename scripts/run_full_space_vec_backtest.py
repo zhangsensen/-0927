@@ -166,10 +166,11 @@ def main():
     print(f"  Cost Model: mode={cost_model.mode}, tier={cost_model.tier}, "
           f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
 
-    close_prices = ohlcv["close"][etf_codes].ffill().bfill().values
-    open_prices = ohlcv["open"][etf_codes].ffill().bfill().values
-    high_prices = ohlcv["high"][etf_codes].ffill().bfill().values
-    low_prices = ohlcv["low"][etf_codes].ffill().bfill().values
+    # fillna(1.0) instead of bfill() to avoid lookahead bias
+    close_prices = ohlcv["close"][etf_codes].ffill().fillna(1.0).values
+    open_prices = ohlcv["open"][etf_codes].ffill().fillna(1.0).values
+    high_prices = ohlcv["high"][etf_codes].ffill().fillna(1.0).values
+    low_prices = ohlcv["low"][etf_codes].ffill().fillna(1.0).values
 
     # 5. Compute Timing Signal
     timing_module = LightTimingModule(

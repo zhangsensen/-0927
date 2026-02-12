@@ -5,7 +5,7 @@
 # ✅ 必须: uv run python <script>, uv sync, uv add/remove
 # 📖 详见: AGENTS.md 顶部说明
 
-.PHONY: help install format lint test clean clean-numba wfo vec bt pipeline all
+.PHONY: help install format lint test clean clean-numba wfo vec bt pipeline all research research-reuse
 
 # ============ 帮助 ============
 help:  ## 显示帮助信息
@@ -83,3 +83,10 @@ export-requirements:  ## 导出 requirements.txt（兼容模式）
 setup-dev: install  ## 初始化开发环境
 	uv run pre-commit install
 	@echo "✅ 开发环境初始化完成"
+
+# ============ 研究流水线 ============
+research:  ## 完整研究流水线：mining → WFO → VEC → BT → validation
+	uv run python scripts/run_full_pipeline.py --with-mining --top-n 200
+
+research-reuse:  ## 研究流水线（复用最新 mining 结果）
+	uv run python scripts/run_full_pipeline.py --skip-mining --top-n 200

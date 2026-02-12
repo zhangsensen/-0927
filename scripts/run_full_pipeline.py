@@ -126,6 +126,16 @@ def main():
         choices=["auto", "on", "off"],
         help="Regime gate 开关：auto=按配置文件原样；on/off=为本次运行强制开/关（不改默认配置文件）",
     )
+    parser.add_argument(
+        "--with-mining",
+        action="store_true",
+        help="Run factor mining before WFO (Stage 0)",
+    )
+    parser.add_argument(
+        "--skip-mining",
+        action="store_true",
+        help="Skip mining, inject latest mining results into WFO",
+    )
     args = parser.parse_args()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -146,6 +156,38 @@ def main():
         logger.info(f"📌 training_end_date: {training_end_date}")
 
     env_cfg = {"WFO_CONFIG_PATH": str(effective_config_path)}
+
+    # 0. Factor Mining (optional)
+    if args.with_mining:
+        logger.info("=" * 80)
+        logger.info("0️⃣  STEP 0: Factor Mining")
+        logger.info("=" * 80)
+        run_command(
+            [
+                "uv", "run", "python", "scripts/run_factor_mining.py",
+                "--config", str(effective_config_path),
+            ],
+            env=env_cfg,
+        )
+        mining_dir = get_latest_run_dir("factor_mining_*")
+        npz_path = mining_dir / "survivors_3d.npz"
+        if not npz_path.exists():
+            logger.error(f"❌ Mining output not found: {npz_path}")
+            sys.exit(1)
+        env_cfg["EXTRA_FACTORS_NPZ"] = str(npz_path)
+        logger.info(f"Mining → WFO: {npz_path}")
+
+    elif args.skip_mining:
+        try:
+            mining_dir = get_latest_run_dir("factor_mining_*")
+            npz_path = mining_dir / "survivors_3d.npz"
+            if npz_path.exists():
+                env_cfg["EXTRA_FACTORS_NPZ"] = str(npz_path)
+                logger.info(f"Reusing mining results: {npz_path}")
+            else:
+                logger.warning(f"⚠️ No survivors_3d.npz in {mining_dir}, proceeding without extra factors")
+        except FileNotFoundError:
+            logger.warning("⚠️ No factor_mining_* directory found, proceeding without extra factors")
 
     # 1. WFO (Full Space)
     if not args.skip_wfo:
