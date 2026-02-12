@@ -732,15 +732,15 @@ def vec_backtest_kernel(
             valid = 0
             for n in range(N):
                 score = 0.0
-                has_value = False
+                n_valid_f = 0
                 for idx in factor_indices:
                     val = factors_3d[t - 1, n, idx]
                     if not np.isnan(val):
                         score += val
-                        has_value = True
+                        n_valid_f += 1
 
-                if has_value and score != 0.0:
-                    combined_score[n] = score
+                if n_valid_f > 0:
+                    combined_score[n] = score / n_valid_f
                     valid += 1
                 else:
                     combined_score[n] = -np.inf
@@ -1822,16 +1822,43 @@ def main():
         for combo in combo_strings
     ]
 
+    # GPU pre-scoring: compute all combo scores at once on GPU
+    import os as _os
+    _use_gpu = _os.environ.get("VEC_GPU", "0") == "1"
+    _precomputed_scores = None  # (T, N, n_combos) or None
+    if _use_gpu:
+        try:
+            from etf_strategy.gpu.vec_gpu_batch import precompute_all_scores_gpu
+            import time as _time
+            _t0 = _time.time()
+            _precomputed_scores, _gpu_backend = precompute_all_scores_gpu(
+                factors_3d, combo_indices, batch_size=5000, device="auto"
+            )
+            _gpu_elapsed = _time.time() - _t0
+            print(f"GPU pre-scoring: {len(combo_indices)} combos in {_gpu_elapsed:.2f}s "
+                  f"(backend={_gpu_backend}, "
+                  f"output={_precomputed_scores.nbytes / 1024**2:.0f}MB)")
+        except Exception as e:
+            print(f"GPU pre-scoring failed: {e}. Falling back to CPU.")
+            _precomputed_scores = None
+
     # 定义单个combo回测函数（闭包捕获共享数据）
-    def _backtest_one_combo(combo_str, factor_indices):
+    def _backtest_one_combo(combo_str, factor_indices, combo_idx=None):
+        # If GPU pre-computed scores available, use single-column view
+        if _precomputed_scores is not None and combo_idx is not None:
+            _factors = _precomputed_scores[:, :, combo_idx:combo_idx + 1]
+            _fi = [0]
+        else:
+            _factors = factors_3d
+            _fi = factor_indices
         eq_curve, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
-            factors_3d,
+            _factors,
             close_prices,
             open_prices,
             high_prices,
             low_prices,
             timing_arr,
-            factor_indices,
+            _fi,
             # ✅ P0: 传入配置参数
             freq=FREQ,
             pos_size=POS_SIZE,
@@ -1909,17 +1936,17 @@ def main():
         return result
 
     # ✅ 并行回测（Numba JIT 释放 GIL，线程池避免序列化开销）
-    import os as _os
     n_vec_jobs = int(_os.environ.get("VEC_N_JOBS", min((_os.cpu_count() or 8) // 2, 16)))
     n_combos = len(combo_strings)
     # 小批量自动保存权益曲线 (用于 holdout 分析)
     _save_equity = n_combos <= 200
-    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs})"
+    _gpu_label = " [GPU pre-scored]" if _precomputed_scores is not None else ""
+    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs}){_gpu_label}"
           + (", 保存权益曲线" if _save_equity else ""))
     results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
-        delayed(_backtest_one_combo)(cs, fi)
-        for cs, fi in tqdm(
-            zip(combo_strings, combo_indices),
+        delayed(_backtest_one_combo)(cs, fi, combo_idx=ci)
+        for ci, (cs, fi) in tqdm(
+            enumerate(zip(combo_strings, combo_indices)),
             total=n_combos,
             desc="VEC 回测",
         )

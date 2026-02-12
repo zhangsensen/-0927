@@ -170,7 +170,7 @@ def _validate_signal_state(
 
     # 1) version compatibility
     sv = state.get("version", "")
-    if sv and not sv.startswith("v5.0"):
+    if sv and not sv.startswith(CURRENT_VERSION):
         problems.append(f"version mismatch: state={sv}, current={CURRENT_VERSION}")
 
     # 2) freq

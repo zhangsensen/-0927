@@ -288,5 +288,88 @@ class TestVecBtAlignmentIntegration:
             )
 
 
+# ==============================================================================
+# Signal aggregation: WFO / VEC NaN-normalization consistency
+# ==============================================================================
+
+
+class TestSignalNormalizationConsistency:
+    """Verify WFO and VEC compute identical combined_score when factors have NaN."""
+
+    def test_wfo_vec_signal_equal_no_nan(self):
+        """Without NaN: WFO (equal weights) == VEC normalized mean."""
+        from etf_strategy.core.combo_wfo_optimizer import _compute_combo_signal
+
+        T, N, F = 3, 5, 4
+        np.random.seed(42)
+        factors = np.random.randn(T, N, F)
+        weights = np.ones(F) / F  # equal weights
+
+        wfo_signal = _compute_combo_signal(factors, weights)
+
+        # VEC logic (after fix): mean of valid factors
+        vec_signal = np.nanmean(factors, axis=2)
+
+        np.testing.assert_allclose(wfo_signal, vec_signal, atol=1e-12,
+                                   err_msg="WFO/VEC signal must match when no NaN")
+
+    def test_wfo_vec_signal_equal_with_nan(self):
+        """With NaN: both must skip NaN and normalize by valid count."""
+        from etf_strategy.core.combo_wfo_optimizer import _compute_combo_signal
+
+        T, N, F = 5, 8, 4
+        np.random.seed(123)
+        factors = np.random.randn(T, N, F)
+        # Inject NaN: ETF 0 factor 2 always NaN, ETF 3 factors 1&3 on day 2
+        factors[:, 0, 2] = np.nan
+        factors[2, 3, 1] = np.nan
+        factors[2, 3, 3] = np.nan
+
+        weights = np.ones(F) / F
+        wfo_signal = _compute_combo_signal(factors, weights)
+
+        # VEC equivalent: mean of non-NaN factors per (t, n)
+        vec_signal = np.nanmean(factors, axis=2)
+        # Where ALL factors are NaN, WFO returns NaN
+        all_nan_mask = np.all(np.isnan(factors), axis=2)
+        vec_signal[all_nan_mask] = np.nan
+
+        np.testing.assert_allclose(wfo_signal, vec_signal, atol=1e-12,
+                                   err_msg="WFO/VEC signal must match with NaN")
+
+    def test_nan_does_not_penalize_ranking(self):
+        """ETF with 3/4 valid factors should NOT be ranked lower than
+        ETF with 4/4 valid factors of equal value — normalization prevents this."""
+        T, N, F = 1, 2, 4
+        factors = np.zeros((T, N, F))
+        # ETF 0: all factors = 0.5
+        factors[0, 0, :] = 0.5
+        # ETF 1: 3 factors = 0.5, 1 factor = NaN
+        factors[0, 1, :3] = 0.5
+        factors[0, 1, 3] = np.nan
+
+        # Both should score identically (mean = 0.5)
+        from etf_strategy.core.combo_wfo_optimizer import _compute_combo_signal
+
+        weights = np.ones(F) / F
+        signal = _compute_combo_signal(factors, weights)
+        assert signal[0, 0] == signal[0, 1], (
+            f"NaN factor should not penalize: {signal[0, 0]} != {signal[0, 1]}"
+        )
+
+    def test_all_nan_returns_nan(self):
+        """ETF with ALL factors NaN must get NaN signal, not -inf or 0."""
+        from etf_strategy.core.combo_wfo_optimizer import _compute_combo_signal
+
+        T, N, F = 1, 3, 4
+        factors = np.random.randn(T, N, F)
+        factors[0, 1, :] = np.nan  # ETF 1 all NaN
+
+        weights = np.ones(F) / F
+        signal = _compute_combo_signal(factors, weights)
+        assert np.isnan(signal[0, 1]), "All-NaN ETF must produce NaN signal"
+        assert not np.isnan(signal[0, 0]), "Normal ETF must not be NaN"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

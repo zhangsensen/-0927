@@ -1,0 +1,84 @@
+# C2 Production Strategy Parameters (v6.0)
+# Sealed: 2026-02-12
+
+strategy:
+  name: C2
+  factors:
+    - AMIHUD_ILLIQUIDITY    # Bucket D: MICROSTRUCTURE
+    - CALMAR_RATIO_60D      # Bucket B: SUSTAINED_POSITION
+    - CORRELATION_TO_MARKET_20D  # Bucket E: TREND_STRENGTH_RISK
+  bucket_coverage: [B, D, E]  # 3 buckets
+
+execution:
+  freq: 5
+  pos_size: 2
+  lookback_window: 252
+  commission_rate: 0.0002
+  initial_capital: 1000000
+  execution_model: T1_OPEN
+  cost_model:
+    mode: SPLIT_MARKET
+    tier: med
+    a_share: 0.0020
+    qdii: 0.0050
+
+hysteresis:
+  delta_rank: 0.10
+  min_hold_days: 9
+
+regime_gate:
+  enabled: true
+  mode: volatility
+  proxy_symbol: "510300"
+  window: 20
+  shift_days: 1
+  thresholds_pct: [25, 30, 40]
+  exposures: [1.0, 0.7, 0.4, 0.1]
+
+universe:
+  mode: A_SHARE_ONLY
+  total_etfs: 49
+  a_share_traded: 41
+  qdii_monitored: 8
+
+cross_section:
+  bounded_factors:
+    - ADX_14D
+    - CMF_20D
+    - CORRELATION_TO_MARKET_20D
+    - PRICE_POSITION_20D
+    - PRICE_POSITION_120D
+    - PV_CORR_20D
+    - RSI_14
+  winsorize_lower: 0.025
+  winsorize_upper: 0.975
+
+performance:
+  vec_holdout:
+    return: 0.719
+    mdd: 0.116
+    sharpe: 2.75
+    worst_month: -0.059
+    trades: 30
+  bt_holdout:
+    return: 0.716
+    mdd: 0.119
+    sharpe: 2.61
+    worst_month: -0.071
+    trades: 37
+  vec_bt_gap: -0.003  # -0.3pp (excellent alignment)
+
+shadow_alternative:
+  name: "6F"
+  factors:
+    - AMIHUD_ILLIQUIDITY
+    - MARGIN_BUY_RATIO
+    - MARGIN_CHG_10D
+    - PRICE_POSITION_120D
+    - SHARE_ACCEL
+    - SLOPE_20D
+  vec_holdout:
+    return: 0.669
+    mdd: 0.108
+    sharpe: 2.69
+    trades: 27

@@ -2,7 +2,7 @@
 
 Combines VEC speed (Numba @njit kernel) with BT realism (integer-lot sizing,
 cash constraints, SPLIT_MARKET costs). Designed to replace Backtrader as
-ground truth while running 50-100x faster.
+ground truth. Per-combo speedup is unverified — needs benchmark.
 
 Key differences from VEC kernel:
   - Integer-lot sizing: shares = floor(float_shares / lot_size) * lot_size
@@ -13,7 +13,7 @@ Key differences from VEC kernel:
 Key differences from BT engine:
   - Pure Numba: no Python/Backtrader overhead
   - Deterministic: same inputs always produce same outputs
-  - ~50-100x faster than Backtrader per combo
+  - Expected faster than Backtrader per combo (unverified, needs benchmark)
 
 Execution model:
   T1_OPEN:  signal at close(t) -> fill at open(t+1)
@@ -63,9 +63,18 @@ def _stable_topk(scores, k):
 
 @njit(cache=True)
 def _execute_sells(
-    holdings, entry_prices, hold_days_arr, cost_arr, target_mask,
-    exec_prices, cash, total_commission_paid,
-    wins, losses, total_win_pnl, total_loss_pnl,
+    holdings,
+    entry_prices,
+    hold_days_arr,
+    cost_arr,
+    target_mask,
+    exec_prices,
+    cash,
+    total_commission_paid,
+    wins,
+    losses,
+    total_win_pnl,
+    total_loss_pnl,
 ):
     """Sell all held positions NOT in target_mask. Returns updated state scalars."""
     N = len(holdings)
@@ -98,9 +107,19 @@ def _execute_sells(
 
 @njit(cache=True)
 def _execute_buys_integer_lots(
-    holdings, entry_prices, hold_days_arr, cost_arr, target_mask,
-    exec_prices, cash, total_commission_paid, margin_failures,
-    available_for_new, pos_size, lot_size, init_hold_days,
+    holdings,
+    entry_prices,
+    hold_days_arr,
+    cost_arr,
+    target_mask,
+    exec_prices,
+    cash,
+    total_commission_paid,
+    margin_failures,
+    available_for_new,
+    pos_size,
+    lot_size,
+    init_hold_days,
 ):
     """Buy new targets (not already held) using integer-lot sizing.
 
@@ -164,23 +183,23 @@ def _execute_buys_integer_lots(
 
 @njit(cache=True)
 def vec_bt_hybrid_kernel(
-    factors_3d,         # (T, N, F) float64: factor score tensor
-    close_prices,       # (T, N) float64: close prices
-    open_prices,        # (T, N) float64: open prices
-    timing_arr,         # (T,) float64: shifted timing signal (already t-1)
-    cost_arr,           # (N,) float64: per-ETF one-way transaction cost (decimal)
-    factor_indices,     # (n_factors,) int64: which factors to sum
-    rebalance_schedule, # (n_rebal,) int32: bar indices for rebalancing
-    pos_size,           # int: number of positions to hold
-    initial_capital,    # float: starting cash
-    lot_size,           # int: shares per lot (100 for A-share ETFs)
-    use_t1_open,        # bool: T+1 Open execution mode
-    delta_rank,         # float: hysteresis rank gap (0 = disabled)
-    min_hold_days,      # int: min holding period (0 = disabled)
+    factors_3d,  # (T, N, F) float64: factor score tensor
+    close_prices,  # (T, N) float64: close prices
+    open_prices,  # (T, N) float64: open prices
+    timing_arr,  # (T,) float64: shifted timing signal (already t-1)
+    cost_arr,  # (N,) float64: per-ETF one-way transaction cost (decimal)
+    factor_indices,  # (n_factors,) int64: which factors to sum
+    rebalance_schedule,  # (n_rebal,) int32: bar indices for rebalancing
+    pos_size,  # int: number of positions to hold
+    initial_capital,  # float: starting cash
+    lot_size,  # int: shares per lot (100 for A-share ETFs)
+    use_t1_open,  # bool: T+1 Open execution mode
+    delta_rank,  # float: hysteresis rank gap (0 = disabled)
+    min_hold_days,  # int: min holding period (0 = disabled)
     dynamic_leverage_enabled,  # bool
-    target_vol,         # float: target annualized vol for dynamic leverage
-    vol_window,         # int: lookback for vol calculation
-    leverage_cap,       # float: max leverage (1.0 = no leverage)
+    target_vol,  # float: target annualized vol for dynamic leverage
+    vol_window,  # int: lookback for vol calculation
+    leverage_cap,  # float: max leverage (1.0 = no leverage)
 ):
     """Numba kernel that matches BT ground truth with integer-lot sizing.
 
@@ -204,9 +223,15 @@ def vec_bt_hybrid_kernel(
 
     # --- State ---
     cash = initial_capital
-    holdings = np.zeros(N, dtype=np.int64)    # share counts (integer lots)
-    hold_days_arr = np.zeros(N, dtype=np.int64)
+    holdings = np.zeros(N, dtype=np.int64)  # share counts (integer lots)
+    hold_days_arr = np.zeros(N, dtype=np.int64)  # execution hold days
     entry_prices = np.zeros(N, dtype=np.float64)
+
+    # Exp4.1: Signal portfolio decoupled from execution (matches BT GenericStrategy)
+    # Hysteresis decisions use signal state, not execution state.
+    # This prevents integer-lot rounding from cascading into hysteresis divergence.
+    signal_portfolio = np.zeros(N, dtype=np.bool_)  # like BT's _signal_portfolio
+    signal_hold_days = np.zeros(N, dtype=np.int64)  # like BT's _signal_hold_days
 
     equity_curve = np.full(T, initial_capital, dtype=np.float64)
 
@@ -257,7 +282,9 @@ def vec_bt_hybrid_kernel(
 
         # ===== 2. Daily return and Welford update =====
         if t > start_day:
-            dr = (current_equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
+            dr = (
+                (current_equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
+            )
             welford_count += 1
             delta = dr - welford_mean
             welford_mean += delta / welford_count
@@ -282,6 +309,10 @@ def vec_bt_hybrid_kernel(
         for n in range(N):
             if holdings[n] > 0:
                 hold_days_arr[n] += 1
+        # Exp4.1: Increment signal hold_days for signal portfolio
+        for n in range(N):
+            if signal_portfolio[n]:
+                signal_hold_days[n] += 1
 
         # ===== 4. Execute T1_OPEN pending orders from yesterday =====
         if use_t1_open and pend_active:
@@ -295,9 +326,18 @@ def vec_bt_hybrid_kernel(
             # Sell non-targets
             cash, total_commission_paid, wins, losses, total_win_pnl, total_loss_pnl = (
                 _execute_sells(
-                    holdings, entry_prices, hold_days_arr, cost_arr, pend_target,
-                    exec_prices, cash, total_commission_paid,
-                    wins, losses, total_win_pnl, total_loss_pnl,
+                    holdings,
+                    entry_prices,
+                    hold_days_arr,
+                    cost_arr,
+                    pend_target,
+                    exec_prices,
+                    cash,
+                    total_commission_paid,
+                    wins,
+                    losses,
+                    total_win_pnl,
+                    total_loss_pnl,
                 )
             )
 
@@ -317,9 +357,18 @@ def vec_bt_hybrid_kernel(
 
             # Buy new targets
             cash, total_commission_paid, margin_failures = _execute_buys_integer_lots(
-                holdings, entry_prices, hold_days_arr, cost_arr, pend_target,
-                exec_prices, cash, total_commission_paid, margin_failures,
-                available, pos_size, lot_size,
+                holdings,
+                entry_prices,
+                hold_days_arr,
+                cost_arr,
+                pend_target,
+                exec_prices,
+                cash,
+                total_commission_paid,
+                margin_failures,
+                available,
+                pos_size,
+                lot_size,
                 0,  # init_hold_days=0 for T1_OPEN (count starts next bar)
             )
             pend_active = False
@@ -358,15 +407,15 @@ def vec_bt_hybrid_kernel(
             valid_count = 0
             for n in range(N):
                 score = 0.0
-                has_value = False
+                n_valid_f = 0
                 for fi in range(len(factor_indices)):
                     fidx = factor_indices[fi]
                     val = factors_3d[t - 1, n, fidx]
                     if not np.isnan(val):
                         score += val
-                        has_value = True
-                if has_value and score != 0.0:
-                    combined_score[n] = score
+                        n_valid_f += 1
+                if n_valid_f > 0:
+                    combined_score[n] = score / n_valid_f
                     valid_count += 1
                 else:
                     combined_score[n] = -np.inf
@@ -378,14 +427,22 @@ def vec_bt_hybrid_kernel(
             if valid_count >= pos_size:
                 top_indices = _stable_topk(combined_score, pos_size)
 
+                # Exp4.1: Use signal portfolio state for hysteresis (not execution state)
                 h_mask = np.zeros(N, dtype=np.bool_)
                 for n in range(N):
-                    h_mask[n] = holdings[n] > 0
+                    h_mask[n] = signal_portfolio[n]
 
-                if (delta_rank > 0.0 or min_hold_days > 0) and len(top_indices) >= pos_size:
+                if (delta_rank > 0.0 or min_hold_days > 0) and len(
+                    top_indices
+                ) >= pos_size:
                     hyst_result = apply_hysteresis(
-                        combined_score, h_mask, hold_days_arr, top_indices,
-                        pos_size, delta_rank, min_hold_days,
+                        combined_score,
+                        h_mask,
+                        signal_hold_days,
+                        top_indices,
+                        pos_size,
+                        delta_rank,
+                        min_hold_days,
                     )
                     for n in range(N):
                         target_mask[n] = hyst_result[n]
@@ -394,6 +451,17 @@ def vec_bt_hybrid_kernel(
                         idx = top_indices[i]
                         if combined_score[idx] > -np.inf:
                             target_mask[idx] = True
+
+                # Exp4.1: Update signal portfolio from hysteresis decision
+                init_days = 0 if use_t1_open else 1
+                for n in range(N):
+                    if target_mask[n] and not signal_portfolio[n]:
+                        # New entry: init hold days
+                        signal_hold_days[n] = init_days
+                    elif not target_mask[n] and signal_portfolio[n]:
+                        # Exit: reset hold days
+                        signal_hold_days[n] = 0
+                    signal_portfolio[n] = target_mask[n]
 
             # --- Compute timing ratio ---
             effective_leverage = min(current_leverage, leverage_cap)
@@ -411,12 +479,26 @@ def vec_bt_hybrid_kernel(
                     exec_prices[n] = close_prices[t, n]
 
                 # Sell non-targets
-                cash, total_commission_paid, wins, losses, total_win_pnl, total_loss_pnl = (
-                    _execute_sells(
-                        holdings, entry_prices, hold_days_arr, cost_arr, target_mask,
-                        exec_prices, cash, total_commission_paid,
-                        wins, losses, total_win_pnl, total_loss_pnl,
-                    )
+                (
+                    cash,
+                    total_commission_paid,
+                    wins,
+                    losses,
+                    total_win_pnl,
+                    total_loss_pnl,
+                ) = _execute_sells(
+                    holdings,
+                    entry_prices,
+                    hold_days_arr,
+                    cost_arr,
+                    target_mask,
+                    exec_prices,
+                    cash,
+                    total_commission_paid,
+                    wins,
+                    losses,
+                    total_win_pnl,
+                    total_loss_pnl,
                 )
 
                 # Compute portfolio value for buy sizing
@@ -436,11 +518,22 @@ def vec_bt_hybrid_kernel(
                     available = 0.0
 
                 # Buy new targets
-                cash, total_commission_paid, margin_failures = _execute_buys_integer_lots(
-                    holdings, entry_prices, hold_days_arr, cost_arr, target_mask,
-                    exec_prices, cash, total_commission_paid, margin_failures,
-                    available, pos_size, lot_size,
-                    1,  # init_hold_days=1 for COC (count starts immediately)
+                cash, total_commission_paid, margin_failures = (
+                    _execute_buys_integer_lots(
+                        holdings,
+                        entry_prices,
+                        hold_days_arr,
+                        cost_arr,
+                        target_mask,
+                        exec_prices,
+                        cash,
+                        total_commission_paid,
+                        margin_failures,
+                        available,
+                        pos_size,
+                        lot_size,
+                        1,  # init_hold_days=1 for COC (count starts immediately)
+                    )
                 )
 
     # ===== Final equity (mark-to-market at last close, no liquidation cost) =====
@@ -592,7 +685,9 @@ def run_hybrid_backtest(
     aligned_return = 0.0
     aligned_sharpe = 0.0
     if len(eq_valid) > 1:
-        aligned_return = (eq_valid[-1] - eq_valid[0]) / eq_valid[0] if eq_valid[0] > 0 else 0.0
+        aligned_return = (
+            (eq_valid[-1] - eq_valid[0]) / eq_valid[0] if eq_valid[0] > 0 else 0.0
+        )
         daily_rets = np.diff(eq_valid) / eq_valid[:-1]
         valid_rets = daily_rets[np.isfinite(daily_rets)]
         if len(valid_rets) > 1:

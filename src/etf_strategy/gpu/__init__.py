@@ -40,10 +40,14 @@ except ImportError:
     )
     _using_torch = False
 
+from .vec_gpu_batch import GPUVECBatcher, precompute_all_scores_gpu
+
 __all__ = [
     "gpu_available",
     "get_gpu_memory_info",
     "compute_ic_batch_torch",
     "compute_ic_batch_auto",
     "spearman_ic_torch",
+    "GPUVECBatcher",
+    "precompute_all_scores_gpu",
 ]
