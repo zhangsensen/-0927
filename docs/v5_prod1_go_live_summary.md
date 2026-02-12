@@ -13,7 +13,7 @@
 | 策略类型 | ETF 轮动 (A股 + QDII) |
 | 持仓数量 | 2 只 ETF |
 | 调仓频率 | 每 5 个交易日 |
-| ETF 池 | 43 只 (38 A股 + 5 QDII 监控) |
+| ETF 池 | 49 只 (41 A股 + 8 QDII 监控) |
 | 宇宙模式 | A_SHARE_ONLY (QDII 硬屏蔽) |
 | 迟滞控制 | delta_rank=0.10, min_hold_days=9 |
 | 择时/风控 | 轻择时 + 波动率 regime gate (510300 proxy) |
