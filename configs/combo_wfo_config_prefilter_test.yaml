@@ -169,12 +169,7 @@ combo_wfo:
     enabled: true
     path: "results/factor_mining_20260212_103242/survivors_3d.npz"
 cross_section:
-  bounded_factors:
-  - PRICE_POSITION_20D
-  - PRICE_POSITION_120D
-  - PV_CORR_20D
-  - RSI_14
-  - CMF_20D                    # CMF is bounded [-1,1]
+  # bounded_factors: removed — now derived from factor_registry.py (single source of truth)
   winsorize_lower: 0.025
   winsorize_upper: 0.975
   pool_mode: unified
