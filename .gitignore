@@ -141,3 +141,4 @@ activeContext.md
 *.tar.gz
 *.rar
 *.7z
+.opencode/

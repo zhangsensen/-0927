@@ -1,0 +1,269 @@
+universe:
+  mode: "A_SHARE_ONLY"   # "A_SHARE_ONLY" = 实盘禁止QDII; "GLOBAL" = 全池含QDII
+  qdii_tickers:
+    - "513500"
+    - "513100"
+    - "513050"
+    - "159920"
+    - "513130"
+
+backtest:
+  execution_model: "T1_OPEN"  # "COC" (cheat-on-close) or "T1_OPEN" (signal T-1 → fill at open T+1)
+  commission_rate: 0.0002
+  cost_model:
+    mode: "SPLIT_MARKET"
+    tier: "med"
+    tiers:
+      low:
+        a_share: 0.0010
+        qdii: 0.0030
+      med:
+        a_share: 0.0020
+        qdii: 0.0050
+      high:
+        a_share: 0.0030
+        qdii: 0.0080
+  initial_capital: 1000000
+  lookback_window: 252
+  freq: 3
+  pos_size: 2
+  lookback: 252
+  rebalance_frequency: 3d
+  max_workers: 8
+  test_all_frequencies: false
+  test_all_position_sizes: false
+  position_size_range:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  timing:
+    enabled: true
+    type: light_timing
+    extreme_threshold: -0.1
+    extreme_position: 0.1
+    index_timing:
+      enabled: false
+      method: ma_cross
+      window: 200
+      symbol: market_avg
+      bear_position: 0.1
+    individual_timing:
+      enabled: false
+      window: 20
+  hysteresis:
+    delta_rank: 0.0
+    min_hold_days: 0
+  regime_gate:
+    enabled: true
+    mode: volatility
+    volatility:
+      proxy_symbol: '510300'
+      window: 20
+      shift_days: 1
+      thresholds_pct:
+      - 25
+      - 30
+      - 40
+      exposures:
+      - 1.0
+      - 0.7
+      - 0.4
+      - 0.1
+    dual:
+      proxy_symbol: '510300'
+      vol_window: 20
+      trend_short_window: 20
+      trend_long_window: 60
+      shift_days: 1
+      thresholds_pct:
+      - 25
+      - 30
+      - 40
+      exposures_uptrend:
+      - 1.0
+      - 0.7
+      - 0.5
+      - 0.3
+      exposures_downtrend:
+      - 0.7
+      - 0.4
+      - 0.2
+      - 0.1
+    market_regime:
+      window: 60
+      bull_exposure: 1.0
+      sideways_exposure: 0.7
+      bear_exposure: 0.1
+  dynamic_pos_size:
+    enabled: false
+    mode: regime
+    regime_map:
+      high_vol: 1
+      mid_vol: 2
+      low_vol: 3
+    max_pos_size: 4
+    min_pos_size: 1
+  risk_control:
+    enabled: true
+    leverage_cap: 1.0
+    stop_check_on_rebalance_only: true
+    stop_method: fixed
+    trailing_stop_pct: 0.0
+    atr_window: 14
+    atr_multiplier: 8.0
+    cooldown_days: 0
+    profit_ladders:
+    - threshold: 0.2
+      new_stop: 0.08
+      new_multiplier: 5.0
+    - threshold: 0.4
+      new_stop: 0.05
+      new_multiplier: 3.0
+    circuit_breaker:
+      max_drawdown_day: 0.0
+      max_drawdown_total: 0.0
+      recovery_days: 5
+    dynamic_leverage:
+      enabled: false
+      target_vol: 0.15
+      vol_window: 20
+    etf_stop_loss: 0.05
+combo_wfo:
+  combo_sizes:
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  enable_fdr: true
+  fdr_alpha: 0.05
+  fdr_method: fdr_bh
+  is_period: 180
+  n_jobs: -1
+  oos_period: 60
+  rebalance_frequencies:
+  - 5
+  save_all_results: true
+  scoring:
+    complexity_penalty_lambda: 0.15
+    use_robust_scoring: true
+    vec_score_weights:
+      ann_ret: 0.4
+      sharpe: 0.3
+      max_dd: 0.3
+  step_size: 60
+  top_n: 100000
+  verbose: true
+cross_section:
+  bounded_factors:
+  - PRICE_POSITION_20D
+  - PRICE_POSITION_120D
+  - PV_CORR_20D
+  - RSI_14
+  winsorize_lower: 0.025
+  winsorize_upper: 0.975
+  pool_mode: unified
+  pools:
+    qdii:
+      symbols:
+      - '513100'
+      - '513500'
+      - '159920'
+      - '513050'
+      - '513130'
+      allocation: 0.5
+      pos_count: 1
+    a_share:
+      allocation: 0.5
+      pos_count: 1
+data:
+  cache_dir: /home/sensen/dev/projects/-0927/.cache
+  data_dir: /home/sensen/dev/projects/-0927/raw/ETF/daily
+  start_date: '2020-01-01'
+  end_date: '2026-02-10'
+  training_end_date: '2025-04-30'
+  symbols:
+  - '159801'
+  - '159819'
+  - '159859'
+  - '159883'
+  - '159915'
+  - '159928'
+  - '159949'
+  - '159992'
+  - '159995'
+  - '159998'
+  - '510050'
+  - '510300'
+  - '510500'
+  - '511010'
+  - '511260'
+  - '511380'
+  - '512010'
+  - '512100'
+  - '512400'
+  - '512480'
+  - '512660'
+  - '512690'
+  - '512720'
+  - '512800'
+  - '512880'
+  - '512980'
+  - '513050'
+  - '513100'
+  - '513130'
+  - '159920'
+  - '513500'
+  - '515030'
+  - '515180'
+  - '515210'
+  - '515650'
+  - '515790'
+  - '516090'
+  - '516160'
+  - '516520'
+  - '518850'
+  - '518880'
+  - '588000'
+  - '588200'
+# 正交因子集 v2: 15→16, 基于 factor_mining 10维质检结论
+# 变更 (2026-02-05):
+#   +UP_DOWN_VOL_RATIO_20D  (score=4.5, IC=+0.017**, 单调=1.0, roll+=72%, 正交)
+#   +GK_VOL_RATIO_20D       (score=2.5, IC=-0.017**, autocorr=0.86, 正交, roll+=31%需观察)
+#   -SPREAD_PROXY            (score=1.5, 质检未通过: 单调=0.5, roll+=33%)
+# 修改此列表即可扩缩搜索空间，无需改代码
+active_factors:
+  - ADX_14D
+  - AMIHUD_ILLIQUIDITY
+  - BREAKOUT_20D
+  - CALMAR_RATIO_60D
+  - CORRELATION_TO_MARKET_20D
+  - GK_VOL_RATIO_20D
+  - MAX_DD_60D
+  - MOM_20D
+  - OBV_SLOPE_10D
+  - PRICE_POSITION_20D
+  - PRICE_POSITION_120D
+  - PV_CORR_20D
+  - SHARPE_RATIO_20D
+  - SLOPE_20D
+  - UP_DOWN_VOL_RATIO_20D
+  - VOL_RATIO_20D
+  - VORTEX_14D
+output_root: results_combo_wfo
+run_id: COMBO_WFO_DEEP_MINING
+selection:
+  ic_threshold: 0.05
+  positive_rate_threshold: 0.55
+  composite_weights:
+    return: 0.4
+    sharpe: 0.3
+    drawdown: 0.3

@@ -35,7 +35,7 @@ uv run python scripts/generate_today_signal.py             # Daily trading signa
 uv run python scripts/update_daily_from_qmt_bridge.py --all  # Data update from QMT
 
 # Testing
-uv run pytest tests/ -v                                    # All tests (114 cases)
+uv run pytest tests/ -v                                    # All tests (157 cases)
 uv run pytest tests/test_frozen_params.py -v               # Single file
 uv run pytest -k "test_shift" -v                           # Single test by name
 ```
@@ -75,7 +75,7 @@ Enforced by `src/etf_strategy/core/frozen_params.py` — validated at WFO/VEC/BT
 
 ## Hysteresis State Machine (v5.0)
 
-`src/etf_strategy/core/hysteresis.py` — `@njit` kernel shared by VEC/WFO.
+`src/etf_strategy/core/hysteresis.py` — `@njit` kernel shared by WFO/VEC/BT.
 
 Rules:
 1. Max 1 swap per rebalance (forced)
@@ -172,4 +172,4 @@ Single source of truth: `configs/combo_wfo_config.yaml` — 43 ETFs, 18 active f
 ## Code Style
 
 - Python 3.11+, black (88 chars), isort (black profile), ruff, mypy strict
-- pytest for testing (6 test files, 114 cases covering frozen_params, rebalance utilities, OBV alignment, cost model, execution model, factor mining)
+- pytest for testing (6 test files, 157 cases covering frozen_params, rebalance utilities, OBV alignment, cost model, execution model, factor mining)

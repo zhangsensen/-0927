@@ -1,180 +1,99 @@
-# ETF 轮动策略研究平台
+# ETF 轮动策略研究平台 — 文档索引
 
-> **版本**: 3.1  
-> **最后更新**: 2025-12-01  
-> **状态**: ✅ 生产就绪 | 🔒 v3.2 交付已封板
-
----
-
-## 项目概述
-
-本项目是一个专业级 **ETF 轮动策略** 研究与验证平台，核心目标是：
-
-1. **因子挖掘与组合优化** - 从 18 个精选因子中筛选最优组合
-2. **严格回测验证** - 以 VEC + Rolling + Holdout + BT 四重验证作为交付标准，并在通过后封板归档
-3. **贴近实盘** - 无前视偏差，T+1 执行约束
-
-### 核心特点
-
-| 特性 | v3.0 生产值 | 说明 |
-|------|-------------|------|
-| **标的池** | 43 只 ETF | 38 A股 + 5 QDII（核心 Alpha 来源） |
-| **因子库** | 18 个因子 | 趋势/动量/波动/资金流 |
-| **最佳组合** | 5 因子 | ADX_14D + MAX_DD_60D + PRICE_POSITION_* + SHARPE |
-| **回测周期** | 2020-01-01 至今 | 4+ 年 |
-| **初始资金** | 100 万 | |
-| **持仓数** | **2 只** | v3.0 优化（v1.0 为 3） |
-| **调仓频率** | **每 3 个交易日** | v3.0 高频（v1.0 为 8） |
-| **收益率** | **237.45%** | v3.0 验证结果 |
+> **版本**: v5.0 (sealed 2026-02-11)
+> **最后更新**: 2026-02-12
+> **状态**: S1 生产运行中 | C2 Shadow 候选中
 
 ---
 
-## 引擎与交付架构（v3.2）
+## 核心文档
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    WFO 筛选层                                │
-│  run_combo_wfo.py - 真·滚动 WFO，2.5s 覆盖 12,597 组合      │
-│  职责：高维空间搜索，产出 Top-N 候选池                        │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    VEC 复算层                                │
-│  run_full_space_vec_backtest.py - 向量化高精度复算           │
-│  职责：统一规则下精算（Screening），用于高效筛选             │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│               Rolling + Holdout 验证层                        │
-│  final_triple_validation.py - 无泄漏与一致性验证             │
-│  职责：Rolling gate 使用 train-only summary；Holdout 单独输出  │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    BT 审计层                                 │
-│  batch_bt_backtest.py - Backtrader 事件驱动                  │
-│  职责：资金约束兜底审计（Ground Truth），输出 Train/Holdout 分段收益│
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    封板归档层                                 │
-│  seal_release.py - 冻结产物+脚本+配置+源码快照+依赖锁定       │
-│  职责：可搬走、可复现、可校验（CHECKSUMS.sha256）             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 关键架构决策
-
-1. **VEC ↔ BT 严格对齐**：差异 < 0.01pp，这是基准一致性
-2. **WFO 是粗筛器**：与 VEC/BT 数值可能不同，但排序稳定即可
-3. **无前视偏差**：
-   - 信号来自 T-1（`shift_timing_signal`）
-   - 统一调仓日程（`generate_rebalance_schedule`）
-   - 价格校验（`ensure_price_views`）
+| 文档 | 说明 |
+|------|------|
+| [../CLAUDE.md](../CLAUDE.md) | LLM 开发指南（Claude Code 必读） |
+| [../README.md](../README.md) | 项目总览与快速开始 |
+| [../PROJECT_STATUS.md](../PROJECT_STATUS.md) | 当前项目状态、策略表现与研究汇总 |
 
 ---
 
-## 目录结构
+## 架构与引擎
+
+| 文档 | 说明 |
+|------|------|
+| [WFO_VEC_STATUS.md](WFO_VEC_STATUS.md) | 三层引擎对齐状态 + P0 修复记录 |
+| [VEC_BT_ALIGNMENT_GUIDE.md](VEC_BT_ALIGNMENT_GUIDE.md) | VEC/BT 对齐原理与红线 |
+| [ETF_POOL_ARCHITECTURE.md](ETF_POOL_ARCHITECTURE.md) | 43 ETF 池设计（38 A股 + 5 QDII） |
+| [DATA_FORMAT_SPECIFICATION.md](DATA_FORMAT_SPECIFICATION.md) | Parquet 数据格式规范 |
+| [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md) | 已知引擎差异清单 |
+
+---
+
+## 策略与生产
+
+| 文档 | 说明 |
+|------|------|
+| [v5_prod1_go_live_summary.md](v5_prod1_go_live_summary.md) | v5.0 上线总结 |
+| [BEST_STRATEGY_43ETF_UNIFIED.md](BEST_STRATEGY_43ETF_UNIFIED.md) | 历史最佳策略（v3.0 参考） |
+| [STRATEGY_DEVELOPMENT_WORKFLOW.md](STRATEGY_DEVELOPMENT_WORKFLOW.md) | 策略开发流程 |
+| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | 快速参考卡 |
+
+---
+
+## 研究文档
+
+| 文档 | 结论 | 说明 |
+|------|------|------|
+| [research/algebraic_factor_vec_validation.md](research/algebraic_factor_vec_validation.md) | 边际 | 代数因子 VEC 验证（6 个 BT 候选） |
+| [research/bucket_constraints_ablation.md](research/bucket_constraints_ablation.md) | POSITIVE | 跨桶约束 +4.9pp |
+| [research/conditional_factor_negative_results.md](research/conditional_factor_negative_results.md) | NEGATIVE | 条件因子切换 — 5 假设全推翻 |
+| [research/sector_constraint_negative_results.md](research/sector_constraint_negative_results.md) | NEGATIVE | 行业约束 — MDD 恶化 |
+
+---
+
+## 历史版本与审计
+
+| 文档 | 说明 |
+|------|------|
+| [PROJECT_DEEP_DIVE.md](PROJECT_DEEP_DIVE.md) | 项目技术深潜 |
+| [OVERFITTING_DIAGNOSIS_REPORT.md](OVERFITTING_DIAGNOSIS_REPORT.md) | 过拟合诊断报告 |
+| [FACTOR_EXPANSION_V42.md](FACTOR_EXPANSION_V42.md) | v4.2 因子扩展 |
+| [RELEASE_NOTES_V3_2.md](RELEASE_NOTES_V3_2.md) | v3.2 发布说明 |
+| [PRODUCTION_STRATEGIES_V3_2.md](PRODUCTION_STRATEGIES_V3_2.md) | v3.2 生产策略 |
+| [../reports/deep_review_final_report.md](../reports/deep_review_final_report.md) | 深度审阅报告 (6P0 + 8P1 + 9P2) |
+
+---
+
+## GPU 加速（实验性）
+
+| 文档 | 说明 |
+|------|------|
+| [GPU_OPTIMIZATION_GUIDE.md](GPU_OPTIMIZATION_GUIDE.md) | GPU IC 计算加速指南 |
+| [GPU_IMPLEMENTATION_SUMMARY.md](GPU_IMPLEMENTATION_SUMMARY.md) | GPU 实施总结 |
+
+---
+
+## 封存策略
 
 ```
--0927/
-├── src/                        # ⭐ 统一源码目录
-│   ├── etf_strategy/           # 核心策略模块
-│   │   ├── core/               # 核心引擎模块
-│   │   ├── auditor/            # BT 审计模块
-│   │   └── run_combo_wfo.py    # WFO 入口
-│   └── etf_data/               # 数据管理模块
-│
-├── scripts/                    # 工具脚本
-│   ├── batch_vec_backtest.py   # VEC 批量回测
-│   ├── batch_bt_backtest.py    # BT 批量回测
-│   ├── full_vec_bt_comparison.py # VEC/BT 对比验证
-│   └── cache_cleaner.py        # 缓存清理
-│
-├── configs/                    # 全局配置
-│   ├── etf_pools.yaml          # ETF 池配置
-│   ├── combo_wfo_config.yaml   # WFO 配置
-│   └── default.yaml            # 默认参数
-│
-├── raw/                        # 原始数据
-├── results/                    # 运行结果
-├── tests/                      # 测试
-└── docs/                       # 文档
+sealed_strategies/
+├── v3.1_20251216/     # FREQ=3 基线
+├── v3.4_20251220/     # 稳定版封板
+├── v4.0_20260131/     # 16因子正交集
+├── v4.1_20260203/     # cost model引入
+├── v4.2_20260205/     # 因子扩展
+├── v5.0_20260211/     # 当前生产版 (FREQ=5 + Exp4)
+└── c2_shadow_20260211/ # C2影子策略
 ```
 
 ---
 
-## 快速开始
+## 三层引擎快速导航
 
-### 1. 环境准备
-
-```bash
-# 安装依赖
-uv sync --dev
-uv pip install -e .
-
-# 验证环境
-./test_environment.sh
+```
+WFO (筛选)  →  VEC (精算)  →  BT (审计)
+FREQ=5         FREQ=5         FREQ=5
+Hysteresis ON  Hysteresis ON  Hysteresis ON
+~2 min         ~5 min         ~30-60 min
 ```
 
-### 2. 标准工作流
-
-```bash
-# 步骤 1: WFO 筛选（12,597 组合 → Top 100）
-uv run python src/etf_strategy/run_combo_wfo.py
-
-# 步骤 2: VEC 精算（Screening，仅 WFO 输出候选）
-uv run python scripts/run_full_space_vec_backtest.py
-
-# 步骤 3: Rolling + Holdout（无泄漏候选）
-uv run python scripts/final_triple_validation.py
-
-# 步骤 4: BT 审计（Ground Truth，含分段收益）
-uv run python scripts/batch_bt_backtest.py
-
-# 步骤 5: 封板归档（强烈建议每次交付都执行）
-uv run python scripts/seal_release.py --help
-
-# 可选: VEC/BT 对比验证单个组合
-uv run python scripts/full_vec_bt_comparison.py --combo "ADX_14D + CMF_20D + ..."
-```
-
-### 3. 清理缓存（重要）
-
-```bash
-# 每次重大修改后，建议清理缓存
-python scripts/cache_cleaner.py
-```
-
----
-
-## 核心参数（v3.0 生产配置）
-
-| 参数 | v3.0 生产值 | v1.0 旧值 | 说明 |
-|------|-------------|-----------|------|
-| `FREQ` | **3** | 8 | 调仓频率（交易日）|
-| `POS_SIZE` | **2** | 3 | 持仓数量 |
-| `INITIAL_CAPITAL` | 1,000,000 | 同 | 初始资金 |
-| `COMMISSION_RATE` | 0.0002 | 同 | 手续费率 |
-| `LOOKBACK` | 252 | 同 | 回看窗口 |
-
-> ⚠️ **重要**: v3.0 的 FREQ=3, POS=2 是经过完整回测验证的最优参数。
-> 详见 `docs/BEST_STRATEGY_43ETF_UNIFIED.md`
-
----
-
-## 相关文档
-
-- [架构与引擎对齐](ARCHITECTURE.md) - 引擎对齐与执行口径说明
-- [最佳策略 v3.0](BEST_STRATEGY_43ETF_UNIFIED.md) - 237.45% 收益策略详情
-- [ETF 池架构](ETF_POOL_ARCHITECTURE.md) - 43 ETF 池设计与 QDII 重要性
-- [开发注意事项](DEVELOPMENT_NOTES.md) - 开发规范与陷阱
-- [历史修复记录](VEC_BT_ALIGNMENT_HISTORY_AND_FIXES.md) - BUG 修复历史
-
----
-
-## 联系与维护
-
-- **仓库**: `zhangsensen/-0927`
-- **分支**: `refactor/unified-codebase-20251116`
-- **状态**: 🔒 v3.1 策略封板 | 237.45% 收益已验证
+**关键原则**: 任何新因子/信号必须在生产执行框架 (FREQ=5 + Exp4 + Regime Gate) 下评估。
