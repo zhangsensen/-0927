@@ -1357,7 +1357,7 @@ def main():
     backtest_config = config.get("backtest", {})
     FREQ = backtest_config.get("freq")
     POS_SIZE = backtest_config.get("pos_size")
-    LOOKBACK = backtest_config.get("lookback")
+    LOOKBACK = backtest_config.get("lookback") or backtest_config.get("lookback_window")
     INITIAL_CAPITAL = float(backtest_config.get("initial_capital"))
     COMMISSION_RATE = float(backtest_config.get("commission_rate"))
 
@@ -1456,6 +1456,51 @@ def main():
     tier = cost_model.active_tier
     print(f"   COST_ARR: A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
     factors_3d = cached["factors_3d"]
+    factor_names = list(factor_names)  # Convert to mutable list
+
+    # ── 加载外部因子 (parquet, 与 run_combo_wfo.py 一致) ──
+    _ext_factors_dir = config.get("combo_wfo", {}).get("extra_factors", {}).get("factors_dir", "")
+    if _ext_factors_dir:
+        from etf_strategy.core.cross_section_processor import CrossSectionProcessor
+        _ext_dir = Path(_ext_factors_dir)
+        if not _ext_dir.is_absolute():
+            _ext_dir = ROOT / _ext_dir
+        if _ext_dir.exists():
+            # Find factors referenced in combos but not in factor_names
+            _combo_factors = set()
+            for c in df_combos["combo"].tolist():
+                _combo_factors.update(f.strip() for f in c.split(" + "))
+            _missing = sorted(_combo_factors - set(factor_names))
+            if _missing:
+                print(f"🔧 加载 {len(_missing)} 个外部因子 (parquet): {_missing}")
+                cs_processor = CrossSectionProcessor(
+                    lower_percentile=config["cross_section"]["winsorize_lower"],
+                    upper_percentile=config["cross_section"]["winsorize_upper"],
+                    verbose=False,
+                )
+                for fname in _missing:
+                    fpath = _ext_dir / f"{fname}.parquet"
+                    if fpath.exists():
+                        fdf = pd.read_parquet(fpath)
+                        fdf.index = pd.to_datetime(fdf.index)
+                        fdf = fdf.reindex(dates)
+                        fdf = fdf[etf_codes] if all(c in fdf.columns for c in etf_codes) else fdf.reindex(columns=etf_codes)
+                        farr = fdf.values
+                        valid_ratio = np.isfinite(farr).sum() / farr.size if farr.size > 0 else 0
+                        if valid_ratio > 0.01:
+                            processed = cs_processor.process_all_factors({fname: fdf})
+                            fstd = processed[fname].values
+                            fstd = np.where(np.isfinite(fstd), fstd, 0.0)
+                            factors_3d = np.concatenate([factors_3d, fstd[:, :, np.newaxis]], axis=2)
+                            factor_names.append(fname)
+                            print(f"  ✓ {fname}: {valid_ratio*100:.1f}% valid")
+                        else:
+                            print(f"  ⚠️ {fname}: insufficient data ({valid_ratio*100:.1f}%)")
+                    else:
+                        print(f"  ⚠️ {fname}: file not found {fpath}")
+                T = factors_3d.shape[0]
+                N = factors_3d.shape[1]
+                print(f"  factors_3d shape: {factors_3d.shape} ({len(factor_names)} factors)")
 
     # ── 加载额外因子矩阵 (来自 factor mining prefilter) ──
     extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})

@@ -4,7 +4,7 @@
 功能:
   1. 对无界因子执行日期内横截面 Z-score 标准化
   2. 对无界因子执行 Winsorize 极值截断 (2.5%, 97.5%)
-  3. 对有界因子直接透传，不做任何处理
+  3. 对有界因子执行横截面 rank 标准化 (映射到 [-0.5, 0.5])
   4. 严格保留 NaN，不做任何填充
 
 工作流:
@@ -362,15 +362,19 @@ class CrossSectionProcessor:
 
             # 检查有界性
             if factor_name in self.BOUNDED_FACTORS:
-                # 有界因子：直接透传
-                processed_factors[factor_name] = factor_data
+                # 有界因子：横截面 rank 标准化 (映射到 [-0.5, 0.5])
+                # 不做 Winsorize (值已有界), 但需要 rank 以保证与 Z-scored 因子可比
+                ranked = factor_data.rank(axis=1, pct=True) - 0.5  # center at 0
+                # 保留原始 NaN
+                ranked = ranked.where(factor_data.notna())
+                processed_factors[factor_name] = ranked
                 if self.verbose:
-                    print(f"  ✓ {factor_name:20s} [有界] 直接透传")
+                    print(f"  ✓ {factor_name:20s} [有界] rank标准化 → [-0.5, 0.5]")
 
                 self.processing_report["factors_processed"].append(factor_name)
                 self.processing_report["nan_stats"][factor_name] = {
                     "original_nan_count": original_nan_count,
-                    "final_nan_count": original_nan_count,
+                    "final_nan_count": ranked.isna().sum().sum(),
                     "nan_preserved": True,
                 }
                 continue
@@ -488,9 +492,12 @@ class CrossSectionProcessor:
                 print(f"\n📊 处理因子: {factor_name}")
 
             if factor_name in self.BOUNDED_FACTORS:
-                processed_factors[factor_name] = factor_data
+                # 有界因子：横截面 rank 标准化 (与 process_all_factors 一致)
+                ranked = factor_data.rank(axis=1, pct=True) - 0.5
+                ranked = ranked.where(factor_data.notna())
+                processed_factors[factor_name] = ranked
                 if self.verbose:
-                    print(f"  ✓ {factor_name:20s} [有界] 直接透传")
+                    print(f"  ✓ {factor_name:20s} [有界] rank标准化 → [-0.5, 0.5]")
                 continue
 
             # Per-pool Z-score + Winsorize, then merge back

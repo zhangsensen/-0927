@@ -11,7 +11,7 @@ import hashlib
 import logging
 import pickle
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -284,3 +284,319 @@ class DataLoader:
             summary["coverage_ratio"][col] = 1 - (missing / total)
 
         return summary
+
+    # ------------------------------------------------------------------
+    # Non-OHLCV data loaders (fund_share, margin, fund_nav, FX)
+    # ------------------------------------------------------------------
+
+    @property
+    def _etf_root(self) -> Path:
+        """Return raw/ETF/ root dir (parent of daily/)."""
+        return self.data_dir.parent
+
+    @staticmethod
+    def _ts_code_to_etf_code(ts_code: str) -> str:
+        """Convert Tushare ts_code '159801.SZ' → bare code '159801'."""
+        return ts_code.split(".")[0]
+
+    def _get_trading_dates(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DatetimeIndex:
+        """Load OHLCV trading calendar as reference DatetimeIndex."""
+        ohlcv = self.load_ohlcv(start_date=start_date, end_date=end_date)
+        return ohlcv["close"].index
+
+    def load_fund_share(
+        self,
+        etf_codes: Optional[List[str]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        trading_dates: Optional[pd.DatetimeIndex] = None,
+    ) -> pd.DataFrame:
+        """Load fund share (份额) data for ETFs.
+
+        Args:
+            etf_codes: ETF codes to load (None = all available).
+            start_date: Start date 'YYYY-MM-DD'.
+            end_date: End date 'YYYY-MM-DD'.
+            trading_dates: Reference trading calendar. If None, derived from
+                OHLCV data.
+
+        Returns:
+            DataFrame with DatetimeIndex (trading dates), columns = ETF codes,
+            values = fd_share (float). Forward-filled for gaps.
+        """
+        share_dir = self._etf_root / "fund_share"
+        if not share_dir.exists():
+            raise FileNotFoundError(f"fund_share 目录不存在: {share_dir}")
+
+        parquet_files = sorted(share_dir.glob("fund_share_*.parquet"))
+        series_dict: Dict[str, pd.Series] = {}
+
+        for fp in parquet_files:
+            # Extract code from filename: fund_share_159801.parquet → 159801
+            code = fp.stem.replace("fund_share_", "").split(".")[0]
+            if etf_codes and code not in etf_codes:
+                continue
+
+            df = pd.read_parquet(fp)
+            if "trade_date" not in df.columns or "fd_share" not in df.columns:
+                logger.warning(f"fund_share {code}: 缺少必需列, 跳过")
+                continue
+
+            df["trade_date"] = pd.to_datetime(df["trade_date"])
+            df = df.set_index("trade_date").sort_index()
+            df = df[~df.index.duplicated(keep="last")]
+
+            if start_date:
+                df = df[df.index >= start_date]
+            if end_date:
+                df = df[df.index <= end_date]
+
+            series_dict[code] = df["fd_share"]
+
+        if not series_dict:
+            raise ValueError("没有加载到任何 fund_share 数据")
+
+        result = pd.DataFrame(series_dict)
+
+        # Align to trading calendar and forward fill
+        if trading_dates is None:
+            trading_dates = self._get_trading_dates(start_date, end_date)
+        result = result.reindex(trading_dates).ffill()
+
+        # Sort columns for reproducibility
+        result = result[sorted(result.columns)]
+        logger.info(
+            f"fund_share 加载完成: {len(result.columns)} ETFs × {len(result)} 日期, "
+            f"NaN率 {result.isna().mean().mean():.1%}"
+        )
+        return result
+
+    def load_margin(
+        self,
+        field: str = "rzye",
+        etf_codes: Optional[List[str]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        trading_dates: Optional[pd.DatetimeIndex] = None,
+    ) -> pd.DataFrame:
+        """Load margin trading data (融资融券).
+
+        Args:
+            field: Margin field to load. One of: rzye (融资余额), rqye (融券余额),
+                rzmre (融资买入额), rqyl (融券余量), rzche (融资偿还额),
+                rqchl (融券偿还量), rqmcl (融券卖出量), rzrqye (融资融券余额).
+            etf_codes: ETF codes to filter (None = all available).
+            start_date: Start date 'YYYY-MM-DD'.
+            end_date: End date 'YYYY-MM-DD'.
+            trading_dates: Reference trading calendar.
+
+        Returns:
+            DataFrame with DatetimeIndex, columns = ETF codes, values = field.
+            Forward-filled. ETFs without margin data have NaN columns.
+        """
+        valid_fields = [
+            "rzye", "rqye", "rzmre", "rqyl", "rzche", "rqchl", "rqmcl", "rzrqye",
+        ]
+        if field not in valid_fields:
+            raise ValueError(f"无效字段 '{field}', 可选: {valid_fields}")
+
+        margin_file = self._etf_root / "margin" / "margin_pool43_2020_now.parquet"
+        if not margin_file.exists():
+            raise FileNotFoundError(f"margin 文件不存在: {margin_file}")
+
+        df = pd.read_parquet(margin_file)
+
+        # trade_date is string 'YYYYMMDD'
+        df["trade_date"] = pd.to_datetime(df["trade_date"], format="%Y%m%d")
+        df["etf_code"] = df["ts_code"].apply(self._ts_code_to_etf_code)
+
+        if start_date:
+            df = df[df["trade_date"] >= start_date]
+        if end_date:
+            df = df[df["trade_date"] <= end_date]
+
+        # Pivot to wide format: date x etf_code
+        pivot = df.pivot_table(
+            index="trade_date", columns="etf_code", values=field, aggfunc="last"
+        )
+        pivot = pivot.sort_index()
+
+        if etf_codes:
+            # Keep only requested codes; missing ones become NaN columns
+            pivot = pivot.reindex(columns=sorted(etf_codes))
+        else:
+            pivot = pivot[sorted(pivot.columns)]
+
+        # Align to trading calendar and forward fill
+        if trading_dates is None:
+            trading_dates = self._get_trading_dates(start_date, end_date)
+        pivot = pivot.reindex(trading_dates).ffill()
+
+        logger.info(
+            f"margin({field}) 加载完成: {len(pivot.columns)} ETFs × {len(pivot)} 日期, "
+            f"NaN率 {pivot.isna().mean().mean():.1%}"
+        )
+        return pivot
+
+    def load_fund_nav(
+        self,
+        field: str = "unit_nav",
+        etf_codes: Optional[List[str]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        trading_dates: Optional[pd.DatetimeIndex] = None,
+    ) -> pd.DataFrame:
+        """Load fund NAV data aligned by ann_date (publication date).
+
+        CRITICAL: Uses ann_date (T+1 publication) as index, NOT trade_date,
+        to prevent lookahead bias. The NAV for trade_date T is published on
+        ann_date T+1, so using ann_date ensures we only see data that was
+        actually available at each point in time.
+
+        Args:
+            field: NAV field to load. One of: unit_nav, adj_nav, accum_nav,
+                total_netasset, net_asset.
+            etf_codes: ETF codes to load (None = all available).
+            start_date: Start date 'YYYY-MM-DD'.
+            end_date: End date 'YYYY-MM-DD'.
+            trading_dates: Reference trading calendar.
+
+        Returns:
+            DataFrame with DatetimeIndex (aligned to ann_date), columns = ETF
+            codes, values = requested NAV field. Forward-filled.
+        """
+        valid_fields = ["unit_nav", "adj_nav", "accum_nav", "total_netasset", "net_asset"]
+        if field not in valid_fields:
+            raise ValueError(f"无效字段 '{field}', 可选: {valid_fields}")
+
+        nav_dir = self._etf_root / "fund_nav"
+        if not nav_dir.exists():
+            raise FileNotFoundError(f"fund_nav 目录不存在: {nav_dir}")
+
+        parquet_files = sorted(nav_dir.glob("fund_nav_*.parquet"))
+        series_dict: Dict[str, pd.Series] = {}
+
+        for fp in parquet_files:
+            code = fp.stem.replace("fund_nav_", "").split(".")[0]
+            if etf_codes and code not in etf_codes:
+                continue
+
+            df = pd.read_parquet(fp)
+            if "ann_date" not in df.columns:
+                logger.warning(f"fund_nav {code}: 缺少 ann_date 列, 跳过")
+                continue
+            if field not in df.columns:
+                logger.warning(f"fund_nav {code}: 缺少 {field} 列, 跳过")
+                continue
+
+            # Use ann_date as index to prevent lookahead
+            df["ann_date"] = pd.to_datetime(df["ann_date"], format="%Y%m%d")
+            df = df.set_index("ann_date").sort_index()
+            df = df[~df.index.duplicated(keep="last")]
+
+            if start_date:
+                df = df[df.index >= start_date]
+            if end_date:
+                df = df[df.index <= end_date]
+
+            series_dict[code] = df[field]
+
+        if not series_dict:
+            raise ValueError("没有加载到任何 fund_nav 数据")
+
+        result = pd.DataFrame(series_dict)
+
+        # Align to trading calendar and forward fill
+        if trading_dates is None:
+            trading_dates = self._get_trading_dates(start_date, end_date)
+        result = result.reindex(trading_dates).ffill()
+
+        result = result[sorted(result.columns)]
+        logger.info(
+            f"fund_nav({field}) 加载完成: {len(result.columns)} ETFs × {len(result)} 日期, "
+            f"NaN率 {result.isna().mean().mean():.1%}"
+        )
+        return result
+
+    def load_fx(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        trading_dates: Optional[pd.DatetimeIndex] = None,
+    ) -> pd.DataFrame:
+        """Load FX rate data (USDCNH, USDCNY, HKDCNY).
+
+        Sources:
+        - USDCNH: Tushare fx_daily bid_close (offshore CNH rate)
+        - USDCNY: BOC中间价 (onshore CNY rate, 美元 column / 100)
+        - HKDCNY: BOC中间价 (港元 column / 100)
+
+        Args:
+            start_date: Start date 'YYYY-MM-DD'.
+            end_date: End date 'YYYY-MM-DD'.
+            trading_dates: Reference trading calendar.
+
+        Returns:
+            DataFrame with DatetimeIndex, columns = ['USDCNH', 'USDCNY', 'HKDCNY'].
+            Forward-filled for non-trading days (FX and A-share calendars differ).
+        """
+        fx_dir = self._etf_root / "fx"
+        if not fx_dir.exists():
+            raise FileNotFoundError(f"FX 目录不存在: {fx_dir}")
+
+        series_dict: Dict[str, pd.Series] = {}
+
+        # 1. USDCNH from Tushare fx_daily
+        usdcnh_file = fx_dir / "usdcnh_daily.parquet"
+        if usdcnh_file.exists():
+            df = pd.read_parquet(usdcnh_file)
+            df["trade_date"] = pd.to_datetime(df["trade_date"], format="%Y%m%d")
+            df = df.set_index("trade_date").sort_index()
+            df = df[~df.index.duplicated(keep="last")]
+            if "bid_close" in df.columns:
+                series_dict["USDCNH"] = df["bid_close"]
+            else:
+                logger.warning("usdcnh_daily.parquet 缺少 bid_close 列")
+        else:
+            logger.warning(f"USDCNH 文件不存在: {usdcnh_file}")
+
+        # 2. BOC FX (USDCNY, HKDCNY)
+        boc_file = fx_dir / "boc_fx_daily.parquet"
+        if boc_file.exists():
+            df = pd.read_parquet(boc_file)
+            df["trade_date"] = pd.to_datetime(df["trade_date"], format="%Y%m%d")
+            df = df.set_index("trade_date").sort_index()
+            df = df[~df.index.duplicated(keep="last")]
+            # BOC rates are per 100 foreign currency → divide by 100
+            if "美元" in df.columns:
+                series_dict["USDCNY"] = df["美元"] / 100.0
+            if "港元" in df.columns:
+                series_dict["HKDCNY"] = df["港元"] / 100.0
+        else:
+            logger.warning(f"BOC FX 文件不存在: {boc_file}")
+
+        if not series_dict:
+            raise ValueError("没有加载到任何 FX 数据")
+
+        result = pd.DataFrame(series_dict)
+
+        # Date filter
+        if start_date:
+            result = result[result.index >= start_date]
+        if end_date:
+            result = result[result.index <= end_date]
+
+        # Align to trading calendar and forward fill
+        if trading_dates is None:
+            trading_dates = self._get_trading_dates(start_date, end_date)
+        result = result.reindex(trading_dates).ffill()
+
+        logger.info(
+            f"FX 加载完成: {list(result.columns)}, {len(result)} 日期, "
+            f"NaN率 {result.isna().mean().mean():.1%}"
+        )
+        return result

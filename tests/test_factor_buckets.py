@@ -40,9 +40,9 @@ class TestBucketMapping:
         for f in ACTIVE_FACTORS_V50:
             assert f in FACTOR_TO_BUCKET, f"{f} not mapped to any bucket"
 
-    def test_five_buckets(self):
-        """恰好 5 个桶."""
-        assert len(FACTOR_BUCKETS) == 5
+    def test_bucket_count(self):
+        """7 个桶: 5 OHLCV + 2 non-OHLCV (FUND_FLOW, LEVERAGE)."""
+        assert len(FACTOR_BUCKETS) == 7
 
     def test_no_duplicate_factors(self):
         """每个因子只属于一个桶."""

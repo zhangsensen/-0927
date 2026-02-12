@@ -1,39 +1,81 @@
 """
 精确因子库 v2 | Precise Factor Library v2
 ================================================================================
-根据CANDIDATE_FACTORS_PRECISE_DEFINITION.md精确定义实现的因子库
+ETF轮动策略多维因子库，覆盖OHLCV价量因子和非OHLCV另类因子。
 
 核心设计原则：
 1. 严格遵循精确定义：公式、缺失处理、极值规则
 2. 缺失值处理：原始缺失→保留NaN；满窗不足→NaN（无向前填充）
 3. 标准化位置：WFO内完成（不在生成阶段）
-4. 极值截断：2.5%/97.5%分位（有界因子跳过）
-5. 避免冗余：12-15个精选因子，遵循互斥规则
+4. 极值截断：2.5%/97.5%分位（有界因子跳过rank标准化）
+5. 非OHLCV因子通过外部预计算parquet加载，与OHLCV因子在WFO中统一标准化
 
-【首批精选因子】
-维度 1 - 趋势/动量 (2个):
-  ✓ MOM_20D          - 20日动量百分比
-  ✓ SLOPE_20D        - 20日线性回归斜率
+因子总览: 40个注册因子, 24个生产活跃, 7个信息维度桶
+========================================================================
 
-维度 2 - 价格位置 (2个):
-  ✓ PRICE_POSITION_20D   - 20日价格位置（有界）
-  ✓ PRICE_POSITION_120D  - 120日价格位置（有界）
+OHLCV因子 (34个注册, 18个活跃) — 数据源: raw/ETF/daily/
+------------------------------------------------------------------------
+桶A 趋势/动量 (6):
+  ★ MOM_20D              20日动量百分比
+  ★ SLOPE_20D            20日线性回归斜率 [S1成员]
+  ★ SHARPE_RATIO_20D     20日夏普比率 [S1成员]
+  ★ BREAKOUT_20D         20日突破信号
+  ★ VORTEX_14D           14日涡旋指标
+    PRICE_POSITION_20D   20日价格位置 [有界0-1]
 
-维度 3 - 波动率 (2个):
-  ✓ RET_VOL_20D      - 20日收益波动率
-  ✓ MAX_DD_60D       - 60日最大回撤
+桶B 持续位置 (2):
+    PRICE_POSITION_120D  120日价格位置 [有界0-1]
+  ★ CALMAR_RATIO_60D     60日卡玛比率 [C2成员]
 
-维度 4 - 成交量 (2个):
-  ✓ VOL_RATIO_20D    - 20日成交量比率
-  ✓ VOL_RATIO_60D    - 60日成交量比率（中期）
+桶C 量能确认 (3):
+  ★ OBV_SLOPE_10D        OBV斜率 [S1成员]
+  ★ UP_DOWN_VOL_RATIO_20D 上涨量/下跌量比
+    CMF_20D              Chaikin资金流 [有界-1~1]
 
-维度 5 - 价量耦合 (1个):
-  ✓ PV_CORR_20D      - 20日价量相关性
+桶D 微观结构 (3):
+    PV_CORR_20D          价量相关性 [有界-1~1]
+  ★ AMIHUD_ILLIQUIDITY   Amihud非流动性 [C2成员]
+  ★ GK_VOL_RATIO_20D     GK波动率比
 
-维度 6 - 反转 (1个):
-  ✓ RSI_14           - 14日相对强度指数
+桶E 趋势强度/风险 (4):
+  ★ ADX_14D              趋势强度 [S1成员, 有界0-100]
+  ★ CORRELATION_TO_MARKET_20D 市场相关性 [C2成员, 有界-1~1]
+  ★ MAX_DD_60D           60日最大回撤
+  ★ VOL_RATIO_20D        波动率比率
 
-=================================================================
+未入桶 (16个注册未活跃):
+    RET_VOL_20D, VOL_RATIO_60D, RSI_14, RELATIVE_STRENGTH_VS_MARKET_20D,
+    TSMOM_60D, TSMOM_120D, TURNOVER_ACCEL_5_20, REALIZED_VOL_20D,
+    SPREAD_PROXY, SKEW_20D, KURT_20D, INFO_DISCRETE_20D, IBS,
+    MEAN_REV_RATIO_20D, ABNORMAL_VOLUME_20D, ULCER_INDEX_20D,
+    DD_DURATION_60D, PERM_ENTROPY_20D, HURST_60D, DOWNSIDE_DEV_20D
+
+非OHLCV因子 (6个注册, 6个活跃) — 数据源: raw/ETF/fund_share/, margin/
+------------------------------------------------------------------------
+桶F 资金流向 (4): IC来源=基金份额申赎行为
+  ★ SHARE_CHG_5D         5日份额变化率    IC=-0.050 (反向)
+  ★ SHARE_CHG_10D        10日份额变化率   IC=-0.056 (最强)
+  ★ SHARE_CHG_20D        20日份额变化率   IC=-0.047 (反向)
+  ★ SHARE_ACCEL          份额变化加速度   IC=+0.034 (正向, 拐点信号)
+
+桶G 杠杆行为 (2): IC来源=融资融券数据
+  ★ MARGIN_CHG_10D       10日融资余额变化 IC=-0.047 (反向)
+  ★ MARGIN_BUY_RATIO     融资买入占比     IC=-0.031 (反向)
+
+有界因子 (跳过Winsorize, 使用rank标准化):
+  ADX_14D[0,100], CMF_20D[-1,1], CORRELATION_TO_MARKET_20D[-1,1],
+  PRICE_POSITION_20D[0,1], PRICE_POSITION_120D[0,1], PV_CORR_20D[-1,1], RSI_14[0,100]
+
+生产策略:
+  S1 = ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D (桶A+C+E)
+  C2 = AMIHUD_ILLIQUIDITY + CALMAR_RATIO_60D + CORRELATION_TO_MARKET_20D (桶B+D+E)
+
+API:
+  compute_all_factors(prices)           → Dict[str, DataFrame]  # OHLCV因子
+  compute_non_ohlcv_factors(prices, fund_share, margin) → Dict[str, DataFrame]  # 非OHLCV因子
+  get_metadata(name)                    → FactorMetadata
+  list_factors()                        → Dict[str, FactorMetadata]
+========================================================================
 """
 
 import logging
@@ -889,6 +931,62 @@ class PreciseFactorLibrary:
                 bounded=False,
                 direction="low_is_good",
                 orthogonal_v1=False,
+            ),
+            # ── 非OHLCV因子: 资金流向 (fund_share) ──
+            "SHARE_CHG_5D": FactorMetadata(
+                name="SHARE_CHG_5D",
+                description="5日份额变化率（反向: 份额减少→收益高）",
+                dimension="资金流向",
+                required_columns=["fund_share"],
+                window=5,
+                bounded=False,
+                direction="low_is_good",
+            ),
+            "SHARE_CHG_10D": FactorMetadata(
+                name="SHARE_CHG_10D",
+                description="10日份额变化率（反向: 份额减少→收益高）",
+                dimension="资金流向",
+                required_columns=["fund_share"],
+                window=10,
+                bounded=False,
+                direction="low_is_good",
+            ),
+            "SHARE_CHG_20D": FactorMetadata(
+                name="SHARE_CHG_20D",
+                description="20日份额变化率（反向: 份额减少→收益高）",
+                dimension="资金流向",
+                required_columns=["fund_share"],
+                window=20,
+                bounded=False,
+                direction="low_is_good",
+            ),
+            "SHARE_ACCEL": FactorMetadata(
+                name="SHARE_ACCEL",
+                description="份额变化加速度（短期变化-长期变化）",
+                dimension="资金流向",
+                required_columns=["fund_share"],
+                window=20,
+                bounded=False,
+                direction="high_is_good",
+            ),
+            # ── 非OHLCV因子: 杠杆行为 (margin) ──
+            "MARGIN_CHG_10D": FactorMetadata(
+                name="MARGIN_CHG_10D",
+                description="10日融资余额变化率（反向: 融资减少→收益高）",
+                dimension="杠杆行为",
+                required_columns=["margin_rzye"],
+                window=10,
+                bounded=False,
+                direction="low_is_good",
+            ),
+            "MARGIN_BUY_RATIO": FactorMetadata(
+                name="MARGIN_BUY_RATIO",
+                description="融资买入占比（反向: 融资买入少→收益高）",
+                dimension="杠杆行为",
+                required_columns=["margin_rzmre", "close", "volume"],
+                window=1,
+                bounded=False,
+                direction="low_is_good",
             ),
         }
 
@@ -2160,6 +2258,88 @@ class PreciseFactorLibrary:
         logger.info(
             f"✅ 计算完成: {len(symbols)}个标的 × {len(self.factors_metadata)}个因子"
         )
+
+        return result
+
+    def compute_non_ohlcv_factors(
+        self,
+        prices: Dict[str, pd.DataFrame],
+        fund_share_panel: Optional[pd.DataFrame] = None,
+        margin_panels: Optional[Dict[str, pd.DataFrame]] = None,
+    ) -> Dict[str, pd.DataFrame]:
+        """Compute non-OHLCV factors from fund_share and margin data.
+
+        Args:
+            prices: OHLCV price dict (needs 'close' and 'volume' for MARGIN_BUY_RATIO)
+            fund_share_panel: DatetimeIndex x ETF codes, fund share data (亿份)
+            margin_panels: {'rzye': DataFrame, 'rzmre': DataFrame} margin data
+
+        Returns:
+            Dict of {factor_name: pd.DataFrame} with same index/columns as inputs.
+            Only includes factors whose input data is available.
+        """
+        result: Dict[str, pd.DataFrame] = {}
+        eps = 1e-10
+
+        # ── Fund share factors ──
+        if fund_share_panel is not None and not fund_share_panel.empty:
+            fd = fund_share_panel
+
+            share_chg_5d = (fd - fd.shift(5)) / (fd.shift(5) + eps)
+            share_chg_5d = share_chg_5d.where(fd.shift(5).abs() > eps, np.nan)
+            result["SHARE_CHG_5D"] = share_chg_5d
+
+            share_chg_10d = (fd - fd.shift(10)) / (fd.shift(10) + eps)
+            share_chg_10d = share_chg_10d.where(fd.shift(10).abs() > eps, np.nan)
+            result["SHARE_CHG_10D"] = share_chg_10d
+
+            share_chg_20d = (fd - fd.shift(20)) / (fd.shift(20) + eps)
+            share_chg_20d = share_chg_20d.where(fd.shift(20).abs() > eps, np.nan)
+            result["SHARE_CHG_20D"] = share_chg_20d
+
+            result["SHARE_ACCEL"] = share_chg_5d - share_chg_20d
+
+            logger.info(
+                f"Computed 4 fund_share factors: "
+                f"{fd.shape[1]} ETFs, {fd.notna().any(axis=1).sum()} trading days"
+            )
+
+        # ── Margin factors ──
+        if margin_panels is not None:
+            rzye = margin_panels.get("rzye")
+            rzmre = margin_panels.get("rzmre")
+
+            if rzye is not None and not rzye.empty:
+                margin_chg_10d = (rzye - rzye.shift(10)) / (rzye.shift(10) + eps)
+                margin_chg_10d = margin_chg_10d.where(rzye.shift(10).abs() > eps, np.nan)
+                result["MARGIN_CHG_10D"] = margin_chg_10d
+
+                logger.info(
+                    f"Computed MARGIN_CHG_10D: "
+                    f"{rzye.shape[1]} ETFs, {rzye.notna().any(axis=1).sum()} trading days"
+                )
+
+            if rzmre is not None and not rzmre.empty:
+                close = prices.get("close")
+                volume = prices.get("volume")
+                if close is not None and volume is not None:
+                    turnover = close * volume
+                    # Align rzmre to turnover index/columns
+                    common_cols = sorted(set(rzmre.columns) & set(turnover.columns))
+                    common_idx = rzmre.index.intersection(turnover.index)
+                    if common_cols and len(common_idx) > 0:
+                        rzmre_aligned = rzmre.loc[common_idx, common_cols]
+                        turnover_aligned = turnover.loc[common_idx, common_cols]
+                        margin_buy_ratio = rzmre_aligned / (turnover_aligned + eps)
+                        margin_buy_ratio = margin_buy_ratio.where(
+                            turnover_aligned.abs() > eps, np.nan
+                        )
+                        result["MARGIN_BUY_RATIO"] = margin_buy_ratio
+
+                        logger.info(
+                            f"Computed MARGIN_BUY_RATIO: "
+                            f"{len(common_cols)} ETFs, {len(common_idx)} trading days"
+                        )
 
         return result
 

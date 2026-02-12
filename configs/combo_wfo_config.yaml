@@ -171,6 +171,9 @@ combo_wfo:
   step_size: 60
   top_n: 100000
   verbose: true
+  # 外部因子 (非OHLCV): 从预计算parquet加载
+  extra_factors:
+    factors_dir: results/non_ohlcv_factors
   # 跨桶约束: 基于因子截面相关性分桶, 强制组合跨维度选择
   # 默认关闭; 启用后组合空间约减半, 搜索密度翻倍
   bucket_constraints:
@@ -261,13 +264,16 @@ data:
   - '518880'
   - '588000'
   - '588200'
-# 正交因子集 v3: 17→18, 基于折溢价因子相关性分析
+# 正交因子集 v4: 17→23, 加入非OHLCV因子 (fund_share + margin)
 # 变更 (2026-02-12):
-#   +PREMIUM_DEVIATION_20D  (IC=-0.107, 与现有17因子平均|ρ|=0.18, 独立性良好)
-#   数据覆盖: 2025-02起有效 (约50天训练数据可用)
-#   因子方向: 反向 (高溢价→低收益)
+#   v3: PREMIUM_DEVIATION_20D removed (no implementation, IC screening FAILED)
+#   v4: +6 non-OHLCV factors from IC screening (all |IC|>0.03, HO stable)
+#     SHARE_CHG_5D/10D/20D, SHARE_ACCEL (fund_share), MARGIN_CHG_10D, MARGIN_BUY_RATIO (margin)
+#     These factors are loaded via extra_factors mechanism from pre-computed parquets.
+#     Run: uv run python scripts/precompute_non_ohlcv_factors.py
 # 修改此列表即可扩缩搜索空间，无需改代码
 active_factors:
+  # OHLCV-derived (18 factors)
   - ADX_14D
   - AMIHUD_ILLIQUIDITY
   - BREAKOUT_20D
@@ -277,7 +283,7 @@ active_factors:
   - MAX_DD_60D
   - MOM_20D
   - OBV_SLOPE_10D
-  - PREMIUM_DEVIATION_20D
+  # PREMIUM_DEVIATION_20D removed: no implementation in factor library, IC screening FAILED
   - PRICE_POSITION_20D
   - PRICE_POSITION_120D
   - PV_CORR_20D
@@ -286,6 +292,14 @@ active_factors:
   - UP_DOWN_VOL_RATIO_20D
   - VOL_RATIO_20D
   - VORTEX_14D
+  # Non-OHLCV: fund_share (4 factors, IC screening 2026-02-12)
+  - SHARE_CHG_5D
+  - SHARE_CHG_10D
+  - SHARE_CHG_20D
+  - SHARE_ACCEL
+  # Non-OHLCV: margin (2 factors, IC screening 2026-02-12)
+  - MARGIN_CHG_10D
+  - MARGIN_BUY_RATIO
 output_root: results_combo_wfo
 run_id: COMBO_WFO_DEEP_MINING
 selection:

@@ -1,14 +1,25 @@
 """
-因子分桶映射 (基于截面 Rank 相关性矩阵, 2026-02-11 验证)
+因子分桶映射 — 7维信息桶 (5 OHLCV + 2 非OHLCV)
+
+分桶总览:
+  A: TREND_MOMENTUM (6)      趋势/动量 — PC1核心, 内部相关0.47-0.87
+  B: SUSTAINED_POSITION (2)  持续位置/长期趋势 — 与A中等相关
+  C: VOLUME_CONFIRMATION (3) 量能确认 — OBV较正交
+  D: MICROSTRUCTURE (3)      微观结构/流动性 — 各自独立
+  E: TREND_STRENGTH_RISK (4) 趋势强度/风险 — ADX近乎纯正交
+  F: FUND_FLOW (4)           资金流向 — 基金份额申赎 (非OHLCV, 2026-02-12)
+  G: LEVERAGE (2)            杠杆行为 — 融资融券数据 (非OHLCV, 2026-02-12)
 
 设计原则:
   - 同桶内因子高度相关 (>0.4), 选1-2个即可饱和该维度
   - 跨桶因子低相关 (<0.3), 组合跨桶选才能获取正交信息
-  - 分桶依据: PCA + 截面 rank 相关性矩阵 (results/alpha_dimension_analysis/)
+  - A-E基于PCA + 截面rank相关性矩阵 (results/alpha_dimension_analysis/)
+  - F-G基于IC screening, 与OHLCV因子正交 (不同数据源)
 
 用途:
-  - WFO 组合生成时加跨桶约束, 提高搜索效率
+  - WFO 组合生成时加跨桶约束 (min_buckets=3, max_per_bucket=2)
   - 因子选择可解释性: 明确组合覆盖了哪些信息维度
+  - S1 覆盖 A+C+E (3桶), C2 覆盖 B+D+E (3桶)
 """
 
 from __future__ import annotations
@@ -62,6 +73,26 @@ FACTOR_BUCKETS: Dict[str, List[str]] = {
         "MAX_DD_60D",               # 最大回撤 — 与趋势桶负相关 -0.21~-0.52
         "VOL_RATIO_20D",            # 波动率变化 — 弱相关 0.02-0.20
     ],
+
+    # ─── Non-OHLCV 桶 (2026-02-12 IC screening) ─────────────────────
+
+    # Bucket F: 基金份额变动 (fund_share)
+    # 与 OHLCV 因子正交: 衡量申赎行为, 非价格/量能信号
+    # IC 方向: 负 (份额减少→看涨, 逆向信号)
+    "FUND_FLOW": [
+        "SHARE_CHG_5D",         # 5日份额变化  IC=-0.050
+        "SHARE_CHG_10D",        # 10日份额变化 IC=-0.056 (最强)
+        "SHARE_CHG_20D",        # 20日份额变化 IC=-0.047
+        "SHARE_ACCEL",          # 份额加速度   IC=+0.034 (唯一正向)
+    ],
+
+    # Bucket G: 杠杆/融资 (margin)
+    # 与 OHLCV 因子正交: 衡量杠杆资金行为
+    # IC 方向: 负 (融资减少/买入占比低→看涨, 逆向信号)
+    "LEVERAGE": [
+        "MARGIN_CHG_10D",       # 10日融资余额变化 IC=-0.047
+        "MARGIN_BUY_RATIO",     # 融资买入占比     IC=-0.031
+    ],
 }
 
 # 反向映射: 因子 → 桶名
@@ -72,13 +103,13 @@ for bucket_name, factors in FACTOR_BUCKETS.items():
 
 # ─── S1 覆盖分析 ─────────────────────────────────────────────────
 # S1 = SLOPE(A) + SHARPE(A) + OBV(C) + ADX(E)
-# 覆盖: A + C + E = 3/5 桶
-# 缺失: B (持续位置), D (微观结构)
-# → S2 加了 PP_120D 补了 B, 但 D 仍空白
+# 覆盖: A + C + E = 3/7 桶 (OHLCV only)
+# 缺失: B (持续位置), D (微观结构), F (基金份额), G (杠杆)
+# → 跨信息源组合可覆盖 F/G, 提供真正正交的非OHLCV维度
 
 # 冠军 = AMIHUD(D) + PP_20D(A) + PV_CORR(D) + SLOPE(A)
-# 覆盖: A + D = 2/5 桶
-# 缺失: B, C, E → 缺量能确认和趋势强度, 执行框架下不稳定
+# 覆盖: A + D = 2/7 桶
+# 缺失: B, C, E, F, G → 缺量能确认和趋势强度, 执行框架下不稳定
 
 
 def register_extra_factors(mapping: Dict[str, str]) -> None:

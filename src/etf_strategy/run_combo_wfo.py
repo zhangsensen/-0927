@@ -206,8 +206,8 @@ def main():
                             factor_arr, index=dates, columns=etf_codes
                         )
                         cs_processor = CrossSectionProcessor(
-                            lower_percentile=config["cross_section"]["winsorize_lower"],
-                            upper_percentile=config["cross_section"]["winsorize_upper"],
+                            lower_percentile=config["cross_section"]["winsorize_lower"] * 100,
+                            upper_percentile=config["cross_section"]["winsorize_upper"] * 100,
                             verbose=False,
                         )
                         processed = cs_processor.process_all_factors(
