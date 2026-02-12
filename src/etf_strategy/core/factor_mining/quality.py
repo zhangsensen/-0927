@@ -27,7 +27,7 @@ from scipy import stats
 logger = logging.getLogger(__name__)
 
 # 常量
-FREQ = 3
+DEFAULT_FREQ = 5  # 默认改为生产级频率，保持向后兼容可通过参数覆盖
 IC_HORIZONS = [1, 3, 5, 10, 20]
 QDII_CODES = {"513100", "513500", "159920", "513050", "513130"}
 ROLLING_IC_WINDOW = 120
@@ -93,9 +93,17 @@ class FactorQualityReport:
             if isinstance(v, (np.floating, np.integer)):
                 d[k] = float(v)
             elif isinstance(v, dict):
-                d[k] = {str(kk): float(vv) if isinstance(vv, (np.floating, np.integer)) else vv for kk, vv in v.items()}
+                d[k] = {
+                    str(kk): float(vv)
+                    if isinstance(vv, (np.floating, np.integer))
+                    else vv
+                    for kk, vv in v.items()
+                }
             elif isinstance(v, list):
-                d[k] = [float(x) if isinstance(x, (np.floating, np.integer)) else x for x in v]
+                d[k] = [
+                    float(x) if isinstance(x, (np.floating, np.integer)) else x
+                    for x in v
+                ]
             else:
                 d[k] = v
         return d
@@ -159,7 +167,7 @@ class FactorQualityAnalyzer:
         self,
         close: pd.DataFrame,
         regime_series: Optional[pd.Series] = None,
-        freq: int = FREQ,
+        freq: int = DEFAULT_FREQ,
     ):
         """
         参数:
@@ -203,7 +211,9 @@ class FactorQualityAnalyzer:
         # --- 1. IC 分析 ---
         ic_s = spearman_ic_series(factor_df, self.fwd_ret)
         if len(ic_s) < 30:
-            logger.warning("Factor %s: IC series too short (%d), skipping", factor_name, len(ic_s))
+            logger.warning(
+                "Factor %s: IC series too short (%d), skipping", factor_name, len(ic_s)
+            )
             return report
 
         report.mean_ic = float(ic_s.mean())
@@ -211,11 +221,19 @@ class FactorQualityAnalyzer:
         report.ic_ir = report.mean_ic / report.std_ic if report.std_ic > 1e-10 else 0.0
         report.hit_rate = float((ic_s > 0).mean())
         report.n_obs = len(ic_s)
-        report.t_stat = report.mean_ic / (report.std_ic / np.sqrt(len(ic_s))) if report.std_ic > 1e-10 else 0.0
-        report.p_value = float(2 * (1 - stats.t.cdf(abs(report.t_stat), df=len(ic_s) - 1)))
+        report.t_stat = (
+            report.mean_ic / (report.std_ic / np.sqrt(len(ic_s)))
+            if report.std_ic > 1e-10
+            else 0.0
+        )
+        report.p_value = float(
+            2 * (1 - stats.t.cdf(abs(report.t_stat), df=len(ic_s) - 1))
+        )
 
         # --- 2. 单调性 (三等分组) ---
-        report.monotonicity_score, report.tercile_returns = self._monotonicity(factor_df)
+        report.monotonicity_score, report.tercile_returns = self._monotonicity(
+            factor_df
+        )
 
         # --- 3. 稳定性 (滚动 IC) ---
         if len(ic_s) >= ROLLING_IC_WINDOW:
@@ -230,7 +248,9 @@ class FactorQualityAnalyzer:
             ic_h = spearman_ic_series(factor_df, fwd_h)
             report.ic_by_horizon[h] = float(ic_h.mean()) if len(ic_h) > 0 else 0.0
         if report.ic_by_horizon:
-            report.best_horizon = max(report.ic_by_horizon, key=lambda k: abs(report.ic_by_horizon[k]))
+            report.best_horizon = max(
+                report.ic_by_horizon, key=lambda k: abs(report.ic_by_horizon[k])
+            )
 
         # --- 5. 换手率 (rank autocorrelation) ---
         report.rank_autocorrelation = self._rank_autocorrelation(factor_df)
@@ -238,9 +258,15 @@ class FactorQualityAnalyzer:
         # --- 6. NaN 覆盖 ---
         valid_counts = factor_df.notna().sum(axis=1)
         total_cols = factor_df.shape[1]
-        report.nan_rate = float(1 - valid_counts.mean() / total_cols) if total_cols > 0 else 1.0
-        report.min_valid_per_date = int(valid_counts.min()) if len(valid_counts) > 0 else 0
-        report.mean_valid_per_date = float(valid_counts.mean()) if len(valid_counts) > 0 else 0.0
+        report.nan_rate = (
+            float(1 - valid_counts.mean() / total_cols) if total_cols > 0 else 1.0
+        )
+        report.min_valid_per_date = (
+            int(valid_counts.min()) if len(valid_counts) > 0 else 0
+        )
+        report.mean_valid_per_date = (
+            float(valid_counts.mean()) if len(valid_counts) > 0 else 0.0
+        )
 
         # --- 7. 市场环境 IC ---
         if self.regime_series is not None:
@@ -270,7 +296,9 @@ class FactorQualityAnalyzer:
 
         # --- 10. 综合评分 ---
         report.quality_score = self._compute_score(report, production_ready)
-        report.passed = report.quality_score >= PASS_THRESHOLD and report.nan_rate <= MAX_NAN_RATE
+        report.passed = (
+            report.quality_score >= PASS_THRESHOLD and report.nan_rate <= MAX_NAN_RATE
+        )
 
         return report
 
@@ -331,7 +359,9 @@ class FactorQualityAnalyzer:
             grp_mask = (rk_vals >= lo) & (rk_vals < hi) & r_vals.notna()
             grp_ret = r_vals.where(grp_mask)
             daily_mean = grp_ret.mean(axis=1)
-            tercile_means.append(float(daily_mean.mean()) if daily_mean.notna().any() else 0.0)
+            tercile_means.append(
+                float(daily_mean.mean()) if daily_mean.notna().any() else 0.0
+            )
 
         if any(x != 0 for x in tercile_means):
             corr_val, _ = stats.spearmanr([1, 2, 3], tercile_means)
@@ -369,9 +399,21 @@ class FactorQualityAnalyzer:
         ic_aligned = ic_s.loc[common_idx]
         regime_aligned = regime.loc[common_idx]
 
-        ic_bull = float(ic_aligned[regime_aligned == "bull"].mean()) if (regime_aligned == "bull").any() else 0.0
-        ic_bear = float(ic_aligned[regime_aligned == "bear"].mean()) if (regime_aligned == "bear").any() else 0.0
-        ic_sideways = float(ic_aligned[regime_aligned == "sideways"].mean()) if (regime_aligned == "sideways").any() else 0.0
+        ic_bull = (
+            float(ic_aligned[regime_aligned == "bull"].mean())
+            if (regime_aligned == "bull").any()
+            else 0.0
+        )
+        ic_bear = (
+            float(ic_aligned[regime_aligned == "bear"].mean())
+            if (regime_aligned == "bear").any()
+            else 0.0
+        )
+        ic_sideways = (
+            float(ic_aligned[regime_aligned == "sideways"].mean())
+            if (regime_aligned == "sideways").any()
+            else 0.0
+        )
 
         return ic_bull, ic_bear, ic_sideways
 

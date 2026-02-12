@@ -207,7 +207,10 @@ class DataLoader:
 
         for col in result:
             result[col] = result[col].reindex(all_dates)
-            result[col] = result[col][sorted_cols]
+            # Some fields (e.g. amount) may have fewer ETFs than close;
+            # only select columns that exist, then reindex to add missing as NaN
+            available = [c for c in sorted_cols if c in result[col].columns]
+            result[col] = result[col][available].reindex(columns=sorted_cols)
 
         logger.info(
             f"加载完成: {len(result['close'].columns)} ETFs × {len(result['close'])} 日期"

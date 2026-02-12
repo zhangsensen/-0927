@@ -112,6 +112,7 @@ from etf_strategy.core.utils.rebalance import (
 | Late-IPO ETF NaN | Crash on NaN prices beyond lookback | `.ffill().fillna(1.0)` — NaN factor scores prevent selection |
 | BT sizing commission | Use a_share rate for QDII positions | Pass `max(a_share, qdii)` rate |
 | State file corruption | Silently use stale/wrong-env state | Validated on load; cold-start on mismatch |
+| VEC hysteresis omission | VEC batch without `delta_rank`/`min_hold_days` | Always pass hysteresis params from config — without them results are meaningless |
 
 ## Bounded Factors (NO winsorization)
 
@@ -160,10 +161,13 @@ Rationale (verified 2026-02-11):
 - S1's 4 factors have moderate IC correlation (avg 0.31) and moderate cross-sectional overlap (avg 0.24) — they are not fully redundant but share the same dominant signal
 - Factor space effective dimensionality (Kaiser): 5 out of 17 — most factors are redundant
 - v3.4→v5.0 evidence: same signal (S1), execution-only improvement yielded +35.8pp holdout return; switching signals under same execution destroyed value
+- Execution delivers 3.6x return multiplier vs signal improvement's 1.25x — always prioritize execution compatibility over signal quality
+- Factor rank stability determines Exp4 compatibility: stable-rank factors (ADX, SLOPE, CMF) thrive; volatile-rank factors (PV_CORR, PP_20D) collapse
+- OHLCV-derived factor space is near-saturated (Kaiser dimension 5/17) — genuine alpha requires new information sources (IOPV, FX), not recombinations
 
 ## Config
 
-Single source of truth: `configs/combo_wfo_config.yaml` — 43 ETFs, 17 active factors (OBV_SLOPE_10D restored), all engine parameters including hysteresis section.
+Single source of truth: `configs/combo_wfo_config.yaml` — 43 ETFs, 18 active factors (17 base + PREMIUM_DEVIATION_20D), all engine parameters including hysteresis section.
 
 ## Code Style
 

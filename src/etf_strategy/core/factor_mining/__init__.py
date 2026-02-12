@@ -1,12 +1,13 @@
 """
 因子挖掘体系 | Factor Mining System
 ================================================================================
-5 层架构:
-  Layer 1: FactorZoo (注册中心)        — registry.py
-  Layer 2: FactorQualityAnalyzer (质检) — quality.py
+6 层架构:
+  Layer 1: FactorZoo (注册中心)          — registry.py
+  Layer 2: FactorQualityAnalyzer (质检)  — quality.py
   Layer 3: FactorDiscoveryPipeline (挖掘) — discovery.py
-  Layer 4: FactorSelector (筛选)        — selection.py
-  Layer 5: 全流程脚本                    — scripts/run_factor_mining.py
+  Layer 4: FactorPrefilter (可组合性预筛) — prefilter.py
+  Layer 5: FactorSelector (去冗余)       — selection.py
+  Layer 6: 全流程脚本                     — scripts/run_factor_mining.py
 """
 
 from .discovery import (
@@ -15,6 +16,7 @@ from .discovery import (
     TransformSearch,
     WindowOptimizer,
 )
+from .prefilter import FactorPrefilter, PrefilterConfig, PrefilterResult
 from .quality import (
     FactorQualityAnalyzer,
     FactorQualityReport,
@@ -33,6 +35,9 @@ __all__ = [
     "AlgebraicSearch",
     "WindowOptimizer",
     "TransformSearch",
+    "FactorPrefilter",
+    "PrefilterConfig",
+    "PrefilterResult",
     "FactorSelector",
     "spearman_ic_series",
     "compute_forward_returns",

@@ -73,6 +73,7 @@ class ComboWFOConfig:
     use_bucket_constraints: bool = False  # 跨桶约束开关
     bucket_min_buckets: int = 3           # 最少覆盖桶数
     bucket_max_per_bucket: int = 2        # 每桶最多选几个因子
+    max_parent_occurrence: int = 0        # 父因子最大重复 (0=不限制)
 
     def __post_init__(self):
         """初始化后自动调整 n_jobs"""
@@ -318,6 +319,7 @@ class ComboWFOOptimizer:
         use_bucket_constraints: bool = False,
         bucket_min_buckets: int = 3,
         bucket_max_per_bucket: int = 2,
+        max_parent_occurrence: int = 0,
     ):
         self.use_t1_open = use_t1_open
         self.config = ComboWFOConfig(
@@ -333,6 +335,7 @@ class ComboWFOOptimizer:
             use_bucket_constraints=use_bucket_constraints,
             bucket_min_buckets=bucket_min_buckets,
             bucket_max_per_bucket=bucket_max_per_bucket,
+            max_parent_occurrence=max_parent_occurrence,
         )
         self.rebalance_frequencies = (
             rebalance_frequencies if rebalance_frequencies else [5, 10, 15, 20, 25, 30]
@@ -360,6 +363,7 @@ class ComboWFOOptimizer:
                     combo_size=size,
                     min_buckets=effective_min,
                     max_per_bucket=self.config.bucket_max_per_bucket,
+                    max_parent_occurrence=self.config.max_parent_occurrence,
                 )
                 idx_combos = [
                     tuple(name_to_idx[n] for n in nc) for nc in name_combos

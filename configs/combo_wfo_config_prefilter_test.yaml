@@ -1,5 +1,5 @@
 universe:
-  mode: "A_SHARE_ONLY"   # "A_SHARE_ONLY" = 实盘禁止QDII; "GLOBAL" = 全池含QDII
+  mode: "A_SHARE_ONLY"
   qdii_tickers:
     - "513500"
     - "513100"
@@ -8,7 +8,7 @@ universe:
     - "513130"
 
 backtest:
-  execution_model: "T1_OPEN"  # "COC" (cheat-on-close) or "T1_OPEN" (signal T-1 → fill at open T+1)
+  execution_model: "T1_OPEN"
   commission_rate: 0.0002
   cost_model:
     mode: "SPLIT_MARKET"
@@ -62,8 +62,8 @@ backtest:
     min_hold_days: 9
   portfolio_constraints:
     pool_diversity:
-      enabled: false        # research default OFF
-      extended_k: 10        # search depth for cross-pool candidates
+      enabled: false
+      extended_k: 10
   regime_gate:
     enabled: true
     mode: volatility
@@ -141,12 +141,7 @@ backtest:
     etf_stop_loss: 0.05
 combo_wfo:
   combo_sizes:
-  - 2
-  - 3
-  - 4
-  - 5
-  - 6
-  - 7
+  - 4                          # Size 4 first (1.2M combos); size 5 = 17M, run separately
   enable_fdr: true
   fdr_alpha: 0.05
   fdr_method: fdr_bh
@@ -166,18 +161,20 @@ combo_wfo:
   step_size: 60
   top_n: 100000
   verbose: true
-  # 跨桶约束: 基于因子截面相关性分桶, 强制组合跨维度选择
-  # 默认关闭; 启用后组合空间约减半, 搜索密度翻倍
   bucket_constraints:
-    enabled: true         # 2026-02-11: 启用, Phase1+2验证通过 (HO+4.84pp, 5/5 PASS)
-    min_buckets: 3        # 组合至少覆盖3个信息维度桶
-    max_per_bucket: 2     # 每桶最多选2个因子
+    enabled: true
+    min_buckets: 3
+    max_per_bucket: 2
+  extra_factors:
+    enabled: true
+    path: "results/factor_mining_20260212_103242/survivors_3d.npz"
 cross_section:
   bounded_factors:
   - PRICE_POSITION_20D
   - PRICE_POSITION_120D
   - PV_CORR_20D
   - RSI_14
+  - CMF_20D                    # CMF is bounded [-1,1]
   winsorize_lower: 0.025
   winsorize_upper: 0.975
   pool_mode: unified
@@ -244,23 +241,20 @@ data:
   - '518880'
   - '588000'
   - '588200'
-# 正交因子集 v3: 17→18, 基于折溢价因子相关性分析
-# 变更 (2026-02-12):
-#   +PREMIUM_DEVIATION_20D  (IC=-0.107, 与现有17因子平均|ρ|=0.18, 独立性良好)
-#   数据覆盖: 2025-02起有效 (约50天训练数据可用)
-#   因子方向: 反向 (高溢价→低收益)
-# 修改此列表即可扩缩搜索空间，无需改代码
+# Prefilter sanity test: active17 + CMF_20D (prefilter survivor)
+# CMF_20D: IC=+0.031***, p=0.0000, monotonicity=1.0
+# Only hand-crafted survivor from 6-gate composability prefilter
 active_factors:
   - ADX_14D
   - AMIHUD_ILLIQUIDITY
   - BREAKOUT_20D
   - CALMAR_RATIO_60D
+  - CMF_20D                    # NEW: prefilter survivor, bucket C
   - CORRELATION_TO_MARKET_20D
   - GK_VOL_RATIO_20D
   - MAX_DD_60D
   - MOM_20D
   - OBV_SLOPE_10D
-  - PREMIUM_DEVIATION_20D
   - PRICE_POSITION_20D
   - PRICE_POSITION_120D
   - PV_CORR_20D
@@ -270,7 +264,7 @@ active_factors:
   - VOL_RATIO_20D
   - VORTEX_14D
 output_root: results_combo_wfo
-run_id: COMBO_WFO_DEEP_MINING
+run_id: PREFILTER_SANITY_CMF
 selection:
   ic_threshold: 0.05
   positive_rate_threshold: 0.55

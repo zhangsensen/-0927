@@ -1343,7 +1343,10 @@ def main():
     print("=" * 80)
 
     # 0. ✅ P0: 立即加载配置文件
-    config_path = ROOT / "configs/combo_wfo_config.yaml"
+    import os
+    config_path = Path(
+        os.environ.get("WFO_CONFIG_PATH", str(ROOT / "configs/combo_wfo_config.yaml"))
+    )
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
@@ -1383,34 +1386,45 @@ def main():
     print(f"   COST_MODEL: mode={cost_model.mode}, tier={cost_model.tier}")
 
     # 1. 加载 WFO 结果
-    # ✅ 优先查找 run_* 目录 (True WFO)，排除 symlink
-    wfo_dirs = sorted(
-        [
-            d
-            for d in (ROOT / "results").glob("run_*")
-            if d.is_dir() and not d.is_symlink()
-        ]
-    )
+    combos_override = os.environ.get("VEC_COMBOS_PATH")
+    if combos_override:
+        combos_path = Path(combos_override)
+        if not combos_path.is_absolute():
+            combos_path = ROOT / combos_path
+        if not combos_path.exists():
+            print(f"❌ 未找到 {combos_path}")
+            return
+        df_combos = pd.read_parquet(combos_path)
+        print(f"✅ 加载自定义组合：{combos_path.name} ({len(df_combos)} 个组合)")
+    else:
+        # ✅ 优先查找 run_* 目录 (True WFO)，排除 symlink
+        wfo_dirs = sorted(
+            [
+                d
+                for d in (ROOT / "results").glob("run_*")
+                if d.is_dir() and not d.is_symlink()
+            ]
+        )
 
-    if not wfo_dirs:
-        wfo_dirs = sorted((ROOT / "results").glob("unified_wfo_*"))
+        if not wfo_dirs:
+            wfo_dirs = sorted((ROOT / "results").glob("unified_wfo_*"))
 
-    if not wfo_dirs:
-        print("❌ 未找到 WFO 结果目录")
-        return
-    latest_wfo = wfo_dirs[-1]
+        if not wfo_dirs:
+            print("❌ 未找到 WFO 结果目录")
+            return
+        latest_wfo = wfo_dirs[-1]
 
-    # 优先加载 top100_by_ic.parquet (WFO 输出)，其次 all_combos.parquet
-    combos_path = latest_wfo / "top100_by_ic.parquet"
-    if not combos_path.exists():
-        combos_path = latest_wfo / "all_combos.parquet"
+        # 优先加载 top100_by_ic.parquet (WFO 输出)，其次 all_combos.parquet
+        combos_path = latest_wfo / "top100_by_ic.parquet"
+        if not combos_path.exists():
+            combos_path = latest_wfo / "all_combos.parquet"
 
-    if not combos_path.exists():
-        print(f"❌ 未找到 {combos_path}")
-        return
+        if not combos_path.exists():
+            print(f"❌ 未找到 {combos_path}")
+            return
 
-    df_combos = pd.read_parquet(combos_path)
-    print(f"✅ 加载 WFO 结果 ({latest_wfo.name})：{len(df_combos)} 个组合")
+        df_combos = pd.read_parquet(combos_path)
+        print(f"✅ 加载 WFO 结果 ({latest_wfo.name})：{len(df_combos)} 个组合")
 
     # 2. 加载数据
     loader = DataLoader(
@@ -1442,6 +1456,80 @@ def main():
     tier = cost_model.active_tier
     print(f"   COST_ARR: A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
     factors_3d = cached["factors_3d"]
+
+    # ── 加载额外因子矩阵 (来自 factor mining prefilter) ──
+    extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})
+    if extra_cfg.get("enabled", False):
+        import json as _json
+        extra_path = Path(extra_cfg["path"])
+        if not extra_path.is_absolute():
+            extra_path = ROOT / extra_path
+        if extra_path.exists():
+            extra = np.load(extra_path)
+            extra_names = list(extra["factor_names"])
+            extra_dates = list(extra["dates"])
+            extra_symbols = list(extra["symbols"])
+            base_dates = [str(d.date()) for d in dates]
+            base_symbols = list(etf_codes)
+
+            # Date alignment
+            _need_pad = False
+            if extra_dates == base_dates:
+                date_slice = slice(None)
+            elif set(base_dates).issubset(set(extra_dates)):
+                # Extra has more dates (e.g. WFO training cutoff)
+                si = extra_dates.index(base_dates[0])
+                ei = extra_dates.index(base_dates[-1])
+                date_slice = slice(si, ei + 1)
+                print(f"  Extra factors date subset: {len(extra_dates)} → {len(base_dates)}")
+            elif set(extra_dates).issubset(set(base_dates)):
+                # Base has more dates (e.g. VEC uses full range, mining stopped earlier)
+                # Take all extra dates, pad remaining with NaN
+                date_slice = slice(None)
+                _need_pad = True
+                print(f"  Extra factors date pad: {len(extra_dates)} → {len(base_dates)} (NaN-padded)")
+            else:
+                raise ValueError(f"Date mismatch: base {len(base_dates)}, extra {len(extra_dates)}")
+
+            # Symbol alignment
+            if extra_symbols == base_symbols:
+                sym_idx = None
+            elif set(base_symbols).issubset(set(extra_symbols)):
+                sym_idx = [extra_symbols.index(s) for s in base_symbols]
+                print(f"  Extra factors symbol subset: {len(extra_symbols)} → {len(base_symbols)}")
+            else:
+                raise ValueError(f"Symbol mismatch: base needs symbols not in extra")
+
+            # Filter duplicates
+            new_mask = [n not in set(factor_names) for n in extra_names]
+            new_indices = [i for i, keep in enumerate(new_mask) if keep]
+            new_names = [extra_names[i] for i in new_indices]
+
+            if new_names:
+                raw = extra["data"][date_slice, :, :][:, :, new_indices]
+                if sym_idx is not None:
+                    raw = raw[:, sym_idx, :]
+                # Pad with NaN if base has more dates than extra
+                if _need_pad:
+                    T_base = len(base_dates)
+                    T_extra = raw.shape[0]
+                    N_sym = raw.shape[1]
+                    F_new = raw.shape[2]
+                    # Find where extra dates start in base
+                    pad_start = base_dates.index(extra_dates[0])
+                    padded = np.full((T_base, N_sym, F_new), np.nan, dtype=np.float32)
+                    padded[pad_start:pad_start + T_extra, :, :] = raw
+                    extra_data = padded
+                else:
+                    extra_data = raw
+                factors_3d = np.concatenate([factors_3d, extra_data], axis=-1)
+                factor_names = factor_names + new_names
+                T = factors_3d.shape[0]
+                N = factors_3d.shape[1]
+                print(f"✅ Extra factors loaded: +{len(new_names)} → total {len(factor_names)}")
+        else:
+            print(f"⚠️  Extra factors path not found: {extra_path}, skipping")
+
     # 价格数据处理：仅 ffill（bfill 会将未来价格回填到过去，造成 lookahead bias）
     # ✅ FIX: 部分 ETF 在 lookback 后才上市，ffill 无法填充上市前的 NaN
     # 用 1.0 兜底填充（上市前 ETF 的 factor score 也是 NaN，不会被选中交易，填充值不影响结果）
@@ -1645,6 +1733,15 @@ def main():
         POOL_POST_HYST = False
         print(f"✅ 池约束: disabled")
 
+    # ✅ Exp4: 从配置读取 hysteresis 参数
+    hyst_config = backtest_config.get("hysteresis", {})
+    DELTA_RANK = float(hyst_config.get("delta_rank", 0.0))
+    MIN_HOLD_DAYS = int(hyst_config.get("min_hold_days", 0))
+    if DELTA_RANK > 0 or MIN_HOLD_DAYS > 0:
+        print(f"✅ Hysteresis: delta_rank={DELTA_RANK}, min_hold_days={MIN_HOLD_DAYS}")
+    else:
+        print(f"✅ Hysteresis: disabled")
+
     # ✅ v4.0: 动态持仓数组
     dps_config = parse_dynamic_pos_config(backtest_config)
     if dps_config["enabled"]:
@@ -1682,7 +1779,7 @@ def main():
 
     # 定义单个combo回测函数（闭包捕获共享数据）
     def _backtest_one_combo(combo_str, factor_indices):
-        _, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
+        eq_curve, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
             factors_3d,
             close_prices,
             open_prices,
@@ -1725,12 +1822,15 @@ def main():
             leverage_cap=leverage_cap,
             # ✅ Exp1: T+1 Open
             use_t1_open=USE_T1_OPEN,
+            # ✅ Exp4: Hysteresis
+            delta_rank=DELTA_RANK,
+            min_hold_days=MIN_HOLD_DAYS,
             # ✅ Pool diversity constraint
             pool_ids=POOL_IDS,
             pool_constraint_extended_k=POOL_EXTENDED_K,
             pool_constraint_post_hyst=POOL_POST_HYST,
         )
-        return {
+        result = {
             "combo": combo_str,
             "vec_return": ret,
             "vec_win_rate": wr,
@@ -1759,12 +1859,18 @@ def main():
             "vec_share_gap": rounding["target_shares_total"]
             - rounding["filled_shares_total"],
         }
+        if _save_equity:
+            result["_equity_curve"] = eq_curve
+        return result
 
     # ✅ 并行回测（Numba JIT 释放 GIL，线程池避免序列化开销）
     import os as _os
     n_vec_jobs = int(_os.environ.get("VEC_N_JOBS", min((_os.cpu_count() or 8) // 2, 16)))
     n_combos = len(combo_strings)
-    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs})")
+    # 小批量自动保存权益曲线 (用于 holdout 分析)
+    _save_equity = n_combos <= 200
+    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs})"
+          + (", 保存权益曲线" if _save_equity else ""))
     results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
         delayed(_backtest_one_combo)(cs, fi)
         for cs, fi in tqdm(
@@ -1778,6 +1884,25 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = ROOT / "results" / f"vec_full_backtest_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 提取权益曲线 (从 results dict 中移除, 不存 parquet)
+    equity_curves = {}
+    if _save_equity:
+        for r in results:
+            ec = r.pop("_equity_curve", None)
+            if ec is not None:
+                equity_curves[r["combo"]] = ec
+        if equity_curves:
+            combo_names = list(equity_curves.keys())
+            eq_matrix = np.column_stack([equity_curves[c] for c in combo_names])
+            dates_str = np.array([str(d.date()) for d in dates])
+            np.savez_compressed(
+                output_dir / "equity_curves.npz",
+                curves=eq_matrix,        # (T, n_combos)
+                dates=dates_str,          # (T,)
+                combos=np.array(combo_names),
+            )
+            print(f"   权益曲线已保存: {len(combo_names)} 组合 × {len(dates_str)} 天")
 
     df_results = pd.DataFrame(results)
     df_results.to_parquet(output_dir / "vec_all_combos.parquet", index=False)

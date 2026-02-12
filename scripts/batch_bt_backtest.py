@@ -566,6 +566,59 @@ def main():
     dates = first_factor.index
     etf_codes = first_factor.columns.tolist()
 
+    # ── 加载额外因子 (来自 factor mining prefilter) ──
+    extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})
+    if extra_cfg.get("enabled", False):
+        extra_path = Path(extra_cfg["path"])
+        if not extra_path.is_absolute():
+            extra_path = ROOT / extra_path
+        if extra_path.exists():
+            extra = np.load(extra_path)
+            extra_names = [str(x) for x in extra["factor_names"]]
+            extra_dates_str = [str(x) for x in extra["dates"]]
+            extra_symbols = [str(x) for x in extra["symbols"]]
+            base_symbols = list(etf_codes)
+
+            # Symbol alignment: subset extra to base symbols
+            sym_idx = [extra_symbols.index(s) for s in base_symbols if s in extra_symbols]
+            sym_names = [base_symbols[i] for i, s in enumerate(base_symbols) if s in extra_symbols]
+
+            # Filter to only new factors (not already in std_factors)
+            existing = set(std_factors.keys())
+            new_mask = [n not in existing for n in extra_names]
+            new_indices = [i for i, keep in enumerate(new_mask) if keep]
+            new_names = [extra_names[i] for i in new_indices]
+
+            if new_names:
+                raw = extra["data"][:, :, new_indices]  # (T_extra, N_extra, F_new)
+                # Subset symbols
+                if len(sym_idx) < len(extra_symbols):
+                    raw = raw[:, [extra_symbols.index(s) for s in base_symbols if s in extra_symbols], :]
+
+                # Convert each factor slice to DataFrame, aligning to base dates
+                extra_dates_pd = pd.DatetimeIndex([pd.Timestamp(d) for d in extra_dates_str])
+                n_added = 0
+                for fi, fname in enumerate(new_names):
+                    factor_df = pd.DataFrame(
+                        raw[:, :, fi],
+                        index=extra_dates_pd,
+                        columns=sym_names,
+                    )
+                    # Reindex to base dates (NaN for dates not in extra)
+                    factor_df = factor_df.reindex(dates)
+                    # Add missing ETF columns as NaN
+                    for col in etf_codes:
+                        if col not in factor_df.columns:
+                            factor_df[col] = np.nan
+                    factor_df = factor_df[etf_codes]  # ensure column order
+                    std_factors[fname] = factor_df
+                    n_added += 1
+
+                factor_names = sorted(std_factors.keys())
+                print(f"✅ Extra factors loaded: +{n_added} → total {len(factor_names)}")
+        else:
+            print(f"⚠️  Extra factors path not found: {extra_path}, skipping")
+
     # ✅ P0: 从配置文件读取回测参数
     backtest_config = config.get("backtest", {})
     freq = backtest_config.get("freq", 8)
@@ -585,8 +638,23 @@ def main():
         f"✅ 成本模型: mode={cost_model.mode}, tier={cost_model.tier}, "
         f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp"
     )
+    # ✅ Exp4: hysteresis — config 为默认, CLI 为 override
+    hyst_config = backtest_config.get("hysteresis", {})
+    if args.delta_rank > 0:
+        effective_delta_rank = args.delta_rank
+    else:
+        effective_delta_rank = float(hyst_config.get("delta_rank", 0.0))
+    if args.min_hold_days > 0:
+        effective_min_hold_days = args.min_hold_days
+    else:
+        effective_min_hold_days = int(hyst_config.get("min_hold_days", 0))
+    # Overwrite args for downstream usage
+    args.delta_rank = effective_delta_rank
+    args.min_hold_days = effective_min_hold_days
     if args.delta_rank > 0 or args.min_hold_days > 0:
-        print(f"✅ Exp4: delta_rank={args.delta_rank}, min_hold_days={args.min_hold_days}")
+        print(f"✅ Exp4: EXECUTION=F5_ON(dr={args.delta_rank}, mh={args.min_hold_days})")
+    else:
+        print(f"⚠️  Exp4: EXECUTION=F5_OFF (hysteresis disabled)")
 
     # ✅ P1: 从配置文件读取择时参数
     timing_config = config.get("backtest", {}).get("timing", {})

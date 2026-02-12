@@ -2,7 +2,7 @@
 """
 因子挖掘全流程 | Factor Mining Pipeline
 ================================================================================
-Layer 5: 完整流程入口。
+Layer 6: 完整流程入口。
 
 用法:
   uv run python scripts/run_factor_mining.py                 # 完整流程 (~30min)
@@ -14,8 +14,9 @@ Layer 5: 完整流程入口。
   2. Compute Factors (PreciseFactorLibrary)
   3. Quality Analysis (10 维度)
   4. Discovery (代数/窗口/变换搜索 + FDR)
-  5. Selection (聚类去冗余)
-  6. Save Results
+  5. Prefilter (可组合性预筛: 6-gate + 正交性)
+  6. Selection (聚类去冗余)
+  7. Save Results
 
 输出: results/factor_mining_YYYYMMDD_HHMMSS/
 """
@@ -29,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 # ── 项目路径 ──────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -40,14 +42,17 @@ from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.regime_detector import RegimeDetector
 from etf_strategy.core.factor_mining import (
     FactorDiscoveryPipeline,
+    FactorPrefilter,
     FactorQualityAnalyzer,
     FactorSelector,
     FactorZoo,
+    PrefilterConfig,
 )
 
 # ── 配置 ──────────────────────────────────────────────────
 SEP = "=" * 80
 THIN = "-" * 80
+DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "combo_wfo_config.yaml"
 
 
 def setup_logging():
@@ -61,26 +66,43 @@ def setup_logging():
 def parse_args():
     parser = argparse.ArgumentParser(description="因子挖掘全流程")
     parser.add_argument(
-        "--skip-discovery", action="store_true",
-        help="跳过发现阶段，仅质检现有因子"
+        "--skip-discovery", action="store_true", help="跳过发现阶段，仅质检现有因子"
+    )
+    parser.add_argument("--algebraic-only", action="store_true", help="仅执行代数搜索")
+    parser.add_argument(
+        "--max-factors", type=int, default=40, help="最终精选因子数量上限 (default: 40)"
     )
     parser.add_argument(
-        "--algebraic-only", action="store_true",
-        help="仅执行代数搜索"
+        "--max-correlation", type=float, default=0.7, help="聚类相关阈值 (default: 0.7)"
     )
     parser.add_argument(
-        "--max-factors", type=int, default=40,
-        help="最终精选因子数量上限 (default: 40)"
+        "--fdr-alpha", type=float, default=0.05, help="FDR 校正 alpha (default: 0.05)"
     )
     parser.add_argument(
-        "--max-correlation", type=float, default=0.7,
-        help="聚类相关阈值 (default: 0.7)"
+        "--skip-prefilter",
+        action="store_true",
+        help="跳过可组合性预筛（默认开启）",
     )
     parser.add_argument(
-        "--fdr-alpha", type=float, default=0.05,
-        help="FDR 校正 alpha (default: 0.05)"
+        "--orth-threshold",
+        type=float,
+        default=0.6,
+        help="正交性阈值: max|rank_corr| with active factors (default: 0.6)",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="配置文件路径（默认: configs/combo_wfo_config.yaml）",
     )
     return parser.parse_args()
+
+
+def load_config(config_path: str | None) -> dict:
+    """Load YAML config for active factors list."""
+    path = Path(config_path) if config_path else DEFAULT_CONFIG
+    with open(path) as f:
+        return yaml.safe_load(f)
 
 
 def main():
@@ -92,6 +114,10 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = PROJECT_ROOT / "results" / f"factor_mining_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load config for active factors
+    config = load_config(args.config)
+    active_factors = sorted(config.get("active_factors", []))
 
     # ── Step 1: Load Data ──────────────────────────────────
     print(f"\n{SEP}")
@@ -135,17 +161,22 @@ def main():
     regime_series, _ = detector.detect_regime(ohlcv)
     for regime_val in sorted(regime_series.unique()):
         count = (regime_series == regime_val).sum()
-        print(f"    {regime_val}: {count} days ({count / len(regime_series) * 100:.1f}%)")
+        print(
+            f"    {regime_val}: {count} days ({count / len(regime_series) * 100:.1f}%)"
+        )
 
     # ── Step 3: Quality Analysis ───────────────────────────
     print(f"\n{SEP}")
     print("Step 3: 因子质检 (10 维度)")
     print(SEP)
 
+    # Read freq from config (production-aligned)
+    freq = config.get("freq", config.get("rebalance", {}).get("freq", 5))
+
     analyzer = FactorQualityAnalyzer(
         close=close,
         regime_series=regime_series,
-        freq=3,
+        freq=freq,
     )
 
     # 注册手工因子到 Zoo
@@ -167,9 +198,11 @@ def main():
         zoo.update_quality(name, report.quality_score, report.passed)
 
         status = "PASS" if report.passed else "FAIL"
-        print(f"  [{status}] {name:35s}  score={report.quality_score:+.1f}  "
-              f"IC={report.mean_ic:+.4f}  p={report.p_value:.4f}  "
-              f"mono={report.monotonicity_score:.2f}")
+        print(
+            f"  [{status}] {name:35s}  score={report.quality_score:+.1f}  "
+            f"IC={report.mean_ic:+.4f}  p={report.p_value:.4f}  "
+            f"mono={report.monotonicity_score:.2f}"
+        )
 
     passed_count = sum(1 for r in reports.values() if r.passed)
     print(f"\n  质检通过: {passed_count} / {len(reports)}")
@@ -235,14 +268,99 @@ def main():
         print("Step 4: 因子发现 (已跳过)")
         print(SEP)
 
-    # ── Step 5: Selection ──────────────────────────────────
+    # ── Step 5: Prefilter (可组合性预筛) ──────────────────
+    # 合并所有因子值 (base + algebraic)
+    all_factors = {**std_factors, **discovery_factors}
+
+    prefilter_survivors = None  # None = no prefilter, use all
+
+    if not args.skip_prefilter and active_factors:
+        print(f"\n{SEP}")
+        print("Step 5: 可组合性预筛 (6-gate cascade + orthogonality)")
+        print(SEP)
+
+        pf_config = PrefilterConfig(orthogonality_max=args.orth_threshold)
+        prefilter = FactorPrefilter(
+            active_factors=active_factors,
+            config=pf_config,
+        )
+
+        # Build quality DataFrame for prefilter
+        quality_rows = []
+        for name, r in reports.items():
+            quality_rows.append(r.to_dict())
+        quality_df = pd.DataFrame(quality_rows)
+
+        pf_result = prefilter.run(
+            quality_df=quality_df,
+            registry={e.name: {"source": e.source,
+                               "parent_factors": e.parent_factors,
+                               "quality_score": e.quality_score}
+                      for e in zoo.list_all()},
+            factor_values=all_factors,
+        )
+
+        # Print cascade
+        for gate, eliminated, remaining in pf_result.gate_cascade:
+            print(f"  {gate:20s}: -{eliminated:4d} → {remaining:4d} remain")
+        print(f"\n  Survivors: {len(pf_result.survivors)}")
+
+        # Bucket distribution
+        print(f"\n  Bucket distribution:")
+        for bucket, count in sorted(pf_result.bucket_distribution.items()):
+            print(f"    {bucket:30s}: {count}")
+        if pf_result.unmapped_survivors:
+            print(f"    UNMAPPED: {len(pf_result.unmapped_survivors)}")
+
+        # Warnings
+        for w in pf_result.bucket_warnings:
+            print(f"  ⚠ {w}")
+
+        # Save prefilter results + survivor matrices
+        full_registry = {e.name: {
+            "name": e.name, "source": e.source,
+            "expression": e.expression,
+            "parent_factors": e.parent_factors,
+            "metadata": e.metadata,
+            "quality_score": e.quality_score, "passed": e.passed,
+        } for e in zoo.list_all()}
+        prefilter.save(
+            output_dir, full_registry, pf_result,
+            factor_values=all_factors,
+        )
+        print(f"\n  Saved: prefilter artifacts + survivor matrices")
+
+        prefilter_survivors = pf_result.survivors
+    else:
+        print(f"\n{SEP}")
+        print("Step 5: 可组合性预筛 (已跳过)")
+        print(SEP)
+
+    # ── Step 6: Selection (聚类去冗余) ────────────────────
     print(f"\n{SEP}")
-    print("Step 5: 因子筛选 (聚类去冗余)")
+    print("Step 6: 因子筛选 (聚类去冗余)")
     print(SEP)
 
-    # 合并所有因子值
-    all_factors = {**std_factors, **discovery_factors}
-    all_entries = zoo.list_all()
+    # If prefilter ran, only select from survivors
+    if prefilter_survivors is not None:
+        entries_for_select = [
+            e for e in zoo.list_all()
+            if e.name in prefilter_survivors
+        ]
+        factors_for_select = {
+            k: v for k, v in all_factors.items()
+            if k in prefilter_survivors
+        }
+        reports_for_select = {
+            k: v for k, v in reports.items()
+            if k in prefilter_survivors
+        }
+        print(f"  Input: {len(entries_for_select)} prefiltered survivors")
+    else:
+        entries_for_select = zoo.list_all()
+        factors_for_select = all_factors
+        reports_for_select = reports
+        print(f"  Input: {len(entries_for_select)} factors (no prefilter)")
 
     selector = FactorSelector(
         max_correlation=args.max_correlation,
@@ -251,9 +369,9 @@ def main():
     )
 
     selected_names, corr_matrix = selector.select(
-        entries=all_entries,
-        reports=reports,
-        factors_dict=all_factors,
+        entries=entries_for_select,
+        reports=reports_for_select,
+        factors_dict=factors_for_select,
     )
 
     print(f"\n  精选因子池 ({len(selected_names)} 个):")
@@ -261,26 +379,28 @@ def main():
         r = reports.get(name)
         source = zoo.get(name).source if zoo.get(name) else "?"
         if r:
-            print(f"    {name:40s}  [{source:14s}]  score={r.quality_score:+.1f}  IC={r.mean_ic:+.4f}")
+            print(
+                f"    {name:40s}  [{source:14s}]  score={r.quality_score:+.1f}  IC={r.mean_ic:+.4f}"
+            )
         else:
             print(f"    {name:40s}  [{source:14s}]")
 
-    # ── Step 6: Save Results ───────────────────────────────
+    # ── Step 7: Save Results ──────────────────────────────
     print(f"\n{SEP}")
-    print(f"Step 6: 保存结果 → {output_dir}")
+    print(f"Step 7: 保存结果 → {output_dir}")
     print(SEP)
 
-    # 6a. Factor registry
+    # 7a. Factor registry
     zoo.export_registry(output_dir / "factor_registry.json")
     print(f"  factor_registry.json ({len(zoo)} factors)")
 
-    # 6b. Quality reports
+    # 7b. Quality reports
     report_rows = [r.to_dict() for r in reports.values()]
     reports_df = pd.DataFrame(report_rows)
     reports_df.to_parquet(output_dir / "quality_reports.parquet", index=False)
     print(f"  quality_reports.parquet ({len(reports_df)} rows)")
 
-    # 6c. Discovery summary
+    # 7c. Discovery summary
     if not args.skip_discovery:
         discovery_rows = []
         for entry in zoo.list_all():
@@ -298,12 +418,13 @@ def main():
             disc_df.to_parquet(output_dir / "discovery_summary.parquet", index=False)
             print(f"  discovery_summary.parquet ({len(disc_df)} rows)")
 
-    # 6d. Selected factors
+    # 7d. Selected factors
     selected_data = {
         "timestamp": timestamp,
         "n_selected": len(selected_names),
         "max_correlation": args.max_correlation,
         "max_factors": args.max_factors,
+        "prefiltered": prefilter_survivors is not None,
         "factors": selected_names,
         "factor_details": {},
     }
@@ -325,10 +446,12 @@ def main():
     )
     print(f"  selected_factors.json ({len(selected_names)} factors)")
 
-    # 6e. Correlation matrix
+    # 7e. Correlation matrix
     if not corr_matrix.empty:
         corr_matrix.to_parquet(output_dir / "correlation_matrix.parquet")
-        print(f"  correlation_matrix.parquet ({corr_matrix.shape[0]}x{corr_matrix.shape[1]})")
+        print(
+            f"  correlation_matrix.parquet ({corr_matrix.shape[0]}x{corr_matrix.shape[1]})"
+        )
 
     elapsed = time.time() - t0
     print(f"\n{SEP}")

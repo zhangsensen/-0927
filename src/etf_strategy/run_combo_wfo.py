@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import sys
+import warnings
 from datetime import datetime
 from pathlib import Path
 
@@ -33,7 +34,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from etf_strategy.core.combo_wfo_optimizer import ComboWFOOptimizer, warmup_numba_kernels
+from etf_strategy.core.combo_wfo_optimizer import (
+    ComboWFOOptimizer,
+    warmup_numba_kernels,
+)
 from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.factor_cache import FactorCache
@@ -74,13 +78,13 @@ def main():
     logger.info(f"🔒 参数冻结校验通过 (version={frozen.version})")
 
     logger.info("✅ 配置加载成功")
-    logger.info(f'  - ETF数量: {len(config["data"]["symbols"])}')
+    logger.info(f"  - ETF数量: {len(config['data']['symbols'])}")
     logger.info(
-        f'  - 日期范围: {config["data"]["start_date"]} → {config["data"]["end_date"]}'
+        f"  - 日期范围: {config['data']['start_date']} → {config['data']['end_date']}"
     )
-    logger.info(f'  - 组合规模: {config["combo_wfo"]["combo_sizes"]}')
-    logger.info(f'  - IS窗口: {config["combo_wfo"]["is_period"]}天')
-    logger.info(f'  - OOS窗口: {config["combo_wfo"]["oos_period"]}天')
+    logger.info(f"  - 组合规模: {config['combo_wfo']['combo_sizes']}")
+    logger.info(f"  - IS窗口: {config['combo_wfo']['is_period']}天")
+    logger.info(f"  - OOS窗口: {config['combo_wfo']['oos_period']}天")
     logger.info("")
 
     # 环境变量覆盖：可通过 RB_FREQ_SUBSET 指定逗号分隔的换仓频率列表（例如 "8" 或 "8,16,24"）
@@ -131,8 +135,8 @@ def main():
     )
 
     logger.info(f"✅ 数据加载完成")
-    logger.info(f'  - 交易日数: {len(ohlcv["close"])}')
-    logger.info(f'  - ETF数量: {len(ohlcv["close"].columns)}')
+    logger.info(f"  - 交易日数: {len(ohlcv['close'])}")
+    logger.info(f"  - ETF数量: {len(ohlcv['close'].columns)}")
     logger.info("")
 
     # ========== 3-4. 计算因子 + 横截面标准化 (带缓存) ==========
@@ -140,17 +144,80 @@ def main():
     logger.info("🔧 计算精确因子库 + 横截面标准化 (带缓存)")
     logger.info("=" * 100)
 
-    factor_cache = FactorCache(cache_dir=Path(config["data"].get("cache_dir") or ".cache"))
+    factor_cache = FactorCache(
+        cache_dir=Path(config["data"].get("cache_dir") or ".cache")
+    )
     cached = factor_cache.get_or_compute(
         ohlcv=ohlcv,
         config=config,
         data_dir=loader.data_dir,
     )
     standardized_factors = cached["std_factors"]
-    all_factor_names = cached["factor_names"]
+    all_factor_names = list(cached["factor_names"])  # Convert to list for modification
+    factors_3d = cached["factors_3d"]
+    dates = cached["dates"]
+    etf_codes = cached["etf_codes"]
+
+    # ── 加载外部因子 (从parquet文件) ──
+    active_factors_cfg = config.get("active_factors")
+    if active_factors_cfg:
+        external_factors = set(active_factors_cfg) - set(all_factor_names)
+        if external_factors:
+            logger.info(f"🔧 检测到外部因子: {sorted(external_factors)}")
+            factors_dir = Path("results/run_20260212_005855/factors")
+
+            for factor_name in sorted(external_factors):
+                factor_path = factors_dir / f"{factor_name}.parquet"
+                if factor_path.exists():
+                    # 加载外部因子
+                    factor_df = pd.read_parquet(factor_path)
+                    factor_df.index = pd.to_datetime(factor_df.index)
+
+                    # 对齐日期和symbol
+                    factor_aligned = factor_df.reindex(dates)
+                    factor_aligned = factor_aligned[etf_codes]  # 按顺序排列
+
+                    # 转换为numpy数组
+                    factor_arr = factor_aligned.values  # Shape: (T, N)
+
+                    # 检查是否有足够的数据
+                    valid_ratio = np.isfinite(factor_arr).sum() / factor_arr.size
+                    if valid_ratio > 0.01:  # 至少1%有效数据
+                        logger.info(
+                            f"  ✓ {factor_name}: {valid_ratio * 100:.1f}% 有效数据"
+                        )
+
+                        # 标准化处理（截面z-score）
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            mean = np.nanmean(factor_arr, axis=1, keepdims=True)
+                            std = np.nanstd(factor_arr, axis=1, keepdims=True)
+                            factor_std = (factor_arr - mean) / (std + 1e-8)
+                            factor_std = np.where(
+                                np.isfinite(factor_std), factor_std, 0.0
+                            )
+
+                        # 添加到factors_3d
+                        factor_std_expanded = factor_std[
+                            :, :, np.newaxis
+                        ]  # Shape: (T, N, 1)
+                        factors_3d = np.concatenate(
+                            [factors_3d, factor_std_expanded], axis=2
+                        )
+                        all_factor_names.append(factor_name)
+
+                        # 添加到standardized_factors
+                        for j, symbol in enumerate(etf_codes):
+                            factor_series = pd.Series(factor_std[:, j], index=dates)
+                            standardized_factors[(factor_name, symbol)] = factor_series
+                    else:
+                        logger.warning(
+                            f"  ⚠️ {factor_name}: 有效数据不足 ({valid_ratio * 100:.1f}%), 跳过"
+                        )
+                else:
+                    logger.warning(f"  ⚠️ {factor_name}: 因子文件不存在 {factor_path}")
 
     # ── 正交因子集过滤 ──
-    active_factors_cfg = config.get("active_factors")
     if active_factors_cfg:
         active_set = set(active_factors_cfg)
         missing = active_set - set(all_factor_names)
@@ -159,17 +226,118 @@ def main():
         factor_names = sorted(active_set & set(all_factor_names))
         idx_map = {name: i for i, name in enumerate(all_factor_names)}
         selected_idx = [idx_map[f] for f in factor_names]
-        factors_data = cached["factors_3d"][:, :, selected_idx]
+        factors_data = factors_3d[:, :, selected_idx]
         logger.info(
             f"✅ 正交因子集: {len(factor_names)}/{len(all_factor_names)} 个因子已激活"
         )
         logger.info(f"  已排除: {sorted(set(all_factor_names) - active_set)}")
     else:
         factor_names = all_factor_names
-        factors_data = cached["factors_3d"]
+        factors_data = factors_3d
+
+    # ── 加载额外因子矩阵 (来自 factor mining prefilter) ──
+    extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})
+    if extra_cfg.get("enabled", False):
+        extra_path = Path(extra_cfg["path"])
+        if not extra_path.is_absolute():
+            extra_path = ROOT / extra_path
+
+        if not extra_path.exists():
+            raise FileNotFoundError(f"Extra factors not found: {extra_path}")
+
+        extra = np.load(extra_path)
+        extra_names = list(extra["factor_names"])
+        extra_dates = list(extra["dates"])
+        extra_symbols = list(extra["symbols"])
+
+        # Date alignment: extra may have more dates (mining uses full data,
+        # WFO uses training_end_date). Subset extra to base date range.
+        base_dates = [str(d.date()) for d in cached["dates"]]
+        if extra_dates == base_dates:
+            date_slice = slice(None)  # Perfect match
+        elif set(base_dates).issubset(set(extra_dates)):
+            # Extra has more dates — find contiguous slice
+            start_idx = extra_dates.index(base_dates[0])
+            end_idx = extra_dates.index(base_dates[-1])
+            date_slice = slice(start_idx, end_idx + 1)
+            sliced_dates = extra_dates[date_slice]
+            if sliced_dates != base_dates:
+                raise ValueError(
+                    f"Date alignment failed: sliced extra has {len(sliced_dates)} dates "
+                    f"but base has {len(base_dates)}"
+                )
+            logger.info(
+                f"  Extra factors date subset: {len(extra_dates)} → {len(base_dates)} dates"
+            )
+        else:
+            raise ValueError(
+                f"Date mismatch: base has {len(base_dates)} dates "
+                f"({base_dates[0]}~{base_dates[-1]}), "
+                f"extra has {len(extra_dates)} ({extra_dates[0]}~{extra_dates[-1]})"
+            )
+
+        # Symbol alignment: extra may have more symbols than WFO (mining loads
+        # all parquet files, WFO uses config symbol list). Subset to base symbols.
+        base_symbols = cached["etf_codes"]
+        if extra_symbols == base_symbols:
+            symbol_indices = None  # Perfect match
+        elif set(base_symbols).issubset(set(extra_symbols)):
+            symbol_indices = [extra_symbols.index(s) for s in base_symbols]
+            logger.info(
+                f"  Extra factors symbol subset: {len(extra_symbols)} → {len(base_symbols)} ETFs"
+            )
+        else:
+            missing = set(base_symbols) - set(extra_symbols)
+            raise ValueError(
+                f"Symbol mismatch: base needs {sorted(missing)} "
+                f"but extra only has {len(extra_symbols)} symbols"
+            )
+
+        # Exclude factors already in base pool
+        new_mask = [n not in set(factor_names) for n in extra_names]
+        new_indices = [i for i, keep in enumerate(new_mask) if keep]
+        new_names = [extra_names[i] for i in new_indices]
+
+        if new_names:
+            raw_extra = extra["data"][date_slice, :, :][:, :, new_indices]
+            if symbol_indices is not None:
+                extra_data = raw_extra[:, symbol_indices, :]
+            else:
+                extra_data = raw_extra
+            factors_data = np.concatenate([factors_data, extra_data], axis=-1)
+            factor_names = factor_names + new_names
+
+            # Register extra factors into bucket system
+            meta_path = extra_path.parent / "survivors_meta.json"
+            if meta_path.exists():
+                with open(meta_path) as f:
+                    extra_meta = json.load(f)
+                bucket_map = extra_meta.get("factor_bucket_map", {})
+                mapped = {
+                    n: b
+                    for n, b in bucket_map.items()
+                    if n in new_names and b != "UNMAPPED"
+                }
+                if mapped:
+                    from etf_strategy.core.factor_buckets import register_extra_factors
+
+                    register_extra_factors(mapped)
+                    logger.info(
+                        f"  Registered {len(mapped)} extra factors into buckets"
+                    )
+
+            logger.info(
+                f"✅ Extra factors loaded: +{len(new_names)} → "
+                f"total {len(factor_names)} factors"
+            )
+            logger.info(
+                f"  New: {', '.join(new_names[:10])}{'...' if len(new_names) > 10 else ''}"
+            )
+        else:
+            logger.info("  Extra factors: all already in base pool, skipped")
 
     logger.info(f"✅ 因子准备完成: {len(factor_names)} 个因子")
-    logger.info(f'  - 因子列表: {", ".join(factor_names[:10])}...')
+    logger.info(f"  - 因子列表: {', '.join(factor_names[:10])}...")
     logger.info("")
 
     # ========== 5. 准备数据 ==========
@@ -229,10 +397,12 @@ def main():
             "complexity_penalty_lambda"
         ],
         rebalance_frequencies=config["combo_wfo"]["rebalance_frequencies"],
-        use_t1_open=config.get("backtest", {}).get("execution_model", "COC") == "T1_OPEN",
+        use_t1_open=config.get("backtest", {}).get("execution_model", "COC")
+        == "T1_OPEN",
         use_bucket_constraints=bucket_cfg.get("enabled", False),
         bucket_min_buckets=bucket_cfg.get("min_buckets", 3),
         bucket_max_per_bucket=bucket_cfg.get("max_per_bucket", 2),
+        max_parent_occurrence=bucket_cfg.get("max_parent_occurrence", 0),
     )
 
     # ✅ Exp2: 加载成本模型 → 构建 per-ETF 成本数组
@@ -241,8 +411,10 @@ def main():
     qdii_set = set(FrozenETFPool().qdii_codes)
     cost_arr = build_cost_array(cost_model, etf_codes, qdii_set)
     tier = cost_model.active_tier
-    logger.info(f"✅ 成本模型: mode={cost_model.mode}, tier={cost_model.tier}, "
-                f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
+    logger.info(
+        f"✅ 成本模型: mode={cost_model.mode}, tier={cost_model.tier}, "
+        f"A股={tier.a_share * 10000:.0f}bp, QDII={tier.qdii * 10000:.0f}bp"
+    )
 
     top_combos_list, all_combos_df = optimizer.run_combo_search(
         factors_data=factors_data,
@@ -311,13 +483,20 @@ def main():
     top_combos.to_parquet(pending_dir / "top100_by_ic.parquet", index=False)
     logger.info(f"✅ Top{top_n}组合已保存(兼容): {pending_dir}/top100_by_ic.parquet")
 
-    # 保存因子数据到 factors/ 目录
+    # 保存因子数据到 factors/ 目录 (仅base因子; extra因子已在mining输出中)
     factors_dir = pending_dir / "factors"
     factors_dir.mkdir(exist_ok=True)
+    saved_count = 0
     for factor_name in factor_names:
-        factor_df = standardized_factors[factor_name]
-        factor_df.to_parquet(factors_dir / f"{factor_name}.parquet")
-    logger.info(f"✅ {len(factor_names)}个因子已保存: {factors_dir}/")
+        if factor_name in standardized_factors:
+            factor_df = standardized_factors[factor_name]
+            factor_df.to_parquet(factors_dir / f"{factor_name}.parquet")
+            saved_count += 1
+    skipped = len(factor_names) - saved_count
+    msg = f"✅ {saved_count}个因子已保存: {factors_dir}/"
+    if skipped > 0:
+        msg += f" (跳过{skipped}个extra因子)"
+    logger.info(msg)
 
     # 保存因子筛选汇总 (匹配现有格式)
     factor_selection_summary = {
@@ -415,22 +594,22 @@ def main():
     logger.info("=" * 100)
     logger.info("")
     logger.info(f"输出目录: {final_dir}")
-    logger.info(f'总组合数: {summary["total_combos"]}')
+    logger.info(f"总组合数: {summary['total_combos']}")
     logger.info("")
     logger.info("🏆 Top 1 组合:")
-    logger.info(f'  - 名称: {summary["best_combo"]["combo"]}')
-    logger.info(f'  - OOS Sharpe: {summary["best_combo"]["ic"]:.4f} (原IC字段)')
-    logger.info(f'  - 稳定性得分: {summary["best_combo"]["score"]:.2f}')
-    logger.info(f'  - 最优换仓频率: {summary["best_combo"]["freq"]}天')
+    logger.info(f"  - 名称: {summary['best_combo']['combo']}")
+    logger.info(f"  - OOS Sharpe: {summary['best_combo']['ic']:.4f} (原IC字段)")
+    logger.info(f"  - 稳定性得分: {summary['best_combo']['score']:.2f}")
+    logger.info(f"  - 最优换仓频率: {summary['best_combo']['freq']}天")
     if "best_trailing_stop" in top_combos.iloc[0]:
         logger.info(
-            f'  - 最优动态止损: {top_combos.iloc[0]["best_trailing_stop"]*100:.1f}%'
+            f"  - 最优动态止损: {top_combos.iloc[0]['best_trailing_stop'] * 100:.1f}%"
         )
     logger.info("")
     logger.info("📈 整体统计:")
-    logger.info(f'  - 平均OOS Sharpe: {summary["mean_ic"]:.4f}')
+    logger.info(f"  - 平均OOS Sharpe: {summary['mean_ic']:.4f}")
     logger.info(
-        f'  - 显著组合数: {summary["significant_combos"]}/{summary["total_combos"]}'
+        f"  - 显著组合数: {summary['significant_combos']}/{summary['total_combos']}"
     )
     logger.info("")
     logger.info("=" * 100)

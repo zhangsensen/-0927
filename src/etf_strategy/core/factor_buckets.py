@@ -43,6 +43,7 @@ FACTOR_BUCKETS: Dict[str, List[str]] = {
     "VOLUME_CONFIRMATION": [
         "OBV_SLOPE_10D",            # OBV 斜率 — 较正交, 与趋势桶 avg=0.27
         "UP_DOWN_VOL_RATIO_20D",    # 上涨量/下跌量 — 与趋势桶 avg=0.50 (边界)
+        "CMF_20D",                  # Chaikin Money Flow — prefilter survivor, IC=+0.031***
     ],
 
     # Bucket D: 微观结构/流动性 (内部相关 0.02-0.05, 各自独立)
@@ -78,6 +79,20 @@ for bucket_name, factors in FACTOR_BUCKETS.items():
 # 冠军 = AMIHUD(D) + PP_20D(A) + PV_CORR(D) + SLOPE(A)
 # 覆盖: A + D = 2/5 桶
 # 缺失: B, C, E → 缺量能确认和趋势强度, 执行框架下不稳定
+
+
+def register_extra_factors(mapping: Dict[str, str]) -> None:
+    """Dynamically register extra factors into bucket system.
+
+    Args:
+        mapping: {factor_name: bucket_name} for new factors
+    """
+    for factor, bucket in mapping.items():
+        if bucket not in FACTOR_BUCKETS:
+            raise ValueError(f"Unknown bucket '{bucket}'. Valid: {sorted(FACTOR_BUCKETS)}")
+        FACTOR_TO_BUCKET[factor] = bucket
+        if factor not in FACTOR_BUCKETS[bucket]:
+            FACTOR_BUCKETS[bucket].append(factor)
 
 
 def get_bucket_coverage(factor_names: List[str]) -> Dict[str, List[str]]:
@@ -122,11 +137,47 @@ def dict_summary(coverage: Dict[str, List[str]]) -> str:
     return ", ".join(f"{k}={len(v)}" for k, v in sorted(coverage.items()))
 
 
+def get_parent_factors(factor_name: str) -> Set[str]:
+    """Extract parent factors from a (possibly algebraic) factor name.
+
+    Base factor: {'ADX_14D'}
+    Algebraic:   'CMF_20D__sub__GK_VOL_RATIO_20D' → {'CMF_20D', 'GK_VOL_RATIO_20D'}
+    """
+    if "__" not in factor_name:
+        return {factor_name}
+    parts = factor_name.split("__")
+    # pattern: PARENT1__op__PARENT2
+    if len(parts) >= 3:
+        return {parts[0], parts[2]}
+    return {factor_name}
+
+
+def check_parent_diversity(
+    combo: Tuple[str, ...],
+    max_parent_occurrence: int = 2,
+) -> bool:
+    """Check that no single parent factor appears too many times in a combo.
+
+    Args:
+        combo: tuple of factor names
+        max_parent_occurrence: max times any parent can appear (default 2)
+
+    Returns:
+        True if combo passes diversity check
+    """
+    parent_counts: Dict[str, int] = {}
+    for f in combo:
+        for p in get_parent_factors(f):
+            parent_counts[p] = parent_counts.get(p, 0) + 1
+    return all(c <= max_parent_occurrence for c in parent_counts.values())
+
+
 def generate_cross_bucket_combos(
     factor_names: List[str],
     combo_size: int,
     min_buckets: int = 3,
     max_per_bucket: int = 2,
+    max_parent_occurrence: int = 0,
 ) -> List[Tuple[str, ...]]:
     """生成满足跨桶约束的因子组合.
 
@@ -137,6 +188,7 @@ def generate_cross_bucket_combos(
         combo_size: 组合大小 (e.g. 4)
         min_buckets: 最少覆盖桶数
         max_per_bucket: 每桶最多选几个
+        max_parent_occurrence: 每个父因子最多出现次数 (0=不限制)
 
     Returns:
         满足约束的因子名组合列表
@@ -155,6 +207,8 @@ def generate_cross_bucket_combos(
 
     if n_buckets_available < min_buckets:
         return []  # 不够桶
+
+    use_parent_filter = max_parent_occurrence > 0
 
     # 枚举桶的选择方案: 选哪些桶, 每桶选几个
     # 用整数分配: combo_size 个因子分到 k 个桶, 每桶 1~max_per_bucket 个
@@ -184,6 +238,10 @@ def generate_cross_bucket_combos(
                     combo = []
                     for part in combo_parts:
                         combo.extend(part)
+                    if use_parent_filter and not check_parent_diversity(
+                        tuple(combo), max_parent_occurrence
+                    ):
+                        continue
                     results.add(frozenset(combo))
 
     return [tuple(sorted(c)) for c in sorted(results)]
