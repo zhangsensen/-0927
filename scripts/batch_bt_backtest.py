@@ -23,8 +23,6 @@ from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.factor_cache import FactorCache
 from etf_strategy.core.cost_model import load_cost_model, CostModel
 from etf_strategy.core.frozen_params import load_frozen_config, FrozenETFPool
-from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
-from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import (
     shift_timing_signal,
@@ -338,6 +336,13 @@ def process_combo(row_data):
 
     factors = [f.strip() for f in combo_str.split(" + ")]
     dates = timing_series.index
+
+    # 检查因子是否都存在
+    missing = [f for f in factors if f not in std_factors]
+    if missing:
+        print(f"  ⚠️ Combo skipped — missing factors {missing}: {combo_str}")
+        return {"combo": combo_str, "bt_return": np.nan, "bt_margin_failures": -1,
+                "error": f"missing factors: {missing}"}
 
     # 构造得分矩阵 (使用 DataFrame.add 保持 NaN 处理一致性)
     # ✅ 与 full_vec_bt_comparison.py 保持一致：fill_value=0 避免 NaN 传播

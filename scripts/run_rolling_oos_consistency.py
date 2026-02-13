@@ -45,8 +45,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from etf_strategy.core.utils.run_meta import write_step_meta
 from etf_strategy.core.data_loader import DataLoader
-from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
-from etf_strategy.core.cross_section_processor import CrossSectionProcessor
+from etf_strategy.core.factor_cache import FactorCache
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import shift_timing_signal
 from etf_strategy.regime_gate import compute_regime_gate_arr
@@ -234,6 +233,8 @@ def process_combo(
     try:
         combo_indices = [factor_index_map[f] for f in factors_in_combo]
     except KeyError:
+        missing = [f for f in factors_in_combo if f not in factor_index_map]
+        print(f"  ⚠️ Combo skipped — missing factors {missing}: {combo_str}")
         return None
 
     current_factors = all_factors_stack[..., combo_indices]
@@ -482,24 +483,18 @@ def main() -> None:
         end_date=full_end,
     )
 
-    # Factors
-    factor_lib = PreciseFactorLibrary()
-    raw_factors_df = factor_lib.compute_all_factors(ohlcv)
-    factor_names_list = sorted(
-        raw_factors_df.columns.get_level_values(0).unique().tolist()
+    # Factors (via FactorCache — includes non-OHLCV factors)
+    factor_cache = FactorCache(
+        cache_dir=Path(config["data"].get("cache_dir") or ".cache")
     )
-    raw_factors = {fname: raw_factors_df[fname] for fname in factor_names_list}
-
-    processor = CrossSectionProcessor(verbose=False)
-    std_factors = processor.process_all_factors(raw_factors)
-
-    first_factor = std_factors[factor_names_list[0]]
-    all_dates = first_factor.index
-    etf_codes = first_factor.columns.tolist()
-
-    all_factors_stack = np.stack(
-        [std_factors[f].values for f in factor_names_list], axis=-1
+    cached = factor_cache.get_or_compute(
+        ohlcv=ohlcv, config=config, data_dir=loader.data_dir,
     )
+    factor_names_list = cached["factor_names"]
+    all_dates = cached["dates"]
+    etf_codes = cached["etf_codes"]
+
+    all_factors_stack = cached["factors_3d"]
 
     # ✅ Exp2: 构建 per-ETF 成本数组
     cost_model = load_cost_model(config)

@@ -26,12 +26,11 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from etf_strategy.core.cross_section_processor import CrossSectionProcessor
 from etf_strategy.core.data_loader import DataLoader
+from etf_strategy.core.factor_cache import FactorCache
 from etf_strategy.core.frozen_params import CURRENT_VERSION, get_qdii_tickers, get_universe_mode
 from etf_strategy.core.hysteresis import apply_hysteresis
 from etf_strategy.core.market_timing import LightTimingModule
-from etf_strategy.core.precise_factor_library_v2 import PreciseFactorLibrary
 from etf_strategy.core.utils.rebalance import generate_rebalance_schedule
 from etf_strategy.regime_gate import compute_regime_gate_arr
 
@@ -264,15 +263,17 @@ def _iter_combo_factors(combo: str) -> list[str]:
     return [s.strip() for s in combo.split("+") if s.strip()]
 
 
-def _compute_std_factors(ohlcv: dict) -> dict[str, pd.DataFrame]:
-    factor_lib = PreciseFactorLibrary()
-    raw_factors_df = factor_lib.compute_all_factors(ohlcv)
-    factor_names = sorted(raw_factors_df.columns.get_level_values(0).unique().tolist())
-    raw_factors = {name: raw_factors_df[name] for name in factor_names}
-
-    processor = CrossSectionProcessor(verbose=False)
-    std_factors = processor.process_all_factors(raw_factors)
-    return std_factors
+def _compute_std_factors(
+    ohlcv: dict, config: dict, data_dir: Path, loader=None,
+) -> dict[str, pd.DataFrame]:
+    """Compute standardized factors via FactorCache (includes non-OHLCV factors)."""
+    factor_cache = FactorCache(
+        cache_dir=Path(config["data"].get("cache_dir") or ".cache")
+    )
+    cached = factor_cache.get_or_compute(
+        ohlcv=ohlcv, config=config, data_dir=data_dir, loader=loader,
+    )
+    return cached["std_factors"]
 
 
 def _ensure_asof_in_index(df: pd.DataFrame, asof: str) -> pd.Timestamp:
@@ -335,8 +336,8 @@ def main() -> int:
     close_df: pd.DataFrame = ohlcv["close"]
     asof_ts = _ensure_asof_in_index(close_df, args.asof)
 
-    # 2) 计算标准化因子（与 VEC 一致）
-    std_factors = _compute_std_factors(ohlcv)
+    # 2) 计算标准化因子（与 VEC 一致，含 non-OHLCV 因子）
+    std_factors = _compute_std_factors(ohlcv, raw_config, loader.data_dir, loader=loader)
 
     # Exp5: temporal EMA smoothing
     ts_cfg = backtest_config.get("temporal_smoothing", {})
