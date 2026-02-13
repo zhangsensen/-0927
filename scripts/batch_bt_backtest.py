@@ -2,6 +2,7 @@
 """
 批量 BT 回测：遍历 WFO 输出的全部组合，逐个用 Backtrader GenericStrategy 回测并保存结果。
 """
+
 import gc
 import sys
 import argparse
@@ -17,6 +18,9 @@ import numpy as np
 import backtrader as bt
 from tqdm import tqdm
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from etf_strategy.core.utils.run_meta import write_step_meta
 from etf_strategy.core.data_loader import DataLoader
@@ -144,8 +148,11 @@ def run_bt_backtest(
                 daily_returns = pd.Series(tr_analysis).sort_index()
             else:
                 daily_returns = pd.Series(list(tr_analysis))
-        except Exception:
-            daily_returns = None
+        except Exception as e:
+            logger.warning(
+                "Failed to extract daily_returns from TimeReturn analyzer: %s", e
+            )
+            daily_returns = pd.Series()
 
     # ✅ P0: 提取风险指标
     # DrawDown Analyzer
@@ -341,8 +348,12 @@ def process_combo(row_data):
     missing = [f for f in factors if f not in std_factors]
     if missing:
         print(f"  ⚠️ Combo skipped — missing factors {missing}: {combo_str}")
-        return {"combo": combo_str, "bt_return": np.nan, "bt_margin_failures": -1,
-                "error": f"missing factors: {missing}"}
+        return {
+            "combo": combo_str,
+            "bt_return": np.nan,
+            "bt_margin_failures": -1,
+            "error": f"missing factors: {missing}",
+        }
 
     # 构造得分矩阵 (使用 DataFrame.add 保持 NaN 处理一致性)
     # ✅ 与 full_vec_bt_comparison.py 保持一致：fill_value=0 避免 NaN 传播
@@ -447,11 +458,15 @@ def main():
     )
     # ✅ Exp4: 换仓迟滞 CLI 参数
     parser.add_argument(
-        "--delta-rank", type=float, default=0.0,
+        "--delta-rank",
+        type=float,
+        default=0.0,
         help="Exp4: rank01 gap threshold for swap (0 = disabled)",
     )
     parser.add_argument(
-        "--min-hold-days", type=int, default=0,
+        "--min-hold-days",
+        type=int,
+        default=0,
         help="Exp4: minimum hold days before sell (0 = disabled)",
     )
     args = parser.parse_args()
@@ -540,6 +555,7 @@ def main():
 
     # ✅ Exp1: 执行模型
     from etf_strategy.core.execution_model import load_execution_model
+
     exec_model = load_execution_model(config)
     USE_T1_OPEN = exec_model.is_t1_open
     print(f"   EXECUTION_MODEL: {exec_model.mode}")
@@ -558,7 +574,9 @@ def main():
     )
 
     # 3. 计算因子 (带缓存)
-    factor_cache = FactorCache(cache_dir=Path(config["data"].get("cache_dir") or ".cache"))
+    factor_cache = FactorCache(
+        cache_dir=Path(config["data"].get("cache_dir") or ".cache")
+    )
     cached = factor_cache.get_or_compute(
         ohlcv=ohlcv,
         config=config,
@@ -585,8 +603,14 @@ def main():
             base_symbols = list(etf_codes)
 
             # Symbol alignment: subset extra to base symbols
-            sym_idx = [extra_symbols.index(s) for s in base_symbols if s in extra_symbols]
-            sym_names = [base_symbols[i] for i, s in enumerate(base_symbols) if s in extra_symbols]
+            sym_idx = [
+                extra_symbols.index(s) for s in base_symbols if s in extra_symbols
+            ]
+            sym_names = [
+                base_symbols[i]
+                for i, s in enumerate(base_symbols)
+                if s in extra_symbols
+            ]
 
             # Filter to only new factors (not already in std_factors)
             existing = set(std_factors.keys())
@@ -598,10 +622,20 @@ def main():
                 raw = extra["data"][:, :, new_indices]  # (T_extra, N_extra, F_new)
                 # Subset symbols
                 if len(sym_idx) < len(extra_symbols):
-                    raw = raw[:, [extra_symbols.index(s) for s in base_symbols if s in extra_symbols], :]
+                    raw = raw[
+                        :,
+                        [
+                            extra_symbols.index(s)
+                            for s in base_symbols
+                            if s in extra_symbols
+                        ],
+                        :,
+                    ]
 
                 # Convert each factor slice to DataFrame, aligning to base dates
-                extra_dates_pd = pd.DatetimeIndex([pd.Timestamp(d) for d in extra_dates_str])
+                extra_dates_pd = pd.DatetimeIndex(
+                    [pd.Timestamp(d) for d in extra_dates_str]
+                )
                 n_added = 0
                 for fi, fname in enumerate(new_names):
                     factor_df = pd.DataFrame(
@@ -620,7 +654,9 @@ def main():
                     n_added += 1
 
                 factor_names = sorted(std_factors.keys())
-                print(f"✅ Extra factors loaded: +{n_added} → total {len(factor_names)}")
+                print(
+                    f"✅ Extra factors loaded: +{n_added} → total {len(factor_names)}"
+                )
         else:
             print(f"⚠️  Extra factors path not found: {extra_path}, skipping")
 
@@ -630,7 +666,9 @@ def main():
     pos_size = backtest_config.get("pos_size", 3)
     initial_capital = float(backtest_config.get("initial_capital", 1_000_000.0))
     commission_rate = float(backtest_config.get("commission_rate", 0.0002))
-    lookback = backtest_config.get("lookback") or backtest_config.get("lookback_window", 252)
+    lookback = backtest_config.get("lookback") or backtest_config.get(
+        "lookback_window", 252
+    )
 
     # ✅ Exp2: 加载成本模型
     cost_model = load_cost_model(config)
@@ -641,7 +679,7 @@ def main():
     )
     print(
         f"✅ 成本模型: mode={cost_model.mode}, tier={cost_model.tier}, "
-        f"A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp"
+        f"A股={tier.a_share * 10000:.0f}bp, QDII={tier.qdii * 10000:.0f}bp"
     )
     # ✅ Exp4: hysteresis — config 为默认, CLI 为 override
     hyst_config = backtest_config.get("hysteresis", {})
@@ -657,7 +695,9 @@ def main():
     args.delta_rank = effective_delta_rank
     args.min_hold_days = effective_min_hold_days
     if args.delta_rank > 0 or args.min_hold_days > 0:
-        print(f"✅ Exp4: EXECUTION=F5_ON(dr={args.delta_rank}, mh={args.min_hold_days})")
+        print(
+            f"✅ Exp4: EXECUTION=F5_ON(dr={args.delta_rank}, mh={args.min_hold_days})"
+        )
     else:
         print(f"⚠️  Exp4: EXECUTION=F5_OFF (hysteresis disabled)")
 
@@ -727,7 +767,10 @@ def main():
     # 4. 多进程回测
     # 自动检测: 物理核心数 (16), compute-bound BT 任务 SMT 收益 <5%
     import os as _os
-    num_workers = int(_os.environ.get("BT_NUM_WORKERS", min((_os.cpu_count() or 8) // 2, 16)))
+
+    num_workers = int(
+        _os.environ.get("BT_NUM_WORKERS", min((_os.cpu_count() or 8) // 2, 16))
+    )
     print(f"🚀 启动多进程回测 (Workers: {num_workers})...")
 
     # 准备任务列表 (转换为 dict 列表以便传递)
@@ -776,7 +819,13 @@ def main():
     df_results = pd.DataFrame(results)
     df_results.to_parquet(output_dir / "bt_results.parquet", index=False)
 
-    write_step_meta(output_dir, step="bt", inputs={"combos": str(args.combos)}, config=str(args.config or "default"), extras={"combo_count": len(df_results), "topk": args.topk})
+    write_step_meta(
+        output_dir,
+        step="bt",
+        inputs={"combos": str(args.combos)},
+        config=str(args.config or "default"),
+        extras={"combo_count": len(df_results), "topk": args.topk},
+    )
 
     print(f"\n✅ BT 批量回测完成")
     print(f"   输出目录: {output_dir}")

@@ -4,6 +4,7 @@
 
 ✅ P0 修正: 删除所有硬编码常量，强制从配置文件读取
 """
+
 import sys
 from pathlib import Path
 
@@ -16,6 +17,9 @@ from tqdm import tqdm
 from datetime import datetime
 from numba import njit
 from joblib import Parallel, delayed
+import logging
+
+logger = logging.getLogger(__name__)
 
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.factor_cache import FactorCache
@@ -761,11 +765,15 @@ def vec_backtest_kernel(
                 )
                 if use_pre_hyst_pool:
                     top_indices = pool_diversify_topk(
-                        combined_score, pool_ids,
-                        effective_pos_size, pool_constraint_extended_k,
+                        combined_score,
+                        pool_ids,
+                        effective_pos_size,
+                        pool_constraint_extended_k,
                     )
                 else:
-                    top_indices = stable_topk_indices(combined_score, effective_pos_size)
+                    top_indices = stable_topk_indices(
+                        combined_score, effective_pos_size
+                    )
                 for k in range(len(top_indices)):
                     idx = top_indices[k]
                     if combined_score[idx] == -np.inf:
@@ -782,9 +790,13 @@ def vec_backtest_kernel(
 
             if (delta_rank > 0.0 or min_hold_days > 0) and buy_count > 0:
                 target_mask = apply_hysteresis(
-                    combined_score, h_mask, hold_days_arr,
-                    top_indices, effective_pos_size,
-                    delta_rank, min_hold_days,
+                    combined_score,
+                    h_mask,
+                    hold_days_arr,
+                    top_indices,
+                    effective_pos_size,
+                    delta_rank,
+                    min_hold_days,
                 )
                 # Overwrite target_set and buy_order from hysteresis result
                 for n in range(N):
@@ -1014,7 +1026,7 @@ def vec_backtest_kernel(
         )
         if np.isinf(annual_return) or np.isnan(annual_return):
             annual_return = -0.99
-    except:
+    except Exception:
         annual_return = -0.99
 
     # 年化波动率（daily std * sqrt(252)）
@@ -1208,9 +1220,7 @@ def run_vec_backtest(
             len(rebalance_schedule), -1, dtype=np.int64
         )
     else:
-        dynamic_pos_size_arr_internal = np.asarray(
-            dynamic_pos_size_arr, dtype=np.int64
-        )
+        dynamic_pos_size_arr_internal = np.asarray(dynamic_pos_size_arr, dtype=np.int64)
 
     # ✅ Pool diversity constraint
     if pool_ids is not None and pool_constraint_extended_k > 0:
@@ -1303,7 +1313,11 @@ def run_vec_backtest(
     # ✅ Exp2: 计算换手率和成本拖拽
     trading_days_total = T - start_day
     years_total = trading_days_total / 252.0 if trading_days_total > 0 else 1.0
-    turnover_ann = total_turnover_value / (initial_capital * years_total) if years_total > 0 else 0.0
+    turnover_ann = (
+        total_turnover_value / (initial_capital * years_total)
+        if years_total > 0
+        else 0.0
+    )
     final_value_est = initial_capital * (1.0 + total_return)
     gross_pnl = final_value_est - initial_capital
     cost_drag = total_commission_paid / max(gross_pnl, 1.0) if gross_pnl > 0 else 0.0
@@ -1344,6 +1358,7 @@ def main():
 
     # 0. ✅ P0: 立即加载配置文件
     import os
+
     config_path = Path(
         os.environ.get("WFO_CONFIG_PATH", str(ROOT / "configs/combo_wfo_config.yaml"))
     )
@@ -1370,10 +1385,11 @@ def main():
     print(f"   POS_SIZE: {POS_SIZE}")
     print(f"   LOOKBACK: {LOOKBACK}")
     print(f"   INITIAL_CAPITAL: {INITIAL_CAPITAL:,.0f}")
-    print(f"   COMMISSION_RATE: {COMMISSION_RATE*10000:.1f} bp")
+    print(f"   COMMISSION_RATE: {COMMISSION_RATE * 10000:.1f} bp")
 
     # ✅ Exp1: 执行模型
     from etf_strategy.core.execution_model import load_execution_model
+
     exec_model = load_execution_model(config)
     USE_T1_OPEN = exec_model.is_t1_open
     print(f"   EXECUTION_MODEL: {exec_model.mode}")
@@ -1381,6 +1397,7 @@ def main():
     # ✅ Exp2: 成本模型
     from etf_strategy.core.cost_model import load_cost_model, build_cost_array
     from etf_strategy.core.frozen_params import FrozenETFPool
+
     cost_model = load_cost_model(config)
     qdii_set = set(FrozenETFPool().qdii_codes)
     print(f"   COST_MODEL: mode={cost_model.mode}, tier={cost_model.tier}")
@@ -1438,7 +1455,9 @@ def main():
     )
 
     # 3. 计算因子 (带缓存)
-    factor_cache = FactorCache(cache_dir=Path(config["data"].get("cache_dir") or ".cache"))
+    factor_cache = FactorCache(
+        cache_dir=Path(config["data"].get("cache_dir") or ".cache")
+    )
     cached = factor_cache.get_or_compute(
         ohlcv=ohlcv,
         config=config,
@@ -1454,7 +1473,9 @@ def main():
     # ✅ Exp2: 构建 per-ETF 成本数组
     COST_ARR = build_cost_array(cost_model, list(etf_codes), qdii_set)
     tier = cost_model.active_tier
-    print(f"   COST_ARR: A股={tier.a_share*10000:.0f}bp, QDII={tier.qdii*10000:.0f}bp")
+    print(
+        f"   COST_ARR: A股={tier.a_share * 10000:.0f}bp, QDII={tier.qdii * 10000:.0f}bp"
+    )
     factors_3d = cached["factors_3d"]
     factor_names = list(factor_names)  # Convert to mutable list
 
@@ -1464,6 +1485,7 @@ def main():
     extra_cfg = config.get("combo_wfo", {}).get("extra_factors", {})
     if extra_cfg.get("enabled", False):
         import json as _json
+
         extra_path = Path(extra_cfg["path"])
         if not extra_path.is_absolute():
             extra_path = ROOT / extra_path
@@ -1484,22 +1506,30 @@ def main():
                 si = extra_dates.index(base_dates[0])
                 ei = extra_dates.index(base_dates[-1])
                 date_slice = slice(si, ei + 1)
-                print(f"  Extra factors date subset: {len(extra_dates)} → {len(base_dates)}")
+                print(
+                    f"  Extra factors date subset: {len(extra_dates)} → {len(base_dates)}"
+                )
             elif set(extra_dates).issubset(set(base_dates)):
                 # Base has more dates (e.g. VEC uses full range, mining stopped earlier)
                 # Take all extra dates, pad remaining with NaN
                 date_slice = slice(None)
                 _need_pad = True
-                print(f"  Extra factors date pad: {len(extra_dates)} → {len(base_dates)} (NaN-padded)")
+                print(
+                    f"  Extra factors date pad: {len(extra_dates)} → {len(base_dates)} (NaN-padded)"
+                )
             else:
-                raise ValueError(f"Date mismatch: base {len(base_dates)}, extra {len(extra_dates)}")
+                raise ValueError(
+                    f"Date mismatch: base {len(base_dates)}, extra {len(extra_dates)}"
+                )
 
             # Symbol alignment
             if extra_symbols == base_symbols:
                 sym_idx = None
             elif set(base_symbols).issubset(set(extra_symbols)):
                 sym_idx = [extra_symbols.index(s) for s in base_symbols]
-                print(f"  Extra factors symbol subset: {len(extra_symbols)} → {len(base_symbols)}")
+                print(
+                    f"  Extra factors symbol subset: {len(extra_symbols)} → {len(base_symbols)}"
+                )
             else:
                 raise ValueError(f"Symbol mismatch: base needs symbols not in extra")
 
@@ -1521,7 +1551,7 @@ def main():
                     # Find where extra dates start in base
                     pad_start = base_dates.index(extra_dates[0])
                     padded = np.full((T_base, N_sym, F_new), np.nan, dtype=np.float32)
-                    padded[pad_start:pad_start + T_extra, :, :] = raw
+                    padded[pad_start : pad_start + T_extra, :, :] = raw
                     extra_data = padded
                 else:
                     extra_data = raw
@@ -1529,7 +1559,9 @@ def main():
                 factor_names = factor_names + new_names
                 T = factors_3d.shape[0]
                 N = factors_3d.shape[1]
-                print(f"✅ Extra factors loaded: +{len(new_names)} → total {len(factor_names)}")
+                print(
+                    f"✅ Extra factors loaded: +{len(new_names)} → total {len(factor_names)}"
+                )
         else:
             print(f"⚠️  Extra factors path not found: {extra_path}, skipping")
 
@@ -1584,7 +1616,7 @@ def main():
             print(
                 f"   大盘择时 (MA{index_timing_config.get('window', 200)}): "
                 f"熊市 {stats['bear_days']:.0f} 天 ({stats['bear_ratio']:.1f}%), "
-                f"熊市仓位 {index_timing_config.get('bear_position', 0.1)*100:.0f}%"
+                f"熊市仓位 {index_timing_config.get('bear_position', 0.1) * 100:.0f}%"
             )
         else:
             timing_arr_raw = np.ones(T, dtype=np.float64)
@@ -1679,7 +1711,7 @@ def main():
         avg_atr = np.nanmean(atr_arr)
         print(f"   ATR 有效率: {valid_atr_pct:.1f}%, 平均 ATR: {avg_atr:.4f}")
     else:
-        print(f"✅ 止损模式: Fixed 百分比 ({trailing_stop_pct*100:.1f}%)")
+        print(f"✅ 止损模式: Fixed 百分比 ({trailing_stop_pct * 100:.1f}%)")
         atr_arr = None
 
     # ✅ v1.3: 显示止损检查时机
@@ -1707,30 +1739,40 @@ def main():
     for i, ladder in enumerate(profit_ladders):
         if use_atr_stop:
             print(
-                f"   [{i+1}] 收益>{ladder.get('threshold', 0)*100:.0f}% → ATR倍数={ladder.get('new_multiplier', atr_multiplier):.1f}x"
+                f"   [{i + 1}] 收益>{ladder.get('threshold', 0) * 100:.0f}% → ATR倍数={ladder.get('new_multiplier', atr_multiplier):.1f}x"
             )
         else:
             print(
-                f"   [{i+1}] 收益>{ladder.get('threshold', 0)*100:.0f}% → 止损={ladder.get('new_stop', 0)*100:.1f}%"
+                f"   [{i + 1}] 收益>{ladder.get('threshold', 0) * 100:.0f}% → 止损={ladder.get('new_stop', 0) * 100:.1f}%"
             )
     print(
-        f"✅ 熔断机制: 单日={circuit_breaker_day*100:.1f}%, 总回撤={circuit_breaker_total*100:.1f}%, 恢复={circuit_recovery_days}天"
+        f"✅ 熔断机制: 单日={circuit_breaker_day * 100:.1f}%, 总回撤={circuit_breaker_total * 100:.1f}%, 恢复={circuit_recovery_days}天"
     )
     print(f"✅ 冷却期: {cooldown_days} 天")
     print(f"✅ 杠杆上限: {leverage_cap} (零杠杆原则)")
 
     # ✅ Pool diversity constraint
-    pool_constraint_config = backtest_config.get("portfolio_constraints", {}).get("pool_diversity", {})
+    pool_constraint_config = backtest_config.get("portfolio_constraints", {}).get(
+        "pool_diversity", {}
+    )
     pool_diversity_enabled = pool_constraint_config.get("enabled", False)
-    POOL_EXTENDED_K = pool_constraint_config.get("extended_k", 10) if pool_diversity_enabled else 0
+    POOL_EXTENDED_K = (
+        pool_constraint_config.get("extended_k", 10) if pool_diversity_enabled else 0
+    )
     POOL_POST_HYST = pool_constraint_config.get("post_hyst", False)
     if pool_diversity_enabled:
-        from etf_strategy.core.etf_pool_mapper import load_pool_mapping, build_pool_array
+        from etf_strategy.core.etf_pool_mapper import (
+            load_pool_mapping,
+            build_pool_array,
+        )
+
         pool_mapping = load_pool_mapping(config_path.parent / "etf_pools.yaml")
         POOL_IDS = build_pool_array(etf_codes, pool_mapping)
         n_mapped = int(np.sum(POOL_IDS >= 0))
         n_pools = len(set(int(p) for p in POOL_IDS if p >= 0))
-        print(f"✅ 池约束: enabled, extended_k={POOL_EXTENDED_K}, mapped={n_mapped}/{len(etf_codes)}, pools={n_pools}")
+        print(
+            f"✅ 池约束: enabled, extended_k={POOL_EXTENDED_K}, mapped={n_mapped}/{len(etf_codes)}, pools={n_pools}"
+        )
     else:
         POOL_IDS = None
         POOL_POST_HYST = False
@@ -1868,12 +1910,17 @@ def main():
 
     # ✅ 并行回测（Numba JIT 释放 GIL，线程池避免序列化开销）
     import os as _os
-    n_vec_jobs = int(_os.environ.get("VEC_N_JOBS", min((_os.cpu_count() or 8) // 2, 16)))
+
+    n_vec_jobs = int(
+        _os.environ.get("VEC_N_JOBS", min((_os.cpu_count() or 8) // 2, 16))
+    )
     n_combos = len(combo_strings)
     # 小批量自动保存权益曲线 (用于 holdout 分析)
     _save_equity = n_combos <= 200
-    print(f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs})"
-          + (", 保存权益曲线" if _save_equity else ""))
+    print(
+        f"\n🚀 并行 VEC 回测: {n_combos} 组合 (n_jobs={n_vec_jobs})"
+        + (", 保存权益曲线" if _save_equity else "")
+    )
     results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
         delayed(_backtest_one_combo)(cs, fi)
         for cs, fi in tqdm(
@@ -1901,8 +1948,8 @@ def main():
             dates_str = np.array([str(d.date()) for d in dates])
             np.savez_compressed(
                 output_dir / "equity_curves.npz",
-                curves=eq_matrix,        # (T, n_combos)
-                dates=dates_str,          # (T,)
+                curves=eq_matrix,  # (T, n_combos)
+                dates=dates_str,  # (T,)
                 combos=np.array(combo_names),
             )
             print(f"   权益曲线已保存: {len(combo_names)} 组合 × {len(dates_str)} 天")
