@@ -25,6 +25,14 @@ Combo WFO 入口脚本 - 全空间搜索
 import sys
 import os
 from pathlib import Path
+
+# Must set NUMBA_NUM_THREADS before any Numba import to prevent
+# thread pool conflict when FactorCache misses and triggers parallel @njit
+if not os.getenv("NUMBA_NUM_THREADS"):
+    cpu_count = os.cpu_count() or 8
+    n_jobs = min(cpu_count // 2, 8)  # mirror _get_optimal_n_jobs logic
+    os.environ["NUMBA_NUM_THREADS"] = str(max(1, cpu_count // n_jobs))
+
 import yaml
 import logging
 from datetime import datetime
