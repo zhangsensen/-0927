@@ -28,7 +28,11 @@ import yaml
 
 from etf_strategy.core.data_loader import DataLoader
 from etf_strategy.core.factor_cache import FactorCache
-from etf_strategy.core.frozen_params import CURRENT_VERSION, get_qdii_tickers, get_universe_mode
+from etf_strategy.core.frozen_params import (
+    CURRENT_VERSION,
+    get_qdii_tickers,
+    get_universe_mode,
+)
 from etf_strategy.core.hysteresis import apply_hysteresis
 from etf_strategy.core.market_timing import LightTimingModule
 from etf_strategy.core.utils.rebalance import generate_rebalance_schedule
@@ -264,14 +268,20 @@ def _iter_combo_factors(combo: str) -> list[str]:
 
 
 def _compute_std_factors(
-    ohlcv: dict, config: dict, data_dir: Path, loader=None,
+    ohlcv: dict,
+    config: dict,
+    data_dir: Path,
+    loader=None,
 ) -> dict[str, pd.DataFrame]:
     """Compute standardized factors via FactorCache (includes non-OHLCV factors)."""
     factor_cache = FactorCache(
         cache_dir=Path(config["data"].get("cache_dir") or ".cache")
     )
     cached = factor_cache.get_or_compute(
-        ohlcv=ohlcv, config=config, data_dir=data_dir, loader=loader,
+        ohlcv=ohlcv,
+        config=config,
+        data_dir=data_dir,
+        loader=loader,
     )
     return cached["std_factors"]
 
@@ -337,7 +347,9 @@ def main() -> int:
     asof_ts = _ensure_asof_in_index(close_df, args.asof)
 
     # 2) 计算标准化因子（与 VEC 一致，含 non-OHLCV 因子）
-    std_factors = _compute_std_factors(ohlcv, raw_config, loader.data_dir, loader=loader)
+    std_factors = _compute_std_factors(
+        ohlcv, raw_config, loader.data_dir, loader=loader
+    )
 
     # Exp5: temporal EMA smoothing
     ts_cfg = backtest_config.get("temporal_smoothing", {})
@@ -411,11 +423,19 @@ def main() -> int:
         prev_strategies = prev_state.get("strategies", {})
 
     # 6a-pre) Pool diversity constraint (mirrors VEC kernel logic)
-    pool_constraint_cfg = backtest_config.get("portfolio_constraints", {}).get("pool_diversity", {})
+    pool_constraint_cfg = backtest_config.get("portfolio_constraints", {}).get(
+        "pool_diversity", {}
+    )
     pool_diversity_enabled = pool_constraint_cfg.get("enabled", False)
-    pool_extended_k = pool_constraint_cfg.get("extended_k", 10) if pool_diversity_enabled else 0
+    pool_extended_k = (
+        pool_constraint_cfg.get("extended_k", 10) if pool_diversity_enabled else 0
+    )
     if pool_diversity_enabled:
-        from etf_strategy.core.etf_pool_mapper import load_pool_mapping, build_pool_array
+        from etf_strategy.core.etf_pool_mapper import (
+            load_pool_mapping,
+            build_pool_array,
+        )
+
         _pool_map = load_pool_mapping(ROOT / "configs" / "etf_pools.yaml")
         pool_ids = build_pool_array(list(tickers), _pool_map)
         logger.info(f"池约束: enabled, extended_k={pool_extended_k}")
@@ -433,6 +453,14 @@ def main() -> int:
     for _, row in df_candidates.iterrows():
         combo = str(row["combo"]).strip()
         factors = _iter_combo_factors(combo)
+
+        missing_factors = [f for f in factors if f not in std_factors]
+        if missing_factors:
+            logger.warning(
+                "Strategy %s has missing factors: %s. Signal may be degraded.",
+                combo,
+                missing_factors,
+            )
 
         scores = np.full(len(tickers), -np.inf, dtype=float)
         valid = 0
@@ -480,11 +508,17 @@ def main() -> int:
         if valid >= proto.pos_size:
             # ✅ Pool diversity: prefer cross-pool candidates
             if pool_ids is not None and pool_extended_k > 0:
-                top_indices = _pool_diversify_topk(scores, pool_ids, proto.pos_size, pool_extended_k)
+                top_indices = _pool_diversify_topk(
+                    scores, pool_ids, proto.pos_size, pool_extended_k
+                )
             else:
                 top_indices = _stable_topk_indices(scores, proto.pos_size)
 
-            if hysteresis_enabled and is_rebalance_day and len(top_indices) == proto.pos_size:
+            if (
+                hysteresis_enabled
+                and is_rebalance_day
+                and len(top_indices) == proto.pos_size
+            ):
                 # Load per-combo state
                 combo_state = prev_strategies.get(combo, {})
                 signal_portfolio = set(combo_state.get("signal_portfolio", []))
@@ -500,8 +534,13 @@ def main() -> int:
 
                 top_arr = np.array(top_indices, dtype=np.int64)
                 target_mask = apply_hysteresis(
-                    scores, hmask, hdays, top_arr,
-                    proto.pos_size, proto.delta_rank, proto.min_hold_days,
+                    scores,
+                    hmask,
+                    hdays,
+                    top_arr,
+                    proto.pos_size,
+                    proto.delta_rank,
+                    proto.min_hold_days,
                 )
                 picks = [i for i in range(len(tickers)) if target_mask[i]]
 
@@ -518,7 +557,9 @@ def main() -> int:
                 new_set = set(new_portfolio)
                 for t in new_set:
                     if t in signal_portfolio:
-                        new_hold_days[t] = signal_hold_days.get(t, 0)  # already incremented
+                        new_hold_days[t] = signal_hold_days.get(
+                            t, 0
+                        )  # already incremented
                     else:
                         new_hold_days[t] = 0  # T+1 Open: init to 0, next run increments
                 new_strategies[combo] = {
@@ -598,7 +639,9 @@ def main() -> int:
 
             # Separate state file per shadow strategy
             s_state_path = STATE_DIR / f"signal_state_shadow_{s_name}.json"
-            s_prev_state = _load_signal_state(s_state_path) if hysteresis_enabled else None
+            s_prev_state = (
+                _load_signal_state(s_state_path) if hysteresis_enabled else None
+            )
             s_combo_state: dict = {}
             s_elapsed = 0
 
@@ -664,20 +707,33 @@ def main() -> int:
 
             if s_valid >= proto.pos_size:
                 if pool_ids is not None and pool_extended_k > 0:
-                    s_top = _pool_diversify_topk(s_scores, pool_ids, proto.pos_size, pool_extended_k)
+                    s_top = _pool_diversify_topk(
+                        s_scores, pool_ids, proto.pos_size, pool_extended_k
+                    )
                 else:
                     s_top = _stable_topk_indices(s_scores, proto.pos_size)
 
-                if hysteresis_enabled and is_rebalance_day and len(s_top) == proto.pos_size:
+                if (
+                    hysteresis_enabled
+                    and is_rebalance_day
+                    and len(s_top) == proto.pos_size
+                ):
                     sig_pf = set(s_combo_state.get("signal_portfolio", []))
                     sig_hd = s_combo_state.get("signal_hold_days", {})
 
                     hmask = np.array([t in sig_pf for t in tickers], dtype=np.bool_)
-                    hdays = np.array([sig_hd.get(t, 0) for t in tickers], dtype=np.int64)
+                    hdays = np.array(
+                        [sig_hd.get(t, 0) for t in tickers], dtype=np.int64
+                    )
 
                     target_mask = apply_hysteresis(
-                        s_scores, hmask, hdays, np.array(s_top, dtype=np.int64),
-                        proto.pos_size, proto.delta_rank, proto.min_hold_days,
+                        s_scores,
+                        hmask,
+                        hdays,
+                        np.array(s_top, dtype=np.int64),
+                        proto.pos_size,
+                        proto.delta_rank,
+                        proto.min_hold_days,
                     )
                     s_picks = [i for i in range(len(tickers)) if target_mask[i]]
 
@@ -736,13 +792,19 @@ def main() -> int:
                 sf.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
 
             shadow_results.append(snapshot)
-            print(f"  Shadow {s_name}: {s_picked_tickers} (scores: {[f'{x:.3f}' for x in s_picked_scores]})")
+            print(
+                f"  Shadow {s_name}: {s_picked_tickers} (scores: {[f'{x:.3f}' for x in s_picked_scores]})"
+            )
 
     # 6b) QDII 排名监控（不交易，仅记录当日 QDII 在全池的排名情况）
     qdii_monitor_rows: list[dict] = []
     if qdii_set:
         # 用第一个策略的因子做一次全池排名（含 QDII）
-        first_combo = str(df_candidates.iloc[0]["combo"]).strip() if len(df_candidates) > 0 else ""
+        first_combo = (
+            str(df_candidates.iloc[0]["combo"]).strip()
+            if len(df_candidates) > 0
+            else ""
+        )
         first_factors = _iter_combo_factors(first_combo)
         monitor_scores = np.full(len(tickers), -np.inf, dtype=float)
         for i, ticker in enumerate(tickers):
@@ -772,7 +834,9 @@ def main() -> int:
                 qdii_monitor_rows.append(
                     {
                         "ticker": ticker,
-                        "score": float(monitor_scores[i]) if np.isfinite(monitor_scores[i]) else None,
+                        "score": float(monitor_scores[i])
+                        if np.isfinite(monitor_scores[i])
+                        else None,
                         "rank": int(ranks[i]),
                         "in_top2": ranks[i] <= 2,
                         "in_top10": ranks[i] <= 10,
@@ -828,7 +892,9 @@ def main() -> int:
     md_lines.append(
         f"- 是否调仓日（按 freq={proto.freq}, lookback={proto.lookback_window} 的 index 近似）：{is_rebalance_day}"
     )
-    md_lines.append(f"- 择时仓位系数（含 regime gate）：{timing_ratio:.3f} (regime={regime_ratio:.3f})")
+    md_lines.append(
+        f"- 择时仓位系数（含 regime gate）：{timing_ratio:.3f} (regime={regime_ratio:.3f})"
+    )
     if hysteresis_enabled:
         prev_date = prev_state.get("last_asof_date", "N/A") if prev_state else "N/A"
         md_lines.append(
@@ -891,7 +957,9 @@ def main() -> int:
 
         # Save shadow signals CSV
         shadow_csv_path = outdir / "shadow_signals.csv"
-        pd.DataFrame(shadow_results).to_csv(shadow_csv_path, index=False, encoding="utf-8")
+        pd.DataFrame(shadow_results).to_csv(
+            shadow_csv_path, index=False, encoding="utf-8"
+        )
 
     (outdir / "TODAY_SIGNAL.md").write_text(
         "\n".join(md_lines) + "\n", encoding="utf-8"
