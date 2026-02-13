@@ -113,6 +113,8 @@ def process_combo(
     trailing_windows,
     use_t1_open=False,
     cost_arr=None,
+    delta_rank=0.0,
+    min_hold_days=0,
 ):
     factors_in_combo = [f.strip() for f in combo_str.split(" + ")]
     try:
@@ -151,6 +153,8 @@ def process_combo(
             trailing_stop_pct=0.0,
             stop_on_rebalance_only=True,
             use_t1_open=use_t1_open,
+            delta_rank=delta_rank,
+            min_hold_days=min_hold_days,
         )
 
         # Holdout window metrics
@@ -398,6 +402,15 @@ def main():
     trailing_windows = sorted(set(trailing_windows))
     print(f"Trailing windows (trading days): {trailing_windows}")
 
+    # 6b. Hysteresis parameters (must match BT for VEC-BT alignment)
+    hyst_config = backtest_config.get("hysteresis", {})
+    DELTA_RANK = float(hyst_config.get("delta_rank", 0.0))
+    MIN_HOLD_DAYS = int(hyst_config.get("min_hold_days", 0))
+    if DELTA_RANK > 0 or MIN_HOLD_DAYS > 0:
+        print(f"✅ Hysteresis: delta_rank={DELTA_RANK}, min_hold_days={MIN_HOLD_DAYS}")
+    else:
+        print("⚠️ Hysteresis DISABLED (delta_rank=0, min_hold_days=0)")
+
     # 7. Run Holdout Backtest (parallel)
     factor_index_map = {name: idx for idx, name in enumerate(factor_names_list)}
     combos = training_df["combo"].tolist()
@@ -422,6 +435,8 @@ def main():
             trailing_windows,
             use_t1_open=USE_T1_OPEN,
             cost_arr=cost_arr,
+            delta_rank=DELTA_RANK,
+            min_hold_days=MIN_HOLD_DAYS,
         )
         for combo_str in combos
     )

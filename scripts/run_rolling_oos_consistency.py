@@ -228,6 +228,8 @@ def process_combo(
     write_segments: bool,
     use_t1_open: bool = False,
     cost_arr: np.ndarray | None = None,
+    delta_rank: float = 0.0,
+    min_hold_days: int = 0,
 ):
     factors_in_combo = [f.strip() for f in combo_str.split(" + ")]
     try:
@@ -266,6 +268,8 @@ def process_combo(
             trailing_stop_pct=0.0,
             stop_on_rebalance_only=True,
             use_t1_open=use_t1_open,
+            delta_rank=delta_rank,
+            min_hold_days=min_hold_days,
         )
 
         seg_rows = []
@@ -539,6 +543,15 @@ def main() -> None:
         f"Segmentation: {args.segment}, segments={len(segments)} (effective_start_idx={effective_start_idx})"
     )
 
+    # Hysteresis parameters (must match BT for VEC-BT alignment)
+    hyst_config = backtest_config.get("hysteresis", {})
+    DELTA_RANK = float(hyst_config.get("delta_rank", 0.0))
+    MIN_HOLD_DAYS = int(hyst_config.get("min_hold_days", 0))
+    if DELTA_RANK > 0 or MIN_HOLD_DAYS > 0:
+        print(f"✅ Hysteresis: delta_rank={DELTA_RANK}, min_hold_days={MIN_HOLD_DAYS}")
+    else:
+        print("⚠️ Hysteresis DISABLED (delta_rank=0, min_hold_days=0)")
+
     factor_index_map = {name: idx for idx, name in enumerate(factor_names_list)}
 
     # Parallel evaluation
@@ -564,6 +577,8 @@ def main() -> None:
             bool(args.write_segments),
             use_t1_open=USE_T1_OPEN,
             cost_arr=cost_arr,
+            delta_rank=DELTA_RANK,
+            min_hold_days=MIN_HOLD_DAYS,
         )
         for combo_str in combos
     )
