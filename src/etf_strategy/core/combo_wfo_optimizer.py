@@ -595,7 +595,7 @@ class ComboWFOOptimizer:
         return (
             best_score, best_ir, best_pos_rate, best_freq,
             oos_return, oos_sharpe, oos_maxdd,
-            ic_signs,
+            is_ics,  # raw IC values (not just signs) for stability analysis
         )
 
     def _test_combo_impl(
@@ -616,7 +616,7 @@ class ComboWFOOptimizer:
         oos_return_list = []
         oos_sharpe_list = []
         oos_maxdd_list = []
-        ic_signs_list = []
+        per_factor_ics_list = []  # raw IC per factor per window
 
         for w_idx, (is_range, oos_range) in enumerate(windows):
             is_start, is_end = is_range
@@ -652,7 +652,7 @@ class ComboWFOOptimizer:
             oos_return_list.append(res[4])
             oos_sharpe_list.append(res[5])
             oos_maxdd_list.append(res[6])
-            ic_signs_list.append(res[7])
+            per_factor_ics_list.append(res[7])
 
         return {
             "combo_indices": combo_indices,
@@ -663,7 +663,7 @@ class ComboWFOOptimizer:
             "oos_return_list": oos_return_list,
             "oos_sharpe_list": oos_sharpe_list,
             "oos_maxdd_list": oos_maxdd_list,
-            "ic_signs_list": ic_signs_list,
+            "per_factor_ics_list": per_factor_ics_list,
         }
 
     def _test_combo_batch(
@@ -822,16 +822,33 @@ class ComboWFOOptimizer:
             oos_return_list = res["oos_return_list"]
             oos_sharpe_list = res["oos_sharpe_list"]
             oos_maxdd_list = res["oos_maxdd_list"]
-            ic_signs_list = res["ic_signs_list"]
+            per_factor_ics = res["per_factor_ics_list"]
 
-            # Consensus factor signs across IS windows: mean(per-window sign)
-            # sign(mean) → +1 or -1 per factor
-            signs_matrix = np.array(ic_signs_list)  # (n_windows, n_factors)
-            consensus_signs = np.sign(signs_matrix.mean(axis=0))
-            # Default to +1 if consensus is exactly 0 (equal split)
+            # Stability-gated factor direction from raw per-window IC values
+            # ics_matrix: (n_windows, n_factors), each entry is raw IS IC
+            ics_matrix = np.array(per_factor_ics)
+            signs_matrix = np.sign(ics_matrix)
+            # sign_stability: [0,1], 1.0 = all windows agree on direction
+            sign_stability = np.abs(signs_matrix.mean(axis=0))
+
+            # Direction: only flip if ≥80% of windows agree (stability ≥ 0.8)
+            consensus_signs = np.sign(ics_matrix.mean(axis=0))
             consensus_signs[consensus_signs == 0] = 1.0
+            # Gate: unstable factors → don't flip (default +1)
+            consensus_signs[sign_stability < 0.8] = 1.0
             factor_signs_str = ",".join(
                 [f"{int(s):+d}" for s in consensus_signs]
+            )
+
+            # Signed ICIR per factor (for Phase 2 validation & Phase 3 weighting)
+            ic_means = ics_matrix.mean(axis=0)
+            ic_stds = np.maximum(ics_matrix.std(axis=0, ddof=1), 0.01)
+            factor_icirs = ic_means / ic_stds
+            factor_icirs_str = ",".join(
+                [f"{v:.3f}" for v in factor_icirs]
+            )
+            sign_stability_str = ",".join(
+                [f"{v:.2f}" for v in sign_stability]
             )
 
             mean_oos_ic = np.mean(oos_ic_list)
@@ -863,6 +880,8 @@ class ComboWFOOptimizer:
                     "combo": combo_str,
                     "combo_size": len(combo_indices),
                     "factor_signs": factor_signs_str,
+                    "factor_icirs": factor_icirs_str,
+                    "sign_stability": sign_stability_str,
                     "mean_oos_ic": mean_oos_ic,
                     "oos_ic_std": oos_ic_std,
                     "oos_ic_ir": mean_oos_ir,
