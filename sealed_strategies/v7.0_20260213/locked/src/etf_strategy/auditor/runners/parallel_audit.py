@@ -82,40 +82,15 @@ def worker_task(strategy_row):
 
         factors = [f.strip() for f in combo_name.split(" + ")]
 
-        # Parse factor_signs (IC-sign-aware direction)
-        factor_signs_raw = strategy_row.get("factor_signs")
-        if factor_signs_raw and pd.notna(factor_signs_raw):
-            factor_signs = [int(s) for s in str(factor_signs_raw).split(",")]
-        else:
-            factor_signs = [1] * len(factors)
-
-        n_factors = len(factors)
-
-        # Parse factor_icirs from WFO output (ICIR-weighted scoring)
-        factor_icirs_raw = strategy_row.get("factor_icirs")
-        if factor_icirs_raw and pd.notna(factor_icirs_raw):
-            icirs = [float(s) for s in str(factor_icirs_raw).split(",")]
-            abs_icirs = [abs(icir) for icir in icirs]
-            total = sum(abs_icirs)
-            if total > 0:
-                factor_weights = [aic / total for aic in abs_icirs]
-            else:
-                factor_weights = [1.0 / n_factors] * n_factors
-        else:
-            factor_weights = [1.0 / n_factors] * n_factors
-
-        # Combine Scores with ICIR-weighted pre-multiply
+        # Combine Scores
         t_score = time.time()
         combined_score = pd.DataFrame(0.0, index=GLOBAL_INDEX, columns=GLOBAL_ETF_CODES)
         valid_factors = True
-        for f, sign, weight in zip(factors, factor_signs, factor_weights):
+        for f in factors:
             if f not in GLOBAL_STD_FACTORS:
                 valid_factors = False
                 break
-            multiplier = sign * weight * n_factors
-            combined_score = combined_score.add(
-                multiplier * GLOBAL_STD_FACTORS[f], fill_value=0
-            )
+            combined_score = combined_score.add(GLOBAL_STD_FACTORS[f], fill_value=0)
         metrics["score_calc"] = time.time() - t_score
 
         if not valid_factors:

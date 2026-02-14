@@ -1822,59 +1822,10 @@ def main():
         for combo in combo_strings
     ]
 
-    # Parse factor_signs and factor_icirs from WFO output
-    # factor_signs: "+1,+1,-1,+1" per combo; missing → all +1 (backward compat)
-    # factor_icirs: "0.44,1.86,-0.34,..." per combo; missing → equal weights
-    combo_signs_list = []
-    combo_weights_list = []
-    has_factor_signs = "factor_signs" in df_combos.columns
-    has_factor_icirs = "factor_icirs" in df_combos.columns
-
-    for idx_row, row in df_combos.iterrows():
-        n_factors = len(str(row["combo"]).split(" + "))
-
-        # Parse signs
-        if has_factor_signs and pd.notna(row.get("factor_signs")):
-            signs = [int(s) for s in str(row["factor_signs"]).split(",")]
-        else:
-            signs = [1] * n_factors
-
-        # Parse ICIR weights and normalize
-        if has_factor_icirs and pd.notna(row.get("factor_icirs")):
-            icirs = [float(s) for s in str(row["factor_icirs"]).split(",")]
-            # Use |ICIR| as weight, normalize to sum=1
-            abs_icirs = [abs(icir) for icir in icirs]
-            total = sum(abs_icirs)
-            if total > 0:
-                weights = [aic / total for aic in abs_icirs]
-            else:
-                weights = [1.0 / n_factors] * n_factors
-        else:
-            weights = [1.0 / n_factors] * n_factors
-
-        combo_signs_list.append(signs)
-        combo_weights_list.append(weights)
-
     # 定义单个combo回测函数（闭包捕获共享数据）
-    def _backtest_one_combo(combo_str, factor_indices, factor_signs, factor_weights):
-        # Pre-multiply factors_3d with sign * weight (ICIR-weighted scoring)
-        # This allows the kernel to use simple equal-weight sum on pre-weighted data
-        needs_transform = any(
-            s != 1 or w != 1.0 / len(factor_signs)
-            for s, w in zip(factor_signs, factor_weights)
-        )
-        if needs_transform:
-            factors_3d_local = factors_3d.copy()
-            for i, (sign, weight) in enumerate(zip(factor_signs, factor_weights)):
-                if sign != 1 or weight != 1.0:
-                    factors_3d_local[:, :, factor_indices[i]] *= (
-                        sign * weight * len(factor_signs)
-                    )
-        else:
-            factors_3d_local = factors_3d
-
+    def _backtest_one_combo(combo_str, factor_indices):
         eq_curve, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
-            factors_3d_local,
+            factors_3d,
             close_prices,
             open_prices,
             high_prices,
@@ -1971,9 +1922,9 @@ def main():
         + (", 保存权益曲线" if _save_equity else "")
     )
     results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
-        delayed(_backtest_one_combo)(cs, fi, fs, fw)
-        for cs, fi, fs, fw in tqdm(
-            zip(combo_strings, combo_indices, combo_signs_list, combo_weights_list),
+        delayed(_backtest_one_combo)(cs, fi)
+        for cs, fi in tqdm(
+            zip(combo_strings, combo_indices),
             total=n_combos,
             desc="VEC 回测",
         )

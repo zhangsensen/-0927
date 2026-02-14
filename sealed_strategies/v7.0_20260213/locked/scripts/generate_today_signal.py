@@ -450,32 +450,9 @@ def main() -> int:
     agg_counts = {t: 0 for t in tickers}
     new_strategies: dict = {}
 
-    # Check if candidates have factor_signs/factor_icirs from WFO
-    has_factor_signs = "factor_signs" in df_candidates.columns
-    has_factor_icirs = "factor_icirs" in df_candidates.columns
-
     for _, row in df_candidates.iterrows():
         combo = str(row["combo"]).strip()
         factors = _iter_combo_factors(combo)
-        n_factors = len(factors)
-
-        # Parse factor_signs (IC-sign-aware direction)
-        if has_factor_signs and pd.notna(row.get("factor_signs")):
-            factor_signs = [int(s) for s in str(row["factor_signs"]).split(",")]
-        else:
-            factor_signs = [1] * n_factors
-
-        # Parse factor_icirs (ICIR-weighted scoring)
-        if has_factor_icirs and pd.notna(row.get("factor_icirs")):
-            icirs = [float(s) for s in str(row["factor_icirs"]).split(",")]
-            abs_icirs = [abs(icir) for icir in icirs]
-            total = sum(abs_icirs)
-            if total > 0:
-                factor_weights = [aic / total for aic in abs_icirs]
-            else:
-                factor_weights = [1.0 / n_factors] * n_factors
-        else:
-            factor_weights = [1.0 / n_factors] * n_factors
 
         missing_factors = [f for f in factors if f not in std_factors]
         if missing_factors:
@@ -490,12 +467,12 @@ def main() -> int:
         for i, ticker in enumerate(tickers):
             s = 0.0
             has_value = False
-            for f, sign, weight in zip(factors, factor_signs, factor_weights):
+            for f in factors:
                 if f not in std_factors:
                     continue
                 v = std_factors[f].at[asof_ts, ticker]
                 if pd.notna(v):
-                    s += sign * weight * n_factors * float(v)
+                    s += float(v)
                     has_value = True
             if has_value and s != 0.0:
                 scores[i] = s
@@ -653,26 +630,6 @@ def main() -> int:
             s_name = shadow_strat["name"]
             s_combo = shadow_strat["combo"]
             s_factors = _iter_combo_factors(s_combo)
-            s_n_factors = len(s_factors)
-            # Shadow strategies may specify factor_signs in config
-            s_factor_signs_raw = shadow_strat.get("factor_signs")
-            if s_factor_signs_raw:
-                s_factor_signs = [int(s) for s in str(s_factor_signs_raw).split(",")]
-            else:
-                s_factor_signs = [1] * s_n_factors
-
-            # Shadow strategies may specify factor_icirs in config
-            s_factor_icirs_raw = shadow_strat.get("factor_icirs")
-            if s_factor_icirs_raw:
-                s_icirs = [float(s) for s in str(s_factor_icirs_raw).split(",")]
-                s_abs_icirs = [abs(icir) for icir in s_icirs]
-                s_total = sum(s_abs_icirs)
-                if s_total > 0:
-                    s_factor_weights = [aic / s_total for aic in s_abs_icirs]
-                else:
-                    s_factor_weights = [1.0 / s_n_factors] * s_n_factors
-            else:
-                s_factor_weights = [1.0 / s_n_factors] * s_n_factors
 
             # Verify factors exist
             missing = [f for f in s_factors if f not in std_factors]
@@ -709,18 +666,16 @@ def main() -> int:
                         )
                 s_combo_state = s_prev_state.get("strategies", {}).get(s_combo, {})
 
-            # Score (same logic as production, with ICIR-weighted direction)
+            # Score (same logic as production)
             s_scores = np.full(len(tickers), -np.inf, dtype=float)
             s_valid = 0
             for i, ticker in enumerate(tickers):
                 s = 0.0
                 has_value = False
-                for f_name, f_sign, f_weight in zip(
-                    s_factors, s_factor_signs, s_factor_weights
-                ):
+                for f_name in s_factors:
                     v = std_factors[f_name].at[asof_ts, ticker]
                     if pd.notna(v):
-                        s += f_sign * f_weight * s_n_factors * float(v)
+                        s += float(v)
                         has_value = True
                 if has_value and s != 0.0:
                     s_scores[i] = s
@@ -851,42 +806,16 @@ def main() -> int:
             else ""
         )
         first_factors = _iter_combo_factors(first_combo)
-        # Get factor_signs and factor_icirs for first combo (QDII monitoring)
-        first_n_factors = len(first_factors)
-        if has_factor_signs and len(df_candidates) > 0 and pd.notna(
-            df_candidates.iloc[0].get("factor_signs")
-        ):
-            first_signs = [
-                int(s) for s in str(df_candidates.iloc[0]["factor_signs"]).split(",")
-            ]
-        else:
-            first_signs = [1] * first_n_factors
-        if has_factor_icirs and len(df_candidates) > 0 and pd.notna(
-            df_candidates.iloc[0].get("factor_icirs")
-        ):
-            first_icirs = [
-                float(s) for s in str(df_candidates.iloc[0]["factor_icirs"]).split(",")
-            ]
-            first_abs_icirs = [abs(icir) for icir in first_icirs]
-            first_total = sum(first_abs_icirs)
-            if first_total > 0:
-                first_weights = [aic / first_total for aic in first_abs_icirs]
-            else:
-                first_weights = [1.0 / first_n_factors] * first_n_factors
-        else:
-            first_weights = [1.0 / first_n_factors] * first_n_factors
         monitor_scores = np.full(len(tickers), -np.inf, dtype=float)
         for i, ticker in enumerate(tickers):
             s = 0.0
             has_value = False
-            for f_name, f_sign, f_weight in zip(
-                first_factors, first_signs, first_weights
-            ):
+            for f_name in first_factors:
                 if f_name not in std_factors:
                     continue
                 v = std_factors[f_name].at[asof_ts, ticker]
                 if pd.notna(v):
-                    s += f_sign * f_weight * first_n_factors * float(v)
+                    s += float(v)
                     has_value = True
             if has_value and s != 0.0:
                 monitor_scores[i] = s
