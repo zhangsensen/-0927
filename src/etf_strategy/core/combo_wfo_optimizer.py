@@ -524,7 +524,15 @@ class ComboWFOOptimizer:
         else:
             weights = np.ones(n_factors) / n_factors
 
-        factors_oos_combo = factors_oos[:, :, combo_indices]
+        # IC-sign-aware: flip factors with negative IC (pre-flip avoids
+        # signed-weight normalization issue in _compute_combo_signal)
+        ic_signs = np.sign(is_ics)
+        ic_signs[abs_ics < 0.01] = 1.0  # dead zone: IC too small → default +1
+
+        factors_oos_combo = factors_oos[:, :, combo_indices].copy()
+        for i in range(n_factors):
+            if ic_signs[i] < 0:
+                factors_oos_combo[:, :, i] *= -1
         signal_oos = _compute_combo_signal(factors_oos_combo, weights)
 
         best_score = -999.0
@@ -555,7 +563,11 @@ class ComboWFOOptimizer:
 
         if use_warmup:
             # Concatenate IS+OOS for hysteresis warm-up
-            factors_is_combo = factors_is[:, :, combo_indices]
+            # Pre-flip IS factors same as OOS (ic_signs from IS period)
+            factors_is_combo = factors_is[:, :, combo_indices].copy()
+            for i in range(n_factors):
+                if ic_signs[i] < 0:
+                    factors_is_combo[:, :, i] *= -1
             signal_is = _compute_combo_signal(factors_is_combo, weights)
             signal_full = np.concatenate((signal_is, signal_oos), axis=0)
             returns_full = np.concatenate((returns_is, returns_oos), axis=0)
@@ -583,6 +595,7 @@ class ComboWFOOptimizer:
         return (
             best_score, best_ir, best_pos_rate, best_freq,
             oos_return, oos_sharpe, oos_maxdd,
+            ic_signs,
         )
 
     def _test_combo_impl(
@@ -603,6 +616,7 @@ class ComboWFOOptimizer:
         oos_return_list = []
         oos_sharpe_list = []
         oos_maxdd_list = []
+        ic_signs_list = []
 
         for w_idx, (is_range, oos_range) in enumerate(windows):
             is_start, is_end = is_range
@@ -638,6 +652,7 @@ class ComboWFOOptimizer:
             oos_return_list.append(res[4])
             oos_sharpe_list.append(res[5])
             oos_maxdd_list.append(res[6])
+            ic_signs_list.append(res[7])
 
         return {
             "combo_indices": combo_indices,
@@ -648,6 +663,7 @@ class ComboWFOOptimizer:
             "oos_return_list": oos_return_list,
             "oos_sharpe_list": oos_sharpe_list,
             "oos_maxdd_list": oos_maxdd_list,
+            "ic_signs_list": ic_signs_list,
         }
 
     def _test_combo_batch(
@@ -806,6 +822,17 @@ class ComboWFOOptimizer:
             oos_return_list = res["oos_return_list"]
             oos_sharpe_list = res["oos_sharpe_list"]
             oos_maxdd_list = res["oos_maxdd_list"]
+            ic_signs_list = res["ic_signs_list"]
+
+            # Consensus factor signs across IS windows: mean(per-window sign)
+            # sign(mean) → +1 or -1 per factor
+            signs_matrix = np.array(ic_signs_list)  # (n_windows, n_factors)
+            consensus_signs = np.sign(signs_matrix.mean(axis=0))
+            # Default to +1 if consensus is exactly 0 (equal split)
+            consensus_signs[consensus_signs == 0] = 1.0
+            factor_signs_str = ",".join(
+                [f"{int(s):+d}" for s in consensus_signs]
+            )
 
             mean_oos_ic = np.mean(oos_ic_list)
             oos_ic_std = np.std(oos_ic_list)
@@ -835,6 +862,7 @@ class ComboWFOOptimizer:
                 {
                     "combo": combo_str,
                     "combo_size": len(combo_indices),
+                    "factor_signs": factor_signs_str,
                     "mean_oos_ic": mean_oos_ic,
                     "oos_ic_std": oos_ic_std,
                     "oos_ic_ir": mean_oos_ir,

@@ -349,6 +349,37 @@ _V5_0_CONFIG = FrozenProductionConfig(
     ),
 )
 
+_V7_0_CONFIG = FrozenProductionConfig(
+    version="v7.0",
+    config_sha256=None,
+    backtest=FrozenBacktestParams(),  # freq=5
+    timing=FrozenTimingParams(),
+    regime_gate=FrozenRegimeGateParams(enabled=True),
+    risk_control=FrozenRiskControlParams(),
+    hysteresis=FrozenHysteresisParams(),  # dr=0.10, mh=9
+    wfo=FrozenWFOParams(),  # rebalance_frequencies=(5,)
+    scoring=FrozenScoringParams(),
+    cross_section=_V4_1_CROSS_SECTION,  # 7 bounded_factors
+    etf_pool=FrozenETFPool(),  # 49 ETFs (41A + 8Q)
+    strategies=(
+        FrozenStrategy(
+            name="strategy_1",
+            factors=(
+                "ADX_14D",
+                "AMIHUD_ILLIQUIDITY",
+                "PRICE_POSITION_120D",
+                "PRICE_POSITION_20D",
+                "SHARE_ACCEL",
+                "SLOPE_20D",
+            ),
+        ),
+        FrozenStrategy(
+            name="strategy_fallback_s1",
+            factors=("ADX_14D", "OBV_SLOPE_10D", "SHARPE_RATIO_20D", "SLOPE_20D"),
+        ),
+    ),
+)
+
 _V6_0_CONFIG = FrozenProductionConfig(
     version="v6.0",
     config_sha256=None,
@@ -378,10 +409,11 @@ _VERSION_REGISTRY: Dict[str, FrozenProductionConfig] = {
     "v4.0": _V4_0_CONFIG,
     "v4.1": _V4_1_CONFIG,
     "v5.0": _V5_0_CONFIG,
+    "v7.0": _V7_0_CONFIG,
     "v6.0": _V6_0_CONFIG,
 }
 
-CURRENT_VERSION = "v5.0"
+CURRENT_VERSION = "v7.0"
 
 # 操作性参数 (不校验)
 _OPERATIONAL_KEYS = frozenset(

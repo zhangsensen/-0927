@@ -92,6 +92,15 @@ def run_bt_backtest(
     else:
         sizing_comm = commission_rate
 
+    # ✅ Exp2b: per-ticker cost rates for accurate shadow accounting
+    # Without this, sizing_comm = max(a_share, qdii) over-estimates A-share costs by 30bp/side,
+    # causing BT's shadow cash to diverge from VEC's per-ticker cost_arr.
+    cost_rates = None
+    if cost_model is not None and cost_model.is_split_market and qdii_codes is not None:
+        cost_rates = {}
+        for ticker in data_feeds:
+            cost_rates[ticker] = cost_model.get_cost(ticker, qdii_codes)
+
     cerebro.addstrategy(
         GenericStrategy,
         scores=combined_score_df,
@@ -107,8 +116,10 @@ def run_bt_backtest(
         dynamic_leverage_enabled=dynamic_leverage_enabled,
         # ✅ Exp1: T+1 Open
         use_t1_open=use_t1_open,
-        # ✅ Exp2: conservative sizing — use max(A-share, QDII) rate
+        # ✅ Exp2: conservative sizing — fallback for cost_rates=None
         sizing_commission_rate=sizing_comm,
+        # ✅ Exp2b: per-ticker cost rates (matches VEC's cost_arr)
+        cost_rates=cost_rates,
         # ✅ Exp4: 换仓迟滞
         delta_rank=delta_rank,
         min_hold_days=min_hold_days,
@@ -344,6 +355,13 @@ def process_combo(row_data):
     factors = [f.strip() for f in combo_str.split(" + ")]
     dates = timing_series.index
 
+    # Parse factor_signs from WFO output (IC-sign-aware direction)
+    factor_signs_raw = row_data.get("factor_signs")
+    if factor_signs_raw and pd.notna(factor_signs_raw):
+        factor_signs = [int(s) for s in str(factor_signs_raw).split(",")]
+    else:
+        factor_signs = [1] * len(factors)
+
     # 检查因子是否都存在
     missing = [f for f in factors if f not in std_factors]
     if missing:
@@ -358,8 +376,11 @@ def process_combo(row_data):
     # 构造得分矩阵 (使用 DataFrame.add 保持 NaN 处理一致性)
     # ✅ 与 full_vec_bt_comparison.py 保持一致：fill_value=0 避免 NaN 传播
     combined_score_df = pd.DataFrame(0.0, index=dates, columns=etf_codes)
-    for f in factors:
-        combined_score_df = combined_score_df.add(std_factors[f], fill_value=0)
+    for f, sign in zip(factors, factor_signs):
+        if sign < 0:
+            combined_score_df = combined_score_df.add(-std_factors[f], fill_value=0)
+        else:
+            combined_score_df = combined_score_df.add(std_factors[f], fill_value=0)
 
     # 运行回测
     bt_return, margin_failures, risk_metrics, daily_returns_s = run_bt_backtest(

@@ -450,9 +450,18 @@ def main() -> int:
     agg_counts = {t: 0 for t in tickers}
     new_strategies: dict = {}
 
+    # Check if candidates have factor_signs from WFO
+    has_factor_signs = "factor_signs" in df_candidates.columns
+
     for _, row in df_candidates.iterrows():
         combo = str(row["combo"]).strip()
         factors = _iter_combo_factors(combo)
+
+        # Parse factor_signs (IC-sign-aware direction)
+        if has_factor_signs and pd.notna(row.get("factor_signs")):
+            factor_signs = [int(s) for s in str(row["factor_signs"]).split(",")]
+        else:
+            factor_signs = [1] * len(factors)
 
         missing_factors = [f for f in factors if f not in std_factors]
         if missing_factors:
@@ -467,12 +476,12 @@ def main() -> int:
         for i, ticker in enumerate(tickers):
             s = 0.0
             has_value = False
-            for f in factors:
+            for f, sign in zip(factors, factor_signs):
                 if f not in std_factors:
                     continue
                 v = std_factors[f].at[asof_ts, ticker]
                 if pd.notna(v):
-                    s += float(v)
+                    s += sign * float(v)
                     has_value = True
             if has_value and s != 0.0:
                 scores[i] = s
@@ -630,6 +639,12 @@ def main() -> int:
             s_name = shadow_strat["name"]
             s_combo = shadow_strat["combo"]
             s_factors = _iter_combo_factors(s_combo)
+            # Shadow strategies may specify factor_signs in config
+            s_factor_signs_raw = shadow_strat.get("factor_signs")
+            if s_factor_signs_raw:
+                s_factor_signs = [int(s) for s in str(s_factor_signs_raw).split(",")]
+            else:
+                s_factor_signs = [1] * len(s_factors)
 
             # Verify factors exist
             missing = [f for f in s_factors if f not in std_factors]
@@ -666,16 +681,16 @@ def main() -> int:
                         )
                 s_combo_state = s_prev_state.get("strategies", {}).get(s_combo, {})
 
-            # Score (same logic as production)
+            # Score (same logic as production, with IC-sign direction)
             s_scores = np.full(len(tickers), -np.inf, dtype=float)
             s_valid = 0
             for i, ticker in enumerate(tickers):
                 s = 0.0
                 has_value = False
-                for f_name in s_factors:
+                for f_name, f_sign in zip(s_factors, s_factor_signs):
                     v = std_factors[f_name].at[asof_ts, ticker]
                     if pd.notna(v):
-                        s += float(v)
+                        s += f_sign * float(v)
                         has_value = True
                 if has_value and s != 0.0:
                     s_scores[i] = s
@@ -806,16 +821,25 @@ def main() -> int:
             else ""
         )
         first_factors = _iter_combo_factors(first_combo)
+        # Get factor_signs for first combo (QDII monitoring)
+        if has_factor_signs and len(df_candidates) > 0 and pd.notna(
+            df_candidates.iloc[0].get("factor_signs")
+        ):
+            first_signs = [
+                int(s) for s in str(df_candidates.iloc[0]["factor_signs"]).split(",")
+            ]
+        else:
+            first_signs = [1] * len(first_factors)
         monitor_scores = np.full(len(tickers), -np.inf, dtype=float)
         for i, ticker in enumerate(tickers):
             s = 0.0
             has_value = False
-            for f_name in first_factors:
+            for f_name, f_sign in zip(first_factors, first_signs):
                 if f_name not in std_factors:
                     continue
                 v = std_factors[f_name].at[asof_ts, ticker]
                 if pd.notna(v):
-                    s += float(v)
+                    s += f_sign * float(v)
                     has_value = True
             if has_value and s != 0.0:
                 monitor_scores[i] = s

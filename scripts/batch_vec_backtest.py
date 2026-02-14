@@ -1822,10 +1822,31 @@ def main():
         for combo in combo_strings
     ]
 
+    # Parse factor_signs from WFO output (IC-sign-aware direction)
+    # Format: "+1,+1,-1,+1" per combo; missing → all +1 (backward compat)
+    combo_signs_list = []
+    has_factor_signs = "factor_signs" in df_combos.columns
+    for idx_row, row in df_combos.iterrows():
+        if has_factor_signs and pd.notna(row.get("factor_signs")):
+            signs = [int(s) for s in str(row["factor_signs"]).split(",")]
+        else:
+            signs = [1] * len(str(row["combo"]).split(" + "))
+        combo_signs_list.append(signs)
+
     # 定义单个combo回测函数（闭包捕获共享数据）
-    def _backtest_one_combo(combo_str, factor_indices):
+    def _backtest_one_combo(combo_str, factor_indices, factor_signs):
+        # Pre-flip factors_3d for negative-sign factors (avoid modifying shared array)
+        needs_flip = any(s < 0 for s in factor_signs)
+        if needs_flip:
+            factors_3d_local = factors_3d.copy()
+            for i, sign in enumerate(factor_signs):
+                if sign < 0:
+                    factors_3d_local[:, :, factor_indices[i]] *= -1
+        else:
+            factors_3d_local = factors_3d
+
         eq_curve, ret, wr, pf, trades, rounding, risk = run_vec_backtest(
-            factors_3d,
+            factors_3d_local,
             close_prices,
             open_prices,
             high_prices,
@@ -1922,9 +1943,9 @@ def main():
         + (", 保存权益曲线" if _save_equity else "")
     )
     results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
-        delayed(_backtest_one_combo)(cs, fi)
-        for cs, fi in tqdm(
-            zip(combo_strings, combo_indices),
+        delayed(_backtest_one_combo)(cs, fi, fs)
+        for cs, fi, fs in tqdm(
+            zip(combo_strings, combo_indices, combo_signs_list),
             total=n_combos,
             desc="VEC 回测",
         )

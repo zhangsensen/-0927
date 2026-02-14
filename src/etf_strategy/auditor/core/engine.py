@@ -56,6 +56,8 @@ class GenericStrategy(bt.Strategy):
         ("min_hold_days", 0),      # minimum hold days before sell (0 = disabled)
         # ✅ Exp2: per-ticker commission — use max rate for conservative sizing
         ("sizing_commission_rate", COMMISSION_RATE),
+        # ✅ Exp2b: per-ticker cost rates dict {ticker: float} for accurate shadow accounting
+        ("cost_rates", None),
     )
 
     def __init__(self):
@@ -289,16 +291,19 @@ class GenericStrategy(bt.Strategy):
                         if pd.notna(v) and v != 0:
                             score_arr[i] = float(v)
 
-                # Exp4.1: Build holdings mask from signal portfolio (not shadow_holdings)
+                # Build holdings mask from execution state (shadow_holdings)
+                # to match VEC kernel which uses holdings[] (execution-side).
+                # Exp4.1 signal-side tracking caused VEC-BT chain divergence
+                # (+25.7pp gap) because signal state drifts from execution state.
                 hmask = np.zeros(N, dtype=np.bool_)
-                for t in self._signal_portfolio:
-                    idx = etf_list.index(t) if t in etf_list else -1
-                    if idx >= 0:
-                        hmask[idx] = True
+                for i, t in enumerate(etf_list):
+                    if self.shadow_holdings.get(t, 0.0) > 0:
+                        hmask[i] = True
 
-                # Exp4.1: Build hold_days from signal hold_days (not _hold_days)
+                # Build hold_days from execution-side _hold_days (not signal_hold_days)
+                # to match VEC kernel's hold_days_arr tracking.
                 hdays = np.zeros(N, dtype=np.int64)
-                for t, d in self._signal_hold_days.items():
+                for t, d in self._hold_days.items():
                     if t in etf_list:
                         hdays[etf_list.index(t)] = d
 
@@ -389,7 +394,10 @@ class GenericStrategy(bt.Strategy):
                     price = data.close[0]
                 if ticker not in target_set and shares > 0:
                     self.close(data)
-                    cash_after_sells += shares * price * (1 - self.params.sizing_commission_rate)
+                    sell_rate = self.params.sizing_commission_rate
+                    if self.params.cost_rates is not None and ticker in self.params.cost_rates:
+                        sell_rate = self.params.cost_rates[ticker]
+                    cash_after_sells += shares * price * (1 - sell_rate)
                     self.shadow_holdings[ticker] = 0.0
                     self._hold_days[ticker] = 0  # Exp4: reset on sell
                 else:
@@ -409,7 +417,15 @@ class GenericStrategy(bt.Strategy):
             new_count = len(new_tickers)
 
             if new_count > 0:
-                target_pos_value = available_for_new / new_count / (1 + self.params.sizing_commission_rate)
+                # ✅ Exp2b: per-ticker buy rate for accurate sizing
+                if self.params.cost_rates is not None:
+                    avg_buy_rate = sum(
+                        self.params.cost_rates.get(t, self.params.sizing_commission_rate)
+                        for t in new_tickers
+                    ) / new_count
+                else:
+                    avg_buy_rate = self.params.sizing_commission_rate
+                target_pos_value = available_for_new / new_count / (1 + avg_buy_rate)
 
                 buy_orders = []
                 total_cost = 0.0
@@ -424,8 +440,11 @@ class GenericStrategy(bt.Strategy):
                     if np.isnan(price) or price <= 0:
                         continue
 
+                    buy_rate = self.params.sizing_commission_rate
+                    if self.params.cost_rates is not None and ticker in self.params.cost_rates:
+                        buy_rate = self.params.cost_rates[ticker]
                     shares = target_pos_value / price
-                    cost = shares * price * (1 + self.params.sizing_commission_rate)
+                    cost = shares * price * (1 + buy_rate)
                     buy_orders.append((ticker, data, shares, cost))
                     total_cost += cost
 

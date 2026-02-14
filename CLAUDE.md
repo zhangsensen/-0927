@@ -128,9 +128,9 @@ To add a new bounded factor: add `FactorSpec(..., is_bounded=True, bounds=(...))
 
 ## VEC/BT Alignment
 
-- **Systemic gap**: Median ~4.8pp (execution model differences — float shares vs integer lots, not logic bugs)
-- **Red flag**: > 20pp → STOP and investigate
-- **With hysteresis**: Gap can be larger (~12-22pp full period) due to chain divergence from integer-lot rounding. Holdout gap ~5-7pp is acceptable.
+- **Systemic gap**: ~1-2pp after Exp4.1→exec-side fix (float shares vs integer lots). Pre-fix gap was +25pp due to signal-side hysteresis feedback loop.
+- **Red flag**: > 10pp → STOP and investigate
+- **Hysteresis state**: BT MUST use execution-side state (`shadow_holdings`/`_hold_days`) for hmask, NOT signal-side (`_signal_portfolio`/`_signal_hold_days`). Signal-side creates self-referential feedback loop causing chain divergence.
 
 ## Regime Gate
 

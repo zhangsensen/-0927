@@ -82,15 +82,25 @@ def worker_task(strategy_row):
 
         factors = [f.strip() for f in combo_name.split(" + ")]
 
+        # Parse factor_signs (IC-sign-aware direction)
+        factor_signs_raw = strategy_row.get("factor_signs")
+        if factor_signs_raw and pd.notna(factor_signs_raw):
+            factor_signs = [int(s) for s in str(factor_signs_raw).split(",")]
+        else:
+            factor_signs = [1] * len(factors)
+
         # Combine Scores
         t_score = time.time()
         combined_score = pd.DataFrame(0.0, index=GLOBAL_INDEX, columns=GLOBAL_ETF_CODES)
         valid_factors = True
-        for f in factors:
+        for f, sign in zip(factors, factor_signs):
             if f not in GLOBAL_STD_FACTORS:
                 valid_factors = False
                 break
-            combined_score = combined_score.add(GLOBAL_STD_FACTORS[f], fill_value=0)
+            if sign < 0:
+                combined_score = combined_score.add(-GLOBAL_STD_FACTORS[f], fill_value=0)
+            else:
+                combined_score = combined_score.add(GLOBAL_STD_FACTORS[f], fill_value=0)
         metrics["score_calc"] = time.time() - t_score
 
         if not valid_factors:
