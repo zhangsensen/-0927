@@ -1856,7 +1856,9 @@ def main():
         combo_weights_list.append(weights)
 
     # 定义单个combo回测函数（闭包捕获共享数据）
-    def _backtest_one_combo(combo_str, factor_indices, factor_signs, factor_weights):
+    def _backtest_one_combo(
+        combo_str, factor_indices, factor_signs, factor_weights, row_meta
+    ):
         # Pre-multiply factors_3d with sign * weight (ICIR-weighted scoring)
         # This allows the kernel to use simple equal-weight sum on pre-weighted data
         needs_transform = any(
@@ -1952,6 +1954,10 @@ def main():
             - rounding["filled_value_total"],
             "vec_share_gap": rounding["target_shares_total"]
             - rounding["filled_shares_total"],
+            # ✅ Rule 24: 透传元数据 (Phase 3)
+            "factor_signs": row_meta.get("factor_signs"),
+            "factor_icirs": row_meta.get("factor_icirs"),
+            "sign_stability": row_meta.get("sign_stability"),
         }
         if _save_equity:
             result["_equity_curve"] = eq_curve
@@ -1971,9 +1977,15 @@ def main():
         + (", 保存权益曲线" if _save_equity else "")
     )
     results = Parallel(n_jobs=n_vec_jobs, prefer="threads")(
-        delayed(_backtest_one_combo)(cs, fi, fs, fw)
-        for cs, fi, fs, fw in tqdm(
-            zip(combo_strings, combo_indices, combo_signs_list, combo_weights_list),
+        delayed(_backtest_one_combo)(cs, fi, fs, fw, row.to_dict())
+        for cs, fi, fs, fw, (idx, row) in tqdm(
+            zip(
+                combo_strings,
+                combo_indices,
+                combo_signs_list,
+                combo_weights_list,
+                df_combos.iterrows(),
+            ),
             total=n_combos,
             desc="VEC 回测",
         )
