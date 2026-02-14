@@ -211,7 +211,14 @@ def main():
     results = []
     factor_index_map = {name: idx for idx, name in enumerate(factor_names_list)}
 
-    for combo_str in tqdm(combos_df["combo"].tolist(), desc="Running Backtests"):
+    # Phase 3: Extract factor_signs and factor_icirs from WFO output for pre-multiply
+    has_signs = "factor_signs" in combos_df.columns
+    has_icirs = "factor_icirs" in combos_df.columns
+    if has_signs or has_icirs:
+        print(f"  IC-sign pre-multiply: factor_signs={'YES' if has_signs else 'NO'}, "
+              f"factor_icirs={'YES' if has_icirs else 'NO'}")
+
+    for idx_row, combo_str in enumerate(tqdm(combos_df["combo"].tolist(), desc="Running Backtests")):
         factors_in_combo = [f.strip() for f in combo_str.split(" + ")]
         try:
             combo_indices = [factor_index_map[f] for f in factors_in_combo]
@@ -219,8 +226,42 @@ def main():
             print(f"[WARN] combo {combo_str} 包含未知因子 {e}, 跳过")
             continue
 
-        current_factors = all_factors_stack[..., combo_indices]
-        current_factor_indices = list(range(len(combo_indices)))
+        n_factors = len(combo_indices)
+        current_factors = all_factors_stack[..., combo_indices].copy()
+
+        # Parse factor_signs for this combo
+        signs_str = None
+        if has_signs:
+            signs_str = combos_df.iloc[idx_row]["factor_signs"]
+        if signs_str and pd.notna(signs_str):
+            signs = [int(s) for s in str(signs_str).split(",")]
+        else:
+            signs = [1] * n_factors
+            signs_str = None
+
+        # Parse factor_icirs for this combo
+        icirs_str = None
+        if has_icirs:
+            icirs_str = combos_df.iloc[idx_row]["factor_icirs"]
+        if icirs_str and pd.notna(icirs_str):
+            icirs = [float(s) for s in str(icirs_str).split(",")]
+            abs_icirs = [abs(v) for v in icirs]
+            total = sum(abs_icirs)
+            if total > 0:
+                weights = [a / total for a in abs_icirs]
+            else:
+                weights = [1.0 / n_factors] * n_factors
+        else:
+            weights = [1.0 / n_factors] * n_factors
+            icirs_str = None
+
+        # Apply sign * weight * N pre-multiply (Phase 3 ICIR-weighted scoring)
+        for i, (sign, weight) in enumerate(zip(signs, weights)):
+            multiplier = sign * weight * n_factors
+            if abs(multiplier - 1.0) > 1e-6:
+                current_factors[:, :, i] *= multiplier
+
+        current_factor_indices = list(range(n_factors))
 
         try:
             _, ret, wr, pf, trades, _, risk = run_vec_backtest(
@@ -244,23 +285,27 @@ def main():
                 use_t1_open=USE_T1_OPEN,
             )
 
-            results.append(
-                {
-                    "combo": combo_str,
-                    "size": len(combo_indices),
-                    "vec_return": ret,
-                    "vec_max_drawdown": risk["max_drawdown"],
-                    "vec_calmar_ratio": risk["calmar_ratio"],
-                    "vec_sharpe_ratio": risk["sharpe_ratio"],
-                    "vec_aligned_return": risk.get("aligned_return", ret),
-                    "vec_aligned_sharpe": risk.get(
-                        "aligned_sharpe", risk.get("sharpe_ratio", 0.0)
-                    ),
-                    "vec_trades": trades,
-                    "vec_turnover_ann": risk.get("turnover_ann", 0.0),
-                    "vec_cost_drag": risk.get("cost_drag", 0.0),
-                }
-            )
+            row_result = {
+                "combo": combo_str,
+                "size": n_factors,
+                "vec_return": ret,
+                "vec_max_drawdown": risk["max_drawdown"],
+                "vec_calmar_ratio": risk["calmar_ratio"],
+                "vec_sharpe_ratio": risk["sharpe_ratio"],
+                "vec_aligned_return": risk.get("aligned_return", ret),
+                "vec_aligned_sharpe": risk.get(
+                    "aligned_sharpe", risk.get("sharpe_ratio", 0.0)
+                ),
+                "vec_trades": trades,
+                "vec_turnover_ann": risk.get("turnover_ann", 0.0),
+                "vec_cost_drag": risk.get("cost_drag", 0.0),
+            }
+            # Propagate factor_signs/factor_icirs to output for downstream scripts
+            if signs_str is not None:
+                row_result["factor_signs"] = signs_str
+            if icirs_str is not None:
+                row_result["factor_icirs"] = icirs_str
+            results.append(row_result)
         except Exception as e:
             print(f"[WARN] combo {combo_str} failed: {e}")
             continue

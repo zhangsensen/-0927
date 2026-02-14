@@ -268,12 +268,42 @@ config 读取了这些参数。导致 VEC-BT gap 被人为放大（median 12.1pp
 □ min_hold_days 是否从 config.backtest.hysteresis 读取？
 □ cost_arr 是否与 BT 一致？
 □ use_t1_open 是否与 BT 一致？
+□ factor_signs / factor_icirs 是否从 WFO 输出传递？（Rule 24）
 ```
 
 **验证方法**：
 ```bash
 grep -n "run_vec_backtest(" scripts/*.py | grep -v "delta_rank"
 # 返回 0 行才算全部对齐
+```
+
+## Rule 24: VEC 管线必须传播 factor_signs / factor_icirs 元数据
+
+**教训 (2026-02-14)**：`run_full_space_vec_backtest.py` 只读取 WFO 输出的 `combo` 列，
+丢弃 `factor_signs`/`factor_icirs`。下游 holdout/rolling 脚本从 VEC 输出读取，
+也拿不到这些列 → 默认 all-positive + equal-weight → 5/6 非OHLCV因子反向使用。
+
+```
+故障链：
+  WFO 输出（有 factor_signs/factor_icirs）
+    → run_full_space_vec_backtest.py 只用 combo 列
+      → full_space_results.parquet 无元数据列
+        → holdout/rolling 默认 all-positive + equal-weight
+          → VEC-BT holdout gap: mean |gap| = 20.3pp（正常应<2pp）
+```
+
+**修复**：
+1. `run_full_space_vec_backtest.py`: 读取 factor_signs/factor_icirs，pre-multiply 后再调 VEC，
+   输出 parquet 包含这两列
+2. `run_holdout_validation.py` / `run_rolling_oos_consistency.py`: 已有 pre-multiply 逻辑，
+   只要 VEC 输出带列就能自动生效
+
+**修复后**：mean |gap| = 20.3pp → **1.47pp**（-93%），100% 策略 gap<5pp
+
+**验证方法**：
+```bash
+uv run python -c "import pandas as pd; df=pd.read_parquet('results/vec_from_wfo_*/full_space_results.parquet'); print('factor_signs' in df.columns, 'factor_icirs' in df.columns)"
+# 两个都应返回 True
 ```
 
 ## Rule 20: Numba 环境变量必须在 import 前设置

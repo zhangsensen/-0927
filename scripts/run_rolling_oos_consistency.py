@@ -230,8 +230,11 @@ def process_combo(
     cost_arr: np.ndarray | None = None,
     delta_rank: float = 0.0,
     min_hold_days: int = 0,
+    factor_signs_str=None,
+    factor_icirs_str=None,
 ):
     factors_in_combo = [f.strip() for f in combo_str.split(" + ")]
+    n_factors = len(factors_in_combo)
     try:
         combo_indices = [factor_index_map[f] for f in factors_in_combo]
     except KeyError:
@@ -239,7 +242,27 @@ def process_combo(
         print(f"  ⚠️ Combo skipped — missing factors {missing}: {combo_str}")
         return None
 
-    current_factors = all_factors_stack[..., combo_indices]
+    current_factors = all_factors_stack[..., combo_indices].copy()
+
+    # Apply ICIR-weighted sign pre-multiply (Phase 3)
+    if factor_signs_str and pd.notna(factor_signs_str):
+        signs = [int(s) for s in str(factor_signs_str).split(",")]
+    else:
+        signs = [1] * n_factors
+
+    if factor_icirs_str and pd.notna(factor_icirs_str):
+        icirs = [float(s) for s in str(factor_icirs_str).split(",")]
+        abs_icirs = [abs(x) for x in icirs]
+        total = sum(abs_icirs)
+        weights = [a / total for a in abs_icirs] if total > 0 else [1.0 / n_factors] * n_factors
+    else:
+        weights = [1.0 / n_factors] * n_factors
+
+    for i, (sign, weight) in enumerate(zip(signs, weights)):
+        multiplier = sign * weight * n_factors
+        if abs(multiplier - 1.0) > 1e-6:
+            current_factors[:, :, i] *= multiplier
+
     current_factor_indices = list(range(len(combo_indices)))
 
     try:
@@ -554,6 +577,14 @@ def main() -> None:
 
     factor_index_map = {name: idx for idx, name in enumerate(factor_names_list)}
 
+    # Extract factor_signs and factor_icirs from input data (Phase 3 ICIR weighting)
+    has_signs = "factor_signs" in df_in.columns
+    has_icirs = "factor_icirs" in df_in.columns
+    signs_list = df_in["factor_signs"].tolist() if has_signs else [None] * len(combos)
+    icirs_list = df_in["factor_icirs"].tolist() if has_icirs else [None] * len(combos)
+    if has_signs or has_icirs:
+        print(f"✅ Factor direction: signs={'yes' if has_signs else 'no'}, icirs={'yes' if has_icirs else 'no'}")
+
     # Parallel evaluation
     n_jobs = _resolve_n_jobs(int(args.n_jobs))
     print(f"Workers: {n_jobs} (requested: {args.n_jobs})")
@@ -579,8 +610,10 @@ def main() -> None:
             cost_arr=cost_arr,
             delta_rank=DELTA_RANK,
             min_hold_days=MIN_HOLD_DAYS,
+            factor_signs_str=signs_str,
+            factor_icirs_str=icirs_str,
         )
-        for combo_str in combos
+        for combo_str, signs_str, icirs_str in zip(combos, signs_list, icirs_list)
     )
 
     summaries = []
