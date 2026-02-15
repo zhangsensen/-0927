@@ -1,0 +1,236 @@
+# ETF分池配置 (Refactored for All-Weather Strategy)
+# 用途：全天候策略的子池定义
+# 更新时间: 2026-02-12
+# 🔧 注意：ETF代码格式必须与 combo_wfo_config.yaml 中的 symbols 一致（不带后缀）
+
+# 全局路径配置
+paths:
+  raw_root: "raw"
+  output_root: "factor_output/etf_rotation_production"
+  logs_root: "logs"
+  snapshots_root: "snapshots"
+
+# CI 阈值配置
+ci_thresholds:
+  min_annual_return: 0.08
+  max_drawdown: -0.30
+  min_sharpe: 0.50
+  min_winrate: 0.45
+  min_coverage: 0.80
+  min_factors: 8
+
+# 容量约束默认配置
+capacity_defaults:
+  max_adv_pct: 0.05
+  max_single_weight: 0.25
+
+# ==============================================================================
+# 🌊 Sub-Pool Definitions (The 7 Pillars of All-Weather)
+# ==============================================================================
+pools:
+  # 1. 权益-宽基 (Beta Source)
+  EQUITY_BROAD:
+    name: "A股宽基"
+    description: "沪深300/中证500/创业板等核心指数"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    symbols:
+      - "510300"
+      - "510500"
+      - "512100"
+      - "159915"
+      - "588000"
+      - "510050"
+      - "588200"
+
+  # 2. 权益-成长 (Alpha Source - Tech/Growth)
+  EQUITY_GROWTH:
+    name: "A股成长"
+    description: "科技/医药/新能源等高弹性板块"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    symbols:
+      - "159949"
+      - "159801"
+      - "512480"
+      - "515790"
+      - "516160"
+      - "159819"
+      - "515030"
+      - "515180"
+      - "512720"
+      - "516520"
+      - "515650"
+      - "159995"
+      - "159998"
+      - "159883"
+      - "512010"
+      - "159859"
+      - "516090"
+
+  # 3. 权益-周期 (Alpha Source - Cyclical)
+  EQUITY_CYCLICAL:
+    name: "A股周期"
+    description: "金融/资源/军工/房地产/煤炭等周期性板块"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    symbols:
+      - "512880"
+      - "512800"
+      - "512400"
+      - "159992"
+      - "515210"
+      - "512660"
+      - "512200"   # 房地产ETF (v5.0 新增)
+      - "515220"   # 煤炭ETF (v5.0 新增)
+
+  # 4. 权益-防御 (Alpha Source - Defensive)
+  EQUITY_DEFENSIVE:
+    name: "A股防御"
+    description: "消费/红利/公用事业"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    symbols:
+      - "512690"
+      - "159928"
+      - "512980"
+
+  # 5. 债券 (Risk-Off / Yield)
+  BOND:
+    name: "债券"
+    description: "国债/转债"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    symbols:
+      - "511010"
+      - "511260"
+      - "511380"
+
+  # 6. 商品 (Inflation Hedge)
+  COMMODITY:
+    name: "商品"
+    description: "黄金/白银/豆粕等大宗"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    symbols:
+      - "518880"
+      - "518850"
+      - "159985"   # 豆粕ETF (v5.0 新增)
+
+  # 7. QDII (Geographic Diversification)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ⚠️ 8 只 QDII 参与横截面校准，v5.0 A_SHARE_ONLY 模式下不交易
+  #
+  # v3.1 审计结果 (2025-12-01, 原始 5 只):
+  #   513500 标普500:     +25.37%, 胜率 68.9%, 选中 45 次 ← 最强
+  #   513130 恒生科技(港元): +23.69%, 胜率 53.3%, 选中 15 次
+  #   513100 纳指100:     +22.03%, 胜率 61.3%, 选中 31 次
+  #   159920 恒生指数:    +17.13%, 胜率 70.0%, 选中 10 次
+  #   513050 中概互联:    +2.01%,  胜率 44.4%, 选中 18 次
+  #
+  # v5.0 新增 3 只: 513180 恒生科技指数, 513400 道琼斯, 513520 日经225
+  # ⚠️ 禁止修改此列表！详见 docs/ETF_POOL_ARCHITECTURE.md
+  # ═══════════════════════════════════════════════════════════════════════════
+  QDII:
+    name: "海外QDII"
+    description: "美股/港股/日股 — 8只QDII，v5.0 A_SHARE_ONLY模式下仅参与横截面校准不交易"
+    calendar: "NYSE"
+    timezone: "America/New_York"
+    symbols:
+      # --- 原始 5 只 (v3.1) ---
+      - "513100"   # 🌍 纳指100 ETF (美股) - +22.03%
+      - "513500"   # 🌍 标普500 ETF (美股) - +25.37% ⭐最强
+      - "513050"   # 🌍 中概互联 ETF (港股)
+      - "159920"   # 🌍 恒生指数 ETF (港股) - 70% 胜率
+      - "513130"   # 🌍 恒生科技(港元) ETF - +23.69%
+      # --- v5.0 新增 3 只 ---
+      - "513180"   # 🌍 恒生科技指数ETF (v5.0 新增)
+      - "513400"   # 🌍 道琼斯ETF (v5.0 新增)
+      - "513520"   # 🌍 日经225ETF (v5.0 新增)
+
+  # 8. 实盘精选池 (Legacy Support)
+  A_SHARE_LIVE:
+    name: "A股ETF实盘池"
+    description: "当前实盘调仓模板使用的精简高流动性ETF集合"
+    calendar: "SSE"
+    timezone: "Asia/Shanghai"
+    symbols:
+      - "510300"
+      - "510500"
+      - "159915"
+      - "512880"
+      - "159949"
+      - "515790"
+      - "516160"
+    capacity_overrides:
+      max_adv_pct: 0.04
+      max_single_weight: 0.30
+
+# ETF分类映射 (用于报告和分析)
+etf_categories:
+  "510300": "Broad"
+  "510500": "Broad"
+  "512100": "Broad"
+  "159915": "Broad"
+  "588000": "Broad"
+  "510050": "Broad"
+  "588200": "Broad"
+  "159949": "Growth"
+  "159801": "Growth"
+  "512480": "Growth"
+  "515790": "Growth"
+  "516160": "Growth"
+  "159819": "Growth"
+  "515030": "Growth"
+  "515180": "Growth"
+  "512720": "Growth"
+  "516520": "Growth"
+  "515650": "Growth"
+  "159995": "Growth"
+  "159998": "Growth"
+  "159883": "Growth"
+  "512010": "Growth"
+  "159859": "Growth"
+  "516090": "Growth"
+  "512880": "Cyclical"
+  "512800": "Cyclical"
+  "512400": "Cyclical"
+  "159992": "Cyclical"
+  "515210": "Cyclical"
+  "512660": "Cyclical"
+  "512200": "Cyclical"
+  "515220": "Cyclical"
+  "512690": "Defensive"
+  "159928": "Defensive"
+  "512980": "Defensive"
+  "511010": "Bond"
+  "511260": "Bond"
+  "511380": "Bond"
+  "518880": "Commodity"
+  "518850": "Commodity"
+  "159985": "Commodity"
+  "513100": "QDII"
+  "513500": "QDII"
+  "513050": "QDII"
+  "159920": "QDII"
+  "513130": "QDII"
+  "513180": "QDII"
+  "513400": "QDII"
+  "513520": "QDII"
+
+# 资金与约束配置
+capital_constraints:
+  EQUITY_BROAD:
+    target_capital: 0.20
+  EQUITY_GROWTH:
+    target_capital: 0.15
+  EQUITY_CYCLICAL:
+    target_capital: 0.10
+  EQUITY_DEFENSIVE:
+    target_capital: 0.05
+  BOND:
+    target_capital: 0.20
+  COMMODITY:
+    target_capital: 0.15
+  QDII:
+    target_capital: 0.15

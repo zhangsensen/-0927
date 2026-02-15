@@ -42,7 +42,7 @@ def real_config():
 
 class TestFrozenValues:
     def test_current_version(self):
-        assert CURRENT_VERSION == "v5.0"
+        assert CURRENT_VERSION == "v8.0"
 
     def test_backtest_defaults(self):
         p = FrozenBacktestParams()
@@ -124,7 +124,7 @@ class TestRealConfigValidation:
             config_path=str(CONFIG_PATH),
             strictness=StrictnessMode.STRICT,
         )
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
         assert frozen.config_sha256 is not None
 
     def test_returns_frozen_config(self, real_config):
@@ -230,7 +230,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise
         frozen = load_frozen_config(bad, strictness=StrictnessMode.WARN)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
     def test_env_var_warn(self, real_config, monkeypatch):
         monkeypatch.setenv("FROZEN_PARAMS_MODE", "warn")
@@ -238,7 +238,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise due to env var
         frozen = load_frozen_config(bad)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
 
 # ---------------------------------------------------------------------------
@@ -252,20 +252,20 @@ class TestOperationalParamsIgnored:
         modified["data"]["data_dir"] = "/some/other/path"
         # Should pass without error
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
     def test_n_jobs_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["combo_wfo"]["n_jobs"] = 1
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
     def test_start_end_date_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["data"]["start_date"] = "2021-01-01"
         modified["data"]["end_date"] = "2026-01-01"
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
 
 # ---------------------------------------------------------------------------
@@ -344,4 +344,30 @@ class TestVersionRegistry:
             "AMIHUD_ILLIQUIDITY",
             "CALMAR_RATIO_60D",
             "CORRELATION_TO_MARKET_20D",
+        )
+
+    def test_v80_registered(self, real_config):
+        """v8.0 has composite_1 champion + core_4f fallback."""
+        frozen = load_frozen_config(
+            real_config, version="v8.0", strictness=StrictnessMode.STRICT
+        )
+        assert frozen.version == "v8.0"
+        assert frozen.backtest.freq == 5
+        assert frozen.hysteresis.delta_rank == 0.10
+        assert frozen.hysteresis.min_hold_days == 9
+        assert len(frozen.strategies) == 2
+        assert frozen.strategies[0].name == "composite_1"
+        assert frozen.strategies[0].factors == (
+            "ADX_14D",
+            "BREAKOUT_20D",
+            "MARGIN_BUY_RATIO",
+            "PRICE_POSITION_120D",
+            "SHARE_CHG_5D",
+        )
+        assert frozen.strategies[1].name == "core_4f"
+        assert frozen.strategies[1].factors == (
+            "MARGIN_CHG_10D",
+            "PRICE_POSITION_120D",
+            "SHARE_CHG_20D",
+            "SLOPE_20D",
         )
