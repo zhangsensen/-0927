@@ -181,4 +181,14 @@ Rationale (verified 2026-02-11):
 ## Code Style
 
 - Python 3.11+, black (88 chars), isort (black profile), ruff, mypy strict
-- pytest for testing (6 test files, 157 cases covering frozen_params, rebalance utilities, OBV alignment, cost model, execution model, factor mining)
+- pytest for testing (10 test files, 210 cases covering frozen_params, rebalance utilities, OBV alignment, cost model, execution model, factor mining, factor registry, factor buckets, hysteresis, ETF pool constraint)
+
+## Sealing Process
+
+Strategy versions are sealed in `sealed_strategies/vX.Y_YYYYMMDD/` with MANIFEST.json, CHECKSUMS.sha256, SEAL_SUMMARY.md, artifacts/, and locked/ source snapshot. See `sealed_strategies/SEALING_GUIDELINES.md`.
+
+**Pre-seal checklist** (Rule 25/26 in `memory/rules.md`):
+- All known pipeline bugs fixed before sealing (don't "fix one, seal one")
+- VEC-BT holdout gap < 10pp for all candidates (target < 5pp)
+- Four-gate validation: Train > 0, Rolling ≥ 60%, Holdout > 0, BT 0 margin failures
+- `make test` all pass, CHECKSUMS verified, package < 50MB
