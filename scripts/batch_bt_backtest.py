@@ -549,7 +549,19 @@ def main():
             print("❌ 未找到 WFO 结果目录")
             return
 
-        latest_wfo = wfo_dirs[-1]
+        # ✅ 只选择有 parquet 文件的目录
+        valid_wfo_dirs = [
+            d
+            for d in wfo_dirs
+            if (d / "top100_by_ic.parquet").exists()
+            or (d / "all_combos.parquet").exists()
+        ]
+
+        if not valid_wfo_dirs:
+            print("❌ 未找到包含 parquet 文件的 WFO 结果目录")
+            return
+
+        latest_wfo = valid_wfo_dirs[-1]
         combos_path = latest_wfo / "top100_by_ic.parquet"
         if not combos_path.exists():
             combos_path = latest_wfo / "all_combos.parquet"
