@@ -381,6 +381,43 @@ uv run python scripts/run_full_pipeline.py
 
 **详细分析**：`memory/2026-02_vec_bt_alignment_fix.md`
 
+## Rule 25: 封板前 VEC-BT gap 是硬性前置检查
+
+**教训 (2026-02-15)**：v7.0 封板时 VEC-BT gap +25.6pp，远超 10pp 红线，但没有系统性检查。
+v8.0 之前修了三个管线 bug 后，155 候选全部 gap < 2pp。
+
+**原则**：
+- 封板前**必须**验证所有候选策略的 VEC-BT holdout gap
+- Gap > 10pp = **不允许封板**，必须先排查管线问题
+- Target gap < 5pp（正常的 float/int 差异范围）
+- Gap 方向也要关注：BT > VEC（安全，实际执行不劣于预期）vs VEC > BT（需调查）
+
+**检查方法**：
+```python
+# 封板前运行
+gap = bt_holdout_return - vec_holdout_return
+assert abs(gap) < 0.10, f"VEC-BT gap {gap:.1%} exceeds 10pp red flag"
+```
+
+## Rule 26: 修 bug 后不要"修一个封一版"
+
+**教训 (2026-02-11~15)**：5天封了 v5.0/v6.0/v7.0/v8.0 四个版本，前三个全废弃。
+每次只修一个 bug 就急于封板，结果下一个 bug 暴露后又要废弃。
+
+**原则**：
+- 发现 pipeline bug 后，**先全部修完**，再封板
+- Bug 是乘法不是加法 — 3个小问题组合后致命
+- 封板是昂贵操作（locked/ 快照 + CHECKSUMS + SEAL_SUMMARY），不应频繁执行
+- 正确节奏：修所有已知 bug → full pipeline 端到端 → 全量 BT → VEC-BT gap 检查 → 封板
+
+**反面案例**：
+```
+v5.0 (02-11) → 废弃 (02-12): ADX Winsorize bug
+v6.0 (02-12) → 从未使用: C2 train gate fail
+v7.0 (02-13) → 废弃 (02-15): IC-sign + metadata + exec-side bugs
+v8.0 (02-15) → 首个 clean seal（三个 bug 全修后）
+```
+
 ## Rule 23: shadow accounting 对交易决策的影响远小于状态追踪
 
 **教训 (2026-02-14)**：`sizing_commission_rate = 50bp`（max rate）vs 实际 20bp（A股），

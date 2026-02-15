@@ -9,10 +9,11 @@
 
 | 文件 | 日期 | 类型 | 简介 |
 |------|------|------|------|
-| [rules.md](./rules.md) | 2026-02 | 规则 | 策略验证诊断规则（24条），每次评估策略前必读 |
+| [rules.md](./rules.md) | 2026-02 | 规则 | 策略验证诊断规则（26条），每次评估策略前必读 |
 | [2026-02_performance_optimization_failure.md](./2026-02_performance_optimization_failure.md) | 2026-02-12 | 教训 | 10x加速目标实际仅提升2.4%的复盘 |
 | [2026-02_vec_bt_alignment_fix.md](./2026-02_vec_bt_alignment_fix.md) | 2026-02-14 | 教训 | VEC-BT +25.7pp gap 根因：信号态 vs 执行态反馈环 |
 | [2026-02_pipeline_metadata_loss.md](./2026-02_pipeline_metadata_loss.md) | 2026-02-14 | 元教训 | 管线信息瓶颈：同一 bug 的三次变体 (Rule 14/19/24) |
+| [2026-02_v8_sealing_lessons.md](./2026-02_v8_sealing_lessons.md) | 2026-02-15 | 教训 | v5→v8 四版封板复盘，3个bug累积效应，封板流程检查清单 |
 
 ---
 
