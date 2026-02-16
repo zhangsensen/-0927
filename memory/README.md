@@ -18,6 +18,7 @@
 | [factor_reference.md](./factor_reference.md) | 2026-02-16 | 参考 | 44因子完整手册：属性/IC/方向/v8用途/分桶/架构 |
 | [2026-02_alpha_theory_and_data_value.md](./2026-02_alpha_theory_and_data_value.md) | 2026-02-16 | 战略 | Alpha理论、数据价值框架、Phase 1复盘、Phase 2指引 |
 | [2026-02_moneyflow_validation.md](./2026-02_moneyflow_validation.md) | 2026-02-17 | 决策 | Moneyflow因子价值验证：与fund_share/margin同维度，放弃 |
+| [2026-02_when_dimension_research_brief.md](./2026-02_when_dimension_research_brief.md) | 2026-02-17 | 研究 | WHEN维度研究简报：策略激活时机+策略组合，待验证 |
 
 ---
 
