@@ -16,6 +16,7 @@
 | [2026-02_v8_sealing_lessons.md](./2026-02_v8_sealing_lessons.md) | 2026-02-15 | 教训 | v5→v8 四版封板复盘，3个bug累积效应，封板流程检查清单 |
 | [2026-02_ic_sign_infrastructure_lesson.md](./2026-02_ic_sign_infrastructure_lesson.md) | 2026-02-16 | 教训 | IC-sign 方向修复：水管通了水一直都在，统计声称修正 |
 | [factor_reference.md](./factor_reference.md) | 2026-02-16 | 参考 | 44因子完整手册：属性/IC/方向/v8用途/分桶/架构 |
+| [2026-02_alpha_theory_and_data_value.md](./2026-02_alpha_theory_and_data_value.md) | 2026-02-16 | 战略 | Alpha理论、数据价值框架、Phase 1复盘、Phase 2指引 |
 
 ---
 
