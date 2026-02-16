@@ -138,6 +138,63 @@ Rule 31: 不同管道同一现象≠新信息（moneyflow vs fund_share vs margi
 
 ---
 
+## 七、得分离散度/置信度验证（2026-02-17）
+
+### 假说
+
+当前系统只用"谁排第一第二"，丢弃了得分分布的形状信息。如果 top1 远超 top3，
+排名确定性高，后续收益应该更好。
+
+### 方法
+
+用 4 个 OHLCV 因子（PP120 + BREAKOUT_20D + SLOPE_20D + ADX_14D）等权排名，
+每 5 天 rebalance，计算截面得分离散度指标 vs 后续 5 天 top-2 平均收益。
+273 个 rebalance 观测（Train 235 + Holdout 38）。
+
+### 结果：无信号
+
+| 指标 | Full rho | p-value | 判断 |
+|------|----------|---------|------|
+| spread_top1_top3 | +0.040 | 0.514 | 无信号 |
+| spread_top2_med | +0.078 | 0.199 | 无信号 |
+| spread_std | +0.063 | 0.302 | 无信号 |
+
+**Train/Holdout 方向反转**（Rule 4 红旗）：
+- Train: High-spread Sharpe 0.70 > Low -0.25 → 微弱正信号
+- Holdout: High-spread Sharpe **-2.27** < Low -0.76 → 完全反转
+
+### 结论
+
+得分离散度不包含可利用的增量信息。Train 期微弱信号是噪声拟合。
+在 49 ETF × FREQ=5 框架下，截面得分分布形状无预测力。
+
+---
+
+## 八、最终结论：现有数据的 alpha 空间已完全耗尽
+
+经过系统性验证，以下方向全部关闭：
+
+| 方向 | 验证方式 | 结果 | 关闭原因 |
+|------|---------|------|---------|
+| 因子重组合 (Phase 1) | 200 combo × 4-gate WFO | v8.0 仍最优 | Kaiser 5/17 饱和 |
+| SHARE_CHG_10D | WFO rank 对比 | rank #6873 vs #14 | -67pp, 窗口不匹配 |
+| SHARE_ACCEL | 4-gate 验证 | Rolling↑ 但 Sharpe↓ | 同源二阶导数 (Rule 28) |
+| Moneyflow | IC + 正交性检验 | rho=0.58 vs fund_share | 同维度 (Rule 31) |
+| 得分离散度 | 相关性 + tercile | rho<0.08, train/HO 反转 | 无信号 |
+
+**结论: v8.0 是当前数据 + 方法论的天花板。后续 alpha 改进必须引入新的正交数据源。**
+
+当前数据障碍：
+- 北向资金: Tushare 无个股级数据
+- 期权IV: 仅覆盖 2-3 个标的
+- IOPV折溢价: 需盘中采集，无历史数据
+- 汇率: A_SHARE_ONLY 模式下截面区分度未知
+
+**建议**: 停止因子研究，专注于 v8.0 shadow 验证（8-12周）和日常运维。
+当新数据源可得时再启动 Phase 2。
+
+---
+
 ## 相关文件
 
 - `memory/2026-02_alpha_theory_and_data_value.md` — Alpha 理论框架
