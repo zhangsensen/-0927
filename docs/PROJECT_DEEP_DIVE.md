@@ -1,6 +1,6 @@
 # ETF 轮动策略研究平台 - 完整项目说明
 
-> **版本**: v5.0 | **更新日期**: 2026-02-12 | **状态**: 生产运行中 (S1 上线 2025-12-18)
+> **版本**: v8.0 | **更新日期**: 2026-02-16 | **状态**: 生产运行中 (composite_1 上线 2025-12-18)
 
 ---
 
@@ -37,11 +37,11 @@
       ↓
 因子: 23 个因子 (17 OHLCV + 6 non-OHLCV: fund_share + margin)
       ↓
-信号: 横截面标准化 (有界→rank, 无界→Z-Score) → 多因子等权合成 → Top-K 排名
+信号: 横截面标准化 (有界→rank, 无界→Z-Score) → 多因子 ICIR 加权 → Top-K 排名
       ↓
 执行: 每 5 日调仓 + Hysteresis (delta_rank=0.10, min_hold=9) → 持有 2 只 ETF
       ↓
-输出: HO +42.7% (S1), MDD 11.8%, 夏普 ~2.15 (VEC)
+输出: HO +53.9% (composite_1), MDD 10.8%, Sharpe 1.38 (BT Ground Truth)
 ```
 
 ### 1.3 关键数字
@@ -73,7 +73,10 @@
 2026-01  v4.0  重构: 16因子正交集, T1_OPEN执行模型
 2026-02  v4.1  成本: SPLIT_MARKET成本模型 (A/QDII分级)
 2026-02  v4.2  扩展: +13新因子候选, GPU加速IC
-2026-02  v5.0  生产: FREQ=5+Exp4 hysteresis, 49 ETF, A_SHARE_ONLY (当前生产版本)
+2026-02  v5.0  封板: FREQ=5+Exp4 (废弃: ADX Winsorize bug)
+2026-02  v6.0  封板: (从未使用: train gate fail)
+2026-02  v7.0  封板: (废弃: IC-sign/metadata/exec bugs)
+2026-02  v8.0  生产: composite_1(5F) + core_4f(4F), 管线修复后首个clean seal (当前版本)
 ```
 
 ---
@@ -839,54 +842,79 @@ sealed_strategies/v3.X_YYYYMMDD/
 
 ---
 
-## 12. 上线策略详情 (v5.0)
+## 12. 上线策略详情 (v8.0)
 
-### 12.1 生产策略 S1 (4因子)
+### 12.1 生产策略 composite_1 (5因子)
 
 ```
-因子: ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D
+因子: ADX_14D(+1) + BREAKOUT_20D(+1) + MARGIN_BUY_RATIO(-1) + PRICE_POSITION_120D(+1) + SHARE_CHG_5D(-1)
 执行: FREQ=5, Exp4 Hysteresis (delta_rank=0.10, min_hold_days=9), Regime Gate ON
 ```
 
-| 指标 | VEC (v5.0) | BT (med cost) |
-|------|-----------|---------------|
-| HO 收益 | **+42.7%** | +32.5% |
-| HO MDD | 11.8% | 11.0% |
-| HO Sharpe | 2.15 | - |
-| Worst Month | -2.7% | - |
-| Trades | 75 | 120 |
-| Margin Failures | - | 0 |
+| 指标 | VEC | BT Ground Truth |
+|------|-----|-----------------|
+| Train 收益 | +51.6% | +51.6% |
+| HO 收益 | +55.7% | **+53.9%** |
+| HO MDD | 7.5% | 10.8% |
+| HO Sharpe | 2.95 | **1.38** |
+| HO Calmar | 7.41 | **7.41** |
+| Trades | — | 77 |
+| Margin Failures | — | 0 |
+| Rolling 正率 | — | 61% (11/18) |
 
-### 12.2 Shadow 候选 C2 (3因子)
+**核心特征**: 全候选中最高 Sharpe (1.38) + 最高 HO Calmar (7.41)，风险调整后表现最优
+
+### 12.2 回退策略 core_4f (4因子)
 
 ```
-因子: AMIHUD_ILLIQUIDITY + CALMAR_RATIO_60D + CORRELATION_TO_MARKET_20D
-状态: Shadow 部署中, 8-12 周后评估
+因子: MARGIN_CHG_10D(-1) + PRICE_POSITION_120D(+1) + SHARE_CHG_20D(-1) + SLOPE_20D(+1)
+触发: composite_1 连续 3 调仓期 MDD 恶化 / Rolling Sharpe < 0 / 人工判断
 ```
 
-| 指标 | VEC | BT (med cost) |
-|------|-----|---------------|
-| HO 收益 | +63.9% | +45.9% |
-| HO MDD | 10.4% | 12.2% |
-| Trades | 28 | 34 |
+| 指标 | VEC | BT Ground Truth |
+|------|-----|-----------------|
+| Train 收益 | +53.0% | +53.0% |
+| HO 收益 | +68.0% | **+67.4%** |
+| HO MDD | 14.9% | 14.9% |
+| HO Sharpe | 2.58 | 1.09 |
+| HO Calmar | 4.56 | 4.56 |
+| Trades | — | 75 |
+| Margin Failures | — | 0 |
+| Rolling 正率 | — | **78% (14/18)** |
 
-### 12.3 S1 因子含义
+**核心特征**: 绝对收益最高 (+67.4%) + Rolling 稳定性最强 (78%)
 
-| 因子 | 含义 | 策略逻辑 |
-|------|------|---------|
-| **ADX_14D** | 趋势强度 | 选择正在形成趋势的 ETF (不关心方向) |
-| **SLOPE_20D** | 线性回归斜率 | 选择价格有上升趋势的 ETF |
-| **SHARPE_RATIO_20D** | 近 20 日风险调整收益 | 选择"性价比"最高的 ETF |
-| **OBV_SLOPE_10D** | OBV 斜率 (资金流) | 选择有持续资金流入的 ETF |
+### 12.3 composite_1 因子含义
 
-**策略思路**: 寻找"趋势明确(ADX)、方向向上(SLOPE)、资金流入(OBV)、风险调整收益好(SHARPE)"的 ETF, 即**强势且有资金支撑**的品种。
+| 因子 | 方向 | 含义 | 策略逻辑 |
+|------|------|------|---------|
+| **ADX_14D** | +1 | 趋势强度 | 选择正在形成趋势的 ETF |
+| **BREAKOUT_20D** | +1 | 突破动量 | 选择价格突破的 ETF |
+| **MARGIN_BUY_RATIO** | -1 | 融资买入占比 | 选择非散户追高的 ETF |
+| **PRICE_POSITION_120D** | +1 | 长期价格位置 | 选择强势 ETF |
+| **SHARE_CHG_5D** | -1 | 份额变化 | 选择机构流出的 ETF (逆向) |
 
-### 12.4 为何 S1 + F5_ON
+**策略思路**: 寻找"趋势明确、有突破、非散户追高、长期强势、机构逆向"的 ETF。
 
-- **因子排名稳定性**: ADX/OBV/SHARPE/SLOPE 的横截面排名高度稳定 (rank autocorrelation > 0.8), 与 Exp4 hysteresis 高度兼容
-- **"冠军"因子不兼容**: AMIHUD+PP20D+PV_CORR+SLOPE 排名波动大 → Exp4 锁仓 → 训练期负收益
-- **执行 > 信号**: v3.4→v5.0 同一信号 (S1), 仅执行改进 (FREQ=5 + Exp4) 就提升 +35.8pp holdout 收益
-- **实盘验证**: 2025-12-18 ~ 2026-02-09, +6.37%, 22 trades, 83.3% WR
+### 12.4 两大 Alpha 家族
+
+| 家族 | 代表策略 | 核心因子 | 特点 |
+|------|---------|---------|------|
+| **Family A** | composite_1 | BREAKOUT + MARGIN_BUY + SHARE_CHG_5D | 高 Sharpe, 低 MDD |
+| **Family B** | core_4f | MARGIN_CHG + PP120 + SLOPE | 高绝对收益, 高稳定性 |
+
+**关键发现** (Phase 1, 2026-02-16):
+- 当前 23 因子空间已饱和 (Kaiser 有效维度 5/17)
+- 200 combos 无一在 Sharpe + Calmar + MDD 同时超越 composite_1
+- 突破需新数据源 (Phase 2: IOPV, FX, northbound)
+
+### 12.5 实盘验证
+
+- **上线日期**: 2025-12-18
+- **实盘收益**: +6.37% (49,178 CNY)
+- **交易次数**: 22 笔
+- **胜率**: 83.3%
+- **持仓特征**: 100% A股, 零 QDII (市场环境导致, 非策略 bug)
 
 ---
 

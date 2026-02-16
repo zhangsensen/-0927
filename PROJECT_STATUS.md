@@ -1,9 +1,9 @@
 # ETF策略项目状态汇总
 
-**最后更新**: 2026-02-12
-**当前版本**: v5.0 (sealed 2026-02-11)
-**生产策略**: S1 (ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D)
-**影子策略**: C2 (AMIHUD + CALMAR_60D + CORR_MKT_20D) — BT验证通过，待shadow
+**最后更新**: 2026-02-16
+**当前版本**: v8.0 (sealed 2026-02-15)
+**生产策略**: composite_1 (5F) — ADX_14D + BREAKOUT_20D + MARGIN_BUY_RATIO + PRICE_POSITION_120D + SHARE_CHG_5D
+**回退策略**: core_4f (4F) — MARGIN_CHG_10D + PRICE_POSITION_120D + SHARE_CHG_20D + SLOPE_20D
 
 ---
 
@@ -22,15 +22,15 @@ IC gate+评分     Numba JIT内核     Backtrader事件驱动
 
 **关键原则**: 每一层必须在生产执行框架下运行 (FREQ=5 + Exp4 hysteresis + regime gate)，否则结果无效。
 
-### 1.3 生产参数 (v5.0, sealed)
+### 1.3 生产参数 (v8.0, sealed)
 | 参数 | 值 | 说明 |
-|-----|-----|------|
+|-----|-----|-----|
 | FREQ | 5 | 5个交易日换仓 |
 | POS_SIZE | 2 | 同时持有2只ETF |
 | COMMISSION | 0.0002 | 2bp基础手续费 |
 | delta_rank | 0.10 | Hysteresis: rank01差≥0.10才换仓 |
 | min_hold_days | 9 | Hysteresis: 最少持有9天 |
-| 因子池 | 17 (base) + 1 (PREMIUM_DEVIATION_20D) | 活跃因子 |
+| 因子池 | 23 (17 OHLCV + 6 non-OHLCV) | 活跃因子 |
 | 标的池 | 49只 | 41只A股ETF + 8只QDII(仅监控) |
 | Regime Gate | ON | 510300波动率门控 (25/30/40%) |
 | 成本模型 | SPLIT_MARKET | A股20bp, QDII 50bp |
@@ -39,26 +39,51 @@ IC gate+评分     Numba JIT内核     Backtrader事件驱动
 
 ## 2. 当前策略表现
 
-### 2.1 S1 生产策略 (v5.0 VEC验证)
-| 指标 | 全期 | 训练期 | 样本外 | 说明 |
-|------|------|--------|--------|------|
-| 收益率 | +54.1% | +8.0% | **+42.7%** | 2020-01~2026-02 |
-| 最大回撤 | — | — | **11.8%** | |
-| 最差月份 | — | — | **-2.9%** | |
-| 交易次数 | — | — | 75 | F5+Exp4控制换手 |
-| 季度正收益率 | — | — | 75% | |
+### 2.1 composite_1 生产策略 (v8.0, BT ground truth)
 
-### 2.2 C2 影子候选 (BT ground truth验证)
-| 指标 | VEC | BT | 说明 |
-|------|-----|-----|------|
-| 样本外收益 | +63.9% | +45.9% | VEC-BT gap: -18.1pp |
-| 最大回撤 | 10.4% | 12.2% | |
-| 最差月份 | -9.4% | -7.1% | |
-| 交易次数 | 28 | 34 | |
-| Margin failures | — | **0** | |
-| vs BT-S1 | — | **+13.4pp** | BT下仍优于S1 |
+**因子组合**: ADX_14D(+1) + BREAKOUT_20D(+1) + MARGIN_BUY_RATIO(-1) + PRICE_POSITION_120D(+1) + SHARE_CHG_5D(-1)
 
-### 2.3 实盘表现 (2025-12-18 ~ 2026-02-09, 6周)
+| 指标 | Train | Holdout | 全期 | 说明 |
+|------|-------|---------|------|------|
+| 收益率 | +51.6% | **+53.9%** | +105.5% | 2020-01~2026-02 |
+| 最大回撤 | 10.8% | 10.8% | 10.8% | |
+| Sharpe | 1.46 | **1.38** | — | 风险调整最优 |
+| Calmar | 4.78 | **7.41** | — | |
+| 交易次数 | — | 77 | — | F5+Exp4控制换手 |
+| Margin Failures | 0 | 0 | — | BT执行可行 |
+| Rolling 正率 | — | 61% (11/18) | — | |
+
+**v8.0 核心特征**:
+- 5因子组合，2个负向因子 (MARGIN_BUY_RATIO, SHARE_CHG_5D)
+- 全候选中 **最高 Sharpe (1.38)** 和 **最高 HO Calmar (7.41)**
+- 低 MDD (10.8%)，风险调整后表现最优
+
+### 2.2 core_4f 回退策略 (v8.0, BT ground truth)
+
+**因子组合**: MARGIN_CHG_10D(-1) + PRICE_POSITION_120D(+1) + SHARE_CHG_20D(-1) + SLOPE_20D(+1)
+
+| 指标 | Train | Holdout | 全期 |
+|------|-------|---------|------|
+| 收益率 | +53.0% | **+67.4%** | +120.4% |
+| 最大回撤 | 14.9% | 14.9% | 14.9% |
+| Sharpe | 1.12 | 1.09 | — |
+| Calmar | 3.56 | 4.56 | — |
+| 交易次数 | — | 75 | — |
+| Rolling 正率 | — | **78% (14/18)** | — |
+
+**特征**: 纯 4 因子组合，**绝对收益最高** (+67.4%)，Rolling 稳定性最强 (78%)
+
+### 2.3 VEC-BT 对齐验证 (v8.0)
+
+| 策略 | VEC HO | BT HO | Gap | 状态 |
+|------|--------|-------|-----|------|
+| composite_1 | +55.7% | +53.9% | **-1.9pp** | PASS (<5pp) |
+| core_4f | +68.0% | +67.4% | **-0.6pp** | PASS (<5pp) |
+
+**管线健康**: VEC-BT train gap mean 0.07pp, median 0.00pp — 完美对齐
+
+### 2.4 实盘表现 (2025-12-18 ~ 2026-02-09, 6周)
+
 - 收益: **+6.37%** (49,178 CNY)
 - 交易: 22笔, 胜率 83.3%, 盈亏比 2.33
 - 持仓: 100% A股, 零QDII (市场环境导致, 非bug)
@@ -71,66 +96,62 @@ IC gate+评分     Numba JIT内核     Backtrader事件驱动
 
 | 优化维度 | 回报乘数 | 证据 |
 |----------|---------|------|
-| **执行优化** | **3.6x** | S1 F5_OFF→F5_ON, 信号不变, HO +11.8%→+42.7% |
-| **信号改进** | 1.25x | C2 vs S1, 相同执行框架 |
+| **执行优化** | **3.6x** | 同一信号, F3_OFF→F5_ON, HO +11.8%→+42.7% |
+| **信号改进** | 1.25x | 不同信号, 相同执行框架 |
 | **因子重组** | ~1x | 代数因子组合, 信息空间已饱和 |
 
 **原理**: A股ETF宇宙PC1=59.8%, Kaiser有效维度=5/17。大部分因子冗余，执行框架决定哪些因子能存活。
 
 ### 3.2 已完成研究 (按时间倒序)
 
-#### 代数因子VEC验证 — 边际价值 (2026-02-12)
+#### Phase 1: Non-OHLCV Factor Optimization (2026-02-16) — EXHAUSTED
+
+- **方法**: 200 combos × 4-gate 验证，vs v8.0 baseline
+- **Exp-A1**: SHARE_CHG_10D vs SHARE_CHG_5D → **REJECTED** (-67.4pp gap)
+- **Exp-A2**: SHARE_ACCEL 集成 → **PARTIAL** (稳定性换收益，无风险调整提升)
+- **Exp-A3**: 全网格搜索 → **v8.0 confirmed optimal**
+- **结论**: 当前 23 因子空间已饱和，突破需新数据源 (Phase 2: IOPV, FX, northbound)
+- **文档**: `docs/research/phase1_non_ohlcv_optimization_20260216.md`
+
+#### v8.0 三大管线修复 (2026-02-14~15) — COMPLETED
+
+1. **IC-sign factor direction fix**: 5/6 非OHLCV 因子被系统性反向使用 → stability-gated sign flip
+2. **VEC metadata propagation**: factor_signs/factor_icirs 丢失 → VEC-BT gap 20.3pp→1.47pp
+3. **BT execution-side hysteresis**: 信号态反馈环 → 执行态驱动，gap +25.7pp→-0.8pp
+
+**教训**: 修 bug 不要"修一个封一版"，等全部修完再封板 (Rule 26)
+
+#### 代数因子VEC验证 — MARGINAL (2026-02-12)
+
 - **方法**: GP挖掘78个代数因子 → WFO 1.2M组合 → 27 VEC候选 → 6 BT候选
-- **关键发现**: Hysteresis反转分组排名 (Group A在Exp4下反超Group B)
-- **发现**: CMF家族因子rank稳定, 与Exp4兼容
-- **产出**: 修复VEC hysteresis参数遗漏bug (最高价值产出)
 - **结论**: 代数组合是OHLCV重排, 信息空间已被17因子覆盖
 - **文档**: `docs/research/algebraic_factor_vec_validation.md`
 
 #### 行业约束研究 — NEGATIVE (2026-02-12)
-- **测试**: 同行业双持诊断, COMMODITY max_1 A/B测试, 全7行业约束
-- **结论**: 同行业双持是最优配置, 非尾部风险放大器; MDD反而恶化
+
+- **结论**: 同行业双持是最优配置; MDD反而恶化
 - **文档**: `docs/research/sector_constraint_negative_results.md`
 
 #### 条件因子研究 — NEGATIVE (2026-02-11)
-- **测试**: Drop ADX, Drop OBV, regime条件切换, differential trade attribution
-- **5个假设全部推翻**: +15pp是路径依赖复利artifact, 非per-trade alpha
+
+- **5个假设全部推翻**: +15pp是路径依赖复利artifact
 - **文档**: `docs/research/conditional_factor_negative_results.md`
 
 #### 跨桶约束 — POSITIVE (2026-02-11)
-- **验证**: 5桶 × min_buckets=3 × max_per_bucket=2
-- **Phase 1 (VEC)**: HO中位数 +4.84pp, PASS
-- **Phase 2 (F5+Exp4)**: HO中位数 +4.92pp, MDD -1.63pp, CONFIRMED
-- **决策**: 研究默认开启, 生产配置保持关闭 (向后兼容)
+
+- **验证**: HO中位数 +4.9pp
 - **文档**: `docs/research/bucket_constraints_ablation.md`
 
-#### C2 Ground Truth验证 — POSITIVE (2026-02-11)
-- **BT验证**: HO +45.9%, 0 margin failures, 比BT-S1多+13.4pp
-- **Gate 1 (滚动)**: PASS (3/4窗口正收益)
-- **Gate 2 (集中度)**: PASS (Gini 0.448)
-- **决策**: Shadow 8-12周
+### 3.3 待研究方向
 
-#### 折溢价因子 (PREMIUM_DEVIATION_20D) — REJECTED by WFO (2026-02-12)
-- 独立IC -0.107, WFO框架下缩水至 -0.044 (< 0.05 gate)
-- 正样本率 41% (< 55% gate)
-- 已加入config active_factors但不影响S1/C2 (数据仅覆盖2025-02起)
+#### Phase 2: 新信息源因子开发
 
-### 3.3 管线基础设施修复
-
-#### VEC hysteresis参数遗漏 (2026-02-12, CRITICAL)
-- **症状**: S1 VEC结果 +3.2% vs sealed +54.1% (50pp差距)
-- **根因**: `batch_vec_backtest.py` 从未传递 `delta_rank`/`min_hold_days` → 默认0 (禁用)
-- **影响**: 所有历史VEC批量结果均无hysteresis, 排名完全错误
-- **修复**: 从config读取hysteresis参数并传递给 `run_vec_backtest()`
-
-#### BT sizing commission率不匹配 (2026-02-11, CRITICAL)
-- **症状**: 所有组合 ~99个 margin failures, 0% holdout收益
-- **根因**: Engine `sizing_commission_rate` 默认2bp, 但SPLIT_MARKET broker收20bp
-- **修复**: 传递 `max(a_share, qdii)` 费率
-
-#### BT regime gate双重应用 (2026-02-11)
-- **根因**: `vol_regime_series` 与 `gate_arr` 使用相同阈值, engine内部相乘
-- **修复**: 设置 `vol_regime_series = 1.0`
+| 实验 | 数据源 | 因子候选 | 状态 |
+|------|--------|---------|------|
+| B4 汇率 | AkShare BOC FX | USD_CNY_MOM_5D, FX_CARRY | **数据已有** |
+| B2 北向资金 | Tushare moneyflow_hsgt | NORTHBOUND_NET_5D | 需确认映射 |
+| B1 IOPV折溢价 | QMT/Wind实时 | IOPV_PREMIUM_5D | 数据管道待建 |
+| B3 期权IV | Tushare opt_daily | IV_RANK_20D | 覆盖面窄 |
 
 ---
 
@@ -139,46 +160,34 @@ IC gate+评分     Numba JIT内核     Backtrader事件驱动
 ### 4.1 关键文件
 ```
 configs/combo_wfo_config.yaml        # 单一配置源 (ETF池, 因子, 引擎参数)
-src/etf_strategy/core/frozen_params.py  # 版本锁定参数
+src/etf_strategy/core/frozen_params.py  # v8.0 版本锁定参数
 src/etf_strategy/core/hysteresis.py     # @njit hysteresis内核
 src/etf_strategy/run_combo_wfo.py       # WFO筛选主流程
 scripts/batch_vec_backtest.py           # VEC批量回测
 scripts/batch_bt_backtest.py            # BT ground truth
 scripts/generate_today_signal.py        # 每日信号生成 (有状态)
-sealed_strategies/v5.0_20260211/        # 封存策略快照
+sealed_strategies/v8.0_20260215/        # v8.0 封存策略快照
 ```
 
 ### 4.2 信号评估原则 (v5.0+)
 **任何新信号/因子必须在生产执行框架下评估 (FREQ=5 + Exp4 + regime gate), 否则不是有效候选。**
 
-验证证据:
-- 相同信号 (S1), 仅执行优化 → HO +35.8pp
-- 切换信号, 相同执行 → 价值被破坏 (冠军因子在Exp4下崩溃)
-- 因子rank稳定性决定Exp4兼容性 (稳定rank → Exp4过滤噪声; 不稳定rank → Exp4锁死错误仓位)
-
 ### 4.3 Alpha维度分析
-- **Return PCA**: PC1中位数 59.8%, >50%在77%窗口 → 强单因子主导
+- **Return PCA**: PC1中位数 59.8% → 强单因子主导
 - **因子空间Kaiser维度**: 5/17 → 大部分因子冗余
-- **S1因子IC相关性**: 均值0.31 (中等), ADX与其他正交, SHARPE×SLOPE=0.84
 - **含义**: OHLCV衍生因子的信息空间已近饱和
 
 ---
 
-## 5. 待办事项与方向
+## 5. 版本历史
 
-### 5.1 高优先级 (High ROI)
-- [ ] **Shadow C2**: 已BT验证, +13.4pp over S1, 零工程量, 最高ROI
-- [ ] **BT验证6个代数因子候选**: 30分钟跑完, 期望值需调低
-
-### 5.2 中优先级 (需要新数据)
-- [ ] **Exp7 QDII折溢价**: 需IOPV/NAV数据 (Tushare Pro可用, QMT无)
-- [ ] **Exp6 FX汇率归因**: 需forex_daily()数据
-- [ ] **Exp5 Rank EMA平滑**: 纯算法改进, 不需新数据
-
-### 5.3 已完结方向 (不再投入)
-- [x] 条件因子切换 (S1 4F家族内) — EXHAUSTED
-- [x] 行业约束 (POS_SIZE=2下) — DEAD
-- [x] 代数因子信号搜索 — 边际递减, 转向新数据源
+| 版本 | 日期 | 策略 | 说明 |
+|------|------|------|------|
+| **v8.0 sealed** | 2026-02-15 | composite_1 (5F) + core_4f (4F) | 管线修复后首个 clean seal |
+| v7.0 | 2026-02-13 | — | 废弃: IC-sign/metadata/exec-side bugs |
+| v6.0 | 2026-02-12 | — | 从未使用: train gate fail |
+| v5.0 | 2026-02-11 | S1 (4F) | 废弃: ADX Winsorize bug |
+| v3.4 | 2025-12-16 | S1 (4F) | FREQ=3 基线 |
 
 ---
 
@@ -195,16 +204,16 @@ uv run python scripts/generate_today_signal.py  # 每日信号
 
 ### 6.2 查看封存策略
 ```bash
-ls sealed_strategies/v5.0_20260211/
-cat sealed_strategies/v5.0_20260211/SEAL_SUMMARY.md
+ls sealed_strategies/v8.0_20260215/
+cat sealed_strategies/v8.0_20260215/SEAL_SUMMARY.md
 ```
 
 ### 6.3 接手checklist
 - [ ] 已阅读 `CLAUDE.md` 了解项目规范
 - [ ] 已阅读本文件了解当前状态
+- [ ] 已阅读 `memory/rules.md` 了解 26 条硬性规则
 - [ ] 已理解三层验证体系和信号评估原则
-- [ ] 已理解v5.0生产参数 (FREQ=5, POS_SIZE=2, Exp4 hysteresis)
-- [ ] 知道VEC必须传递hysteresis参数
+- [ ] 已理解 v8.0 生产参数 (FREQ=5, POS_SIZE=2, Exp4 hysteresis)
 
 ---
 
@@ -217,11 +226,11 @@ cat sealed_strategies/v5.0_20260211/SEAL_SUMMARY.md
 更多因子组合       → ~1x (信息饱和)
 ```
 
-### 7.2 管线一致性
+### 7.2 管线一致性 (Rule 24)
 ```
-VEC必须传递hysteresis参数 (delta_rank, min_hold_days)
-BT必须传递正确的sizing_commission_rate
-Regime gate只能在timing_arr应用一次, 不能重复
+VEC必须传递 hysteresis 参数 (delta_rank, min_hold_days)
+VEC必须透传 factor_signs / factor_icirs 元数据
+BT必须使用执行态 (shadow_holdings) 而非信号态驱动 hysteresis
 ```
 
 ### 7.3 因子-执行兼容性
@@ -234,5 +243,6 @@ Regime gate只能在timing_arr应用一次, 不能重复
 ---
 
 **文档维护**: 每次重大研究后更新
-**封存策略**: `sealed_strategies/v5.0_20260211/`
+**封存策略**: `sealed_strategies/v8.0_20260215/`
 **研究文档**: `docs/research/`
+**经验教训**: `memory/rules.md` (26条)

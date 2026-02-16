@@ -1,7 +1,7 @@
 # WFO / VEC / BT 三层引擎状态
 
-> **最后更新**: 2026-02-12
-> **版本**: v5.0 (sealed 2026-02-11, P0 fixes 2026-02-12)
+> **最后更新**: 2026-02-16
+> **版本**: v8.0 (sealed 2026-02-15, 三大管线修复完成)
 
 ---
 
@@ -79,13 +79,55 @@
 | VEC | `scripts/batch_vec_backtest.py` | 从 config 读 delta_rank/min_hold_days |
 | BT | `scripts/batch_bt_backtest.py` | Backtrader engine, vol_regime=1.0 |
 | Hysteresis | `src/etf_strategy/core/hysteresis.py` | @njit 共享内核 |
-| Frozen Params | `src/etf_strategy/core/frozen_params.py` | 版本锁 v3.4~v5.0 |
+| Frozen Params | `src/etf_strategy/core/frozen_params.py` | 版本锁 v3.4~v8.0 |
 | Config | `configs/combo_wfo_config.yaml` | 单一配置源 |
+
+---
+
+## v8.0 三大管线修复 (2026-02-14~15)
+
+### Fix-1: IC-sign Factor Direction (CRITICAL)
+
+**症状**: 5/6 非 OHLCV 因子被系统性反向使用
+
+**根因**: WFO 用 `abs(IC)` 做权重丢弃方向, VEC/BT 求和假设 "higher=better"
+
+**修复**: stability-gated sign flip + ICIR-weighted scoring
+
+**影响**: factor_signs/factor_icirs 现正确传播到 VEC/BT/Live
+
+### Fix-2: VEC Metadata Propagation (Rule 24)
+
+**症状**: VEC-BT holdout gap 20.3pp
+
+**根因**: `run_full_space_vec_backtest.py` 只保存 combo 列，丢弃 factor_signs/factor_icirs
+
+**修复**: 读取并透传元数据到 VEC 输出 parquet
+
+**影响**: VEC-BT gap 20.3pp → **1.47pp** (-93%)
+
+### Fix-3: BT Execution-side Hysteresis (Rule 22)
+
+**症状**: VEC-BT gap +25.7pp (33 次多余交易)
+
+**根因**: BT 用 `_signal_portfolio` (信号态) 构建 hmask，形成自引用反馈环
+
+**修复**: 改用 `shadow_holdings` (执行态) 驱动 hysteresis
+
+**影响**: gap +25.7pp → **-0.8pp**
+
+---
+
+## 当前状态
+
+- **VEC-BT train gap**: mean 0.07pp, median 0.00pp — **完美对齐**
+- **VEC-BT holdout gap**: 155/155 candidates < 2pp — **管线健康**
+- **Margin failures**: 0 — **执行可行**
 
 ---
 
 ## 后续建议
 
-- **BT ground truth**: 6 个代数因子候选待 BT 验证
-- **Shadow C2**: AMIHUD+CALMAR+CORR_MKT 已 BT 通过，8-12 周 shadow 中
+- **Phase 2**: 新数据源因子开发 (B4 汇率 / B2 北向资金 / B1 IOPV / B3 期权 IV)
+- **Family A+B 组合**: 探索两大家族因子组合的协同效应
 - **新数据源**: IOPV/NAV (Exp7)、FX rates (Exp6) 尚未接入
