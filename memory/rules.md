@@ -514,3 +514,44 @@ Rule 31: 不同数据源观测同一底层现象（moneyflow vs fund_share vs ma
 ```
 
 **详细分析**：`memory/2026-02_moneyflow_validation.md`
+
+---
+
+## Rule 32: POS_SIZE 不是自由参数
+
+> **策略在 POS_SIZE=N 下优化，降至 POS_SIZE=M<N 时性能崩塌。Ensemble via Capital Split 必须验证各子策略在目标 PS 下独立可行。**
+
+**发现过程** (2026-02-17):
+- composite_1 (PS=2): Sharpe 1.589, MDD 10.8%
+- composite_1 (PS=1): Sharpe 0.402, MDD 20.2% → **-75% Sharpe degradation**
+- core_4f (PS=2): Sharpe 1.225 → (PS=1): Sharpe 0.179 → **-85% degradation**
+- Capital Split blend: Sharpe 0.363, worse than both standalone PS=2
+
+**原因**：
+- 单持仓 → 集中度100%, 无法分散选股误差
+- Hysteresis 动态改变（fewer swap options）
+- top-2 多样化选股 alpha 丧失
+
+**推论**：
+- 若考虑 ensemble，每个子策略必须在目标 PS 下独立验证
+- PS=2 → PS=1 的降级不是线性的，而是非线性崩塌
+- 这适用于所有"分资金给多策略"方案
+
+---
+
+## Rule 33: 截面收益离散度 ⊂ 市场波动率
+
+> **A股 ETF 宇宙中，截面收益离散度与市场波动率 rho=0.538，属于同一信息维度。高波动环境本质上产生高收益离散。不可作为独立 WHEN 信号。**
+
+**验证数据** (2026-02-17):
+- 20D 离散度 vs regime vol: Pearson=0.538, Spearman=0.428
+- 5D 离散度 vs regime vol: Pearson=0.369, Spearman=0.392
+- 离散度对策略下期收益的 Pearson rho: 全部 <0.05, p>0.3
+- Quartile 无单调关系（5D/20D × Train/HO 全部 NONE）
+
+**原因**：
+- 高波动=价格大幅变动=ETF间回报差异自然放大
+- 这是数学恒等式而非经济信号
+- Regime gate 已捕获波动率维度的全部可用信息
+
+**详细报告**：`docs/research/when_how_dimension_research_20260217.md`
