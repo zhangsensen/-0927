@@ -1,0 +1,64 @@
+{
+  "generated": "2026-02-11",
+  "holdout_period": "2025-05-06 ~ 2026-02-10",
+  "holdout_days": 191,
+  "strategies": {
+    "S1": {
+      "factors": ["ADX_14D", "OBV_SLOPE_10D", "SHARPE_RATIO_20D", "SLOPE_20D"],
+      "ho_return_vec": 0.427,
+      "ho_return_bt": 0.325,
+      "vec_trades": 75,
+      "bt_trades": 120
+    },
+    "C2": {
+      "factors": ["AMIHUD_ILLIQUIDITY", "CALMAR_RATIO_60D", "CORRELATION_TO_MARKET_20D"],
+      "ho_return_vec": 0.630,
+      "ho_return_bt": 0.459,
+      "vec_trades": 28,
+      "bt_trades": 34
+    }
+  },
+  "q1_orthogonality": {
+    "verdict": "PASS",
+    "n_rebalances_holdout": 39,
+    "top2_overlap_rate": 0.0,
+    "jaccard_mean": 0.000,
+    "jaccard_std": 0.000,
+    "spearman_rho_mean": 0.350,
+    "spearman_rho_std": 0.296,
+    "interpretation": "100% of rebalances have 0/2 holding overlap. Selection layer fully orthogonal."
+  },
+  "q2_tail_dispersal": {
+    "verdict": "PASS",
+    "primary_metrics": {
+      "worst_week_overlap": "1/5",
+      "joint_loss_given_mkt_left": 0.300,
+      "joint_loss_given_mkt_left_k_n": "6/20",
+      "wilson_ci95_upper": 0.519,
+      "interpretation": "In market crashes, at least one leg survives 70% of the time. CI95 upper 0.519 within 0.65 threshold."
+    },
+    "beta_neutral_residual": {
+      "residual_joint_loss_prob": 0.382,
+      "residual_correlation": 0.497,
+      "independent_baseline": 0.25,
+      "interpretation": "After removing 510300 beta, idiosyncratic residuals still positively correlated (0.50). Likely shared sector/style exposure. Monitor in Shadow."
+    },
+    "monitoring_only": {
+      "co_crash_ratio": 4.30,
+      "co_crash_ratio_note": "Inflated by shared A-share market beta. Not used for verdict.",
+      "complementarity_corr_pooled_or": -0.548,
+      "complementarity_corr_note": "Biased negative by OR mask. Measures stress-day complementarity, not joint crash.",
+      "daily_return_corr": 0.494,
+      "weekly_return_corr": 0.423,
+      "dd_sync_rate": 0.493,
+      "worst_month_overlap": "2/3",
+      "joint_loss_prob": 0.272
+    }
+  },
+  "combined_verdict": "PROCEED_TO_SHADOW",
+  "verdict_rules": {
+    "q1_pass": "Jaccard < 0.25",
+    "q2_pass": "worst_week_overlap <= 2 AND P(both<0|mkt left) <= 0.50 AND Wilson CI95 upper <= 0.65",
+    "co_crash_ratio_role": "monitoring only (not hard gate)"
+  }
+}

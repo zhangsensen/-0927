@@ -46,16 +46,16 @@
 | `LOOKBACK` | 252 | 回看窗口 1 年 |
 | `delta_rank` | 0.10 | 迟滞：rank01 差值门槛 |
 | `min_hold_days` | 9 | 迟滞：最小持仓天数 |
-| ETF 池 | 43 只 | 38 A 股 + 5 QDII |
+| ETF 池 | 49 只 | 41 A 股 + 8 QDII |
 | Universe 模式 | `A_SHARE_ONLY` | QDII 硬阻断实盘交易 |
 | Regime Gate | ON | 波动率模式，510300 代理 |
 
-### 封板策略
+### 封板策略 (v5.0 VEC 验证, F5+Exp4, med cost)
 
-| 策略 | 因子组合 | 全期收益 | Sharpe | MDD |
-|------|---------|---------|--------|-----|
-| **S1 (4F)** | ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D | 136.52% | 1.03 | 15.47% |
-| **S2 (5F)** | S1 + PRICE_POSITION_120D | 129.85% | 1.04 | 13.93% |
+| 策略 | 因子组合 | HO 收益 | HO MDD | HO Sharpe |
+|------|---------|---------|--------|-----------|
+| **S1 (4F)** 生产 | ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D | +42.7% | 11.8% | 2.15 |
+| **C2 (3F)** 影子 | AMIHUD_ILLIQUIDITY + CALMAR_RATIO_60D + CORRELATION_TO_MARKET_20D | +63.9% | 10.4% | 2.63 |
 
 ---
 
@@ -89,7 +89,7 @@ uv run python scripts/update_daily_from_qmt_bridge.py --all # 从 QMT 更新数�
 # 代码质量
 make format                 # black + isort
 make lint                   # ruff + mypy
-make test                   # pytest (114 cases)
+make test                   # pytest (157 cases)
 make clean-numba            # 清理 Numba JIT 缓存
 ```
 
@@ -138,7 +138,7 @@ make clean-numba            # 清理 Numba JIT 缓存
 │   │   │   ├── cost_model.py       #     分市场成本模型
 │   │   │   ├── execution_model.py  #     T+1 Open 执行模型
 │   │   │   ├── regime_detector.py  #     Regime Gate 波动率检测
-│   │   │   ├── precise_factor_library_v2.py  # 16 因子库
+│   │   │   ├── precise_factor_library_v2.py  # 17 因子库
 │   │   │   └── utils/rebalance.py  #     调仓工具 (防前视 + 统一日程)
 │   │   └── auditor/core/engine.py  #   Backtrader 策略引擎
 │   │
@@ -155,9 +155,9 @@ make clean-numba            # 清理 Numba JIT 缓存
 │   └── update_daily_from_qmt_bridge.py  # QMT 数据更新
 │
 ├── configs/
-│   └── combo_wfo_config.yaml       # 单一配置源 (43 ETF + 16 因子 + 全参数)
+│   └── combo_wfo_config.yaml       # 单一配置源 (43 ETF + 18 因子 + 全参数)
 │
-├── sealed_strategies/              # 封板归档 (v3.1 ~ v4.2)
+├── sealed_strategies/              # 封板归档 (v3.1 ~ v5.0)
 ├── tests/                          # 测试 (114 cases)
 ├── docs/                           # 文档
 └── Makefile                        # 快捷命令
@@ -193,7 +193,7 @@ v5.0 核心创新——通过换仓迟滞控制降低交易频率，提升持仓
 
 ---
 
-## 已完成实验
+## 已完成实验与研究
 
 | 实验 | 内容 | 结果 |
 |------|------|------|
@@ -203,6 +203,12 @@ v5.0 核心创新——通过换仓迟滞控制降低交易频率，提升持仓
 | Exp4.1 | 信号端状态机 | VEC-BT 链式偏差消除 (-22→-3pp) |
 | QDII 审计 | 排名分析 | 平均最佳 QDII 排名 8.2/43 |
 | FREQ×Exp4 | 消融分析 | F5_ON 主力 + F20_OFF 防御 |
+| 条件因子 | ADX/OBV 条件切换 | **NEGATIVE** — 5个假设全推翻 |
+| 行业约束 | 同行业双持限制 | **NEGATIVE** — MDD 反而恶化 |
+| 跨桶约束 | 5桶 min_buckets=3 | **POSITIVE** — HO +4.9pp |
+| 代数因子 | GP挖掘 78 个组合因子 | 6 个 BT 候选，CMF 家族兼容 Exp4 |
+| C2 验证 | AMIHUD+CALMAR+CORR_MKT | **BT +45.9%**，超 S1 +13.4pp |
+| 深度审阅 | 6 人团队代码审计 | 6 个 P0 已修复，见 `reports/deep_review_final_report.md` |
 
 ---
 
@@ -210,7 +216,7 @@ v5.0 核心创新——通过换仓迟滞控制降低交易频率，提升持仓
 
 ```
 训练集:  2020-01 ~ 2025-04
-Holdout: 2025-05 ~ 2025-12
+Holdout: 2025-05 ~ 2026-02-10
 实盘:    2025-12-18 ~
 ```
 
@@ -236,7 +242,9 @@ Holdout: 2025-05 ~ 2025-12
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| **v5.0-prod1** | 2026-02-10 | 生产就绪：FREQ=5 + Exp4 迟滞 + 状态校验 + 冷启动保护 |
+| **v5.0 sealed** | 2026-02-11 | S1 确认为生产策略，封存至 `sealed_strategies/v5.0_20260211/` |
+| v5.0 P0 fixes | 2026-02-12 | 6个P0修复：WFO hysteresis对齐、bounded factors统一(7个)、FREQ=5同步、bfill→fillna |
+| v5.0-prod1 | 2026-02-10 | 生产就绪：FREQ=5 + Exp4 迟滞 + 状态校验 + 冷启动保护 |
 | v5.0-rc1 | 2026-02-10 | Exp4.1 信号端状态机，链式偏差消除 |
 | v4.2 | 2026-02-05 | 16 因子正交集封板 |
 | v3.4 | 2025-12-16 | 稳定版封板 (FREQ=3) |

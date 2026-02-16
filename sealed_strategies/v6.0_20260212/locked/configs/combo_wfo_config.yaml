@@ -1,0 +1,311 @@
+universe:
+  mode: "A_SHARE_ONLY"   # "A_SHARE_ONLY" = 实盘禁止QDII; "GLOBAL" = 全池含QDII
+  qdii_tickers:
+    - "159920"
+    - "513050"
+    - "513100"
+    - "513130"
+    - "513180"
+    - "513400"
+    - "513500"
+    - "513520"
+
+backtest:
+  execution_model: "T1_OPEN"  # "COC" (cheat-on-close) or "T1_OPEN" (signal T-1 → fill at open T+1)
+  commission_rate: 0.0002
+  cost_model:
+    mode: "SPLIT_MARKET"
+    tier: "med"
+    tiers:
+      low:
+        a_share: 0.0010
+        qdii: 0.0030
+      med:
+        a_share: 0.0020
+        qdii: 0.0050
+      high:
+        a_share: 0.0030
+        qdii: 0.0080
+  initial_capital: 1000000
+  lookback_window: 252
+  freq: 5
+  pos_size: 2
+  rebalance_frequency: 5d
+  max_workers: 8
+  test_all_frequencies: false
+  test_all_position_sizes: false
+  position_size_range:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  timing:
+    enabled: true
+    type: light_timing
+    extreme_threshold: -0.1
+    extreme_position: 0.1
+    index_timing:
+      enabled: false
+      method: ma_cross
+      window: 200
+      symbol: market_avg
+      bear_position: 0.1
+    individual_timing:
+      enabled: false
+      window: 20
+  hysteresis:
+    delta_rank: 0.10
+    min_hold_days: 9
+  temporal_smoothing:
+    enabled: false    # Exp5: EMA on standardized factor scores (OFF for backward compat)
+    ema_span: 5       # match FREQ=5
+  portfolio_constraints:
+    pool_diversity:
+      enabled: false        # research default OFF
+      extended_k: 10        # search depth for cross-pool candidates
+  regime_gate:
+    enabled: true
+    mode: volatility
+    volatility:
+      proxy_symbol: '510300'
+      window: 20
+      shift_days: 1
+      thresholds_pct:
+      - 25
+      - 30
+      - 40
+      exposures:
+      - 1.0
+      - 0.7
+      - 0.4
+      - 0.1
+    dual:
+      proxy_symbol: '510300'
+      vol_window: 20
+      trend_short_window: 20
+      trend_long_window: 60
+      shift_days: 1
+      thresholds_pct:
+      - 25
+      - 30
+      - 40
+      exposures_uptrend:
+      - 1.0
+      - 0.7
+      - 0.5
+      - 0.3
+      exposures_downtrend:
+      - 0.7
+      - 0.4
+      - 0.2
+      - 0.1
+    market_regime:
+      window: 60
+      bull_exposure: 1.0
+      sideways_exposure: 0.7
+      bear_exposure: 0.1
+  dynamic_pos_size:
+    enabled: false
+    mode: regime
+    regime_map:
+      high_vol: 1
+      mid_vol: 2
+      low_vol: 3
+    max_pos_size: 4
+    min_pos_size: 1
+  risk_control:
+    enabled: true
+    leverage_cap: 1.0
+    stop_check_on_rebalance_only: true
+    stop_method: fixed
+    trailing_stop_pct: 0.0
+    atr_window: 14
+    atr_multiplier: 8.0
+    cooldown_days: 0
+    profit_ladders:
+    - threshold: 0.2
+      new_stop: 0.08
+      new_multiplier: 5.0
+    - threshold: 0.4
+      new_stop: 0.05
+      new_multiplier: 3.0
+    circuit_breaker:
+      max_drawdown_day: 0.0    # intentionally disabled: regime gate provides exposure control
+      max_drawdown_total: 0.0  # intentionally disabled: regime gate provides exposure control
+      recovery_days: 5
+    dynamic_leverage:
+      enabled: false
+      target_vol: 0.15
+      vol_window: 20
+    etf_stop_loss: 0.05
+combo_wfo:
+  combo_sizes:
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  enable_fdr: true
+  fdr_alpha: 0.05
+  fdr_method: fdr_bh
+  is_period: 180
+  n_jobs: -1
+  oos_period: 60
+  rebalance_frequencies:
+  - 5
+  save_all_results: true
+  scoring:
+    complexity_penalty_lambda: 0.15
+    use_robust_scoring: true
+    vec_score_weights:
+      ann_ret: 0.4
+      sharpe: 0.3
+      max_dd: 0.3
+  step_size: 60
+  top_n: 100000
+  verbose: true
+  # 外部因子 (非OHLCV): 从预计算parquet加载
+  extra_factors:
+    factors_dir: results/non_ohlcv_factors
+  # 跨桶约束: 基于因子截面相关性分桶, 强制组合跨维度选择
+  # 默认关闭; 启用后组合空间约减半, 搜索密度翻倍
+  bucket_constraints:
+    enabled: true         # 2026-02-11: 启用, Phase1+2验证通过 (HO+4.84pp, 5/5 PASS)
+    min_buckets: 3        # 组合至少覆盖3个信息维度桶
+    max_per_bucket: 2     # 每桶最多选2个因子
+cross_section:
+  bounded_factors:
+  - ADX_14D
+  - CMF_20D
+  - CORRELATION_TO_MARKET_20D
+  - PRICE_POSITION_20D
+  - PRICE_POSITION_120D
+  - PV_CORR_20D
+  - RSI_14
+  winsorize_lower: 0.025
+  winsorize_upper: 0.975
+  pool_mode: unified
+  pools:
+    qdii:
+      symbols:
+      - '159920'
+      - '513050'
+      - '513100'
+      - '513130'
+      - '513180'
+      - '513400'
+      - '513500'
+      - '513520'
+      allocation: 0.5
+      pos_count: 1
+    a_share:
+      allocation: 0.5
+      pos_count: 1
+data:
+  cache_dir: /home/sensen/dev/projects/-0927/.cache
+  data_dir: /home/sensen/dev/projects/-0927/raw/ETF/daily
+  start_date: '2020-01-01'
+  end_date: '2026-02-10'
+  training_end_date: '2025-04-30'
+  symbols:
+  - '159801'
+  - '159819'
+  - '159859'
+  - '159883'
+  - '159915'
+  - '159920'
+  - '159928'
+  - '159949'
+  - '159985'   # 豆粕ETF (商品/通胀对冲, 2019-12上市)
+  - '159992'
+  - '159995'
+  - '159998'
+  - '510050'
+  - '510300'
+  - '510500'
+  - '511010'
+  - '511260'
+  - '511380'
+  - '512010'
+  - '512100'
+  - '512200'   # 房地产ETF (独立地产周期, 2017-09上市)
+  - '512400'
+  - '512480'
+  - '512660'
+  - '512690'
+  - '512720'
+  - '512800'
+  - '512880'
+  - '512980'
+  - '513050'
+  - '513100'
+  - '513130'
+  - '513180'
+  - '513400'
+  - '513500'
+  - '513520'
+  - '515030'
+  - '515180'
+  - '515210'
+  - '515220'   # 煤炭ETF (能源/旧经济, 2020-03上市)
+  - '515650'
+  - '515790'
+  - '516090'
+  - '516160'
+  - '516520'
+  - '518850'
+  - '518880'
+  - '588000'
+  - '588200'
+# 正交因子集 v4: 17→23, 加入非OHLCV因子 (fund_share + margin)
+# 变更 (2026-02-12):
+#   v3: PREMIUM_DEVIATION_20D removed (no implementation, IC screening FAILED)
+#   v4: +6 non-OHLCV factors from IC screening (all |IC|>0.03, HO stable)
+#     SHARE_CHG_5D/10D/20D, SHARE_ACCEL (fund_share), MARGIN_CHG_10D, MARGIN_BUY_RATIO (margin)
+#     These factors are loaded via extra_factors mechanism from pre-computed parquets.
+#     Run: uv run python scripts/precompute_non_ohlcv_factors.py
+# 修改此列表即可扩缩搜索空间，无需改代码
+active_factors:
+  # OHLCV-derived (18 factors)
+  - ADX_14D
+  - AMIHUD_ILLIQUIDITY
+  - BREAKOUT_20D
+  - CALMAR_RATIO_60D
+  - CORRELATION_TO_MARKET_20D
+  - GK_VOL_RATIO_20D
+  - MAX_DD_60D
+  - MOM_20D
+  - OBV_SLOPE_10D
+  # PREMIUM_DEVIATION_20D removed: no implementation in factor library, IC screening FAILED
+  - PRICE_POSITION_20D
+  - PRICE_POSITION_120D
+  - PV_CORR_20D
+  - SHARPE_RATIO_20D
+  - SLOPE_20D
+  - UP_DOWN_VOL_RATIO_20D
+  - VOL_RATIO_20D
+  - VORTEX_14D
+  # Non-OHLCV: fund_share (4 factors, IC screening 2026-02-12)
+  - SHARE_CHG_5D
+  - SHARE_CHG_10D
+  - SHARE_CHG_20D
+  - SHARE_ACCEL
+  # Non-OHLCV: margin (2 factors, IC screening 2026-02-12)
+  - MARGIN_CHG_10D
+  - MARGIN_BUY_RATIO
+output_root: results_combo_wfo
+run_id: COMBO_WFO_DEEP_MINING
+selection:
+  ic_threshold: 0.05
+  positive_rate_threshold: 0.55
+  composite_weights:
+    return: 0.4
+    sharpe: 0.3
+    drawdown: 0.3

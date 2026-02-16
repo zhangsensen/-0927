@@ -1,6 +1,6 @@
 # ETF 轮动策略研究平台 - 完整项目说明
 
-> **版本**: v3.4 | **更新日期**: 2026-02-05 | **状态**: 生产就绪 (Production Ready)
+> **版本**: v5.0 | **更新日期**: 2026-02-12 | **状态**: 生产运行中 (S1 上线 2025-12-18)
 
 ---
 
@@ -28,34 +28,35 @@
 
 ### 1.1 一句话描述
 
-**基于横截面因子排名的 ETF 轮动策略系统**：从 43 只 ETF 中，每 3 个交易日用多因子打分选出最强的 2 只持有，通过三层引擎 (WFO → VEC → BT) 确保策略可复现、可审计。
+**基于横截面因子排名的 ETF 轮动策略系统**：从 49 只 ETF 中，每 5 个交易日用多因子打分选出最强的 2 只持有（A_SHARE_ONLY 模式），通过三层引擎 (WFO → VEC → BT) + Exp4 Hysteresis 确保策略可复现、可审计。
 
 ### 1.2 核心理念
 
 ```
-输入: 43 只 ETF 的日线 OHLCV (2020-2025, 5.95 年)
+输入: 49 只 ETF 的日线 OHLCV (2020-2026, ~6 年)
       ↓
-因子: 18 个技术因子 (趋势/动量/风险/资金流/成交量)
+因子: 23 个因子 (17 OHLCV + 6 non-OHLCV: fund_share + margin)
       ↓
-信号: 横截面 Z-Score 标准化 → 多因子等权合成 → Top-K 排名
+信号: 横截面标准化 (有界→rank, 无界→Z-Score) → 多因子等权合成 → Top-K 排名
       ↓
-执行: 每 3 日调仓，持有排名最高的 2 只 ETF
+执行: 每 5 日调仓 + Hysteresis (delta_rank=0.10, min_hold=9) → 持有 2 只 ETF
       ↓
-输出: 年化 ~30%+, 最大回撤 ~15%, 夏普 ~1.0+
+输出: HO +42.7% (S1), MDD 11.8%, 夏普 ~2.15 (VEC)
 ```
 
 ### 1.3 关键数字
 
 | 指标 | 数值 | 说明 |
 |------|------|------|
-| 回测期 | 2020-01 ~ 2025-12 | 5.95 年，覆盖牛熊震荡 |
-| ETF 池 | 43 只 | 38 A股 + 5 QDII |
-| 因子库 | 18 个 | 6 大类，全向量化计算 |
-| 组合搜索空间 | 12,597 | C(18, 2..5) 种因子组合 |
-| 调仓频率 | 3 天 | 锁死参数，禁止修改 |
+| 回测期 | 2020-01 ~ 2026-02 | ~6 年，覆盖牛熊震荡 |
+| ETF 池 | 49 只 | 41 A股 + 8 QDII (A_SHARE_ONLY 模式) |
+| 因子库 | 23 个 | 17 OHLCV + 6 non-OHLCV (fund_share + margin) |
+| 组合搜索空间 | ~245,157 | C(23, 2..7)，跨桶约束后 ~120,000 |
+| 调仓频率 | 5 天 | 锁死参数，禁止修改 |
 | 持仓数量 | 2 只 | 集中持仓，高弹性 |
+| Hysteresis | delta_rank=0.10, min_hold=9 | Exp4 噪声过滤 |
 | 初始资金 | 100 万 | 足够覆盖实盘最小单位 |
-| 佣金 | 0.02% (2bp) | 单边手续费 |
+| 佣金 | SPLIT_MARKET | A股 20bp, QDII 50bp (med tier) |
 
 ### 1.4 项目演进简史
 
@@ -68,7 +69,11 @@
 2025-12  v3.0  高频化: FREQ=3, POS=2, 收益237%
 2025-12  v3.1  审计: ETF池深度分析, QDII贡献确认
 2025-12  v3.2  交付: BT Ground Truth + 四重验证
-2025-12  v3.4  上线: 震荡市精选双策略 (当前生产版本)
+2025-12  v3.4  上线: 震荡市精选双策略
+2026-01  v4.0  重构: 16因子正交集, T1_OPEN执行模型
+2026-02  v4.1  成本: SPLIT_MARKET成本模型 (A/QDII分级)
+2026-02  v4.2  扩展: +13新因子候选, GPU加速IC
+2026-02  v5.0  生产: FREQ=5+Exp4 hysteresis, 49 ETF, A_SHARE_ONLY (当前生产版本)
 ```
 
 ---
@@ -83,8 +88,8 @@
 │  ─────────────────────────────────────────────────────────   │
 │  脚本: src/etf_strategy/run_combo_wfo.py                    │
 │  引擎: combo_wfo_optimizer.py (582行, Numba JIT加速)        │
-│  输入: 18因子 × 43 ETF × ~1500天                             │
-│  处理: 滚动窗口 IC 计算, 12,597种因子组合遍历               │
+│  输入: 23因子 × 49 ETF × ~1500天                             │
+│  处理: 滚动窗口 IC 计算, ~120,000种因子组合遍历 (跨桶约束)  │
 │  输出: Top-100 候选组合 (按 IC/稳定性排序)                   │
 │  耗时: ~2 分钟                                               │
 │  定位: 快速筛选, 数值可能与VEC/BT有偏差 (正常)             │
@@ -168,7 +173,7 @@ scripts/                      ← 操作脚本
 
 | 模块 | 行数 | 核心职责 |
 |------|------|---------|
-| `precise_factor_library_v2.py` | 1,616 | 18因子计算 (Numba加速) |
+| `precise_factor_library_v2.py` | 1,616 | 17 OHLCV因子计算 (Numba加速) |
 | `category_factors.py` | 759 | 分类因子 (债券/商品/QDII专用) |
 | `combo_wfo_optimizer.py` | 582 | 滚动WFO优化器 |
 | `cross_section_processor.py` | 551 | 横截面标准化 |
@@ -259,21 +264,25 @@ BT回测: Backtrader逐K线模拟 (Cheat-On-Close模式)
 
 ```
 无界因子 (MOM, SLOPE, VOL等):
-  Z = (x - mean_cs) / std_cs
   Winsorize: clip to [P2.5, P97.5]
+  Z = (x - mean_cs) / std_cs
 
-有界因子 (RSI, ADX, PRICE_POSITION等):
-  → 直接透传, 不做标准化
-  (因为它们天然有范围约束, 标准化会破坏语义)
+有界因子 (ADX, RSI, PRICE_POSITION等):
+  → Rank 标准化到 [-0.5, 0.5]
+  (不 Winsorize: 天然有界; 不原值透传: 避免尺度差异主导 VEC 内核求和)
 ```
 
-**有界因子清单**:
+> **v5.0 关键变更**: 有界因子从"原值透传"改为"rank 标准化 [-0.5, 0.5]"。此修复消除了 bounded factors 与 Z-scored factors 的尺度不匹配问题 (ADX [7,92] vs Z-score [-3,+3])。
+
+**有界因子清单 (7 个)**:
 ```
-PRICE_POSITION_20D, PRICE_POSITION_120D  [0, 1]
-PV_CORR_20D, CORRELATION_TO_MARKET_20D  [-1, 1]
-RSI_14  [0, 100]
 ADX_14D  [0, 100]
 CMF_20D  [-1, 1]
+CORRELATION_TO_MARKET_20D  [-1, 1]
+PRICE_POSITION_20D  [0, 1]
+PRICE_POSITION_120D  [0, 1]
+PV_CORR_20D  [-1, 1]
+RSI_14  [0, 100]
 ```
 
 ### 3.6 Rebalance Utilities — VEC/BT对齐核心
@@ -285,7 +294,7 @@ CMF_20D  [-1, 1]
 schedule = generate_rebalance_schedule(
     total_periods=T,          # 总K线数
     lookback_window=252,      # 回看期
-    freq=3,                   # 调仓频率
+    freq=5,                   # 调仓频率
 )
 # 输出: [253, 256, 259, 262, ...]
 
@@ -301,47 +310,63 @@ close_prev, open_t, close_t = ensure_price_views(close, open)
 
 ## 4. 因子系统
 
-### 4.1 18个核心因子全景
+### 4.1 23 个活跃因子全景
 
-| # | 因子名 | 类别 | 窗口 | 有界 | 方向 | 上线策略使用 |
-|---|--------|------|------|------|------|:----------:|
-| 1 | **ADX_14D** | 趋势强度 | 14d | [0,100] | 越高越好 | 双策略 |
-| 2 | **SLOPE_20D** | 趋势 | 20d | 无 | 越高越好 | 双策略 |
+#### OHLCV 衍生因子 (17 个)
+
+| # | 因子名 | 类别 | 窗口 | 有界 | 方向 | S1 使用 |
+|---|--------|------|------|------|------|:-------:|
+| 1 | **ADX_14D** | 趋势强度 | 14d | [0,100] | 越高越好 | **S1** |
+| 2 | **SLOPE_20D** | 趋势 | 20d | 无 | 越高越好 | **S1** |
 | 3 | VORTEX_14D | 趋势 | 14d | 无 | 中性 | |
 | 4 | MOM_20D | 动量 | 20d | 无 | 越高越好 | |
-| 5 | RSI_14 | 反转 | 14d | [0,100] | 中性 | |
+| 5 | BREAKOUT_20D | 动量 | 20d | 无 | 越高越好 | |
 | 6 | PRICE_POSITION_20D | 价格位置 | 20d | [0,1] | 中性 | |
-| 7 | **PRICE_POSITION_120D** | 价格位置 | 120d | [0,1] | 中性 | 策略#2 |
+| 7 | PRICE_POSITION_120D | 价格位置 | 120d | [0,1] | 中性 | |
 | 8 | MAX_DD_60D | 风险 | 60d | 无 | 越低越好 | |
-| 9 | RET_VOL_20D | 风险 | 20d | 无 | 越低越好 | |
-| 10 | **SHARPE_RATIO_20D** | 风险调整 | 20d | 无 | 越高越好 | 双策略 |
-| 11 | CALMAR_RATIO_60D | 风险调整 | 60d | 无 | 越高越好 | |
-| 12 | CORRELATION_TO_MARKET_20D | 相关性 | 20d | [-1,1] | 越低越好 | |
-| 13 | RELATIVE_STRENGTH_VS_MARKET_20D | 相对强度 | 20d | 无 | 越高越好 | |
-| 14 | CMF_20D | 资金流 | 20d | [-1,1] | 越高越好 | |
-| 15 | **OBV_SLOPE_10D** | 资金流 | 10d | 无 | 越高越好 | 双策略 |
-| 16 | PV_CORR_20D | 量价耦合 | 20d | [-1,1] | 越高越好 | |
-| 17 | VOL_RATIO_20D | 成交量 | 20d | 无 | 越高越好 | |
-| 18 | VOL_RATIO_60D | 成交量 | 60d | 无 | 越高越好 | |
+| 9 | CALMAR_RATIO_60D | 风险调整 | 60d | 无 | 越高越好 | |
+| 10 | **SHARPE_RATIO_20D** | 风险调整 | 20d | 无 | 越高越好 | **S1** |
+| 11 | CORRELATION_TO_MARKET_20D | 相关性 | 20d | [-1,1] | 越低越好 | |
+| 12 | **OBV_SLOPE_10D** | 资金流 | 10d | 无 | 越高越好 | **S1** |
+| 13 | PV_CORR_20D | 量价耦合 | 20d | [-1,1] | 越高越好 | |
+| 14 | VOL_RATIO_20D | 成交量 | 20d | 无 | 越高越好 | |
+| 15 | GK_VOL_RATIO_20D | 波动率微结构 | 20d | 无 | 中性 | |
+| 16 | UP_DOWN_VOL_RATIO_20D | 量能方向性 | 20d | 无 | 越高越好 | |
+| 17 | AMIHUD_ILLIQUIDITY | 流动性 | 20d | 无 | 越低越好 | |
+
+#### Non-OHLCV 因子 (6 个, v5.0 新增)
+
+| # | 因子名 | 数据源 | 说明 |
+|---|--------|--------|------|
+| 18 | SHARE_CHG_5D | fund_share | 5 日基金份额变化率 |
+| 19 | SHARE_CHG_10D | fund_share | 10 日基金份额变化率 |
+| 20 | SHARE_CHG_20D | fund_share | 20 日基金份额变化率 |
+| 21 | SHARE_ACCEL | fund_share | 份额变化加速度 (5D/20D) |
+| 22 | MARGIN_CHG_10D | margin | 10 日融资余额变化率 |
+| 23 | MARGIN_BUY_RATIO | margin | 融资买入占比 |
+
+> Non-OHLCV 因子通过 `extra_factors` 机制从预计算 parquet 加载，需先运行 `uv run python scripts/precompute_non_ohlcv_factors.py`。 |
 
 ### 4.2 因子计算特征
 
 - **100% 向量化**: 无 Python 循环, 无 `.apply()`, 全部 Pandas/NumPy 批操作
-- **性能**: 18因子 × 43 ETF × 2000天 < 100ms
+- **性能**: 17 OHLCV因子 × 49 ETF × 1500天 < 100ms
 - **NaN策略**: 严格保留, 不填充, 不插值 (窗口不足→NaN)
 - **Numba加速**: IC计算、信号合成使用 @njit 编译
+- **非OHLCV因子**: 预计算后通过 extra_factors 机制加载，与 OHLCV 因子统一参与标准化
 
 ### 4.3 因子组合搜索
 
 ```
-C(18,2) =  153 种 2因子组合
-C(18,3) =  816 种 3因子组合
-C(18,4) = 3060 种 4因子组合
-C(18,5) = 8568 种 5因子组合
-────────────────────────────
-合计     = 12,597 种组合 (默认搜索空间)
-
-扩展到7因子: C(18,2..7) ≈ 62,985 种
+C(23,2) =     253 种 2因子组合
+C(23,3) =   1,771 种 3因子组合
+C(23,4) =   8,855 种 4因子组合
+C(23,5) =  33,649 种 5因子组合
+C(23,6) = 100,947 种 6因子组合
+C(23,7) = 245,157 种 7因子组合
+──────────────────────────────
+合计     = ~245,157 种组合 (无约束搜索空间)
+跨桶约束 (min_buckets=3, max_per_bucket=2) → ~120,000 种 (-51%)
 ```
 
 ### 4.4 已知不稳定因子
@@ -357,51 +382,39 @@ C(18,5) = 8568 种 5因子组合
 
 ## 5. ETF 池架构
 
-### 5.1 43只ETF的"黄金结构"
+### 5.1 49 只 ETF 池结构 (v5.0)
 
-| 分类 | 数量 | 收益贡献 | 核心作用 |
-|------|------|---------|---------|
-| A股宽基 | 7 | ~40% | Beta来源 (沪深300/中证500/科创50等) |
-| A股成长 | 17 | ~80% | 行业轮动 (半导体/新能源/AI/医药等) |
-| A股周期 | 6 | 波动 | 板块轮动 (证券/银行/有色/军工等) |
-| A股防御 | 3 | ~27% | 避险 (消费/红利) |
-| 债券 | 3 | 稳定 | 熊市避风港 (国债/可转债) |
-| 商品 | 2 | 对冲 | 通胀对冲 (黄金/白银) |
-| **QDII** | **5** | **~90%** | **核心Alpha来源** |
-| **合计** | **43** | **237%** | |
+| 分类 | 数量 | 核心作用 |
+|------|------|---------|
+| A股宽基 | 7 | Beta来源 (沪深300/中证500/科创50等) |
+| A股成长 | 17 | 行业轮动 (半导体/新能源/AI/医药等) |
+| A股周期 | 7 | 板块轮动 (证券/银行/有色/军工/房地产等) |
+| A股防御 | 3 | 避险 (消费/红利) |
+| 债券 | 3 | 熊市避风港 (国债/可转债) |
+| 商品 | 3 | 通胀对冲 (黄金/白银/豆粕) |
+| A股资源 | 1 | 能源 (煤炭) |
+| **QDII** | **8** | **横截面校准 + 跨市场监控** |
+| **合计** | **49** | |
 
-### 5.2 QDII: 策略的隐藏引擎
+> **v5.0 新增 6 只**: 159985 豆粕 ETF, 512200 房地产 ETF, 515220 煤炭 ETF (A 股), 513180 恒生科技 ETF, 513400 道琼斯 ETF, 513520 日经 ETF (QDII)
 
-| 代码 | 名称 | 市场 | 选中次数 | 胜率 | 累计贡献 |
-|------|------|------|---------|------|---------|
-| 513500 | 标普500 ETF | 美股 | 45 | **68.9%** | **+25.37%** |
-| 513130 | 恒生科技(港元) | 港股 | 15 | 53.3% | **+23.69%** |
-| 513100 | 纳指100 ETF | 美股 | 31 | **61.3%** | **+22.03%** |
-| 159920 | 恒生指数 ETF | 港股 | 10 | **70.0%** | **+17.13%** |
+### 5.2 A_SHARE_ONLY 模式
+
+v5.0 生产使用 `A_SHARE_ONLY` 模式: 8 只 QDII 参与因子计算和横截面标准化，但硬屏蔽不进入实盘持仓。
+- **原因**: QDII 交易成本高 (50-80bp)、结算差异、额度限制
+- **验证**: 实盘 6 周 (2025-12-18 ~ 2026-02-09) 100% A 股持仓, +6.37%
+
+### 5.3 QDII 历史贡献 (v3.1 GLOBAL 模式参考)
+
+> 以下数据基于 v3.1 (FREQ=3, 43 ETF, GLOBAL 模式)。v5.0 不交易 QDII，数据仅供参考横截面校准价值。
+
+| 代码 | 名称 | 市场 | 历史选中 | 历史胜率 | 历史贡献 |
+|------|------|------|---------|---------|---------|
+| 513500 | 标普500 ETF | 美股 | 45 | 68.9% | +25.37% |
+| 513130 | 恒生科技(港元) | 港股 | 15 | 53.3% | +23.69% |
+| 513100 | 纳指100 ETF | 美股 | 31 | 61.3% | +22.03% |
+| 159920 | 恒生指数 ETF | 港股 | 10 | 70.0% | +17.13% |
 | 513050 | 中概互联 ETF | 港股 | 18 | 44.4% | +2.01% |
-| **合计** | | | **119次** | **~60%** | **+90.23%** |
-
-**为什么QDII如此重要**:
-1. **跨市场轮动**: A股熊市→自动切换到美股/港股, 提供真正的避险Alpha
-2. **横截面校准**: 43只样本中QDII参与了因子标准化, 移除后所有Z-Score改变→选股质量下降
-3. **分散化**: 降低了整体最大回撤 (14.28% vs 纯A股的18.71%)
-
-**锁定规则**: 禁止增减任何ETF, 曾尝试新增3只QDII→收益反降27pp (横截面污染)
-
-### 5.3 收益归因
-
-```
-总收益: 237.45% (v3.0, 5.95年)
-├── A股 ETF: ~147%
-│   ├── 宽基轮动:    ~40%
-│   ├── 行业轮动:    ~80%
-│   └── 防御/债券:   ~27%
-│
-└── QDII: ~90%
-    ├── 美股 (标普+纳指): ~47%
-    ├── 港股 (恒指+恒科): ~41%
-    └── 中概互联:         ~2%
-```
 
 ---
 
@@ -440,7 +453,7 @@ C(18,5) = 8568 种 5因子组合
   ↓ 耗时: ~30-60分钟 (24核并行)
   ↓
 阶段 5: 生产包 + 封存
-  ↓ scripts/generate_production_pack.py
+  ↓ archive/scripts/legacy_reports/generate_production_pack.py
   ↓ 评分: prod_score = 0.45×Holdout + 0.20×Calmar + 0.20×(-MaxDD) + 0.15×Train
   ↓ 输出: production_candidates.parquet + PRODUCTION_REPORT.md
   ↓
@@ -684,7 +697,7 @@ DataLoader (src/etf_strategy/core/data_loader.py)
 |------|-----|
 | 格式 | Parquet (列式存储) |
 | 时间范围 | 2020-01-01 ~ 2025-12-12 |
-| 覆盖 | 43只ETF, 日线级别 |
+| 覆盖 | 49 只 ETF (41 A股 + 8 QDII), 日线级别 |
 | 价格 | 前复权 (adj_close/adj_open等) |
 | 缺失处理 | NaN保留, 不填充 |
 | 缺失率 | < 20% (DataContract约束) |
@@ -722,18 +735,20 @@ data:
   symbols: [510050, 510300, ..., 513130]  # 43只ETF
   data_dir: "raw/ETF/daily"
   cache_dir: ".cache"
+  symbols: [49 只 ETF]       # 41 A股 + 8 QDII
 
 backtest:
-  freq: 3                    # 调仓频率 (交易日) ← 锁死
+  freq: 5                    # 调仓频率 (交易日) ← 锁死
   pos_size: 2                # 持仓数量 ← 锁死
   initial_capital: 1000000
-  commission_rate: 0.0002    # 2bp
-  lookback: 252              # 回看窗口
+  execution_model: "T1_OPEN"
+  cost_model:
+    mode: "SPLIT_MARKET"     # A股/QDII分级费率
+    tier: "med"              # A股 20bp, QDII 50bp
 
-  timing:
-    type: "light_timing"     # 或 "dual_timing"
-    extreme_threshold: -0.1
-    extreme_position: 0.1
+  hysteresis:                # Exp4 噪声过滤 ← v5.0 核心变更
+    delta_rank: 0.10         # 最小 rank01 差才换仓
+    min_hold_days: 9         # 最短持有天数
 
   regime_gate:
     enabled: true
@@ -744,22 +759,22 @@ backtest:
       thresholds_pct: [25, 30, 40]
       exposures: [1.0, 0.7, 0.4, 0.1]
 
-  risk_control:
-    stop_method: "fixed"     # 或 "atr"
-    trailing_stop_pct: 0.08
-    atr_window: 14
-    atr_multiplier: 3.0
-    leverage_cap: 1.0        # 零杠杆原则
+universe:
+  mode: "A_SHARE_ONLY"      # QDII 参与标准化但不交易
 
 wfo:
   combo_sizes: [2, 3, 4, 5, 6, 7]
   is_period: 180
   oos_period: 60
   step_size: 60
-  n_jobs: 16
+  n_jobs: -1
   enable_fdr: true
   fdr_alpha: 0.05
   complexity_penalty_lambda: 0.15
+  bucket_constraints:
+    enabled: true
+    min_buckets: 3
+    max_per_bucket: 2
   scoring_weights:
     annual_return: 0.4
     sharpe_ratio: 0.3
@@ -811,80 +826,67 @@ sealed_strategies/v3.X_YYYYMMDD/
 
 ### 11.3 版本历史
 
-| 版本 | 日期 | 策略数 | 最佳收益 | 说明 |
-|------|------|--------|---------|------|
-| v3.1 | 2025-12-15 | 多策略 | - | BT Ground Truth基线 |
-| v3.2 | 2025-12-14 | 152 → 120 | 237.45% | 四重验证交付版 |
-| v3.3 | 2025-12-16 | 全量池 | ~150%+ | 全策略池扩展 |
-| **v3.4** | **2025-12-16** | **2** | **136.52%** | **震荡市精选双策略 (生产版)** |
+| 版本 | 日期 | 策略数 | 说明 |
+|------|------|--------|------|
+| v3.1 | 2025-12-15 | 多策略 | BT Ground Truth 基线 |
+| v3.2 | 2025-12-14 | 152 → 120 | 四重验证交付版 |
+| v3.4 | 2025-12-16 | 2 | 震荡市精选双策略 |
+| v4.0 | 2026-01-31 | - | 16 因子正交集 |
+| v4.1 | 2026-02-03 | - | SPLIT_MARKET 成本模型 |
+| v4.2 | 2026-02-05 | - | 因子扩展研究 |
+| **v5.0** | **2026-02-11** | **1 (S1)** | **FREQ=5 + Exp4 + 49 ETF, 当前生产版** |
+| c2_shadow | 2026-02-11 | 1 (C2) | Shadow 候选 (AMIHUD+CALMAR+CORR_MKT) |
 
 ---
 
-## 12. 上线策略详情
+## 12. 上线策略详情 (v5.0)
 
-### 12.1 策略 #1 (4因子核心)
+### 12.1 生产策略 S1 (4因子)
 
 ```
 因子: ADX_14D + OBV_SLOPE_10D + SHARPE_RATIO_20D + SLOPE_20D
+执行: FREQ=5, Exp4 Hysteresis (delta_rank=0.10, min_hold_days=9), Regime Gate ON
 ```
 
-| 指标 | 值 |
-|------|-----|
-| 总收益 | **136.52%** |
-| 夏普比率 | 1.26 |
-| 最大回撤 | 15.47% |
-| 年化收益 | ~15.1% |
-| 胜率 | 50.79% |
-| 盈亏比 | 2.11 |
-| 交易次数 | 252 (5.95年) |
-| 平均持有 | 9.2 天 |
+| 指标 | VEC (v5.0) | BT (med cost) |
+|------|-----------|---------------|
+| HO 收益 | **+42.7%** | +32.5% |
+| HO MDD | 11.8% | 11.0% |
+| HO Sharpe | 2.15 | - |
+| Worst Month | -2.7% | - |
+| Trades | 75 | 120 |
+| Margin Failures | - | 0 |
 
-### 12.2 策略 #2 (5因子增强)
+### 12.2 Shadow 候选 C2 (3因子)
 
 ```
-因子: ADX_14D + OBV_SLOPE_10D + PRICE_POSITION_120D + SHARPE_RATIO_20D + SLOPE_20D
+因子: AMIHUD_ILLIQUIDITY + CALMAR_RATIO_60D + CORRELATION_TO_MARKET_20D
+状态: Shadow 部署中, 8-12 周后评估
 ```
 
-| 指标 | 值 |
-|------|-----|
-| 总收益 | **129.85%** |
-| 夏普比率 | 1.22 |
-| 最大回撤 | **13.93%** (更低!) |
-| 年化收益 | ~14.6% |
-| 胜率 | 49.42% |
-| 盈亏比 | 2.11 |
-| 交易次数 | 257 (5.95年) |
-| 平均持有 | 9.0 天 |
+| 指标 | VEC | BT (med cost) |
+|------|-----|---------------|
+| HO 收益 | +63.9% | +45.9% |
+| HO MDD | 10.4% | 12.2% |
+| Trades | 28 | 34 |
 
-### 12.3 因子含义
+### 12.3 S1 因子含义
 
 | 因子 | 含义 | 策略逻辑 |
 |------|------|---------|
-| **ADX_14D** | 趋势强度 | 选择正在形成趋势的ETF (不关心方向) |
-| **SLOPE_20D** | 线性回归斜率 | 选择价格有上升趋势的ETF |
-| **SHARPE_RATIO_20D** | 近20日风险调整收益 | 选择"性价比"最高的ETF |
-| **OBV_SLOPE_10D** | OBV斜率 (资金流) | 选择有持续资金流入的ETF |
-| **PRICE_POSITION_120D** | 半年价格分位 | 选择在合理位置的ETF (非极端高低) |
+| **ADX_14D** | 趋势强度 | 选择正在形成趋势的 ETF (不关心方向) |
+| **SLOPE_20D** | 线性回归斜率 | 选择价格有上升趋势的 ETF |
+| **SHARPE_RATIO_20D** | 近 20 日风险调整收益 | 选择"性价比"最高的 ETF |
+| **OBV_SLOPE_10D** | OBV 斜率 (资金流) | 选择有持续资金流入的 ETF |
 
-**策略思路**: 寻找"趋势明确(ADX)、方向向上(SLOPE)、资金流入(OBV)、风险调整收益好(SHARPE)"的ETF, 即**强势且有资金支撑**的品种。
+**策略思路**: 寻找"趋势明确(ADX)、方向向上(SLOPE)、资金流入(OBV)、风险调整收益好(SHARPE)"的 ETF, 即**强势且有资金支撑**的品种。
 
-### 12.4 为何选择两个策略
+### 12.4 为何 S1 + F5_ON
 
-- **因子重叠 80%**: ADX, OBV_SLOPE, SHARPE, SLOPE 是共有因子
-- **差异点**: 策略#2 额外使用 PRICE_POSITION_120D (半年价格位置)
-- **互补性**: 策略#2 回撤更低 (13.93% vs 15.47%), 适合保守配置
-- **实质**: 约 1.5 个独立策略, 持仓高度重叠
-- **近60日**: 双策略均为 -0.23%, 在震荡市中表现最佳
-
-### 12.5 期望收益分析
-
-```
-胜率 ~50% × 盈亏比 2.11:
-  期望值 = 50% × 2.11 - 50% × 1.0 = +0.555
-
-每笔交易平均赚 0.555 单位, 年均43笔交易
-→ 年化正期望 = 0.555 × 43 ≈ +23.9 (合理, 含手续费后约15%)
-```
+- **因子排名稳定性**: ADX/OBV/SHARPE/SLOPE 的横截面排名高度稳定 (rank autocorrelation > 0.8), 与 Exp4 hysteresis 高度兼容
+- **"冠军"因子不兼容**: AMIHUD+PP20D+PV_CORR+SLOPE 排名波动大 → Exp4 锁仓 → 训练期负收益
+- **执行 > 信号**: v3.4→v5.0 同一信号 (S1), 仅执行改进 (FREQ=5 + Exp4) 就提升 +35.8pp holdout 收益
+- **实盘验证**: 2025-12-18 ~ 2026-02-09, +6.37%, 22 trades, 83.3% WR
 
 ---
 
@@ -925,7 +927,7 @@ sealed_strategies/v3.X_YYYYMMDD/
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `src/etf_strategy/core/precise_factor_library_v2.py` | 1,616 | 18因子计算引擎 |
+| `src/etf_strategy/core/precise_factor_library_v2.py` | 1,616 | 17 OHLCV 因子计算引擎 |
 | `src/etf_strategy/core/combo_wfo_optimizer.py` | 582 | WFO滚动优化器 |
 | `src/etf_strategy/core/cross_section_processor.py` | 551 | 横截面标准化 |
 | `src/etf_strategy/core/data_loader.py` | 258 | 数据加载 + 缓存 |
@@ -943,7 +945,7 @@ sealed_strategies/v3.X_YYYYMMDD/
 | `scripts/run_full_space_vec_backtest.py` | VEC全空间回测 |
 | `scripts/final_triple_validation.py` | 三重验证 (阶段3) |
 | `scripts/batch_bt_backtest.py` | BT批量审计 (阶段4) |
-| `scripts/generate_production_pack.py` | 生产包生成 (阶段5) |
+| `archive/scripts/legacy_reports/generate_production_pack.py` | 生产包生成 (阶段5) |
 | `scripts/generate_today_signal.py` | 每日信号 (阶段6) |
 | `scripts/run_full_pipeline.py` | 一键全流程 |
 | `scripts/seal_release.py` | 封存归档 |
@@ -955,9 +957,9 @@ sealed_strategies/v3.X_YYYYMMDD/
 | `configs/combo_wfo_config.yaml` | 主配置 (参数/ETF池/风控) |
 | `configs/etf_pools.yaml` | ETF池详细定义 |
 | `CLAUDE.md` | LLM 开发指南 |
-| `docs/ETF_POOL_ARCHITECTURE.md` | ETF池深度分析 |
-| `docs/QUICK_REFERENCE.md` | 快速参考卡 |
-| `sealed_strategies/v3.4_20251216/` | 当前生产版本封存 |
+| `docs/ETF_POOL_ARCHITECTURE.md` | ETF 池深度分析 (49 ETF) |
+| `docs/ETF_DATA_GUIDE.md` | 数据目录与数据源指南 |
+| `sealed_strategies/v5.0_20260211/` | 当前生产版本封存 |
 
 ---
 
@@ -1003,7 +1005,7 @@ uv run python src/etf_strategy/run_combo_wfo.py           # 1. WFO
 uv run python scripts/run_full_space_vec_backtest.py       # 2. VEC
 uv run python scripts/final_triple_validation.py           # 3. 验证
 uv run python scripts/batch_bt_backtest.py                 # 4. BT审计
-uv run python scripts/generate_production_pack.py          # 5. 生产包
+uv run python archive/scripts/legacy_reports/generate_production_pack.py          # 5. 生产包
 
 # 每日操作
 uv run python scripts/update_daily_from_qmt_bridge.py --all  # 数据更新
@@ -1021,15 +1023,15 @@ make test     # pytest
 
 | 操作 | 原因 |
 |------|------|
-| 修改 FREQ/POS 参数 | 策略核心参数已锁定 |
+| 修改 FREQ/POS/Hysteresis 参数 | 策略核心参数已锁定 (v5.0) |
 | 增删 ETF 池成员 | 横截面标准化会改变所有信号 |
 | 修改核心因子库 | 可能导致所有回测结果失效 |
 | 修改回测引擎逻辑 | VEC-BT对齐依赖一致的逻辑 |
 | 使用 pip install | 必须使用 uv 管理依赖 |
 | 删除 ARCHIVE 目录 | 保留历史最佳结果 |
-| 移除任何 QDII ETF | 5只QDII贡献90%+收益 |
+| 移除任何 QDII ETF | 8 只 QDII 参与横截面校准 |
 
 ---
 
-*最后更新: 2026-02-05*
-*文档生成: 基于全项目深度分析*
+*最后更新: 2026-02-12*
+*文档生成: 基于全项目深度分析, v5.0 参数更新*

@@ -13,7 +13,7 @@
 | 策略类型 | ETF 轮动 (A股 + QDII) |
 | 持仓数量 | 2 只 ETF |
 | 调仓频率 | 每 5 个交易日 |
-| ETF 池 | 43 只 (38 A股 + 5 QDII 监控) |
+| ETF 池 | 49 只 (41 A股 + 8 QDII 监控) |
 | 宇宙模式 | A_SHARE_ONLY (QDII 硬屏蔽) |
 | 迟滞控制 | delta_rank=0.10, min_hold_days=9 |
 | 择时/风控 | 轻择时 + 波动率 regime gate (510300 proxy) |
@@ -159,7 +159,7 @@ cat data/live/signal_state.json | python -m json.tool | head -5
 ```
 # 回归验证
 uv run python scripts/run_v5_validation.py          # VEC 12 runs (~3min)
-uv run python scripts/run_bt_exp4_audit.py           # BT 4 runs (~30min)
+uv run python archive/scripts/completed_validation/run_bt_exp4_audit.py           # BT 4 runs (~30min)
 
 # 冻结参数测试
 uv run pytest tests/test_frozen_params.py -v

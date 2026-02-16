@@ -141,3 +141,9 @@ activeContext.md
 *.tar.gz
 *.rar
 *.7z
+.opencode/
+
+# Root-level artifacts
+*.txt
+!requirements.txt
+etf_list.json

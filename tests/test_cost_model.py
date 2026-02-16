@@ -185,7 +185,7 @@ class TestBuildCostArray:
         np.testing.assert_allclose(arr, 0.0002)
 
     def test_production_qdii_set(self):
-        """All 5 QDII ETFs get higher cost."""
+        """All 8 QDII ETFs get higher cost."""
         from etf_strategy.core.cost_model import load_cost_model, build_cost_array
         from etf_strategy.core.frozen_params import FrozenETFPool
 
@@ -206,8 +206,8 @@ class TestBuildCostArray:
             else:
                 assert arr[i] == m.active_tier.a_share, f"{code} should have A-share rate"
 
-        # Exactly 5 QDII ETFs
-        assert np.sum(arr == m.active_tier.qdii) == 5
+        # All QDII ETFs should have QDII rate
+        assert np.sum(arr == m.active_tier.qdii) == len(qdii_codes)
 
 
 # ─────────────────────────────────────────────────────────

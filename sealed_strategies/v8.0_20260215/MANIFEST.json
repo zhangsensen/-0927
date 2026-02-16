@@ -1,0 +1,804 @@
+{
+  "version": "v8.0",
+  "sealed_date": "2026-02-15",
+  "predecessor": "v7.0_20260213",
+  "file_count": 199,
+  "files": [
+    {
+      "path": "./artifacts/final_candidates.parquet",
+      "size": 120348
+    },
+    {
+      "path": "./artifacts/FINAL_TRIPLE_VALIDATION_REPORT.md",
+      "size": 6470
+    },
+    {
+      "path": "./artifacts/production_candidates.csv",
+      "size": 216448
+    },
+    {
+      "path": "./locked/configs/cn_holidays.txt",
+      "size": 860
+    },
+    {
+      "path": "./locked/configs/combo_wfo_config_prefilter_test.yaml",
+      "size": 5211
+    },
+    {
+      "path": "./locked/configs/combo_wfo_config.yaml",
+      "size": 6942
+    },
+    {
+      "path": "./locked/configs/etf_config.yaml",
+      "size": 12047
+    },
+    {
+      "path": "./locked/configs/etf_pools.yaml",
+      "size": 6569
+    },
+    {
+      "path": "./locked/configs/shadow_strategies.yaml",
+      "size": 724
+    },
+    {
+      "path": "./locked/Makefile",
+      "size": 4122
+    },
+    {
+      "path": "./locked/pyproject.toml",
+      "size": 4712
+    },
+    {
+      "path": "./locked/scripts/aligned_metrics.py",
+      "size": 2126
+    },
+    {
+      "path": "./locked/scripts/audit_qdii_ranking.py",
+      "size": 10890
+    },
+    {
+      "path": "./locked/scripts/batch_bt_backtest.py",
+      "size": 32474
+    },
+    {
+      "path": "./locked/scripts/batch_vec_backtest.py",
+      "size": 83361
+    },
+    {
+      "path": "./locked/scripts/benchmark_gpu_speedup.py",
+      "size": 5919
+    },
+    {
+      "path": "./locked/scripts/diagnose_obv_drift.py",
+      "size": 20340
+    },
+    {
+      "path": "./locked/scripts/download_supplementary_data.py",
+      "size": 9495
+    },
+    {
+      "path": "./locked/scripts/factor_alpha_analysis.py",
+      "size": 36916
+    },
+    {
+      "path": "./locked/scripts/factor_diagnosis.py",
+      "size": 6107
+    },
+    {
+      "path": "./locked/scripts/factor_quality_audit.py",
+      "size": 8383
+    },
+    {
+      "path": "./locked/scripts/final_triple_validation.py",
+      "size": 13565
+    },
+    {
+      "path": "./locked/scripts/generate_today_signal.py",
+      "size": 41320
+    },
+    {
+      "path": "./locked/scripts/precompute_non_ohlcv_factors.py",
+      "size": 2220
+    },
+    {
+      "path": "./locked/scripts/rank_stability_analysis.py",
+      "size": 19486
+    },
+    {
+      "path": "./locked/scripts/run_factor_mining.py",
+      "size": 16372
+    },
+    {
+      "path": "./locked/scripts/run_full_pipeline.py",
+      "size": 15455
+    },
+    {
+      "path": "./locked/scripts/run_full_space_vec_backtest.py",
+      "size": 13907
+    },
+    {
+      "path": "./locked/scripts/run_holdout_validation.py",
+      "size": 22814
+    },
+    {
+      "path": "./locked/scripts/run_rolling_oos_consistency.py",
+      "size": 22238
+    },
+    {
+      "path": "./locked/scripts/run_sealed_cost_audit.py",
+      "size": 14347
+    },
+    {
+      "path": "./locked/scripts/run_universe_comparison.py",
+      "size": 17112
+    },
+    {
+      "path": "./locked/scripts/run_v5_validation.py",
+      "size": 18873
+    },
+    {
+      "path": "./locked/scripts/shadow_retrospective_q1q2.py",
+      "size": 31051
+    },
+    {
+      "path": "./locked/scripts/update_all_data.py",
+      "size": 28315
+    },
+    {
+      "path": "./locked/scripts/update_daily_from_qmt_bridge.py",
+      "size": 13502
+    },
+    {
+      "path": "./locked/scripts/update_tushare_funddata.py",
+      "size": 10195
+    },
+    {
+      "path": "./locked/scripts/validate_c2_bt_ground_truth.py",
+      "size": 17820
+    },
+    {
+      "path": "./locked/scripts/validate_c2_robustness.py",
+      "size": 22924
+    },
+    {
+      "path": "./locked/scripts/verify_gpu_cpu_alignment.py",
+      "size": 4350
+    },
+    {
+      "path": "./locked/scripts/view_registry.py",
+      "size": 1569
+    },
+    {
+      "path": "./locked/src/etf_data/\u9ad8\u4f18\u5148\u7ea7ETF\u4e0b\u8f7d\u6e05\u5355_43\u53ea.txt",
+      "size": 950
+    },
+    {
+      "path": "./locked/src/etf_data/\u9ad8\u4f18\u5148\u7ea7ETF\u4e0b\u8f7d\u6e05\u5355.txt",
+      "size": 903
+    },
+    {
+      "path": "./locked/src/etf_data/\u5168\u90e8ETF\u4e0b\u8f7d\u6e05\u5355_43\u53ea.txt",
+      "size": 1821
+    },
+    {
+      "path": "./locked/src/etf_data/config/etf_config_manager.py",
+      "size": 13202
+    },
+    {
+      "path": "./locked/src/etf_data/config/etf_config.py",
+      "size": 7759
+    },
+    {
+      "path": "./locked/src/etf_data/config/etf_config_standalone.py",
+      "size": 4744
+    },
+    {
+      "path": "./locked/src/etf_data/config/__init__.py",
+      "size": 424
+    },
+    {
+      "path": "./locked/src/etf_data/core/config.py",
+      "size": 7962
+    },
+    {
+      "path": "./locked/src/etf_data/core/data_manager.py",
+      "size": 12570
+    },
+    {
+      "path": "./locked/src/etf_data/core/downloader.py",
+      "size": 13305
+    },
+    {
+      "path": "./locked/src/etf_data/core/etf_list.py",
+      "size": 13807
+    },
+    {
+      "path": "./locked/src/etf_data/core/__init__.py",
+      "size": 427
+    },
+    {
+      "path": "./locked/src/etf_data/core/models.py",
+      "size": 4908
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/core/base_crawler.py",
+      "size": 4146
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/core/utils.py",
+      "size": 1846
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/IMPLEMENTATION_REPORT.md",
+      "size": 5437
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/__init__.py",
+      "size": 346
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/README.md",
+      "size": 3210
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/scheduler/daily_update.py",
+      "size": 9807
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/sources/eastmoney_crawler.py",
+      "size": 10508
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/sources/eastmoney_detail_crawler.py",
+      "size": 11990
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/sources/margin_crawler.py",
+      "size": 9356
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/sources/shares_crawler.py",
+      "size": 4992
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/sources/sina_crawler.py",
+      "size": 12636
+    },
+    {
+      "path": "./locked/src/etf_data/crawlers/sources/tushare_flow_crawler.py",
+      "size": 6542
+    },
+    {
+      "path": "./locked/src/etf_data/docs/README.md",
+      "size": 7327
+    },
+    {
+      "path": "./locked/src/etf_data/download_etf_with_custom_dates.py",
+      "size": 13799
+    },
+    {
+      "path": "./locked/src/etf_data/etf_download_dates.json",
+      "size": 3822
+    },
+    {
+      "path": "./locked/src/etf_data/high_priority_etfs.txt",
+      "size": 827
+    },
+    {
+      "path": "./locked/src/etf_data/__init__.py",
+      "size": 664
+    },
+    {
+      "path": "./locked/src/etf_data/scripts/batch_download.py",
+      "size": 8888
+    },
+    {
+      "path": "./locked/src/etf_data/scripts/download_etf_manager.py",
+      "size": 15467
+    },
+    {
+      "path": "./locked/src/etf_data/scripts/__init__.py",
+      "size": 281
+    },
+    {
+      "path": "./locked/src/etf_data/scripts/maintain_etf_config.py",
+      "size": 9911
+    },
+    {
+      "path": "./locked/src/etf_data/scripts/quick_download.py",
+      "size": 2470
+    },
+    {
+      "path": "./locked/src/etf_data/test_etf_manager.py",
+      "size": 6496
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/core/engine.py",
+      "size": 19682
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/core/__init__.py",
+      "size": 0
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/core/__pycache__/engine.cpython-313.pyc",
+      "size": 21014
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/core/__pycache__/__init__.cpython-313.pyc",
+      "size": 170
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/__init__.py",
+      "size": 112
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/__pycache__/__init__.cpython-313.pyc",
+      "size": 287
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/runners/__init__.py",
+      "size": 0
+    },
+    {
+      "path": "./locked/src/etf_strategy/auditor/runners/parallel_audit.py",
+      "size": 16822
+    },
+    {
+      "path": "./locked/src/etf_strategy/.cache/ohlcv_095fbc5473c17939a140fa537ba2086d.pkl",
+      "size": 3458779
+    },
+    {
+      "path": "./locked/src/etf_strategy/.cache/ohlcv_2af3f2bbb9a259097a79c31063787115.pkl",
+      "size": 3458779
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/combo_wfo_optimizer.py",
+      "size": 36478
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/cost_model.py",
+      "size": 5147
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/cross_section_processor.py",
+      "size": 23979
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/data_contract.py",
+      "size": 4178
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/data_loader.py",
+      "size": 22865
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/etf_pool_mapper.py",
+      "size": 2166
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/execution_model.py",
+      "size": 1129
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_buckets.py",
+      "size": 11516
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_cache.py",
+      "size": 12111
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_mining/discovery.py",
+      "size": 13708
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_mining/__init__.py",
+      "size": 1291
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_mining/prefilter.py",
+      "size": 16593
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_mining/quality.py",
+      "size": 14714
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_mining/registry.py",
+      "size": 5024
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_mining/selection.py",
+      "size": 6162
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_mining/vec_integration.py",
+      "size": 13036
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/factor_registry.py",
+      "size": 10027
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/frozen_params.py",
+      "size": 28551
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/hysteresis.py",
+      "size": 3935
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/ic_calculator_numba.py",
+      "size": 3190
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__init__.py",
+      "size": 799
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/market_timing.py",
+      "size": 8346
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/non_ohlcv_factors.py",
+      "size": 5868
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/precise_factor_library_v2.py",
+      "size": 86965
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_combo_signal-109.py313.1.nbc",
+      "size": 49683
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_combo_signal-109.py313.nbi",
+      "size": 1662
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_rebalanced_ic-131.py313.1.nbc",
+      "size": 237054
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_rebalanced_ic-131.py313.nbi",
+      "size": 1662
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_rebalanced_return-186.py313.1.nbc",
+      "size": 195577
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_rebalanced_return-186.py313.nbi",
+      "size": 1968
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_rebalanced_return_stats-221.py313.1.nbc",
+      "size": 256383
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_rebalanced_return_stats-221.py313.2.nbc",
+      "size": 255521
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer._compute_rebalanced_return_stats-221.py313.nbi",
+      "size": 3259
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/combo_wfo_optimizer.cpython-313.pyc",
+      "size": 38664
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/cost_model.cpython-313.pyc",
+      "size": 7156
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/cross_section_processor.cpython-313.pyc",
+      "size": 27060
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/data_loader.cpython-313.pyc",
+      "size": 26033
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/execution_model.cpython-313.pyc",
+      "size": 2179
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/factor_buckets.cpython-313.pyc",
+      "size": 9912
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/factor_cache.cpython-313.pyc",
+      "size": 15441
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/factor_registry.cpython-313.pyc",
+      "size": 7668
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/frozen_params.cpython-313.pyc",
+      "size": 29567
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/hysteresis.apply_hysteresis-21.py313.1.nbc",
+      "size": 140132
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/hysteresis.apply_hysteresis-21.py313.2.nbc",
+      "size": 139835
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/hysteresis.apply_hysteresis-21.py313.nbi",
+      "size": 3174
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/hysteresis.cpython-313.pyc",
+      "size": 3432
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.compute_multiple_ics_numba-71.py313.1.nbc",
+      "size": 190358
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.compute_multiple_ics_numba-71.py313.2.nbc",
+      "size": 190620
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.compute_multiple_ics_numba-71.py313.nbi",
+      "size": 2978
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.compute_spearman_ic_numba-18.py313.1.nbc",
+      "size": 186974
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.compute_spearman_ic_numba-18.py313.2.nbc",
+      "size": 187500
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.compute_spearman_ic_numba-18.py313.3.nbc",
+      "size": 187893
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.compute_spearman_ic_numba-18.py313.nbi",
+      "size": 4164
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/ic_calculator_numba.cpython-313.pyc",
+      "size": 4868
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/__init__.cpython-313.pyc",
+      "size": 947
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/market_timing.cpython-313.pyc",
+      "size": 8497
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/non_ohlcv_factors.cpython-313.pyc",
+      "size": 6802
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2.cpython-313.pyc",
+      "size": 82414
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._dd_duration_batch-292.py313.1.nbc",
+      "size": 67614
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._dd_duration_batch-292.py313.nbi",
+      "size": 1664
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._dd_duration_numba-256.py313.1.nbc",
+      "size": 43659
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._dd_duration_numba-256.py313.nbi",
+      "size": 1664
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._hurst_rs_batch-491.py313.1.nbc",
+      "size": 97973
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._hurst_rs_batch-491.py313.nbi",
+      "size": 1661
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._hurst_rs_numba-387.py313.1.nbc",
+      "size": 100825
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._hurst_rs_numba-387.py313.nbi",
+      "size": 1661
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._permutation_entropy_batch-377.py313.1.nbc",
+      "size": 93124
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._permutation_entropy_batch-377.py313.nbi",
+      "size": 1677
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._permutation_entropy_numba-302.py313.1.nbc",
+      "size": 95249
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._permutation_entropy_numba-302.py313.nbi",
+      "size": 1677
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_calmar_batch-194.py313.1.nbc",
+      "size": 81234
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_calmar_batch-194.py313.nbi",
+      "size": 1667
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_calmar_numba-137.py313.1.nbc",
+      "size": 55020
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_calmar_numba-137.py313.nbi",
+      "size": 1667
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_max_dd_batch-184.py313.1.nbc",
+      "size": 80993
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_max_dd_batch-184.py313.nbi",
+      "size": 1667
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_max_dd_numba-98.py313.1.nbc",
+      "size": 51912
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_max_dd_numba-98.py313.nbi",
+      "size": 1666
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_ulcer_index_batch-246.py313.1.nbc",
+      "size": 81343
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_ulcer_index_batch-246.py313.nbi",
+      "size": 1672
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_ulcer_index_numba-209.py313.1.nbc",
+      "size": 52094
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/precise_factor_library_v2._rolling_ulcer_index_numba-209.py313.nbi",
+      "size": 1672
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/regime_detector.cpython-313.pyc",
+      "size": 10213
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/__pycache__/wfo_realbt_calibrator.cpython-313.pyc",
+      "size": 15169
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/regime_detector.py",
+      "size": 7996
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/__init__.py",
+      "size": 404
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/position_sizing.py",
+      "size": 4106
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/__pycache__/__init__.cpython-313.pyc",
+      "size": 470
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/__pycache__/position_sizing.cpython-313.pyc",
+      "size": 4344
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/__pycache__/rebalance.cpython-313.pyc",
+      "size": 4946
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/__pycache__/run_meta.cpython-313.pyc",
+      "size": 2473
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/rebalance.py",
+      "size": 3899
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/utils/run_meta.py",
+      "size": 1783
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/vec_bt_hybrid.py",
+      "size": 21886
+    },
+    {
+      "path": "./locked/src/etf_strategy/core/wfo_realbt_calibrator.py",
+      "size": 11814
+    },
+    {
+      "path": "./locked/src/etf_strategy/gpu/ic_calculator_cupy.py",
+      "size": 8222
+    },
+    {
+      "path": "./locked/src/etf_strategy/gpu/ic_calculator_torch.py",
+      "size": 5572
+    },
+    {
+      "path": "./locked/src/etf_strategy/gpu/__init__.py",
+      "size": 1253
+    },
+    {
+      "path": "./locked/src/etf_strategy/gpu/utils.py",
+      "size": 3431
+    },
+    {
+      "path": "./locked/src/etf_strategy/gpu/vec_gpu_batch.py",
+      "size": 11931
+    },
+    {
+      "path": "./locked/src/etf_strategy/__pycache__/regime_gate.cpython-313.pyc",
+      "size": 14482
+    },
+    {
+      "path": "./locked/src/etf_strategy/README.md",
+      "size": 1785
+    },
+    {
+      "path": "./locked/src/etf_strategy/regime_gate.py",
+      "size": 11376
+    },
+    {
+      "path": "./locked/src/etf_strategy/run_combo_wfo.py",
+      "size": 23042
+    },
+    {
+      "path": "./locked/src/etf_strategy/run_robust_combo_wfo.py",
+      "size": 15380
+    },
+    {
+      "path": "./locked/src/quant_factor_trading.egg-info/dependency_links.txt",
+      "size": 1
+    },
+    {
+      "path": "./locked/src/quant_factor_trading.egg-info/PKG-INFO",
+      "size": 12685
+    },
+    {
+      "path": "./locked/src/quant_factor_trading.egg-info/requires.txt",
+      "size": 667
+    },
+    {
+      "path": "./locked/src/quant_factor_trading.egg-info/SOURCES.txt",
+      "size": 3334
+    },
+    {
+      "path": "./locked/src/quant_factor_trading.egg-info/top_level.txt",
+      "size": 22
+    },
+    {
+      "path": "./locked/uv.lock",
+      "size": 975607
+    },
+    {
+      "path": "./SEAL_SUMMARY.md",
+      "size": 6488
+    }
+  ]
+}

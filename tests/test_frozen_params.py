@@ -42,7 +42,7 @@ def real_config():
 
 class TestFrozenValues:
     def test_current_version(self):
-        assert CURRENT_VERSION == "v5.0"
+        assert CURRENT_VERSION == "v8.0"
 
     def test_backtest_defaults(self):
         p = FrozenBacktestParams()
@@ -78,8 +78,8 @@ class TestFrozenValues:
 
     def test_etf_pool_counts(self):
         p = FrozenETFPool()
-        assert p.total_count == 43
-        assert p.qdii_count == 5
+        assert p.total_count == 49
+        assert p.qdii_count == 8
 
     def test_scoring_weights(self):
         p = FrozenScoringParams()
@@ -124,14 +124,14 @@ class TestRealConfigValidation:
             config_path=str(CONFIG_PATH),
             strictness=StrictnessMode.STRICT,
         )
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
         assert frozen.config_sha256 is not None
 
     def test_returns_frozen_config(self, real_config):
         frozen = load_frozen_config(real_config, config_path=str(CONFIG_PATH))
         assert isinstance(frozen, FrozenProductionConfig)
         assert frozen.backtest.freq == 5
-        assert frozen.etf_pool.total_count == 43
+        assert frozen.etf_pool.total_count == 49
         assert frozen.hysteresis.delta_rank == 0.10
         assert frozen.hysteresis.min_hold_days == 9
 
@@ -206,7 +206,7 @@ class TestETFPoolTamper:
     def test_qdii_removed(self, real_config):
         bad = copy.deepcopy(real_config)
         # Remove all QDII codes
-        qdii = {"159920", "513050", "513100", "513130", "513500"}
+        qdii = {"159920", "513050", "513100", "513130", "513180", "513400", "513500", "513520"}
         bad["data"]["symbols"] = [s for s in bad["data"]["symbols"] if s not in qdii]
         with pytest.raises(FrozenParamViolation) as exc_info:
             load_frozen_config(bad, strictness=StrictnessMode.STRICT)
@@ -230,7 +230,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise
         frozen = load_frozen_config(bad, strictness=StrictnessMode.WARN)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
     def test_env_var_warn(self, real_config, monkeypatch):
         monkeypatch.setenv("FROZEN_PARAMS_MODE", "warn")
@@ -238,7 +238,7 @@ class TestWarnMode:
         bad["backtest"]["freq"] = 8
         # Should not raise due to env var
         frozen = load_frozen_config(bad)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
 
 # ---------------------------------------------------------------------------
@@ -252,20 +252,20 @@ class TestOperationalParamsIgnored:
         modified["data"]["data_dir"] = "/some/other/path"
         # Should pass without error
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
     def test_n_jobs_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["combo_wfo"]["n_jobs"] = 1
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
     def test_start_end_date_change(self, real_config):
         modified = copy.deepcopy(real_config)
         modified["data"]["start_date"] = "2021-01-01"
         modified["data"]["end_date"] = "2026-01-01"
         frozen = load_frozen_config(modified, strictness=StrictnessMode.STRICT)
-        assert frozen.version == "v5.0"
+        assert frozen.version == "v8.0"
 
 
 # ---------------------------------------------------------------------------
@@ -312,10 +312,10 @@ class TestVersionRegistry:
         assert v34.etf_pool == v41.etf_pool
         assert v34.wfo == v41.wfo
         assert v34.wfo.rebalance_frequencies == (3,)
-        # v4.1 rolled back to v3.4's bounded_factors (both have 4)
+        # v3.4 and v4.1 now both use the full 7 bounded factors
         assert v34.cross_section == v41.cross_section
-        assert len(v41.cross_section.bounded_factors) == 4
-        assert len(v34.cross_section.bounded_factors) == 4
+        assert len(v41.cross_section.bounded_factors) == 7
+        assert len(v34.cross_section.bounded_factors) == 7
 
     def test_v50_differs_from_v41(self, real_config):
         """v5.0 has freq=5 and hysteresis enabled, unlike v4.1."""
@@ -329,3 +329,45 @@ class TestVersionRegistry:
         assert v50.backtest.freq == 5
         assert v41.hysteresis.delta_rank == 0.0
         assert v50.hysteresis.delta_rank == 0.10
+
+    def test_v60_registered(self, real_config):
+        """v6.0 has C2 strategy and same execution params as v5.0."""
+        frozen = load_frozen_config(
+            real_config, version="v6.0", strictness=StrictnessMode.STRICT
+        )
+        assert frozen.version == "v6.0"
+        assert frozen.backtest.freq == 5
+        assert frozen.hysteresis.delta_rank == 0.10
+        assert len(frozen.strategies) == 1
+        assert frozen.strategies[0].name == "C2"
+        assert frozen.strategies[0].factors == (
+            "AMIHUD_ILLIQUIDITY",
+            "CALMAR_RATIO_60D",
+            "CORRELATION_TO_MARKET_20D",
+        )
+
+    def test_v80_registered(self, real_config):
+        """v8.0 has composite_1 champion + core_4f fallback."""
+        frozen = load_frozen_config(
+            real_config, version="v8.0", strictness=StrictnessMode.STRICT
+        )
+        assert frozen.version == "v8.0"
+        assert frozen.backtest.freq == 5
+        assert frozen.hysteresis.delta_rank == 0.10
+        assert frozen.hysteresis.min_hold_days == 9
+        assert len(frozen.strategies) == 2
+        assert frozen.strategies[0].name == "composite_1"
+        assert frozen.strategies[0].factors == (
+            "ADX_14D",
+            "BREAKOUT_20D",
+            "MARGIN_BUY_RATIO",
+            "PRICE_POSITION_120D",
+            "SHARE_CHG_5D",
+        )
+        assert frozen.strategies[1].name == "core_4f"
+        assert frozen.strategies[1].factors == (
+            "MARGIN_CHG_10D",
+            "PRICE_POSITION_120D",
+            "SHARE_CHG_20D",
+            "SLOPE_20D",
+        )
