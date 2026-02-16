@@ -25,12 +25,18 @@ make check                       # pre-commit --all-files
 make test                        # pytest -v
 make test-cov                    # pytest with coverage
 make clean-numba                 # Clear Numba JIT cache (required after @njit signature changes)
+make signal                      # Daily trading signal (shortcut)
+make validate                    # Final triple validation
+make update-data                 # Update all market data (incremental)
+make research                    # Full research pipeline: mining → WFO → VEC → BT → validation
+make pipeline-fast               # Pipeline with 16 BT workers, 16 VEC threads
 
 # Direct commands
 uv run python src/etf_strategy/run_combo_wfo.py           # WFO screening
 uv run python scripts/batch_vec_backtest.py                # VEC backtesting
 uv run python scripts/batch_bt_backtest.py                 # BT ground truth audit
-uv run python scripts/run_full_pipeline.py                 # Full pipeline
+uv run python scripts/precompute_non_ohlcv_factors.py      # Precompute non-OHLCV factors (run before pipeline)
+uv run python scripts/run_full_pipeline.py                 # Full pipeline (WFO → VEC → BT)
 uv run python scripts/generate_today_signal.py             # Daily trading signal (stateful)
 uv run python scripts/update_daily_from_qmt_bridge.py --all  # Data update from QMT
 

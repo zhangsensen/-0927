@@ -14,6 +14,8 @@
 | [2026-02_vec_bt_alignment_fix.md](./2026-02_vec_bt_alignment_fix.md) | 2026-02-14 | 教训 | VEC-BT +25.7pp gap 根因：信号态 vs 执行态反馈环 |
 | [2026-02_pipeline_metadata_loss.md](./2026-02_pipeline_metadata_loss.md) | 2026-02-14 | 元教训 | 管线信息瓶颈：同一 bug 的三次变体 (Rule 14/19/24) |
 | [2026-02_v8_sealing_lessons.md](./2026-02_v8_sealing_lessons.md) | 2026-02-15 | 教训 | v5→v8 四版封板复盘，3个bug累积效应，封板流程检查清单 |
+| [2026-02_ic_sign_infrastructure_lesson.md](./2026-02_ic_sign_infrastructure_lesson.md) | 2026-02-16 | 教训 | IC-sign 方向修复：水管通了水一直都在，统计声称修正 |
+| [factor_reference.md](./factor_reference.md) | 2026-02-16 | 参考 | 44因子完整手册：属性/IC/方向/v8用途/分桶/架构 |
 
 ---
 
