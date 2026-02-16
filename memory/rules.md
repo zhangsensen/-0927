@@ -479,3 +479,38 @@ v8.0 (02-15) → 首个 clean seal（三个 bug 全修后）
 - 只有资金流 → 不知道流出是止损还是获利了结
 - 交叉验证 → "价格涨 + 散户跑" = 高质量趋势信号
 - **新因子的价值 = 它能否更精准地区分"谁在交易"**
+
+## Rule 31: 不同管道观测同一现象 ≠ 新信息维度
+
+**教训 (2026-02-17)**：Tushare moneyflow（按订单大小分档）IC=0.122, ICIR=0.448，
+看似很强，但与 SHARE_CHG_5D 截面 rank 相关 rho=-0.577 → 同维度。
+
+**Rule 28 vs Rule 31**：
+```
+Rule 28: 同一数据源的数学变换（SHARE_CHG → SHARE_ACCEL）
+Rule 31: 不同数据源观测同一底层现象（moneyflow vs fund_share vs margin）
+```
+
+两者的共性：新"因子"看起来不同，但编码的是**同一种信息**。
+
+**判断方法**：
+- 计算新因子与现有因子的截面 rank 相关性
+- |rho| < 0.3 → 正交，值得投入
+- |rho| 0.3~0.5 → 部分正交，评估边际成本
+- |rho| > 0.5 → 同维度，放弃
+
+**本项目已覆盖的信息维度**：
+```
+1. Price/Trend:    SLOPE, BREAKOUT, PP120, ADX — OHLCV 完全覆盖
+2. Volume:         OBV_SLOPE, UP_DOWN_VOL — OHLCV 完全覆盖
+3. InvestorFlow:   SHARE_CHG_5D, MARGIN_BUY, MARGIN_CHG — fund_share+margin 已饱和
+                   (moneyflow 也是此维度，rho=0.58，放弃)
+
+未覆盖维度（真正的 alpha 机会）：
+4. WHO:            北向资金（个股级别，非市场聚合）— Tushare 数据不支持
+5. Forward-looking: 期权IV — 仅覆盖 2-3 标的
+6. Cross-asset:    汇率 — A_SHARE_ONLY 下截面区分度存疑
+7. Microstructure: IOPV折溢价 — 需盘中采集
+```
+
+**详细分析**：`memory/2026-02_moneyflow_validation.md`

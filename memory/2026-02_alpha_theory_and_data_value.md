@@ -197,8 +197,12 @@ SHARE_ACCEL (二阶): IC=+0.035, ICIR=0.130 — 弱且方向相反
 | **期权IV** | 市场前瞻预期 | ✅ 高 (前瞻 vs 后视) | ✅ | ❌ 仅覆盖 2-3 标的 | 高 |
 | **汇率** | 宏观环境 | ✅ 高 (跨资产) | ✅ | ⚠️ QDII直接/A股间接 | 低 |
 | **IOPV折溢价** | 套利/情绪 | ✅ 高 (微观结构) | ⚠️ 需盘中采集 | ✅ | 高 |
-| **ETF申赎** | 机构行为 | ⚠️ 与fund_share重叠 | ✅ | ✅ | 低 |
+| ~~**ETF申赎**~~ | 机构行为 | ❌ 与fund_share重叠 | ✅ | ✅ | — |
+| ~~**Moneyflow**~~ | 订单分档资金流 | ❌ rho=0.58 vs SHARE_CHG_5D | ✅ | ✅ | — |
 | **行业轮动指标** | 宏观板块偏好 | ⚠️ 被PP120+BREAKOUT部分捕获 | ✅ | ✅ | 低 |
+
+**已实证关闭 (2026-02-17)**：Moneyflow (IC=0.12, ICIR=0.45) 看似强信号，
+实为 fund_share+margin 同维度观测 (rho=-0.577)。详见 `memory/2026-02_moneyflow_validation.md`。
 
 ---
 
@@ -266,4 +270,5 @@ v7.0 之前的所有"失败"都被管线 bug 污染，不能作为决策依据�
 - `docs/research/phase1_non_ohlcv_optimization_20260216.md` — Phase 1 实验详细结果
 - `memory/2026-02_ic_sign_infrastructure_lesson.md` — IC-sign 修复教训
 - `memory/factor_reference.md` — 44 因子完整手册
-- `memory/rules.md` — 26 条验证规则
+- `memory/2026-02_moneyflow_validation.md` — Moneyflow 因子验证（放弃，同维度）
+- `memory/rules.md` — 31 条验证规则
