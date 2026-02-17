@@ -555,3 +555,20 @@ Rule 31: 不同数据源观测同一底层现象（moneyflow vs fund_share vs ma
 - Regime gate 已捕获波动率维度的全部可用信息
 
 **详细报告**：`docs/research/when_how_dimension_research_20260217.md`
+
+## Rule 34: 正交 ≠ 有用（折溢价教训）
+
+> **因子正交性是必要条件但不是充分条件。ETF折溢价与所有现有因子 |rho|<0.2（完美正交），但 sign stability=0.27 → 信号方向随机，不可用。**
+
+**验证数据** (2026-02-17):
+- PREMIUM_RAW: IC=-0.065(train), -0.061(HO), ICIR=-0.30, sign_stability=0.27
+- vs SLOPE_20D rho=-0.02, vs PP_120D rho=-0.03, vs SHARE_CHG_5D rho=+0.17 — 全部 ORTHOGONAL
+- A股折溢价: mean=0.01%, std=1.53% — 套利效率极高，截面变异被压制
+- QDII折溢价: mean=1.21%, std=2.62% — 有变异但 A_SHARE_ONLY 不可用
+
+**原因**：
+- A股ETF做市/套利机制高效，折溢价瞬间被套利者抹平
+- 日频收盘时的折溢价残差几乎是噪声
+- IOPV（盘中实时折溢价）可能有信号，但需 tick 级数据
+
+**脚本**：`scripts/research/validate_premium_factor.py`
