@@ -246,9 +246,48 @@ v7.0 之前的所有"失败"都被管线 bug 污染，不能作为决策依据�
 
 ---
 
-## 六、对 Phase 2 的战略指引
+## 六、三维度天花板确认 (2026-02-17 更新)
 
-基于以上框架，Phase 2 的判断标准不是"能不能拿到数据"，而是:
+v8.0 封板后，系统性验证了三个独立优化维度，全部确认天花板：
+
+```
+维度         验证内容                              结果
+WHAT (选什么) Phase1因子重组合 + moneyflow + 得分离散度  Kaiser 5/17 饱和，无组合超越v8.0
+WHEN (何时)   截面收益离散度 vs regime gate             rho=0.538(同维度) + 零预测力
+HOW  (怎么配合) Ensemble Capital Split (2×PS=1)        PS降级→Sharpe暴跌75%
+```
+
+### WHEN 维度关键发现
+- 20D 截面离散度与 regime vol 的 Pearson rho=0.538 → 同一信息维度 (Rule 33)
+- 所有 disp → strategy return 的 Pearson rho < 0.05 (p > 0.3)
+- **数学本质**: 高波动 = 价格大幅变动 = 截面差异自然放大，不是独立信号
+
+### HOW 维度关键发现
+- 两策略季度收益 rho=0.586 (边际互补)
+- 但 PS=2→PS=1 后 Sharpe 分别暴跌75%和85% (Rule 32)
+- Capital Split blend Sharpe 0.363 vs standalone 1.577
+
+### 唯一未关闭方向: 策略级条件切换
+- 不分资金，**整体切换**用哪个策略 (保持 PS=2)
+- 需要一个与 regime_vol 正交 (|rho|<0.3) 的市场环境信号
+- 候选: 北向资金趋势、期权IV曲面、行业集中度 → 均需新数据源
+
+### 当前战略
+
+```
+1. 停止研究 → 三维度天花板已量化确认
+2. 纯运维模式 → shadow 监控 (8-12周) + 日常信号 + 数据更新
+3. 等待数据突破 → 新正交数据源可得时，优先测试"策略切换"框架
+4. S1→v8.0 切换评估点: ~2026-04-15
+```
+
+---
+
+## 七、对未来改善的战略指引
+
+基于以上框架，任何改善尝试的判断标准:
+
+### 新因子/数据源 (扩展 WHAT)
 
 ```
 1. 信息是否正交? → 与 Price/Volume/FundShare/Margin 四个维度线性独立?
@@ -257,8 +296,19 @@ v7.0 之前的所有"失败"都被管线 bug 污染，不能作为决策依据�
 4. 编码了"谁在交易"? → 我们最强的 alpha 来源是区分投资者群体
 ```
 
+### 策略切换信号 (启用 HOW)
+
+```
+1. 与 regime_vol 的 |rho| < 0.3 (严格正交，不是 regime gate 的子集)
+2. 与两策略收益的 rank correlation 方向相反 (当信号高时 A 好 B 差，或反之)
+3. Train/Holdout 方向一致 (Rule 4)
+4. 切换频率合理: 不能每5天切一次 (过频)，也不能全期只切1次 (无意义)
+```
+
+### 数据源优先级
+
 **最高优先级**: 北向资金流 — 直接编码"外资在买什么"，与散户/杠杆行为正交，
-日频可得，且有学术验证。挑战是从个股聚合到 ETF 层面。
+日频可得，且有学术验证。可同时作为 WHAT (新因子) 和 HOW (切换信号) 的数据源。
 
 **最快落地**: 汇率因子 — 数据已有，正交性高（跨资产），但不确定对 A 股 ETF 的截面区分度
 （汇率是宏观因子，可能只影响 QDII，对 A_SHARE_ONLY 模式效用存疑）。
@@ -268,7 +318,9 @@ v7.0 之前的所有"失败"都被管线 bug 污染，不能作为决策依据�
 ## 相关文件
 
 - `docs/research/phase1_non_ohlcv_optimization_20260216.md` — Phase 1 实验详细结果
+- `docs/research/when_how_dimension_research_20260217.md` — WHEN/HOW 完整实验报告
+- `memory/2026-02_when_dimension_research_brief.md` — WHEN/HOW 完结摘要
 - `memory/2026-02_ic_sign_infrastructure_lesson.md` — IC-sign 修复教训
 - `memory/factor_reference.md` — 44 因子完整手册
 - `memory/2026-02_moneyflow_validation.md` — Moneyflow 因子验证（放弃，同维度）
-- `memory/rules.md` — 31 条验证规则
+- `memory/rules.md` — 33 条验证规则 (含 Rule 32/33)

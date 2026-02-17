@@ -1,159 +1,119 @@
-# WHEN 维度研究简报 — 策略激活时机 & 策略组合
+# WHEN/HOW 维度研究 — 完结报告
 
 > 日期: 2026-02-17
-> 状态: 待验证
+> 状态: **已关闭 — 三方向全部 KILL**
 > 前置知识: 读 CLAUDE.md + memory/MEMORY.md
+> 详细数据: `docs/research/when_how_dimension_research_20260217.md`
+> 脚本: `scripts/research_when_how_stage01.py`
 
 ---
 
 ## 背景
 
-v8.0 封板后，系统性验证了所有"选股维度(WHAT)"的优化方向，全部关闭：
-- 因子重组合(Phase1): Kaiser 5/17 饱和
-- 新数据管道(moneyflow): rho=0.58 同维度
-- 得分离散度: rho<0.08 无信号
+v8.0 封板后，WHAT 维度（选哪个 ETF）已系统性穷尽。两个未探索的优化轴：
+- **WHEN**: 什么时候该信任选股（市场环境识别）
+- **HOW**: 两个策略怎么配合（ensemble/切换）
 
-**但 composite_1 Rolling win rate 只有 61%**（39%的时间窗口亏损），稳定性问题未解决。
+## 实验结果
 
-关键洞察：我们穷尽了"选哪个ETF"的空间，但完全没探索"什么时候该信任选股"和"两个策略怎么配合"。
+### Stage 0: Ensemble 失败相关性 (HOW)
+
+| 指标 | Train (16Q) | Holdout (9M) |
+|------|-------------|--------------|
+| Pearson rho | **0.586** | 0.637 |
+| composite_1 win rate | 68.8% | 55.6% |
+| core_4f win rate | 56.2% | 66.7% |
+| P(both_fail) | 0.188 | 0.111 |
+| P(both_fail\|one_fail) | 0.333 | 0.167 |
+
+**判定**: MARGINAL (rho 0.5-0.7 区间)
+- 不是完全冗余（rho<0.7），有一定互补性
+- 但也不是强互补（rho>0.5），改善幅度有限
+- 季度 blend Sharpe 仅提升 +0.023
+
+### Stage 1: 截面收益离散度 (WHEN)
+
+| 检验 | 结果 | 判定 |
+|------|------|------|
+| 正交性: disp vs regime_vol | rho=0.538 (20D), 0.369 (5D) | **KILL** (>0.5) |
+| 预测力: disp → strategy ret | Pearson<0.05, p>0.3 (全部) | **KILL** (零信号) |
+| Quartile 单调性 | NONE (5D/20D × Train/HO 全部) | **KILL** |
+
+**关键发现 (Rule 33)**: 截面收益离散度 ⊂ 市场波动率。高波动本质上产生高离散——这是数学恒等式，不是经济信号。
+
+### Stage 2a: Ensemble Capital Split
+
+| 指标 | composite_1 (PS=2) | Blend (2×PS=1) | 变化 |
+|------|-------------------|----------------|------|
+| Sharpe | 1.577 | 0.363 | **-77%** |
+| Max DD | 10.8% | 16.8% | +6pp |
+| Total Return | 136.1% | 26.4% | -110pp |
+
+**关键发现 (Rule 32)**: PS=2→PS=1 导致 Sharpe 暴跌75-85%。策略在低于优化目标的 POS_SIZE 下不可用。Capital Split 路径彻底关闭。
 
 ---
 
-## 三个独立的 Alpha 优化轴
-
-| 轴 | 问题 | 状态 | 对应稳定性改善 |
-|----|------|------|---------------|
-| **WHAT** | 选哪个 ETF | 已饱和 (Kaiser 5/17) | — |
-| **WHEN** | 什么时候信任选股 | **未探索** | 识别39%坏窗口→降仓→提升Rolling |
-| **HOW** | 两个策略怎么配合 | **未探索** | 取长补短→平滑收益曲线 |
-
----
-
-## 方向 1: 截面收益离散度 (WHEN)
-
-### 核心逻辑
-
-选股策略的前提是"不同ETF有不同回报"。当所有ETF同涨同跌时(PC1主导)，选股毫无意义。
+## 结论
 
 ```
-高离散: 49个ETF收益率分化大 → 选对赚很多，选错亏很多 → 选股alpha最大
-低离散: 49个ETF同方向运动 → 选谁都差不多 → 选股alpha≈0
-
-PCA验证: PC1 median=59.8%, 2021年47.7%(低→分化), 2024年71.2%(高→同向)
+WHAT (选什么)  → 已穷尽 (Phase 1 + moneyflow + 得分离散度)
+WHEN (何时信任) → 已关闭 (离散度 ⊂ 波动率 + 零预测力)
+HOW  (怎么组合) → 已关闭 (Capital Split: PS降级崩塌)
 ```
 
-### 信号定义
-
-```python
-# 过去20天49个ETF的截面收益率标准差
-ret_20d = price_df.pct_change(20)  # 每ETF的20日收益
-dispersion = ret_20d.std(axis=1)    # 截面标准差 (一个时间序列)
-```
-
-### 验证方案
-
-1. 在每个rebalance日计算 dispersion
-2. 和 composite_1 的 period-level 收益做相关性
-3. 做 tercile: 高离散期 vs 低离散期的策略收益对比
-4. 分 train/holdout 检查方向一致性 (Rule 4)
-
-### 使用方式（如果验证通过）
-
-不改因子选股逻辑，只在仓位管理层：
-- 高离散 → 正常仓位 (regime gate 输出 × 1.0)
-- 低离散 → 降低仓位 (regime gate 输出 × 0.3~0.5)
-- 和 regime gate 互补: regime gate 管"市场危不危险"，dispersion 管"选股有没有用"
-
-### 与之前失败的"得分离散度"的区别
-
-- **得分离散度** (已验证, 无信号): 因子排名清不清楚 → 信号质量维度
-- **收益离散度** (待验证): ETF回报是否分化 → 市场环境维度
-- 两者概念完全不同，不能因为前者失败就跳过后者
+**v8.0 = 当前数据和方法论下的天花板。**
 
 ---
 
-## 方向 2: 策略一致性 / Ensemble (HOW)
+## 唯一未关闭的理论方向: 策略级条件切换
 
-### 核心逻辑
+### 概念
 
-composite_1 和 core_4f 是两个不同的 alpha 家族：
+不分资金（避开 Rule 32），而是**整体切换**使用哪个策略：
 
 ```
-Family A (composite_1): 趋势突破 + 散户/杠杆流出 → 高Sharpe(1.38), 低MDD(10.8%), Rolling 61%
-Family B (core_4f):     持续上升 + 双向流出 → 高绝对收益(HO+67%), Rolling 78%
-
-关键问题: 它们的 39% 和 22% 失败期是否重叠？
-- 如果不重叠 → ensemble 可以大幅提升稳定性
-- 如果重叠 → 没用（都在同一种市场环境下失败）
+某个信号 → 高值时: 全仓用 composite_1 (PS=2)
+          → 低值时: 全仓用 core_4f (PS=2)
 ```
 
-### 验证方案
+### 为什么没被关闭
 
-1. 在每个 rolling window 中标记 composite_1 是否盈利、core_4f 是否盈利
-2. 计算重叠率: P(both_fail) / P(either_fail)
-3. 如果 P(both_fail) << P(A_fail) * P(B_fail) → 负相关失败 → ensemble 有价值
-4. 设计 ensemble 规则:
-   - 两者一致时(选同一个ETF) → 满仓
-   - 分歧时 → 各半仓或跟 Rolling 更高的那个
+1. **两策略有互补性** (rho=0.586 < 1.0)：合适的切换信号理论上可利用
+2. **保持 PS=2** → 避开 Rule 32 的 PS 降级崩塌
+3. **只增加一个决策参数** (切换阈值) → 过拟合风险可控
 
-### 数据来源
+### 为什么目前不可执行
 
-需要在相同的 rebalance dates 上同时跑 composite_1 和 core_4f 的因子得分。
-两个策略的 WFO 结果都在 `results/run_20260214_115216/` 中。
+**没有可用的切换信号**：
+- 收益离散度 → KILLED (Rule 33, 与 regime gate 同维度)
+- 得分离散度 → KILLED (rho<0.08, 零信号)
+- 因子近期 IC → 49 ETF 信噪比太低 (见下方风险分析)
+- regime gate 本身 → 不区分两策略（两者都含 regime gate）
 
----
+### 何时可以重启
 
-## 方向 3: 因子近期有效性 / Factor Momentum (WHEN)
+当有**新的正交市场环境信号**可用时：
+- 北向资金净流入趋势（编码外资情绪，vs 波动率正交）
+- 期权 IV 曲面斜率（前瞻预期，vs 历史波动率正交）
+- 行业集中度指标（截面结构，可能与波动率部分正交）
 
-### 核心逻辑
-
-如果 composite_1 的 5 个因子在最近 20 天的截面 IC 都是正的，说明因子正在"工作"。
-如果 IC 转负，说明市场环境变了，策略可能要失效。
-
-### 风险
-
-- 49 ETF × 20 天 = ~980 个数据点估一个 IC，噪声极大
-- 因子动量在大样本(3000+股票)中有强学术支持，但在 49 ETF 中信噪比可能不够
-- 过拟合风险高（需要 IC 的阈值参数）
-
-### 优先级: 低于方向1和2
+**判定标准**:
+1. 与 regime_vol 的 |rho| < 0.3 (严格正交)
+2. 与两策略收益的 rank correlation 方向相反 (一高一低)
+3. Train/Holdout 方向一致 (Rule 4)
 
 ---
 
-## 验证优先级
+## 新增规则
 
-| 优先级 | 方向 | 耗时 | 预期价值 | 风险 |
-|--------|------|------|---------|------|
-| **P0** | 截面收益离散度 | 30min | 中-高 | 概念清晰, 过拟合风险低(单参数) |
-| **P1** | 策略 ensemble (失败重叠率) | 30min | 中-高 | 需同时跑两策略 |
-| P2 | 因子动量 | 1hr | 中 | 样本量小, 过拟合风险高 |
+- **Rule 32**: POS_SIZE 不可降级。PS=2→PS=1: Sharpe -75%。Ensemble 必须在目标 PS 下独立验证。
+- **Rule 33**: 截面收益离散度 ⊂ 市场波动率 (rho=0.538)。不是独立 WHEN 信号。
 
 ---
 
-## 过拟合防护
+## 行动建议
 
-- 每个信号最多 1 个阈值参数
-- Train/Holdout 必须方向一致 (Rule 4)
-- 如果 train 有信号但 holdout 反转 → 立即关闭（如得分离散度案例）
-- 总体改善如果 < 5pp → 不值得增加复杂度
-
----
-
-## 关键数据位置
-
-- 价格: `raw/ETF/daily/{code}.{SH|SZ}_daily_*.parquet` (adj_close列)
-- 基金份额: `raw/ETF/fund_share/fund_share_{code}.parquet` (fd_share列)
-- 融资融券: `raw/ETF/margin/pool43_2020_now.parquet` (ts_code+trade_date+rzmre列)
-- WFO结果: `results/run_20260214_115216/` (top_combos.parquet)
-- v8.0 策略定义:
-  - composite_1: ADX_14D + BREAKOUT_20D + MARGIN_BUY_RATIO + PRICE_POSITION_120D + SHARE_CHG_5D
-  - core_4f: MARGIN_CHG_10D + PRICE_POSITION_120D + SHARE_CHG_20D + SLOPE_20D
-- 已有 Rolling 结果: `results/rolling_oos_consistency_20260216_094332/`
-- Production config: `configs/combo_wfo_config.yaml`
-
-## 当前状态
-
-- 分支: master (clean, pushed)
-- v8.0 sealed, shadow 配置就绪
-- 所有 WHAT 维度研究已关闭
-- WHEN/HOW 维度待验证
+1. **停止所有研究性探索** — WHAT/WHEN/HOW 三维度天花板已确认
+2. **进入纯运维模式** — shadow 监控 + 日常信号 + 数据更新
+3. **等待数据突破** — 新正交数据源可得时，优先测试"策略切换"框架
+4. **Shadow 验证时间表** — 8-12 周后 (~2026-04-15) 评估 S1→v8.0 切换
